@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, name, email, role, loginMethod FROM users ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, name, email, role, loginMethod FROM users ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "60331",
+      "name": "dede",
+      "email": "andersonfg23@gmail.com",
+      "role": "user",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60330",
+      "name": "dede",
+      "email": "farmafrancisltda2@gmail.com",
+      "role": "user",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60329",
+      "name": "dede",
+      "email": "andersonfg23@gmail.com",
+      "role": "user",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60328",
+      "name": "Anderson Francis Gomes",
+      "email": "andersonfg23@gmail.com",
+      "role": "admin",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60265",
+      "name": "Administrador",
+      "email": "admin",
+      "role": "admin",
+      "loginMethod": "email"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tloginMethod\n60331\tdede\tandersonfg23@gmail.com\tuser\temail\n60330\tdede\tfarmafrancisltda2@gmail.com\tuser\temail\n60329\tdede\tandersonfg23@gmail.com\tuser\temail\n60328\tAnderson Francis Gomes\tandersonfg23@gmail.com\tadmin\temail\n60265\tAdministrador\tadmin\tadmin\temail\n",
+  "stderr": "",
+  "execution_time_ms": 81
+}

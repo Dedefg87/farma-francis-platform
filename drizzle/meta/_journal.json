@@ -1,0 +1,104 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1769810853744,
+      "tag": "0000_wakeful_dust",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1769811022858,
+      "tag": "0001_bright_thunderbolts",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1769812786349,
+      "tag": "0002_thin_jack_flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1769814061734,
+      "tag": "0003_normal_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1769817985543,
+      "tag": "0004_perpetual_surge",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1769819466683,
+      "tag": "0005_clear_blue_marvel",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1769824833547,
+      "tag": "0006_overconfident_thing",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1769873419264,
+      "tag": "0007_lethal_wolfpack",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1769886908739,
+      "tag": "0008_blue_xavin",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1769893759690,
+      "tag": "0009_abnormal_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1769900461083,
+      "tag": "0010_robust_brother_voodoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1769900549107,
+      "tag": "0011_lush_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1769901144389,
+      "tag": "0012_dizzy_dagger",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1769901211938,
+      "tag": "0013_demonic_warbound",
+      "breakpoints": true
+    }
+  ]
+}

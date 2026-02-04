@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, integration_type, name, config, is_active FROM integration_settings WHERE integration_type = 'whatsapp_business';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, integration_type, name, config, is_active FROM integration_settings WHERE integration_type = 'whatsapp_business';",
+  "rows": [
+    {
+      "id": "1",
+      "integration_type": "whatsapp_business",
+      "name": "WhatsApp Business API",
+      "config": "\"{\\\"accessToken\\\":\\\"EAATtcB05mB0BQggGpYu6TNZBlFIXxEuvbTavwZB0XTiqD1i6ivmN9iIYXMVAriZBh1XypScRKCFgGVJ5WjDng6WBeOc38tKxepbfcHk7T3ecRrQ8fW2rHNDwgHSk5SZAXRCjylc0kM5WRJTgKoZB0ib2WPFTh99TvnaxCCZCYxN3TpqVBzFkXPTuAZAe0cM2hQ6D2CHTObauPKWts5rRjmQQGcISckjn4MfsheZCMjGQfmxsmn7OttZC2V25G2CiZCCcGmExeE7APP51QbgJxHHXZAi3C1t82KtATwMyWLREAZDZD\\\",\\\"phoneNumberId\\\":\\\"851673194701932\\\",\\\"webhookUrl\\\":\\\"https://farmafrancis.manus.space/api/webhooks/whatsapp\\\",\\\"webhookVerifyToken\\\":\\\"@Afrancis87\\\",\\\"appSecret\\\":\\\"\\\"}\"",
+      "is_active": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tintegration_type\tname\tconfig\tis_active\n1\twhatsapp_business\tWhatsApp Business API\t\"{\\\"accessToken\\\":\\\"EAATtcB05mB0BQggGpYu6TNZBlFIXxEuvbTavwZB0XTiqD1i6ivmN9iIYXMVAriZBh1XypScRKCFgGVJ5WjDng6WBeOc38tKxepbfcHk7T3ecRrQ8fW2rHNDwgHSk5SZAXRCjylc0kM5WRJTgKoZB0ib2WPFTh99TvnaxCCZCYxN3TpqVBzFkXPTuAZAe0cM2hQ6D2CHTObauPKWts5rRjmQQGcISckjn4MfsheZCMjGQfmxsmn7OttZC2V25G2CiZCCcGmExeE7APP51QbgJxHHXZAi3C1t82KtATwMyWLREAZDZD\\\",\\\"phoneNumberId\\\":\\\"851673194701932\\\",\\\"webhookUrl\\\":\\\"https://farmafrancis.manus.space/api/webhooks/whatsapp\\\",\\\"webhookVerifyToken\\\":\\\"@Afrancis87\\\",\\\"appSecret\\\":\\\"\\\"}\"\t1\n",
+  "stderr": "",
+  "execution_time_ms": 443
+}

@@ -1,0 +1,299 @@
+import { z } from 'zod';
+import { router, protectedProcedure } from './_core/trpc';
+import { getDb } from './db';
+import { conversations, conversationMessages, customers } from '../drizzle/schema';
+import { eq, and, desc, sql } from 'drizzle-orm';
+import { storagePut } from './storage';
+
+export const conversationsRouter = router({
+  // Criar nova conversa
+  create: protectedProcedure
+    .input(
+      z.object({
+        customerId: z.number().optional(),
+        phoneOrEmail: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      let customerId = input.customerId;
+
+      // Se forneceu phoneOrEmail, criar ou encontrar customer
+      if (input.phoneOrEmail && !customerId) {
+        const isEmail = input.phoneOrEmail.includes('@');
+        
+        // Tentar encontrar customer existente
+        const [existingCustomer] = await db
+          .select()
+          .from(customers)
+          .where(
+            isEmail
+              ? eq(customers.email, input.phoneOrEmail)
+              : eq(customers.phone, input.phoneOrEmail)
+          )
+          .limit(1);
+
+        if (existingCustomer) {
+          customerId = existingCustomer.id;
+        } else {
+          // Criar novo customer
+          const newCustomer = await db
+            .insert(customers)
+            .values({
+              name: input.phoneOrEmail,
+              phone: isEmail ? null : input.phoneOrEmail,
+              email: isEmail ? input.phoneOrEmail : null,
+            }).$returningId();
+          customerId = newCustomer[0].id;
+        }
+      }
+
+      if (!customerId) {
+        throw new Error('Customer ID is required');
+      }
+
+      // Buscar dados do customer
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1);
+
+      if (!customer) {
+        throw new Error('Customer not found');
+      }
+
+      // Criar nova conversa
+      const newConversation = await db
+        .insert(conversations)
+        .values({
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          channel: 'whatsapp',
+          status: 'assigned',
+          assignedTo: ctx.user.id,
+          openedAt: new Date(),
+          lastMessageAt: new Date(),
+        }).$returningId();
+
+      // Buscar conversa criada
+      const [created] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, newConversation[0].id))
+        .limit(1);
+
+      return created;
+    }),
+
+  // Listar conversas ativas do agente
+  listActive: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error('Database not available');
+    const agentConversations = await db
+      .select({
+        id: conversations.id,
+        customerName: conversations.customerName,
+        customerPhone: conversations.customerPhone,
+        channel: conversations.channel,
+        status: conversations.status,
+        openedAt: conversations.openedAt,
+        lastMessageAt: conversations.lastMessageAt,
+        lastMessage: sql<string>`(
+          SELECT content 
+          FROM conversation_messages 
+          WHERE conversation_messages.conversation_id = ${conversations.id} 
+          ORDER BY created_at DESC 
+          LIMIT 1
+        )`,
+        unreadCount: sql<number>`(
+          SELECT COUNT(*) 
+          FROM conversation_messages 
+          WHERE conversation_messages.conversation_id = ${conversations.id} 
+          AND conversation_messages.sender_type = 'customer'
+          AND conversation_messages.read_at IS NULL
+        )`,
+      })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.assignedTo, ctx.user.id),
+          eq(conversations.status, 'assigned')
+        )
+      )
+      .orderBy(desc(conversations.lastMessageAt));
+
+    return agentConversations;
+  }),
+
+  // Obter detalhes de uma conversa
+  getById: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.id),
+            eq(conversations.assignedTo, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      return conversation;
+    }),
+});
+
+export const messagesRouter = router({
+  // Listar mensagens de uma conversa
+  list: protectedProcedure
+    .input(z.object({ conversation_id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      // Verificar se o agente tem acesso a esta conversa
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversation_id),
+            eq(conversations.assignedTo, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error('Conversa não encontrada ou sem permissão');
+      }
+
+      const messagesList = await db
+        .select()
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, input.conversation_id))
+        .orderBy(conversationMessages.createdAt);
+
+      return messagesList;
+    }),
+
+  // Upload de arquivo
+  uploadFile: protectedProcedure
+    .input(
+      z.object({
+        conversation_id: z.number(),
+        fileName: z.string(),
+        fileType: z.string(),
+        fileSize: z.number(),
+        fileData: z.string(), // Base64 encoded
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      // Verificar se o agente tem acesso a esta conversa
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversation_id),
+            eq(conversations.assignedTo, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error('Conversa não encontrada ou sem permissão');
+      }
+
+      // Validar tamanho do arquivo (máximo 16MB)
+      if (input.fileSize > 16 * 1024 * 1024) {
+        throw new Error('Arquivo muito grande. Tamanho máximo: 16MB');
+      }
+
+      // Decodificar base64 para Buffer
+      const fileBuffer = Buffer.from(input.fileData, 'base64');
+
+      // Gerar chave única para o arquivo
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const fileExtension = input.fileName.split('.').pop();
+      const fileKey = `chat-files/${ctx.user.id}/${timestamp}-${randomSuffix}.${fileExtension}`;
+
+      // Upload para S3
+      const { url: fileUrl } = await storagePut(fileKey, fileBuffer, input.fileType);
+
+      return {
+        success: true,
+        fileUrl,
+        fileName: input.fileName,
+        fileType: input.fileType,
+        fileSize: input.fileSize,
+      };
+    }),
+
+  // Enviar mensagem
+  send: protectedProcedure
+    .input(
+      z.object({
+        conversation_id: z.number(),
+        content: z.string().min(1),
+        fileUrl: z.string().optional(),
+        fileName: z.string().optional(),
+        fileType: z.string().optional(),
+        fileSize: z.number().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      // Verificar se o agente tem acesso a esta conversa
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversation_id),
+            eq(conversations.assignedTo, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error('Conversa não encontrada ou sem permissão');
+      }
+
+      // Criar mensagem
+      const [message] = await db
+        .insert(conversationMessages)
+        .values({
+          conversationId: input.conversation_id,
+          senderId: ctx.user.id,
+          senderType: 'agent',
+          content: input.content,
+          fileUrl: input.fileUrl,
+          fileName: input.fileName,
+          fileType: input.fileType,
+          fileSize: input.fileSize,
+          createdAt: new Date(),
+        })
+        .$returningId();
+
+      // Atualizar última mensagem da conversa
+      await db
+        .update(conversations)
+        .set({
+          lastMessageAt: new Date(),
+        })
+        .where(eq(conversations.id, input.conversation_id));
+
+      return { success: true, messageId: message.id };
+    }),
+});

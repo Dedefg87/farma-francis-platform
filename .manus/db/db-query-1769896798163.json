@@ -1,0 +1,16 @@
+{
+  "query": "SELECT id, email, name, role FROM users WHERE name LIKE '%Dede%' OR email LIKE '%Dede%' OR email LIKE '%dede%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, email, name, role FROM users WHERE name LIKE '%Dede%' OR email LIKE '%Dede%' OR email LIKE '%dede%';",
+  "rows": [
+    {
+      "id": "60335",
+      "email": "Dede",
+      "name": "Dede",
+      "role": "user"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\trole\n60335\tDede\tDede\tuser\n",
+  "stderr": "",
+  "execution_time_ms": 79
+}

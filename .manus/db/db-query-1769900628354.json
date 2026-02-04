@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO queues (name, description, status, max_concurrent_chats, priority, color) VALUES\n('Atendimento Geral', 'Fila principal para atendimento geral de clientes', 'active', 3, 1, '#D32F2F'),\n('Suporte Técnico', 'Fila especializada em suporte técnico e resolução de problemas', 'active', 2, 2, '#1976D2'),\n('Vendas', 'Fila dedicada ao time de vendas e conversão de leads', 'active', 5, 3, '#388E3C');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute INSERT INTO queues (name, description, status, max_concurrent_chats, priority, color) VALUES\n('Atendimento Geral', 'Fila principal para atendimento geral de clientes', 'active', 3, 1, '#D32F2F'),\n('Suporte Técnico', 'Fila especializada em suporte técnico e resolução de problemas', 'active', 2, 2, '#1976D2'),\n('Vendas', 'Fila dedicada ao time de vendas e conversão de leads', 'active', 5, 3, '#388E3C');",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 62
+}

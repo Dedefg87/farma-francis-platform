@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, openId, name, email, role FROM users WHERE email = 'maria.silva';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, openId, name, email, role FROM users WHERE email = 'maria.silva';",
+  "rows": [
+    {
+      "id": "60334",
+      "openId": "employee-1769895599795-ijy6m4fm2",
+      "name": "Maria Silva",
+      "email": "maria.silva",
+      "role": "user"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\temail\trole\n60334\temployee-1769895599795-ijy6m4fm2\tMaria Silva\tmaria.silva\tuser\n",
+  "stderr": "",
+  "execution_time_ms": 86
+}

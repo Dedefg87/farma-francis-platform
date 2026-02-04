@@ -1,0 +1,17 @@
+{
+  "query": "SELECT id, email, name, role, openId FROM users WHERE name LIKE '%Dede%' OR email LIKE '%Dede%' OR email LIKE '%dede%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, email, name, role, openId FROM users WHERE name LIKE '%Dede%' OR email LIKE '%Dede%' OR email LIKE '%dede%';",
+  "rows": [
+    {
+      "id": "60335",
+      "email": "Dede",
+      "name": "Dede",
+      "role": "user",
+      "openId": "employee-1769895953210-jprt04mil"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\trole\topenId\n60335\tDede\tDede\tuser\temployee-1769895953210-jprt04mil\n",
+  "stderr": "",
+  "execution_time_ms": 85
+}

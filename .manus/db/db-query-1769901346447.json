@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO conversations (customer_name, customer_phone, channel, status, assigned_to, queue_id, opened_at, last_message_at, unread_count)\nVALUES \n('João Silva', '+5511999887766', 'whatsapp', 'assigned', 60338, 1, NOW(), NOW(), 2),\n('Maria Santos', '+5511988776655', 'whatsapp', 'assigned', 60338, 1, NOW(), NOW(), 1),\n('Pedro Oliveira', '+5511977665544', 'instagram', 'assigned', 60338, 2, NOW(), NOW(), 0);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute INSERT INTO conversations (customer_name, customer_phone, channel, status, assigned_to, queue_id, opened_at, last_message_at, unread_count)\nVALUES \n('João Silva', '+5511999887766', 'whatsapp', 'assigned', 60338, 1, NOW(), NOW(), 2),\n('Maria Santos', '+5511988776655', 'whatsapp', 'assigned', 60338, 1, NOW(), NOW(), 1),\n('Pedro Oliveira', '+5511977665544', 'instagram', 'assigned', 60338, 2, NOW(), NOW(), 0);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 63
+}

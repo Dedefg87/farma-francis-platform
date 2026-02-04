@@ -1,0 +1,401 @@
+import { useState } from 'react';
+import FarmaDashboardLayout from '@/components/FarmaDashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus, Workflow, Zap, Menu as MenuIcon, Upload, FileJson } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
+import { toast } from 'sonner';
+import FlowBuilder from '@/components/FlowBuilder/FlowBuilder';
+import { FlowData } from '@/types/flowBuilder';
+import { FlowImporter } from '@/lib/flowImporter';
+
+export default function Automation() {
+  const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newFlowName, setNewFlowName] = useState('');
+  const [newFlowDescription, setNewFlowDescription] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+
+  const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
+  const { data: automationFlows } = trpc.automation.list.useQuery();
+  const { data: uraMenus } = trpc.uraMenus.list.useQuery();
+
+  const createFlow = trpc.visualFlows.create.useMutation({
+    onSuccess: (data) => {
+      toast.success('Fluxo criado com sucesso!');
+      setSelectedFlowId(data.insertId as number);
+      setIsCreating(false);
+      setNewFlowName('');
+      setNewFlowDescription('');
+      refetchFlows();
+    },
+    onError: () => {
+      toast.error('Erro ao criar fluxo');
+    },
+  });
+
+  const updateFlow = trpc.visualFlows.update.useMutation({
+    onSuccess: () => {
+      toast.success('Fluxo atualizado!');
+      refetchFlows();
+    },
+  });
+
+  const deleteFlow = trpc.visualFlows.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Fluxo deletado!');
+      setSelectedFlowId(null);
+      refetchFlows();
+    },
+  });
+
+  const toggleFlow = trpc.visualFlows.toggle.useMutation({
+    onSuccess: () => {
+      refetchFlows();
+    },
+  });
+
+  const handleCreateFlow = () => {
+    if (!newFlowName.trim()) {
+      toast.error('Nome do fluxo é obrigatório');
+      return;
+    }
+
+    createFlow.mutate({
+      name: newFlowName,
+      description: newFlowDescription,
+      flowData: JSON.stringify({ nodes: [], edges: [] }),
+    });
+  };
+
+  const handleSaveFlow = async (flowData: FlowData) => {
+    if (!selectedFlowId) return;
+
+    await updateFlow.mutateAsync({
+      id: selectedFlowId,
+      flowData: JSON.stringify(flowData),
+    });
+  };
+
+  const handleExecuteFlow = async (flowData: FlowData) => {
+    // TODO: Implement flow execution engine
+    toast.info('Execução de fluxos será implementada em breve');
+    console.log('Execute flow:', flowData);
+  };
+
+  const handleImportFlow = async () => {
+    if (!importFile) {
+      toast.error('Selecione um arquivo para importar');
+      return;
+    }
+
+    try {
+      const content = await importFile.text();
+      const result = await FlowImporter.importFlow(content);
+
+      if (!result.success) {
+        toast.error(result.error || 'Erro ao importar fluxo');
+        return;
+      }
+
+      // Criar novo fluxo com dados importados
+      const flowName = importFile.name.replace(/\.[^/.]+$/, ''); // Remove extensão
+      createFlow.mutate({
+        name: flowName,
+        description: `Importado de ${importFile.name}`,
+        flowData: JSON.stringify(result.flowData),
+      });
+
+      setIsImporting(false);
+      setImportFile(null);
+      toast.success('Fluxo importado com sucesso!');
+    } catch (error) {
+      toast.error('Erro ao processar arquivo');
+    }
+  };
+
+  const selectedFlow = visualFlows?.find(f => f.id === selectedFlowId);
+
+  return (
+    <FarmaDashboardLayout>
+      <div className="h-full flex flex-col">
+        <div className="border-b bg-background p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">Automação e Fluxos</h1>
+              <p className="text-sm text-muted-foreground">
+                Crie fluxos visuais de automação estilo N8N
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Dialog open={isImporting} onOpenChange={setIsImporting}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Importar Fluxo
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Importar Fluxo</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div>
+                      <Label>Arquivo do Fluxo</Label>
+                      <Input
+                        type="file"
+                        accept=".json,.ivr,.n8n,.zapier,.make"
+                        onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Formatos suportados: JSON, IVR, N8N, Zapier, Make
+                      </p>
+                    </div>
+                    {importFile && (
+                      <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                        <FileJson className="w-5 h-5 text-primary" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{importFile.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {(importFile.size / 1024).toFixed(2)} KB
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <Button onClick={handleImportFlow} className="w-full" disabled={!importFile}>
+                      Importar
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isCreating} onOpenChange={setIsCreating}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Fluxo
+                  </Button>
+                </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar Novo Fluxo</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <Label>Nome do Fluxo</Label>
+                    <Input
+                      value={newFlowName}
+                      onChange={(e) => setNewFlowName(e.target.value)}
+                      placeholder="Atendimento Automático"
+                    />
+                  </div>
+                  <div>
+                    <Label>Descrição (opcional)</Label>
+                    <Textarea
+                      value={newFlowDescription}
+                      onChange={(e) => setNewFlowDescription(e.target.value)}
+                      placeholder="Descreva o objetivo deste fluxo..."
+                      rows={3}
+                    />
+                  </div>
+                  <Button onClick={handleCreateFlow} className="w-full">
+                    Criar Fluxo
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            </div>
+          </div>
+        </div>
+
+        <Tabs defaultValue="visual" className="flex-1 flex flex-col">
+          <TabsList className="mx-4 mt-4 w-fit">
+            <TabsTrigger value="visual">
+              <Workflow className="w-4 h-4 mr-2" />
+              Fluxos Visuais
+            </TabsTrigger>
+            <TabsTrigger value="simple">
+              <Zap className="w-4 h-4 mr-2" />
+              Automações Simples
+            </TabsTrigger>
+            <TabsTrigger value="ura">
+              <MenuIcon className="w-4 h-4 mr-2" />
+              URA
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="visual" className="flex-1 m-0">
+            {selectedFlowId && selectedFlow ? (
+              <div className="h-full flex flex-col">
+                <div className="border-b p-2 flex items-center justify-between bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedFlowId(null)}
+                    >
+                      ← Voltar
+                    </Button>
+                    <div className="text-sm font-medium">{selectedFlow.name}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleFlow.mutate({
+                        id: selectedFlowId,
+                        isActive: !selectedFlow.isActive,
+                      })}
+                    >
+                      {selectedFlow.isActive ? 'Desativar' : 'Ativar'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Tem certeza que deseja deletar este fluxo?')) {
+                          deleteFlow.mutate({ id: selectedFlowId });
+                        }
+                      }}
+                    >
+                      Deletar
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <FlowBuilder
+                    flowId={selectedFlowId}
+                    initialData={selectedFlow.flowData ? JSON.parse(selectedFlow.flowData) : undefined}
+                    onSave={handleSaveFlow}
+                    onExecute={handleExecuteFlow}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {visualFlows?.map((flow) => (
+                    <Card
+                      key={flow.id}
+                      className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => setSelectedFlowId(flow.id)}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Workflow className="w-5 h-5 text-primary" />
+                          <h3 className="font-semibold">{flow.name}</h3>
+                        </div>
+                        <div
+                          className={`px-2 py-0.5 rounded text-xs ${
+                            flow.isActive
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {flow.isActive ? 'Ativo' : 'Inativo'}
+                        </div>
+                      </div>
+                      {flow.description && (
+                        <p className="text-sm text-muted-foreground mb-3">
+                          {flow.description}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{flow.executionCount || 0} execuções</span>
+                        <span>
+                          {new Date(flow.updatedAt).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    </Card>
+                  ))}
+
+                  {(!visualFlows || visualFlows.length === 0) && (
+                    <Card className="p-8 col-span-full text-center">
+                      <Workflow className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                      <h3 className="font-semibold mb-2">Nenhum fluxo criado</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Crie seu primeiro fluxo visual de automação
+                      </p>
+                      <Button onClick={() => setIsCreating(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Criar Primeiro Fluxo
+                      </Button>
+                    </Card>
+                  )}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="simple" className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {automationFlows?.map((flow) => (
+                <Card key={flow.id} className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold">{flow.name}</h3>
+                    <div
+                      className={`px-2 py-0.5 rounded text-xs ${
+                        flow.isActive
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {flow.isActive ? 'Ativo' : 'Inativo'}
+                    </div>
+                  </div>
+                  {flow.description && (
+                    <p className="text-sm text-muted-foreground mb-2">
+                      {flow.description}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                      {flow.triggerType}
+                    </span>
+                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                      {flow.actionType}
+                    </span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="ura" className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {uraMenus?.map((menu) => (
+                <Card key={menu.id} className="p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-semibold">{menu.name}</h3>
+                    <div
+                      className={`px-2 py-0.5 rounded text-xs ${
+                        menu.isActive
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {menu.isActive ? 'Ativo' : 'Inativo'}
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {menu.welcomeMessage}
+                  </p>
+                  <div className="text-xs text-muted-foreground">
+                    Última atualização: {new Date(menu.updatedAt).toLocaleDateString('pt-BR')}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </FarmaDashboardLayout>
+  );
+}

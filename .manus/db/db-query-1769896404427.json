@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO users (openId, email, name, passwordHash, loginMethod, role, createdAt, updatedAt) VALUES ('admin-teste', 'admin.teste', 'Admin Teste', '$2b$10$VBffjCXlOAhSI7I/zQzhM.DqdlYck8w46kVKWl0jDtsoHIulCrORS', 'email', 'admin', NOW(), NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute INSERT INTO users (openId, email, name, passwordHash, loginMethod, role, createdAt, updatedAt) VALUES ('admin-teste', 'admin.teste', 'Admin Teste', '$2b$10$VBffjCXlOAhSI7I/zQzhM.DqdlYck8w46kVKWl0jDtsoHIulCrORS', 'email', 'admin', NOW(), NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 52
+}

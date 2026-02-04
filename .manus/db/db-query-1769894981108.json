@@ -1,0 +1,64 @@
+{
+  "query": "SELECT id, openId, name, email, passwordHash, role, loginMethod FROM users LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, openId, name, email, passwordHash, role, loginMethod FROM users LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "openId": "hrHR58EkjTzCNxcixH7MrB",
+      "name": "Anderson Gomes",
+      "email": "andersonfg23@gmail.com",
+      "passwordHash": "NULL",
+      "role": "admin",
+      "loginMethod": "google"
+    },
+    {
+      "id": "60080",
+      "openId": "employee-1769884257919-f4ia2j1vg",
+      "name": "Anderson Francis Gomes",
+      "email": "andersonfg23@gmail.com",
+      "passwordHash": "NULL",
+      "role": "user",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60265",
+      "openId": "admin-default",
+      "name": "Administrador",
+      "email": "admin",
+      "passwordHash": "$2b$10$8bN5UezmxxnnXPuzJCwu/OI4aB28jbwJDXL3Spj1MtJBfAFLv9hlO",
+      "role": "admin",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60328",
+      "openId": "employee-1769892264018-8fh3qupgg",
+      "name": "Anderson Francis Gomes",
+      "email": "andersonfg23@gmail.com",
+      "passwordHash": "$2b$10$X12ziIGjGdFkvvliIzrfmO6.olZEZX/HxT.NaPwwanArLy1uUUeOW",
+      "role": "admin",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60329",
+      "openId": "employee-1769893184928-bo32mxf4b",
+      "name": "dede",
+      "email": "andersonfg23@gmail.com",
+      "passwordHash": "$2b$10$3Ybup3hb6BGlW8QRsGh70uUVT7mM5uT3m2MeKLFYuGawDVFta4.W.",
+      "role": "user",
+      "loginMethod": "email"
+    },
+    {
+      "id": "60330",
+      "openId": "employee-1769893199179-ty3n1mzgn",
+      "name": "dede",
+      "email": "farmafrancisltda2@gmail.com",
+      "passwordHash": "$2b$10$A4DinF0spaE/XO//S63Ta.moDt/wK3YVWQ3Omoj46epJK8CswZqAa",
+      "role": "user",
+      "loginMethod": "email"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tname\temail\tpasswordHash\trole\tloginMethod\n1\thrHR58EkjTzCNxcixH7MrB\tAnderson Gomes\tandersonfg23@gmail.com\tNULL\tadmin\tgoogle\n60080\temployee-1769884257919-f4ia2j1vg\tAnderson Francis Gomes\tandersonfg23@gmail.com\tNULL\tuser\temail\n60265\tadmin-default\tAdministrador\tadmin\t$2b$10$8bN5UezmxxnnXPuzJCwu/OI4aB28jbwJDXL3Spj1MtJBfAFLv9hlO\tadmin\temail\n60328\temployee-1769892264018-8fh3qupgg\tAnderson Francis Gomes\tandersonfg23@gmail.com\t$2b$10$X12ziIGjGdFkvvliIzrfmO6.olZEZX/HxT.NaPwwanArLy1uUUeOW\tadmin\temail\n60329\temployee-1769893184928-bo32mxf4b\tdede\tandersonfg23@gmail.com\t$2b$10$3Ybup3hb6BGlW8QRsGh70uUVT7mM5uT3m2MeKLFYuGawDVFta4.W.\tuser\temail\n60330\temployee-1769893199179-ty3n1mzgn\tdede\tfarmafrancisltda2@gmail.com\t$2b$10$A4DinF0spaE/XO//S63Ta.moDt/wK3YVWQ3Omoj46epJK8CswZqAa\tuser\temail\n",
+  "stderr": "",
+  "execution_time_ms": 72
+}

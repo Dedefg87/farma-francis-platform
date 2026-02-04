@@ -1,0 +1,28 @@
+{
+  "query": "SELECT id, email, name, role FROM users WHERE role = 'admin' LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, email, name, role FROM users WHERE role = 'admin' LIMIT 5;",
+  "rows": [
+    {
+      "id": "1",
+      "email": "andersonfg23@gmail.com",
+      "name": "Anderson Gomes",
+      "role": "admin"
+    },
+    {
+      "id": "60265",
+      "email": "admin",
+      "name": "Administrador",
+      "role": "admin"
+    },
+    {
+      "id": "60328",
+      "email": "andersonfg23@gmail.com",
+      "name": "Anderson Francis Gomes",
+      "role": "admin"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\temail\tname\trole\n1\tandersonfg23@gmail.com\tAnderson Gomes\tadmin\n60265\tadmin\tAdministrador\tadmin\n60328\tandersonfg23@gmail.com\tAnderson Francis Gomes\tadmin\n",
+  "stderr": "",
+  "execution_time_ms": 123
+}

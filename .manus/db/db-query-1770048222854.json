@@ -1,0 +1,9 @@
+{
+  "query": "-- Inserir clientes\nINSERT INTO customers (name, phone, email, status) VALUES\n('João Silva', '11987654321', 'joao.silva@email.com', 'active'),\n('Maria Santos', '11976543210', 'maria.santos@email.com', 'active'),\n('Pedro Oliveira', '11965432109', 'pedro.oliveira@email.com', 'active'),\n('Ana Costa', '11954321098', 'ana.costa@email.com', 'active'),\n('Carlos Ferreira', '11943210987', 'carlos.ferreira@email.com', 'active');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute -- Inserir clientes\nINSERT INTO customers (name, phone, email, status) VALUES\n('João Silva', '11987654321', 'joao.silva@email.com', 'active'),\n('Maria Santos', '11976543210', 'maria.santos@email.com', 'active'),\n('Pedro Oliveira', '11965432109', 'pedro.oliveira@email.com', 'active'),\n('Ana Costa', '11954321098', 'ana.costa@email.com', 'active'),\n('Carlos Ferreira', '11943210987', 'carlos.ferreira@email.com', 'active');",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 61
+}

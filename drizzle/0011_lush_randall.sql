@@ -1,0 +1,2 @@
+ALTER TABLE `conversations` ADD `queue_id` int;--> statement-breakpoint
+ALTER TABLE `conversations` ADD CONSTRAINT `conversations_queue_id_queues_id_fk` FOREIGN KEY (`queue_id`) REFERENCES `queues`(`id`) ON DELETE no action ON UPDATE no action;

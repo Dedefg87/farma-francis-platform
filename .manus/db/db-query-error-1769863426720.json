@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, name, nodes, edges, created_at, updated_at FROM visual_flows ORDER BY updated_at DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, name, nodes, edges, created_at, updated_at FROM visual_flows ORDER BY updated_at DESC LIMIT 5;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'nodes' in 'field list'"
+  ]
+}

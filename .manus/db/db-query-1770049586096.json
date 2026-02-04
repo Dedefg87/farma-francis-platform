@@ -1,0 +1,60 @@
+{
+  "query": "SELECT id, name, phone FROM customers LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 44VwZBdb8BfvNj4.root --database gr5VVRQrpKJZfx98udLt5K --execute SELECT id, name, phone FROM customers LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "Test Customer",
+      "phone": "+5511999999999"
+    },
+    {
+      "id": "2",
+      "name": "Test Customer",
+      "phone": "+5511999999999"
+    },
+    {
+      "id": "3",
+      "name": "Test Customer",
+      "phone": "+5511888888888"
+    },
+    {
+      "id": "4",
+      "name": "Cliente instagram-user-123",
+      "phone": "instagram-user-123"
+    },
+    {
+      "id": "30001",
+      "name": "João Silva",
+      "phone": "11987654321"
+    },
+    {
+      "id": "30002",
+      "name": "Maria Santos",
+      "phone": "11976543210"
+    },
+    {
+      "id": "30003",
+      "name": "Pedro Oliveira",
+      "phone": "11965432109"
+    },
+    {
+      "id": "30004",
+      "name": "Ana Costa",
+      "phone": "11954321098"
+    },
+    {
+      "id": "30005",
+      "name": "Carlos Ferreira",
+      "phone": "11943210987"
+    },
+    {
+      "id": "30006",
+      "name": "João Silva",
+      "phone": "11987654321"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tphone\n1\tTest Customer\t+5511999999999\n2\tTest Customer\t+5511999999999\n3\tTest Customer\t+5511888888888\n4\tCliente instagram-user-123\tinstagram-user-123\n30001\tJoão Silva\t11987654321\n30002\tMaria Santos\t11976543210\n30003\tPedro Oliveira\t11965432109\n30004\tAna Costa\t11954321098\n30005\tCarlos Ferreira\t11943210987\n30006\tJoão Silva\t11987654321\n",
+  "stderr": "",
+  "execution_time_ms": 56
+}

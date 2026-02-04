@@ -1,0 +1,91 @@
+import { getDb } from '../db';
+import { agentPauses } from '../../drizzle/schema';
+import { eq, and, isNotNull, lt } from 'drizzle-orm';
+
+/**
+ * Worker para finalizar automaticamente pausas que excederam sua duração planejada
+ * Deve ser executado periodicamente (ex: a cada minuto)
+ */
+export async function checkAndFinishExpiredPauses() {
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.error('[PauseAutoFinisher] Database not available');
+      return { finishedCount: 0, error: 'Database not available' };
+    }
+
+    const now = new Date();
+    
+    // Buscar pausas ativas que têm duração planejada
+    const activePauses = await db
+      .select()
+      .from(agentPauses)
+      .where(
+        and(
+          eq(agentPauses.status, 'active'),
+          isNotNull(agentPauses.durationMinutes)
+        )
+      );
+
+    let finishedCount = 0;
+
+    for (const pause of activePauses) {
+      if (!pause.durationMinutes) continue;
+
+      // Calcular tempo decorrido em minutos
+      const startedAt = new Date(pause.startedAt);
+      const elapsedMinutes = (now.getTime() - startedAt.getTime()) / (1000 * 60);
+
+      // Se o tempo decorrido excedeu a duração planejada, finalizar a pausa
+      if (elapsedMinutes >= pause.durationMinutes) {
+        await db
+          .update(agentPauses)
+          .set({
+            endedAt: now,
+            status: 'completed',
+          })
+          .where(eq(agentPauses.id, pause.id));
+
+        finishedCount++;
+
+        console.log(
+          `[PauseAutoFinisher] Pausa ${pause.id} do agente ${pause.agentId} finalizada automaticamente ` +
+          `(${elapsedMinutes.toFixed(1)} min / ${pause.durationMinutes} min)`
+        );
+      }
+    }
+
+    if (finishedCount > 0) {
+      console.log(`[PauseAutoFinisher] ${finishedCount} pausa(s) finalizada(s) automaticamente`);
+    }
+
+    return { finishedCount, checkedCount: activePauses.length };
+  } catch (error) {
+    console.error('[PauseAutoFinisher] Erro ao verificar pausas:', error);
+    return { finishedCount: 0, error: String(error) };
+  }
+}
+
+/**
+ * Inicia o worker com intervalo configurável
+ * @param intervalMinutes Intervalo em minutos entre verificações (padrão: 1 minuto)
+ */
+export function startPauseAutoFinisher(intervalMinutes: number = 1) {
+  const intervalMs = intervalMinutes * 60 * 1000;
+
+  console.log(`[PauseAutoFinisher] Iniciando worker (intervalo: ${intervalMinutes} min)`);
+
+  // Executar imediatamente na inicialização
+  checkAndFinishExpiredPauses();
+
+  // Executar periodicamente
+  const interval = setInterval(() => {
+    checkAndFinishExpiredPauses();
+  }, intervalMs);
+
+  // Retornar função para parar o worker
+  return () => {
+    clearInterval(interval);
+    console.log('[PauseAutoFinisher] Worker parado');
+  };
+}
