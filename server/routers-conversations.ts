@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from './_core/trpc';
+import { z } from 'zod';
 import { getDb } from './db';
-import { conversations, conversationMessages, customers } from '../drizzle/schema';
+import { conversations, conversationMessages, customers, users, agentStatus } from '../drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { storagePut } from './storage';
 import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage } from './messaging';
@@ -167,6 +168,94 @@ export const conversationsRouter = router({
 
     return Array.from(mergedByPhone.values());
   }),
+
+  loggedAgents: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error('Database not available');
+
+    const agents = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        status: agentStatus.status,
+      })
+      .from(agentStatus)
+      .innerJoin(users, eq(agentStatus.userId, users.id))
+      .where(eq(agentStatus.status, 'online'))
+      .orderBy(desc(agentStatus.lastActivity));
+
+    return agents.filter(agent => agent.id !== ctx.user.id);
+  }),
+
+  transfer: protectedProcedure
+    .input(z.object({ conversationId: z.number(), agentId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.assignedTo, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error('Conversa não encontrada ou sem permissão');
+      }
+
+      await db
+        .update(conversations)
+        .set({
+          assignedTo: input.agentId,
+          status: 'assigned',
+        })
+        .where(eq(conversations.id, input.conversationId));
+
+      return { success: true };
+    }),
+
+  close: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.number(),
+        reason: z.enum(['venda', 'orcamento', 'conversa_anterior', 'engano']).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.assignedTo, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error('Conversa não encontrada ou sem permissão');
+      }
+
+      await db
+        .update(conversations)
+        .set({
+          status: 'closed',
+          closedAt: new Date(),
+          closeReason: input.reason || 'conversa_anterior',
+        })
+        .where(eq(conversations.id, input.conversationId));
+
+      return { success: true };
+    }),
 
   // Obter detalhes de uma conversa
   getById: protectedProcedure

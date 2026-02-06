@@ -4,8 +4,23 @@ import AgentTopBar from '@/components/AgentTopBar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, Clock, User, Send, Paperclip, Smile, ArrowDownUp, Plus, Inbox, BellOff, Bell, Search } from 'lucide-react';
+import { MessageSquare, Clock, User, Send, Paperclip, Smile, ArrowDownUp, Plus, Inbox, BellOff, Bell, Search, Image as ImageIcon, Users, ArrowRightLeft, XCircle, Video } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +51,15 @@ export default function AgentMessages() {
   const [showPullConversation, setShowPullConversation] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [channelFilter, setChannelFilter] = useState<string>('all');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [showMediaDialog, setShowMediaDialog] = useState(false);
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [showConferenceDialog, setShowConferenceDialog] = useState(false);
+  const [transferAgentId, setTransferAgentId] = useState<string>('');
+  const [closeReason, setCloseReason] = useState('conversa_anterior');
+  const [conferenceLink, setConferenceLink] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousMessagesCountRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
@@ -83,6 +107,10 @@ export default function AgentMessages() {
     trpc.conversations.listActive.useQuery(undefined, {
       refetchInterval: 2000, // Atualizar a cada 2 segundos
     });
+
+  const { data: loggedAgents } = trpc.conversations.loggedAgents.useQuery(undefined, {
+    enabled: showTransferDialog,
+  });
 
   // Filtrar e ordenar conversas
   const sortedConversations = useMemo(() => {
@@ -145,6 +173,18 @@ export default function AgentMessages() {
     }
   );
 
+  const filteredMessages = useMemo(() => {
+    if (!messages) return [];
+    if (!messageSearchQuery.trim()) return messages;
+    const query = messageSearchQuery.toLowerCase();
+    return messages.filter((msg) => msg.content?.toLowerCase().includes(query));
+  }, [messages, messageSearchQuery]);
+
+  const mediaItems = useMemo(() => {
+    if (!messages) return [];
+    return messages.filter((msg) => msg.fileUrl);
+  }, [messages]);
+
   // Mutation para enviar mensagem
   const sendMessageMutation = trpc.messages.send.useMutation({
     onSuccess: () => {
@@ -154,6 +194,39 @@ export default function AgentMessages() {
     },
     onError: (error) => {
       toast.error(`Erro ao enviar mensagem: ${error.message}`);
+    },
+  });
+
+  const handleCreateConference = () => {
+    if (!selectedConversationId) return;
+    const roomId = `farma-francis-${selectedConversationId}-${Date.now()}`;
+    const link = `https://meet.jit.si/${roomId}`;
+    setConferenceLink(link);
+    setShowConferenceDialog(true);
+  };
+
+  const transferConversationMutation = trpc.conversations.transfer.useMutation({
+    onSuccess: () => {
+      toast.success('Conversa transferida com sucesso');
+      setShowTransferDialog(false);
+      setTransferAgentId('');
+      refetchConversations();
+      setSelectedConversationId(null);
+    },
+    onError: (error) => {
+      toast.error(`Erro ao transferir: ${error.message}`);
+    },
+  });
+
+  const closeConversationMutation = trpc.conversations.close.useMutation({
+    onSuccess: () => {
+      toast.success('Conversa encerrada');
+      setShowCloseDialog(false);
+      setSelectedConversationId(null);
+      refetchConversations();
+    },
+    onError: (error) => {
+      toast.error(`Erro ao encerrar: ${error.message}`);
     },
   });
 
@@ -384,28 +457,82 @@ export default function AgentMessages() {
             <>
               {/* Header do Chat */}
               <div className="bg-white border-b border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <Avatar className="w-10 h-10">
-                    {selectedConversation?.customerAvatar ? (
-                      <AvatarImage src={selectedConversation.customerAvatar} alt={selectedConversation.customerName || 'Contato'} />
-                    ) : null}
-                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                      <User className="w-5 h-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{selectedConversation.customerName}</h3>
-                    <p className="text-sm text-gray-500">{selectedConversation.customerPhone}</p>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
+                      {selectedConversation?.customerAvatar ? (
+                        <AvatarImage src={selectedConversation.customerAvatar} alt={selectedConversation.customerName || 'Contato'} />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                        <User className="w-5 h-5" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{selectedConversation.customerName}</h3>
+                      <p className="text-sm text-gray-500">{selectedConversation.customerPhone}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Buscar mensagens"
+                      onClick={() => setShowMessageSearch((prev) => !prev)}
+                    >
+                      <Search className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Midias"
+                      onClick={() => setShowMediaDialog(true)}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Convidados"
+                      onClick={handleCreateConference}
+                    >
+                      <Video className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Transferir chat"
+                      onClick={() => setShowTransferDialog(true)}
+                    >
+                      <ArrowRightLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Encerrar chat"
+                      onClick={() => setShowCloseDialog(true)}
+                    >
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    </Button>
                   </div>
                 </div>
+                {showMessageSearch ? (
+                  <div className="mt-3">
+                    <Input
+                      placeholder="Buscar nas mensagens..."
+                      value={messageSearchQuery}
+                      onChange={(e) => setMessageSearchQuery(e.target.value)}
+                    />
+                  </div>
+                ) : null}
               </div>
 
               {/* Mensagens */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
                 {loadingMessages ? (
                   <div className="text-center text-gray-500">Carregando mensagens...</div>
-                ) : messages && messages.length > 0 ? (
-                  messages.map((msg) => (
+                ) : filteredMessages && filteredMessages.length > 0 ? (
+                  filteredMessages.map((msg) => (
                     <div
                       key={msg.id}
                       className={`flex ${msg.senderType === 'agent' ? 'justify-end' : 'justify-start'}`}
@@ -431,6 +558,8 @@ export default function AgentMessages() {
                       </div>
                     </div>
                   ))
+                ) : messageSearchQuery ? (
+                  <div className="text-center text-gray-500">Nenhuma mensagem encontrada</div>
                 ) : (
                   <div className="text-center text-gray-500">Nenhuma mensagem ainda</div>
                 )}
@@ -490,6 +619,154 @@ export default function AgentMessages() {
             </div>
           )}
         </div>
+
+        <Dialog open={showMediaDialog} onOpenChange={setShowMediaDialog}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Midias compartilhadas</DialogTitle>
+              <DialogDescription>Arquivos enviados nesta conversa</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {mediaItems.length === 0 ? (
+                <div className="text-sm text-gray-500">Nenhuma midia encontrada.</div>
+              ) : (
+                mediaItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3">
+                    <div className="flex items-center gap-3">
+                      {item.fileType?.startsWith('image/') && item.fileUrl ? (
+                        <img src={item.fileUrl} alt={item.fileName || 'midia'} className="w-16 h-16 object-cover rounded" />
+                      ) : (
+                        <div className="w-16 h-16 bg-gray-100 rounded flex items-center justify-center">
+                          <ImageIcon className="w-6 h-6 text-gray-500" />
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-sm font-medium">{item.fileName || item.content || 'Midia'}</p>
+                        <p className="text-xs text-gray-500">{item.fileType || 'arquivo'}</p>
+                      </div>
+                    </div>
+                    {item.fileUrl ? (
+                      <a
+                        className="text-sm text-blue-600 hover:underline"
+                        href={item.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Abrir
+                      </a>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showConferenceDialog} onOpenChange={setShowConferenceDialog}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Convidados</DialogTitle>
+              <DialogDescription>Crie uma sala temporaria e compartilhe o link</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input value={conferenceLink} readOnly />
+              <div className="flex gap-2">
+                <Button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(conferenceLink);
+                    toast.success('Link copiado');
+                  }}
+                >
+                  Copiar link
+                </Button>
+                <Button variant="outline" asChild>
+                  <a href={conferenceLink} target="_blank" rel="noreferrer">
+                    Abrir sala
+                  </a>
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Transferir chat</DialogTitle>
+              <DialogDescription>Selecione um agente logado para transferir</DialogDescription>
+            </DialogHeader>
+            <Select value={transferAgentId} onValueChange={setTransferAgentId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um agente" />
+              </SelectTrigger>
+              <SelectContent>
+                {loggedAgents && loggedAgents.length > 0 ? (
+                  loggedAgents.map((agent) => (
+                    <SelectItem key={agent.id} value={String(agent.id)}>
+                      {agent.name || `Agente ${agent.id}`}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>
+                    Nenhum agente logado
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  if (!transferAgentId || transferAgentId === 'none' || !selectedConversationId) {
+                    toast.error('Selecione um agente');
+                    return;
+                  }
+                  transferConversationMutation.mutate({
+                    conversationId: selectedConversationId,
+                    agentId: Number(transferAgentId),
+                  });
+                }}
+                disabled={transferConversationMutation.isPending}
+              >
+                Transferir
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Encerrar chat</DialogTitle>
+              <DialogDescription>Escolha o motivo e confirme</DialogDescription>
+            </DialogHeader>
+            <Select value={closeReason} onValueChange={setCloseReason}>
+              <SelectTrigger>
+                <SelectValue placeholder="Motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="venda">Venda</SelectItem>
+                <SelectItem value="orcamento">Orcamento</SelectItem>
+                <SelectItem value="conversa_anterior">Conversa anterior</SelectItem>
+                <SelectItem value="engano">Engano</SelectItem>
+              </SelectContent>
+            </Select>
+            <DialogFooter>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (!selectedConversationId) return;
+                  closeConversationMutation.mutate({
+                    conversationId: selectedConversationId,
+                    reason: closeReason as any,
+                  });
+                }}
+                disabled={closeConversationMutation.isPending}
+              >
+                Encerrar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {showQuickReplies && (
