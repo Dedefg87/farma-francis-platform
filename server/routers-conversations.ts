@@ -278,31 +278,36 @@ export const messagesRouter = router({
 
       const isImage = Boolean(input.fileUrl && input.fileType?.startsWith('image/'));
 
-      if (conversation.channel === 'whatsapp') {
-        if (isImage && input.fileUrl) {
-          await sendWhatsAppImage({
-            to: destination,
-            imageUrl: input.fileUrl,
-            caption: input.content,
-          });
-        } else {
-          await sendWhatsAppMessage({
-            to: destination,
-            message: input.content,
-          });
+      try {
+        if (conversation.channel === 'whatsapp') {
+          if (isImage && input.fileUrl) {
+            await sendWhatsAppImage({
+              to: destination,
+              imageUrl: input.fileUrl,
+              caption: input.content,
+            });
+          } else {
+            await sendWhatsAppMessage({
+              to: destination,
+              message: input.content,
+            });
+          }
+        } else if (conversation.channel === 'instagram') {
+          if (isImage && input.fileUrl) {
+            await sendInstagramImage({
+              to: destination,
+              imageUrl: input.fileUrl,
+            });
+          } else {
+            await sendInstagramMessage({
+              to: destination,
+              message: input.content,
+            });
+          }
         }
-      } else if (conversation.channel === 'instagram') {
-        if (isImage && input.fileUrl) {
-          await sendInstagramImage({
-            to: destination,
-            imageUrl: input.fileUrl,
-          });
-        } else {
-          await sendInstagramMessage({
-            to: destination,
-            message: input.content,
-          });
-        }
+      } catch (error) {
+        console.error('[Messages] Failed to send outbound message', error);
+        throw new Error((error as Error).message || 'Falha ao enviar mensagem');
       }
 
       // Criar mensagem

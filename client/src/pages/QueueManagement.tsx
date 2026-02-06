@@ -11,6 +11,7 @@ export default function QueueManagement() {
   const { user } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const { data: queues, isLoading: queuesLoading } = trpc.agent.queues.list.useQuery();
+  const { data: myQueues, isLoading: myQueuesLoading, refetch: refetchMyQueues } = trpc.queues.myQueues.useQuery();
   const { data: agentStatuses, refetch: refetchStatus } = trpc.agent.status.get.useQuery();
   const { data: metrics } = trpc.agent.metrics.realtime.useQuery(undefined, {
     refetchInterval: 5000, // Atualizar a cada 5 segundos
@@ -23,6 +24,26 @@ export default function QueueManagement() {
     },
     onError: (error) => {
       toast.error(`Erro ao atualizar status: ${error.message}`);
+    },
+  });
+
+  const joinQueueMutation = trpc.queues.join.useMutation({
+    onSuccess: () => {
+      refetchMyQueues();
+      toast.success("Entrou na fila com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao entrar na fila: ${error.message}`);
+    },
+  });
+
+  const leaveQueueMutation = trpc.queues.leave.useMutation({
+    onSuccess: () => {
+      refetchMyQueues();
+      toast.success("Saiu da fila com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao sair da fila: ${error.message}`);
     },
   });
 
@@ -132,6 +153,49 @@ export default function QueueManagement() {
         </div>
 
         {/* Gerenciar Filas */}
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Minhas filas</h2>
+          {myQueuesLoading ? (
+            <p className="text-gray-500">Carregando filas...</p>
+          ) : myQueues && myQueues.length > 0 ? (
+            <div className="space-y-3">
+              {myQueues.map((entry) => (
+                <div key={entry.queue.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
+                  <div>
+                    <p className="font-semibold">{entry.queue.name}</p>
+                    <p className="text-sm text-gray-600">Canal: {entry.queue.channel}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={entry.isActive ? "default" : "outline"}>
+                      {entry.isActive ? "Logado" : "Deslogado"}
+                    </Badge>
+                    {entry.isActive ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => leaveQueueMutation.mutate({ queueId: entry.queue.id })}
+                        disabled={leaveQueueMutation.isPending}
+                      >
+                        Sair
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => joinQueueMutation.mutate({ queueId: entry.queue.id })}
+                        disabled={joinQueueMutation.isPending}
+                      >
+                        Entrar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">Nenhuma fila atribuída</p>
+          )}
+        </Card>
+
         <Card className="p-6">
           <h2 className="text-xl font-bold mb-4">Gerenciar filas</h2>
           <div className="space-y-4">

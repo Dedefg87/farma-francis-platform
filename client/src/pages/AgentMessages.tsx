@@ -18,6 +18,7 @@ import QuickRepliesModal from '@/components/QuickRepliesModal';
 import NewConversationModal from '@/components/NewConversationModal';
 import PullConversationModal from '@/components/PullConversationModal';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { toast } from 'sonner';
 
 export default function AgentMessages() {
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
@@ -149,6 +150,9 @@ export default function AgentMessages() {
       setMessage('');
       refetchMessages();
       refetchConversations();
+    },
+    onError: (error) => {
+      toast.error(`Erro ao enviar mensagem: ${error.message}`);
     },
   });
 
