@@ -577,9 +577,19 @@ async function processEvolutionWebhook(body: any) {
       throw new Error("Database not available");
     }
 
+    const eventName = body?.event || body?.data?.event;
+    if (!eventName || !String(eventName).startsWith("messages.")) {
+      return;
+    }
+
     const { message, remoteJid, pushName, fromMe, messageId } = extractEvolutionMessage(body);
 
     if (fromMe) {
+      return;
+    }
+
+    if (!messageId) {
+      console.log("[Evolution] Missing message id");
       return;
     }
 
@@ -591,17 +601,18 @@ async function processEvolutionWebhook(body: any) {
 
     const content = parseEvolutionMessageContent(message);
 
-    if (messageId) {
-      const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
-      if (existing) {
-        console.log(`[Evolution] Duplicate message ${messageId} ignored`);
-        return;
-      }
+    const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+    if (existing) {
+      console.log(`[Evolution] Duplicate message ${messageId} ignored`);
+      return;
     }
+
+    const messageTimestamp = body?.data?.messageTimestamp || body?.data?.message?.messageTimestamp;
+    const timestamp = Number(messageTimestamp || Math.floor(Date.now() / 1000));
 
     await db.insert(receivedMessages).values({
       provider: "whatsapp",
-      externalId: messageId || null,
+      externalId: messageId,
       fromNumber,
       fromName: pushName || null,
       messageType: content.type,
@@ -609,6 +620,7 @@ async function processEvolutionWebhook(body: any) {
       mediaUrl: content.mediaUrl,
       mimeType: content.mimeType,
       caption: content.caption,
+      timestamp,
       rawPayload: JSON.stringify(body),
       processed: 0,
     });
