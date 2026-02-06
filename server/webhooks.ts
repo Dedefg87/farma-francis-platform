@@ -1,10 +1,22 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "./db";
 import { apiConfigurations, receivedMessages, integrationSettings } from "../drizzle/schema";
+import { getReceivedMessageByExternalId, ingestInboundConversationMessage } from "./db-messages";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
 const router = Router();
+const isProduction = process.env.NODE_ENV === "production";
+
+function logWebhookSummary(provider: "WhatsApp" | "Instagram", payload: unknown) {
+  if (!isProduction) {
+    console.log(`[${provider} Webhook] Received payload:`, JSON.stringify(payload, null, 2));
+    return;
+  }
+  const body = payload as { entry?: unknown[] };
+  const entryCount = Array.isArray(body?.entry) ? body.entry.length : 0;
+  console.log(`[${provider} Webhook] Received payload with ${entryCount} entries`);
+}
 
 /**
  * WhatsApp Webhook Verification (GET)
@@ -41,9 +53,8 @@ router.get("/webhooks/whatsapp", async (req: Request, res: Response) => {
       const configData = typeof config[0].config === 'string' ? JSON.parse(config[0].config) : config[0].config;
       const storedToken = configData.webhookVerifyToken;
 
-      console.log("[WhatsApp Webhook] Debug - Received token:", token);
-      console.log("[WhatsApp Webhook] Debug - Stored token:", storedToken);
-      console.log("[WhatsApp Webhook] Debug - Config keys:", Object.keys(configData));
+      console.log("[WhatsApp Webhook] Verify token present:", Boolean(token));
+      console.log("[WhatsApp Webhook] Stored token present:", Boolean(storedToken));
 
       if (token === storedToken) {
         console.log("[WhatsApp Webhook] Verification successful");
@@ -69,12 +80,16 @@ router.post("/webhooks/whatsapp", async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
-    console.log("[WhatsApp Webhook] Received payload:", JSON.stringify(body, null, 2));
+    logWebhookSummary("WhatsApp", body);
 
     // Validate signature if app secret is configured
-    const signature = req.headers["x-hub-signature-256"] as string;
+    const signature = req.headers["x-hub-signature-256"] as string | undefined;
+    if (!signature && isProduction) {
+      console.error("[WhatsApp Webhook] Missing signature in production");
+      return res.status(403).send("Missing signature");
+    }
     if (signature) {
-      const isValid = await validateWhatsAppSignature(req.body, signature);
+      const isValid = await validateWhatsAppSignature((req as any).rawBody, signature);
       if (!isValid) {
         console.error("[WhatsApp Webhook] Invalid signature");
         return res.status(403).send("Invalid signature");
@@ -154,12 +169,16 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
-    console.log("[Instagram Webhook] Received payload:", JSON.stringify(body, null, 2));
+    logWebhookSummary("Instagram", body);
 
     // Validate signature if app secret is configured
-    const signature = req.headers["x-hub-signature-256"] as string;
+    const signature = req.headers["x-hub-signature-256"] as string | undefined;
+    if (!signature && isProduction) {
+      console.error("[Instagram Webhook] Missing signature in production");
+      return res.status(403).send("Missing signature");
+    }
     if (signature) {
-      const isValid = await validateInstagramSignature(req.body, signature);
+      const isValid = await validateInstagramSignature((req as any).rawBody, signature);
       if (!isValid) {
         console.error("[Instagram Webhook] Invalid signature");
         return res.status(403).send("Invalid signature");
@@ -269,6 +288,12 @@ async function processWhatsAppWebhook(body: any) {
               console.log(`[WhatsApp] Unknown message type: ${type}`);
           }
 
+          const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+          if (existing) {
+            console.log(`[WhatsApp] Duplicate message ${messageId} ignored`);
+            continue;
+          }
+
           // Save to database
           await db.insert(receivedMessages).values({
             provider: "whatsapp",
@@ -288,6 +313,20 @@ async function processWhatsAppWebhook(body: any) {
             timestamp,
             rawPayload: JSON.stringify(message),
             processed: 0,
+          });
+
+          await ingestInboundConversationMessage({
+            provider: "whatsapp",
+            fromNumber: from,
+            fromName,
+            messageType: ["text", "image", "audio", "video", "document", "location", "contact", "sticker", "reaction"].includes(type)
+              ? type
+              : "unknown",
+            messageText,
+            caption,
+            mediaUrl,
+            mimeType,
+            createdAt: new Date(),
           });
 
           console.log(`[WhatsApp] Saved message ${messageId} from ${from}`);
@@ -353,6 +392,12 @@ async function processInstagramWebhook(body: any) {
           mediaUrl = payload?.url || null;
         }
 
+        const existing = await getReceivedMessageByExternalId(messageId, "instagram");
+        if (existing) {
+          console.log(`[Instagram] Duplicate message ${messageId} ignored`);
+          continue;
+        }
+
         // Save to database
         await db.insert(receivedMessages).values({
           provider: "instagram",
@@ -372,6 +417,18 @@ async function processInstagramWebhook(body: any) {
           processed: 0,
         });
 
+        await ingestInboundConversationMessage({
+          provider: "instagram",
+          fromNumber: sender,
+          fromName: null,
+          messageType,
+          messageText: text,
+          caption: null,
+          mediaUrl,
+          mimeType,
+          createdAt: new Date(),
+        });
+
         console.log(`[Instagram] Saved message ${messageId} from ${sender}`);
       }
     }
@@ -384,7 +441,7 @@ async function processInstagramWebhook(body: any) {
 /**
  * Validate WhatsApp webhook signature using HMAC SHA256
  */
-async function validateWhatsAppSignature(payload: any, signature: string): Promise<boolean> {
+async function validateWhatsAppSignature(rawBody: string | undefined, signature: string): Promise<boolean> {
   try {
     const db = await getDb();
     if (!db) return false;
@@ -404,13 +461,26 @@ async function validateWhatsAppSignature(payload: any, signature: string): Promi
     const appSecret = configData.appSecret;
 
     if (!appSecret) {
+      if (isProduction) {
+        console.log("[WhatsApp Webhook] No app secret configured in production");
+        return false;
+      }
       console.log("[WhatsApp Webhook] No app secret configured, skipping signature validation");
-      return true; // Allow if no secret configured
+      return true;
     }
+    if (!rawBody) {
+      console.log("[WhatsApp Webhook] Missing raw body for signature validation");
+      return false;
+    }
+
     const expectedSignature = "sha256=" + crypto
       .createHmac("sha256", appSecret)
-      .update(JSON.stringify(payload))
+      .update(rawBody)
       .digest("hex");
+
+    if (signature.length !== expectedSignature.length) {
+      return false;
+    }
 
     return crypto.timingSafeEqual(
       Buffer.from(signature),
@@ -425,7 +495,7 @@ async function validateWhatsAppSignature(payload: any, signature: string): Promi
 /**
  * Validate Instagram webhook signature using HMAC SHA256
  */
-async function validateInstagramSignature(payload: any, signature: string): Promise<boolean> {
+async function validateInstagramSignature(rawBody: string | undefined, signature: string): Promise<boolean> {
   try {
     const db = await getDb();
     if (!db) return false;
@@ -445,13 +515,26 @@ async function validateInstagramSignature(payload: any, signature: string): Prom
     const appSecret = configData.appSecret;
 
     if (!appSecret) {
+      if (isProduction) {
+        console.log("[Instagram Webhook] No app secret configured in production");
+        return false;
+      }
       console.log("[Instagram Webhook] No app secret configured, skipping signature validation");
-      return true; // Allow if no secret configured
+      return true;
     }
+    if (!rawBody) {
+      console.log("[Instagram Webhook] Missing raw body for signature validation");
+      return false;
+    }
+
     const expectedSignature = "sha256=" + crypto
       .createHmac("sha256", appSecret)
-      .update(JSON.stringify(payload))
+      .update(rawBody)
       .digest("hex");
+
+    if (signature.length !== expectedSignature.length) {
+      return false;
+    }
 
     return crypto.timingSafeEqual(
       Buffer.from(signature),
