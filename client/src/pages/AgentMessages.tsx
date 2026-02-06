@@ -80,7 +80,7 @@ export default function AgentMessages() {
   // Buscar conversas ativas do agente
   const { data: conversations, isLoading: loadingConversations, refetch: refetchConversations } =
     trpc.conversations.listActive.useQuery(undefined, {
-      refetchInterval: 5000, // Atualizar a cada 5 segundos
+      refetchInterval: 2000, // Atualizar a cada 2 segundos
     });
 
   // Filtrar e ordenar conversas
@@ -140,7 +140,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     { 
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 3000 : false, // Atualizar mensagens a cada 3 segundos se conversa selecionada
+      refetchInterval: selectedConversationId ? 1500 : false, // Atualizar mensagens a cada 1.5 segundos se conversa selecionada
     }
   );
 

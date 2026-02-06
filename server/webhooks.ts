@@ -8,6 +8,13 @@ import crypto from "crypto";
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";
 
+function normalizeInboundNumber(value: string | undefined | null) {
+  if (!value) return null;
+  const stripped = value.split("@")[0].replace(/\D/g, "");
+  if (!stripped) return null;
+  return stripped.startsWith("+") ? stripped : `+${stripped}`;
+}
+
 function logWebhookSummary(provider: "WhatsApp" | "Instagram", payload: unknown) {
   if (!isProduction) {
     console.log(`[${provider} Webhook] Received payload:`, JSON.stringify(payload, null, 2));
@@ -195,6 +202,49 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("[Instagram Webhook] Handler error:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
+/**
+ * Evolution API Webhook (POST)
+ */
+router.post("/webhooks/evolution", async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+    logWebhookSummary("WhatsApp", body);
+
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).send("Database not available");
+    }
+
+    const [configRow] = await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.integrationType, "evolution_api"))
+      .limit(1);
+
+    if (configRow) {
+      const configData = typeof configRow.config === "string" ? JSON.parse(configRow.config) : configRow.config;
+      const expectedApiKey = configData.apiKey || configData.accessToken;
+      const providedApiKey = (req.headers["apikey"] || req.headers["x-api-key"]) as string | undefined;
+
+      if (expectedApiKey && providedApiKey !== expectedApiKey) {
+        if (isProduction) {
+          console.error("[Evolution Webhook] Invalid API Key");
+          return res.status(403).send("Invalid API key");
+        }
+      }
+    }
+
+    res.status(200).send("EVENT_RECEIVED");
+
+    processEvolutionWebhook(body).catch((error) => {
+      console.error("[Evolution Webhook] Processing error:", error);
+    });
+  } catch (error) {
+    console.error("[Evolution Webhook] Handler error:", error);
     res.status(500).send("Internal server error");
   }
 });
@@ -434,6 +484,148 @@ async function processInstagramWebhook(body: any) {
     }
   } catch (error) {
     console.error("[Instagram] Processing error:", error);
+    throw error;
+  }
+}
+
+function extractEvolutionMessage(body: any) {
+  const payload = body?.data || body?.payload || body;
+  const messageEntry =
+    payload?.message ||
+    payload?.messages?.[0] ||
+    payload?.messages?.[0]?.message ||
+    payload?.data?.messages?.[0] ||
+    payload?.data?.message ||
+    payload?.message ||
+    body?.message;
+
+  const key =
+    payload?.key ||
+    payload?.data?.key ||
+    payload?.message?.key ||
+    messageEntry?.key ||
+    messageEntry?.message?.key;
+
+  const fromMe = key?.fromMe ?? messageEntry?.key?.fromMe ?? payload?.fromMe;
+  const remoteJid = key?.remoteJid || messageEntry?.key?.remoteJid || payload?.remoteJid || payload?.from;
+  const pushName = payload?.pushName || payload?.senderName || payload?.contact?.name || messageEntry?.pushName;
+  const message = messageEntry?.message || messageEntry;
+
+  return { message, remoteJid, pushName, fromMe, messageId: key?.id || payload?.id || messageEntry?.id };
+}
+
+function parseEvolutionMessageContent(message: any) {
+  if (!message) return { type: "unknown", text: null, caption: null, mediaUrl: null, mimeType: null };
+
+  if (message.conversation) {
+    return { type: "text", text: message.conversation, caption: null, mediaUrl: null, mimeType: null };
+  }
+
+  if (message.extendedTextMessage?.text) {
+    return { type: "text", text: message.extendedTextMessage.text, caption: null, mediaUrl: null, mimeType: null };
+  }
+
+  if (message.imageMessage) {
+    return {
+      type: "image",
+      text: null,
+      caption: message.imageMessage.caption || null,
+      mediaUrl: message.imageMessage.url || null,
+      mimeType: message.imageMessage.mimetype || null,
+    };
+  }
+
+  if (message.videoMessage) {
+    return {
+      type: "video",
+      text: null,
+      caption: message.videoMessage.caption || null,
+      mediaUrl: message.videoMessage.url || null,
+      mimeType: message.videoMessage.mimetype || null,
+    };
+  }
+
+  if (message.documentMessage) {
+    return {
+      type: "document",
+      text: null,
+      caption: message.documentMessage.caption || null,
+      mediaUrl: message.documentMessage.url || null,
+      mimeType: message.documentMessage.mimetype || null,
+    };
+  }
+
+  if (message.audioMessage) {
+    return {
+      type: "audio",
+      text: null,
+      caption: null,
+      mediaUrl: message.audioMessage.url || null,
+      mimeType: message.audioMessage.mimetype || null,
+    };
+  }
+
+  return { type: "unknown", text: null, caption: null, mediaUrl: null, mimeType: null };
+}
+
+async function processEvolutionWebhook(body: any) {
+  try {
+    const db = await getDb();
+    if (!db) {
+      throw new Error("Database not available");
+    }
+
+    const { message, remoteJid, pushName, fromMe, messageId } = extractEvolutionMessage(body);
+
+    if (fromMe) {
+      return;
+    }
+
+    const fromNumber = normalizeInboundNumber(remoteJid);
+    if (!fromNumber) {
+      console.log("[Evolution] No sender number found");
+      return;
+    }
+
+    const content = parseEvolutionMessageContent(message);
+
+    if (messageId) {
+      const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+      if (existing) {
+        console.log(`[Evolution] Duplicate message ${messageId} ignored`);
+        return;
+      }
+    }
+
+    await db.insert(receivedMessages).values({
+      provider: "whatsapp",
+      externalId: messageId || null,
+      fromNumber,
+      fromName: pushName || null,
+      messageType: content.type,
+      messageText: content.text,
+      mediaUrl: content.mediaUrl,
+      mimeType: content.mimeType,
+      caption: content.caption,
+      rawPayload: JSON.stringify(body),
+      processed: 0,
+    });
+
+    await ingestInboundConversationMessage({
+      provider: "whatsapp",
+      fromNumber,
+      fromName: pushName || null,
+      messageType: content.type,
+      messageText: content.text,
+      caption: content.caption,
+      mediaUrl: content.mediaUrl,
+      mimeType: content.mimeType,
+      createdAt: new Date(),
+    });
+
+    console.log(`[Evolution] Saved message ${messageId || "(no-id)"} from ${fromNumber}`);
+  } catch (error) {
+    console.error("[Evolution] Processing error:", error);
     throw error;
   }
 }
