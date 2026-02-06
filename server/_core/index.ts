@@ -95,6 +95,9 @@ async function startServer() {
   // Webhook routes for WhatsApp and Instagram
   const webhookRouter = await import("../webhooks");
   app.use("/api/webhooks", webhookRouter.default);
+  // Temporary migration endpoint
+  const migrationRouter = await import("../migration-route");
+  app.use("/api", migrationRouter.default);
   // tRPC API
   app.use(
     "/api/trpc",
