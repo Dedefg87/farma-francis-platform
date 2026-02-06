@@ -63,12 +63,7 @@ export const appRouter = router({
         // Verificar senha (se existir hash)
         if (user.passwordHash) {
           console.log('[LOGIN] Verificando senha com bcrypt...');
-          console.log('[LOGIN] Senha fornecida:', input.password);
-          console.log('[LOGIN] Hash no banco (primeiros 29 chars):', user.passwordHash.substring(0, 29));
-          
           const isValid = await bcrypt.compare(input.password, user.passwordHash);
-          console.log('[LOGIN] Senha válida?', isValid);
-          
           if (!isValid) {
             console.log('[LOGIN] ERRO: Senha incorreta');
             throw new Error("Usuário ou senha incorretos");
@@ -84,14 +79,13 @@ export const appRouter = router({
         // Criar token JWT usando SDK
         const { sdk } = await import("./_core/sdk");
         console.log('[LOGIN] Criando session token para openId:', user.openId);
-        console.log('[LOGIN] Nome do usuário:', user.name);
         
         const token = await sdk.createSessionToken(user.openId, {
           name: user.name || '',
           expiresInMs: 7 * 24 * 60 * 60 * 1000 // 7 dias
         });
         
-        console.log('[LOGIN] Token criado (primeiros 50 chars):', token.substring(0, 50));
+        console.log('[LOGIN] Token criado');
 
         // Definir cookie de sessão
         const cookieOptions = getSessionCookieOptions(ctx.req);
@@ -116,7 +110,7 @@ export const appRouter = router({
       }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions });
       return {
         success: true,
       } as const;
