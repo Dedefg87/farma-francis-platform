@@ -40,6 +40,7 @@ export const customers = mysqlTable("customers", {
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
+  photoUrl: varchar("photo_url", { length: 500 }),
   cpfCnpj: varchar("cpf_cnpj", { length: 18 }),
   address: text("address"),
   city: varchar("city", { length: 100 }),

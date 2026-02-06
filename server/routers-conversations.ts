@@ -99,6 +99,7 @@ export const conversationsRouter = router({
         id: conversations.id,
         customerName: conversations.customerName,
         customerPhone: conversations.customerPhone,
+        customerAvatar: customers.photoUrl,
         channel: conversations.channel,
         status: conversations.status,
         openedAt: conversations.openedAt,
@@ -119,6 +120,7 @@ export const conversationsRouter = router({
         )`,
       })
       .from(conversations)
+      .leftJoin(customers, eq(conversations.customerId, customers.id))
       .where(
         and(
           eq(conversations.assignedTo, ctx.user.id),

@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MessageSquare, Clock, User, Send, Paperclip, Smile, ArrowDownUp, Plus, Inbox, BellOff, Bell, Search } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -323,9 +324,14 @@ export default function AgentMessages() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <User className="w-5 h-5 text-white" />
-                    </div>
+                    <Avatar className="w-10 h-10 flex-shrink-0">
+                      {conv.customerAvatar ? (
+                        <AvatarImage src={conv.customerAvatar} alt={conv.customerName || 'Contato'} />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                        <User className="w-5 h-5" />
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-semibold text-gray-900 truncate">{conv.customerName}</h3>
@@ -379,9 +385,14 @@ export default function AgentMessages() {
               {/* Header do Chat */}
               <div className="bg-white border-b border-gray-200 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-white" />
-                  </div>
+                  <Avatar className="w-10 h-10">
+                    {selectedConversation?.customerAvatar ? (
+                      <AvatarImage src={selectedConversation.customerAvatar} alt={selectedConversation.customerName || 'Contato'} />
+                    ) : null}
+                    <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                      <User className="w-5 h-5" />
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
                     <h3 className="font-semibold text-gray-900">{selectedConversation.customerName}</h3>
                     <p className="text-sm text-gray-500">{selectedConversation.customerPhone}</p>

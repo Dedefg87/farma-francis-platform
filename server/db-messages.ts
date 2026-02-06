@@ -133,7 +133,11 @@ function normalizePhone(value: string) {
   return digits.startsWith("+") ? digits : `+${digits}`;
 }
 
-export async function findOrCreateCustomerByPhone(phone: string, name?: string) {
+export async function findOrCreateCustomerByPhone(
+  phone: string,
+  name?: string,
+  photoUrl?: string | null
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -147,10 +151,17 @@ export async function findOrCreateCustomerByPhone(phone: string, name?: string) 
     .limit(1);
 
   if (existing.length > 0) {
+    const updates: Record<string, unknown> = {};
     if (name && existing[0].name !== name) {
+      updates.name = name;
+    }
+    if (photoUrl && existing[0].photoUrl !== photoUrl) {
+      updates.photoUrl = photoUrl;
+    }
+    if (Object.keys(updates).length > 0) {
       await db
         .update(customers)
-        .set({ name, updatedAt: new Date() })
+        .set({ ...updates, updatedAt: new Date() })
         .where(eq(customers.id, existing[0].id));
     }
     return existing[0];
@@ -160,6 +171,7 @@ export async function findOrCreateCustomerByPhone(phone: string, name?: string) 
   const result = await db.insert(customers).values({
     name: name || `Cliente ${phone}`,
     phone: normalizedPhone,
+    photoUrl: photoUrl || null,
     status: "active",
   });
 

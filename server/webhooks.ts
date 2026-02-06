@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "./db";
 import { apiConfigurations, receivedMessages, integrationSettings } from "../drizzle/schema";
-import { getReceivedMessageByExternalId, ingestInboundConversationMessage } from "./db-messages";
+import { getReceivedMessageByExternalId, ingestInboundConversationMessage, findOrCreateCustomerByPhone } from "./db-messages";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -578,7 +578,27 @@ async function processEvolutionWebhook(body: any) {
     }
 
     const eventName = body?.event || body?.data?.event;
-    if (!eventName || !String(eventName).startsWith("messages.")) {
+    if (!eventName) {
+      return;
+    }
+
+    if (String(eventName).startsWith("contacts.")) {
+      const payload = body?.data || body;
+      const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id;
+      const fromNumber = normalizeInboundNumber(remoteJid);
+      if (!fromNumber) {
+        return;
+      }
+
+      const pushName = payload?.pushName || payload?.name || payload?.contact?.name;
+      const profilePicUrl = payload?.profilePicUrl || payload?.profilePictureUrl || payload?.profilePicture;
+
+      await findOrCreateCustomerByPhone(fromNumber, pushName || undefined, profilePicUrl || undefined);
+      console.log(`[Evolution] Updated contact ${fromNumber}`);
+      return;
+    }
+
+    if (!String(eventName).startsWith("messages.")) {
       return;
     }
 
