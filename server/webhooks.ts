@@ -228,7 +228,9 @@ router.post("/webhooks/evolution", async (req: Request, res: Response) => {
     if (configRow) {
       const configData = typeof configRow.config === "string" ? JSON.parse(configRow.config) : configRow.config;
       const expectedApiKey = configData.apiKey || configData.accessToken;
-      const providedApiKey = (req.headers["apikey"] || req.headers["x-api-key"]) as string | undefined;
+      const providedApiKey =
+        ((req.headers["apikey"] || req.headers["x-api-key"]) as string | undefined) ||
+        (req.query["apikey"] as string | undefined);
 
       if (expectedApiKey && providedApiKey !== expectedApiKey) {
         if (isProduction) {
