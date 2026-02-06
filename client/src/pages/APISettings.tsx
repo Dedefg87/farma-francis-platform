@@ -26,6 +26,7 @@ export default function APISettings() {
   // Evolution API
   const [evolutionApiUrl, setEvolutionApiUrl] = useState("");
   const [evolutionApiKey, setEvolutionApiKey] = useState("");
+  const [evolutionInstanceName, setEvolutionInstanceName] = useState("");
 
   const utils = trpc.useUtils();
   
@@ -135,6 +136,7 @@ export default function APISettings() {
       const config = evolutionConfig.config as any;
       setEvolutionApiUrl(config.apiUrl || "");
       setEvolutionApiKey(config.apiKey || "");
+      setEvolutionInstanceName(config.instanceName || "");
     }
   }, [evolutionConfig]);
 
@@ -202,7 +204,7 @@ export default function APISettings() {
   };
 
   const handleSaveEvolution = () => {
-    if (!evolutionApiUrl || !evolutionApiKey) {
+    if (!evolutionApiUrl || !evolutionApiKey || !evolutionInstanceName) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
@@ -212,6 +214,7 @@ export default function APISettings() {
       name: "Evolution API",
       apiUrl: evolutionApiUrl,
       apiKey: evolutionApiKey,
+      instanceName: evolutionInstanceName,
       isActive: true,
     });
   };
@@ -535,6 +538,19 @@ export default function APISettings() {
                   />
                   <p className="text-sm text-muted-foreground">
                     Chave de API para autenticação
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="evolution-instance">Instance Name *</Label>
+                  <Input
+                    id="evolution-instance"
+                    placeholder="main"
+                    value={evolutionInstanceName}
+                    onChange={(e) => setEvolutionInstanceName(e.target.value)}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Nome da instância criada no Evolution Manager
                   </p>
                 </div>
 

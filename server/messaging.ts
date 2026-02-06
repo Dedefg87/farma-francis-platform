@@ -6,7 +6,7 @@ function normalizeWhatsAppNumber(value: string) {
   return value.replace(/\D/g, "");
 }
 
-async function getIntegrationConfig(type: "whatsapp_business" | "instagram_graph") {
+async function getIntegrationConfig(type: "whatsapp_business" | "instagram_graph" | "evolution_api") {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -24,6 +24,57 @@ async function getIntegrationConfig(type: "whatsapp_business" | "instagram_graph
   return { configData, configId: config.id };
 }
 
+async function getEvolutionConfig() {
+  try {
+    const { configData } = await getIntegrationConfig("evolution_api");
+    const apiUrl = configData.apiUrl as string | undefined;
+    const apiKey = (configData.apiKey as string | undefined) || (configData.accessToken as string | undefined);
+    const instanceName = configData.instanceName as string | undefined;
+
+    if (!apiUrl || !apiKey || !instanceName) {
+      return null;
+    }
+
+    return {
+      apiUrl: apiUrl.replace(/\/$/, ""),
+      apiKey,
+      instanceName,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function sendEvolutionText(params: { to: string; message: string }) {
+  const config = await getEvolutionConfig();
+  if (!config) {
+    throw new Error("Evolution API configuration not found or incomplete");
+  }
+
+  const response = await fetch(
+    `${config.apiUrl}/message/sendText/${config.instanceName}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: config.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        number: normalizeWhatsAppNumber(params.to),
+        text: params.message,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Evolution API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+  return result;
+}
+
 /**
  * Send a text message via WhatsApp Business API
  */
@@ -34,6 +85,19 @@ export async function sendWhatsAppMessage(params: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  const evolutionConfig = await getEvolutionConfig();
+  if (evolutionConfig) {
+    const result = await sendEvolutionText({ to: params.to, message: params.message });
+    await db.insert(messages).values({
+      channel: "whatsapp",
+      direction: "outbound",
+      content: params.message,
+      messageId: result?.key?.id || null,
+      status: "sent",
+    });
+    return { success: true, messageId: result?.key?.id || null, to: params.to };
+  }
 
   const { configData } = await getIntegrationConfig("whatsapp_business");
   const token = configData.accessToken;
@@ -108,6 +172,21 @@ export async function sendWhatsAppImage(params: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  const evolutionConfig = await getEvolutionConfig();
+  if (evolutionConfig) {
+    const messageText = params.caption ? `${params.caption}\n${params.imageUrl}` : params.imageUrl;
+    const result = await sendEvolutionText({ to: params.to, message: messageText });
+    await db.insert(messages).values({
+      channel: "whatsapp",
+      direction: "outbound",
+      content: messageText,
+      messageId: result?.key?.id || null,
+      status: "sent",
+      metadata: JSON.stringify({ imageUrl: params.imageUrl, caption: params.caption }),
+    });
+    return { success: true, messageId: result?.key?.id || null, to: params.to };
+  }
 
   const { configData } = await getIntegrationConfig("whatsapp_business");
   const token = configData.accessToken;

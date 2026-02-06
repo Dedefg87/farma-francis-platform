@@ -54,6 +54,7 @@ export const apiConfigRouter = router({
       appSecret: z.string().optional(),
       apiUrl: z.string().optional(),
       apiKey: z.string().optional(),
+      instanceName: z.string().optional(),
       isActive: z.boolean().default(true),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -73,6 +74,7 @@ export const apiConfigRouter = router({
         appSecret: input.appSecret,
         apiUrl: input.apiUrl,
         apiKey: input.apiKey,
+        instanceName: input.instanceName,
       };
 
       // Verificar se já existe configuração
