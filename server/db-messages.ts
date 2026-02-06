@@ -127,25 +127,39 @@ export async function getConversationHistory(
 /**
  * Find or create customer by phone number
  */
+function normalizePhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return value;
+  return digits.startsWith("+") ? digits : `+${digits}`;
+}
+
 export async function findOrCreateCustomerByPhone(phone: string, name?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  const normalizedPhone = normalizePhone(phone);
 
   // Try to find existing customer
   const existing = await db
     .select()
     .from(customers)
-    .where(eq(customers.phone, phone))
+    .where(eq(customers.phone, normalizedPhone))
     .limit(1);
 
   if (existing.length > 0) {
+    if (name && existing[0].name !== name) {
+      await db
+        .update(customers)
+        .set({ name, updatedAt: new Date() })
+        .where(eq(customers.id, existing[0].id));
+    }
     return existing[0];
   }
 
   // Create new customer
   const result = await db.insert(customers).values({
     name: name || `Cliente ${phone}`,
-    phone,
+    phone: normalizedPhone,
     status: "active",
   });
 
@@ -153,7 +167,7 @@ export async function findOrCreateCustomerByPhone(phone: string, name?: string) 
   const newCustomer = await db
     .select()
     .from(customers)
-    .where(eq(customers.phone, phone))
+    .where(eq(customers.phone, normalizedPhone))
     .limit(1);
 
   return newCustomer[0];
