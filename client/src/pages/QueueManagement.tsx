@@ -155,88 +155,6 @@ export default function QueueManagement() {
           </Card>
         </div>
 
-        {/* Gerenciar Filas */}
-        <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">Minhas filas</h2>
-          {myQueuesLoading ? (
-            <p className="text-gray-500">Carregando filas...</p>
-          ) : myQueues && myQueues.length > 0 ? (
-            <div className="space-y-3">
-              {myQueues.map((entry) => (
-                <div key={entry.queue.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
-                  <div>
-                    <p className="font-semibold">{entry.queue.name}</p>
-                    <p className="text-sm text-gray-600">Canal: {entry.queue.channel}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={entry.isActive ? "default" : "outline"}>
-                      {entry.isActive ? "Logado" : "Deslogado"}
-                    </Badge>
-                    {entry.isActive ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => leaveQueueMutation.mutate({ queueId: entry.queue.id })}
-                        disabled={leaveQueueMutation.isPending}
-                      >
-                        Sair
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => joinQueueMutation.mutate({ queueId: entry.queue.id })}
-                        disabled={joinQueueMutation.isPending}
-                      >
-                        Entrar
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500">Nenhuma fila atribuída</p>
-          )}
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">Gerenciar filas</h2>
-          <div className="space-y-4">
-            {queuesLoading ? (
-              <p className="text-gray-500">Carregando filas...</p>
-            ) : queues && queues.length > 0 ? (
-              queues.map((queue) => (
-                <div
-                  key={queue.id}
-                  className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-yellow-400 rounded flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className="font-semibold">{queue.name}</p>
-                      <p className="text-sm text-gray-600">
-                        Máximo: {queue.maxWaitMinutes} minutos
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold">00:00:02</p>
-                    <Badge variant="outline" className="mt-1">
-                      {queue.channel}
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500">Nenhuma fila ativa no momento</p>
-            )}
-          </div>
-        </Card>
-
         {/* Status de Conexão */}
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">Status de Conexao</h2>
@@ -353,6 +271,89 @@ export default function QueueManagement() {
             <div className={`w-full h-2 rounded-full ${instagramInfo.color}`} />
           </Card>
         </div>
+
+        {/* Gerenciar Filas */}
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Minhas filas</h2>
+          {myQueuesLoading ? (
+            <p className="text-gray-500">Carregando filas...</p>
+          ) : myQueues && myQueues.length > 0 ? (
+            <div className="space-y-3">
+              {myQueues.map((entry) => (
+                <div key={entry.queue.id} className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-lg">
+                  <div>
+                    <p className="font-semibold">{entry.queue.name}</p>
+                    <p className="text-sm text-gray-600">Canal: {entry.queue.channel}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={entry.isActive ? "default" : "outline"}>
+                      {entry.isActive ? "Logado" : "Deslogado"}
+                    </Badge>
+                    {entry.isActive ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => leaveQueueMutation.mutate({ queueId: entry.queue.id })}
+                        disabled={leaveQueueMutation.isPending}
+                      >
+                        Sair
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => joinQueueMutation.mutate({ queueId: entry.queue.id })}
+                        disabled={joinQueueMutation.isPending}
+                      >
+                        Entrar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">Nenhuma fila atribuída</p>
+          )}
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-bold mb-4">Gerenciar filas</h2>
+          <div className="space-y-4">
+            {queuesLoading ? (
+              <p className="text-gray-500">Carregando filas...</p>
+            ) : queues && queues.length > 0 ? (
+              queues.map((queue) => (
+                <div
+                  key={queue.id}
+                  className="flex items-center justify-between p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-yellow-400 rounded flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold">{queue.name}</p>
+                      <p className="text-sm text-gray-600">
+                        Máximo: {queue.maxWaitMinutes} minutos
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold">00:00:02</p>
+                    <Badge variant="outline" className="mt-1">
+                      {queue.channel}
+                    </Badge>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500">Nenhuma fila ativa no momento</p>
+            )}
+          </div>
+        </Card>
+
 
         {/* Novidades */}
         <Card className="p-6">
