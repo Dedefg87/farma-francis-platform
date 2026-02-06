@@ -51,8 +51,6 @@ async function startServer() {
     legacyHeaders: false,
   });
 
-  app.use("/api/", apiLimiter);
-
   app.use(
     express.json({
       limit: "50mb",
@@ -63,41 +61,8 @@ async function startServer() {
   );
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  app.get("/api/events", async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    const token = authHeader.substring(7);
-    const jwt = await import("jsonwebtoken");
-    let decoded: { userId: number } | null = null;
-
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
-    } catch {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    sseManager.addClient(String(decoded.userId), res);
-
-    req.on("close", () => {
-      sseManager.addClient(String(decoded.userId), res);
-    });
-  });
-
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
-  // Webhook routes for WhatsApp and Instagram
-  const webhookRouter = await import("../webhooks");
-  app.use("/api/webhooks", webhookRouter.default);
-  // Temporary migration endpoint
-  app.post("/api/run-migration", async (req, res) => {
+  // Migration endpoint - MUST be before rate limiter and serveStatic
+  app.get("/api/run-migration", async (req, res) => {
     try {
       const db = await getDb();
       if (!db) {
@@ -153,6 +118,42 @@ async function startServer() {
       res.status(500).json({ error: String(error) });
     }
   });
+
+  app.use("/api/", apiLimiter);
+
+  app.get("/api/events", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.substring(7);
+    const jwt = await import("jsonwebtoken");
+    let decoded: { userId: number } | null = null;
+
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
+    } catch {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    sseManager.addClient(String(decoded.userId), res);
+
+    req.on("close", () => {
+      sseManager.addClient(String(decoded.userId), res);
+    });
+  });
+
+  // OAuth callback under /api/oauth/callback
+  registerOAuthRoutes(app);
+  // Webhook routes for WhatsApp and Instagram
+  const webhookRouter = await import("../webhooks");
+  app.use("/api/webhooks", webhookRouter.default);
   // tRPC API
   app.use(
     "/api/trpc",
