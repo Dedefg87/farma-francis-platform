@@ -441,7 +441,7 @@ async function processInstagramWebhook(body: any) {
 /**
  * Validate WhatsApp webhook signature using HMAC SHA256
  */
-async function validateWhatsAppSignature(rawBody: string | undefined, signature: string): Promise<boolean> {
+async function validateWhatsAppSignature(rawBody: Buffer | string | undefined, signature: string): Promise<boolean> {
   try {
     const db = await getDb();
     if (!db) return false;
@@ -473,9 +473,10 @@ async function validateWhatsAppSignature(rawBody: string | undefined, signature:
       return false;
     }
 
+    const payloadBuffer = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
     const expectedSignature = "sha256=" + crypto
       .createHmac("sha256", appSecret)
-      .update(rawBody)
+      .update(payloadBuffer)
       .digest("hex");
 
     if (signature.length !== expectedSignature.length) {
@@ -495,7 +496,7 @@ async function validateWhatsAppSignature(rawBody: string | undefined, signature:
 /**
  * Validate Instagram webhook signature using HMAC SHA256
  */
-async function validateInstagramSignature(rawBody: string | undefined, signature: string): Promise<boolean> {
+async function validateInstagramSignature(rawBody: Buffer | string | undefined, signature: string): Promise<boolean> {
   try {
     const db = await getDb();
     if (!db) return false;
@@ -527,9 +528,10 @@ async function validateInstagramSignature(rawBody: string | undefined, signature
       return false;
     }
 
+    const payloadBuffer = typeof rawBody === "string" ? Buffer.from(rawBody, "utf8") : rawBody;
     const expectedSignature = "sha256=" + crypto
       .createHmac("sha256", appSecret)
-      .update(rawBody)
+      .update(payloadBuffer)
       .digest("hex");
 
     if (signature.length !== expectedSignature.length) {

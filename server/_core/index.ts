@@ -35,7 +35,7 @@ async function startServer() {
     express.json({
       limit: "50mb",
       verify: (req, _res, buf) => {
-        (req as any).rawBody = buf.toString("utf8");
+        (req as any).rawBody = buf;
       },
     })
   );
