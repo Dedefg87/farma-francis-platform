@@ -85,6 +85,9 @@ export default function QueueManagement() {
     instagramInfo.status !== "offline" ? "Instagram" : null,
   ].filter(Boolean) as string[];
 
+  const statusLabel = (status: string) =>
+    status === "online" ? "Logado" : status === "paused" ? "Pausado" : "Deslogado";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -242,6 +245,16 @@ export default function QueueManagement() {
               ? `Canais logados: ${activeChannels.join(", ")}`
               : "Nenhum canal logado"}
           </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-sm text-green-700">
+            <span className="text-base">📱</span>
+            WhatsApp: {statusLabel(whatsappInfo.status)}
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-pink-50 px-3 py-1 text-sm text-pink-700">
+            <span className="text-base">📷</span>
+            Instagram: {statusLabel(instagramInfo.status)}
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* WhatsApp */}
