@@ -129,7 +129,43 @@ export const conversationsRouter = router({
       )
       .orderBy(desc(conversations.lastMessageAt));
 
-    return agentConversations;
+    const normalizePhone = (value?: string | null) => {
+      if (!value) return '';
+      const digits = value.replace(/\D/g, '');
+      return digits || value;
+    };
+
+    const mergedByPhone = new Map<string, typeof agentConversations[number]>();
+
+    for (const conv of agentConversations) {
+      const key = normalizePhone(conv.customerPhone || conv.customerName);
+      const existing = mergedByPhone.get(key);
+
+      if (!existing) {
+        mergedByPhone.set(key, conv);
+        continue;
+      }
+
+      const existingName = existing.customerName || '';
+      const incomingName = conv.customerName || '';
+      const existingLooksLikePhone = existingName.replace(/\D/g, '').length >= 8;
+      const incomingLooksLikePhone = incomingName.replace(/\D/g, '').length >= 8;
+
+      if (existingLooksLikePhone && !incomingLooksLikePhone) {
+        mergedByPhone.set(key, conv);
+        continue;
+      }
+
+      if (!existingLooksLikePhone && incomingLooksLikePhone) {
+        continue;
+      }
+
+      if (new Date(conv.lastMessageAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+        mergedByPhone.set(key, conv);
+      }
+    }
+
+    return Array.from(mergedByPhone.values());
   }),
 
   // Obter detalhes de uma conversa
