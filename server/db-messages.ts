@@ -1,6 +1,6 @@
 import { getDb } from "./db";
-import { receivedMessages, customers } from "../drizzle/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { receivedMessages, customers, conversations, conversationMessages, agentStatus, queues, users } from "../drizzle/schema";
+import { eq, desc, and, or, sql } from "drizzle-orm";
 
 /**
  * Get all received messages with optional filters
@@ -157,6 +157,149 @@ export async function findOrCreateCustomerByPhone(phone: string, name?: string) 
     .limit(1);
 
   return newCustomer[0];
+}
+
+function buildInboundContent(message: {
+  messageType: string;
+  messageText?: string | null;
+  caption?: string | null;
+}) {
+  if (message.messageText?.trim()) return message.messageText;
+  if (message.caption?.trim()) return message.caption;
+
+  switch (message.messageType) {
+    case "image":
+      return "[Imagem]";
+    case "audio":
+      return "[Audio]";
+    case "video":
+      return "[Video]";
+    case "document":
+      return "[Documento]";
+    case "location":
+      return "[Localizacao]";
+    case "sticker":
+      return "[Sticker]";
+    case "reaction":
+      return "[Reacao]";
+    case "contact":
+      return "[Contato]";
+    default:
+      return "[Mensagem]";
+  }
+}
+
+export async function ingestInboundConversationMessage(message: {
+  provider: "whatsapp" | "instagram";
+  fromNumber: string;
+  fromName?: string | null;
+  messageType: string;
+  messageText?: string | null;
+  caption?: string | null;
+  mediaUrl?: string | null;
+  mimeType?: string | null;
+  createdAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const customer = await findOrCreateCustomerByPhone(message.fromNumber, message.fromName || undefined);
+  const now = message.createdAt ?? new Date();
+
+  const [onlineAgent] = await db
+    .select()
+    .from(agentStatus)
+    .where(
+      and(
+        eq(agentStatus.channel, message.provider),
+        eq(agentStatus.status, "online")
+      )
+    )
+    .orderBy(desc(agentStatus.lastActivity))
+    .limit(1);
+
+  const [fallbackAgent] = await db
+    .select()
+    .from(users)
+    .where(eq(users.role, "user"))
+    .orderBy(desc(users.lastSignedIn))
+    .limit(1);
+
+  const assignedUserId = onlineAgent?.userId ?? fallbackAgent?.id ?? null;
+
+  const [defaultQueue] = await db
+    .select()
+    .from(queues)
+    .where(eq(queues.status, "active"))
+    .orderBy(desc(queues.priority))
+    .limit(1);
+
+  const [existingConversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.customerId, customer.id),
+        eq(conversations.channel, message.provider),
+        or(
+          eq(conversations.status, "open"),
+          eq(conversations.status, "assigned")
+        )
+      )
+    )
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(1);
+
+  let conversationId = existingConversation?.id;
+
+  if (!conversationId) {
+    const [newConversation] = await db
+      .insert(conversations)
+      .values({
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        channel: message.provider,
+        status: assignedUserId ? "assigned" : "open",
+        assignedTo: assignedUserId,
+        queueId: assignedUserId ? null : defaultQueue?.id ?? null,
+        openedAt: now,
+        lastMessageAt: now,
+        unreadCount: 1,
+      })
+      .$returningId();
+    conversationId = newConversation.id;
+  } else {
+    const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
+    await db
+      .update(conversations)
+      .set({
+        lastMessageAt: now,
+        unreadCount: sql<number>`unread_count + 1`,
+        ...(shouldAssign
+          ? {
+              assignedTo: assignedUserId,
+              status: "assigned",
+              queueId: null,
+            }
+          : {}),
+      })
+      .where(eq(conversations.id, conversationId));
+  }
+
+  await db.insert(conversationMessages).values({
+    conversationId,
+    senderId: null,
+    senderType: "customer",
+    content: buildInboundContent(message),
+    fileUrl: message.mediaUrl || null,
+    fileName: null,
+    fileType: message.mimeType || null,
+    fileSize: null,
+    createdAt: now,
+  });
+
+  return { conversationId, customerId: customer.id };
 }
 
 /**
