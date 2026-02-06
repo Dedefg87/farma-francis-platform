@@ -4,6 +4,7 @@ import { getDb } from './db';
 import { conversations, conversationMessages, customers } from '../drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { storagePut } from './storage';
+import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage } from './messaging';
 
 export const conversationsRouter = router({
   // Criar nova conversa
@@ -268,6 +269,40 @@ export const messagesRouter = router({
 
       if (!conversation) {
         throw new Error('Conversa não encontrada ou sem permissão');
+      }
+
+      const destination = conversation.customerPhone;
+      if (!destination) {
+        throw new Error('Destino não encontrado para esta conversa');
+      }
+
+      const isImage = Boolean(input.fileUrl && input.fileType?.startsWith('image/'));
+
+      if (conversation.channel === 'whatsapp') {
+        if (isImage && input.fileUrl) {
+          await sendWhatsAppImage({
+            to: destination,
+            imageUrl: input.fileUrl,
+            caption: input.content,
+          });
+        } else {
+          await sendWhatsAppMessage({
+            to: destination,
+            message: input.content,
+          });
+        }
+      } else if (conversation.channel === 'instagram') {
+        if (isImage && input.fileUrl) {
+          await sendInstagramImage({
+            to: destination,
+            imageUrl: input.fileUrl,
+          });
+        } else {
+          await sendInstagramMessage({
+            to: destination,
+            message: input.content,
+          });
+        }
       }
 
       // Criar mensagem

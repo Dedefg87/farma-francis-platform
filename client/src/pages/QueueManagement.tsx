@@ -43,6 +43,10 @@ export default function QueueManagement() {
     updateStatusMutation.mutate({ channel, status: newStatus });
   };
 
+  const handleLogoutStatus = (channel: "whatsapp" | "instagram") => {
+    updateStatusMutation.mutate({ channel, status: "offline" });
+  };
+
   const getStatusInfo = (channel: "whatsapp" | "instagram") => {
     const status = agentStatuses?.find((s) => s.channel === channel);
     return {
@@ -55,6 +59,10 @@ export default function QueueManagement() {
 
   const whatsappInfo = getStatusInfo("whatsapp");
   const instagramInfo = getStatusInfo("instagram");
+  const activeChannels = [
+    whatsappInfo.status !== "offline" ? "WhatsApp" : null,
+    instagramInfo.status !== "offline" ? "Instagram" : null,
+  ].filter(Boolean) as string[];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
@@ -163,6 +171,14 @@ export default function QueueManagement() {
         </Card>
 
         {/* Status de Conexão */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold">Status de Conexao</h2>
+          <span className="text-sm text-gray-600">
+            {activeChannels.length > 0
+              ? `Canais logados: ${activeChannels.join(", ")}`
+              : "Nenhum canal logado"}
+          </span>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* WhatsApp */}
           <Card className="p-6">
@@ -178,24 +194,36 @@ export default function QueueManagement() {
                   <p className="text-sm text-gray-600">{whatsappInfo.label}</p>
                 </div>
               </div>
-              <Button
-                variant={whatsappInfo.status === "online" ? "outline" : "default"}
-                size="sm"
-                onClick={() => handleToggleStatus("whatsapp", whatsappInfo.status)}
-                disabled={updateStatusMutation.isPending}
-              >
-                {whatsappInfo.status === "online" ? (
-                  <>
-                    <Pause className="w-4 h-4 mr-2" />
-                    Pausar
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Ativar
-                  </>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={whatsappInfo.status === "online" ? "outline" : "default"}
+                  size="sm"
+                  onClick={() => handleToggleStatus("whatsapp", whatsappInfo.status)}
+                  disabled={updateStatusMutation.isPending}
+                >
+                  {whatsappInfo.status === "online" ? (
+                    <>
+                      <Pause className="w-4 h-4 mr-2" />
+                      Pausar
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" />
+                      Ativar
+                    </>
+                  )}
+                </Button>
+                {whatsappInfo.status !== "offline" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleLogoutStatus("whatsapp")}
+                    disabled={updateStatusMutation.isPending}
+                  >
+                    Sair
+                  </Button>
                 )}
-              </Button>
+              </div>
             </div>
             <div className={`w-full h-2 rounded-full ${whatsappInfo.color}`} />
           </Card>
@@ -214,24 +242,36 @@ export default function QueueManagement() {
                   <p className="text-sm text-gray-600">{instagramInfo.label}</p>
                 </div>
               </div>
-              <Button
-                variant={instagramInfo.status === "online" ? "outline" : "default"}
-                size="sm"
-                onClick={() => handleToggleStatus("instagram", instagramInfo.status)}
-                disabled={updateStatusMutation.isPending}
-              >
-                {instagramInfo.status === "online" ? (
-                  <>
-                    <Pause className="w-4 h-4 mr-2" />
-                    Pausar
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    Ativar
-                  </>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={instagramInfo.status === "online" ? "outline" : "default"}
+                  size="sm"
+                  onClick={() => handleToggleStatus("instagram", instagramInfo.status)}
+                  disabled={updateStatusMutation.isPending}
+                >
+                  {instagramInfo.status === "online" ? (
+                    <>
+                      <Pause className="w-4 h-4 mr-2" />
+                      Pausar
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" />
+                      Ativar
+                    </>
+                  )}
+                </Button>
+                {instagramInfo.status !== "offline" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleLogoutStatus("instagram")}
+                    disabled={updateStatusMutation.isPending}
+                  >
+                    Sair
+                  </Button>
                 )}
-              </Button>
+              </div>
             </div>
             <div className={`w-full h-2 rounded-full ${instagramInfo.color}`} />
           </Card>

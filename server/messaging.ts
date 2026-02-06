@@ -1,6 +1,28 @@
 import { getDb } from "./db";
-import { apiConfigurations, messages } from "../drizzle/schema";
+import { integrationSettings, messages } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+
+function normalizeWhatsAppNumber(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+async function getIntegrationConfig(type: "whatsapp_business" | "instagram_graph") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [config] = await db
+    .select()
+    .from(integrationSettings)
+    .where(eq(integrationSettings.integrationType, type))
+    .limit(1);
+
+  if (!config || !config.isActive) {
+    throw new Error(`${type} configuration not found or inactive`);
+  }
+
+  const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
+  return { configData, configId: config.id };
+}
 
 /**
  * Send a text message via WhatsApp Business API
@@ -13,23 +35,18 @@ export async function sendWhatsAppMessage(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Get WhatsApp configuration
-  const config = await db
-    .select()
-    .from(apiConfigurations)
-    .where(eq(apiConfigurations.provider, "whatsapp"))
-    .limit(1);
+  const { configData } = await getIntegrationConfig("whatsapp_business");
+  const token = configData.accessToken;
+  const phoneNumberId = configData.phoneNumberId;
 
-  if (config.length === 0 || !config[0].isActive) {
-    throw new Error("WhatsApp configuration not found or inactive");
+  if (!token || !phoneNumberId) {
+    throw new Error("WhatsApp configuration missing accessToken or phoneNumberId");
   }
-
-  const { token, phoneNumberId } = config[0];
 
   // Prepare request body
   const body: any = {
     messaging_product: "whatsapp",
-    to: params.to,
+    to: normalizeWhatsAppNumber(params.to),
     type: "text",
     text: {
       body: params.message,
@@ -92,21 +109,17 @@ export async function sendWhatsAppImage(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const config = await db
-    .select()
-    .from(apiConfigurations)
-    .where(eq(apiConfigurations.provider, "whatsapp"))
-    .limit(1);
+  const { configData } = await getIntegrationConfig("whatsapp_business");
+  const token = configData.accessToken;
+  const phoneNumberId = configData.phoneNumberId;
 
-  if (config.length === 0 || !config[0].isActive) {
-    throw new Error("WhatsApp configuration not found or inactive");
+  if (!token || !phoneNumberId) {
+    throw new Error("WhatsApp configuration missing accessToken or phoneNumberId");
   }
-
-  const { token, phoneNumberId } = config[0];
 
   const body = {
     messaging_product: "whatsapp",
-    to: params.to,
+    to: normalizeWhatsAppNumber(params.to),
     type: "image",
     image: {
       link: params.imageUrl,
@@ -159,17 +172,13 @@ export async function sendInstagramMessage(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const config = await db
-    .select()
-    .from(apiConfigurations)
-    .where(eq(apiConfigurations.provider, "instagram"))
-    .limit(1);
+  const { configData } = await getIntegrationConfig("instagram_graph");
+  const token = configData.accessToken;
+  const pageId = configData.pageId || configData.businessAccountId;
 
-  if (config.length === 0 || !config[0].isActive) {
-    throw new Error("Instagram configuration not found or inactive");
+  if (!token || !pageId) {
+    throw new Error("Instagram configuration missing accessToken or pageId");
   }
-
-  const { token, pageId } = config[0];
 
   const body = {
     recipient: {
@@ -227,17 +236,13 @@ export async function sendInstagramImage(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const config = await db
-    .select()
-    .from(apiConfigurations)
-    .where(eq(apiConfigurations.provider, "instagram"))
-    .limit(1);
+  const { configData } = await getIntegrationConfig("instagram_graph");
+  const token = configData.accessToken;
+  const pageId = configData.pageId || configData.businessAccountId;
 
-  if (config.length === 0 || !config[0].isActive) {
-    throw new Error("Instagram configuration not found or inactive");
+  if (!token || !pageId) {
+    throw new Error("Instagram configuration missing accessToken or pageId");
   }
-
-  const { token, pageId } = config[0];
 
   const body = {
     recipient: {
