@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sseManager } from "./sse";
 import { logger } from "./logger";
+import migrationRouter from "../migration-route";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -96,8 +97,7 @@ async function startServer() {
   const webhookRouter = await import("../webhooks");
   app.use("/api/webhooks", webhookRouter.default);
   // Temporary migration endpoint
-  const migrationRouter = await import("../migration-route");
-  app.use("/api", migrationRouter.default);
+  app.use("/api", migrationRouter);
   // tRPC API
   app.use(
     "/api/trpc",
