@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from './_core/trpc';
-import { z } from 'zod';
 import { getDb } from './db';
 import { conversations, conversationMessages, customers, users, agentStatus } from '../drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { storagePut } from './storage';
 import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage } from './messaging';
+import { sseManager, EVENTS } from './_core/sse';
 
 export const conversationsRouter = router({
   // Criar nova conversa
@@ -460,6 +460,16 @@ export const messagesRouter = router({
           lastMessageAt: new Date(),
         })
         .where(eq(conversations.id, input.conversation_id));
+
+      sseManager.emitToUser(String(ctx.user.id), {
+        type: EVENTS.MESSAGE_STATUS,
+        data: {
+          messageId: message.id,
+          conversationId: input.conversation_id,
+          status: 'sent',
+        },
+        timestamp: Date.now(),
+      });
 
       return { success: true, messageId: message.id };
     }),

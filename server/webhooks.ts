@@ -1,9 +1,10 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "./db";
-import { apiConfigurations, receivedMessages, integrationSettings } from "../drizzle/schema";
+import { apiConfigurations, receivedMessages, integrationSettings, conversations } from "../drizzle/schema";
 import { getReceivedMessageByExternalId, ingestInboundConversationMessage, findOrCreateCustomerByPhone } from "./db-messages";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
+import { sseManager, EVENTS } from "./_core/sse";
 
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";

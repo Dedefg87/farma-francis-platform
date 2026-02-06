@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 import { receivedMessages, customers, conversations, conversationMessages, agentStatus, queues, users } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
+import { sseManager, EVENTS } from "./_core/sse";
 
 /**
  * Get all received messages with optional filters
@@ -324,6 +325,26 @@ export async function ingestInboundConversationMessage(message: {
     fileSize: null,
     createdAt: now,
   });
+
+  const [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(eq(conversations.id, conversationId))
+    .limit(1);
+
+  if (conversation?.assignedTo) {
+    sseManager.emitToUser(String(conversation.assignedTo), {
+      type: EVENTS.MESSAGE_NEW,
+      data: {
+        conversationId,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        content: buildInboundContent(message),
+        channel: message.provider,
+      },
+      timestamp: now.getTime(),
+    });
+  }
 
   return { conversationId, customerId: customer.id };
 }

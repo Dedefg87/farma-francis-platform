@@ -3,10 +3,13 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
+import rateLimit from "express-rate-limit";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { sseManager } from "./sse";
+import { logger } from "./logger";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -30,21 +33,68 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
+
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 100,
+    message: { error: "Too many requests, please try again later" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 200,
+    message: { error: "Too many webhook requests" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use("/api/", apiLimiter);
+
   app.use(
     express.json({
       limit: "50mb",
-      verify: (req, _res, buf) => {
+      verify: (req: any, _res, buf) => {
         (req as any).rawBody = buf;
       },
     })
   );
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+  app.get("/api/events", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const token = authHeader.substring(7);
+    const jwt = await import("jsonwebtoken");
+    let decoded: { userId: number } | null = null;
+
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
+    } catch {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    sseManager.addClient(String(decoded.userId), res);
+
+    req.on("close", () => {
+      sseManager.addClient(String(decoded.userId), res);
+    });
+  });
+
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // Webhook routes for WhatsApp and Instagram
   const webhookRouter = await import("../webhooks");
-  app.use("/api", webhookRouter.default);
+  app.use("/api/webhooks", webhookRouter.default);
   // tRPC API
   app.use(
     "/api/trpc",
