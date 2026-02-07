@@ -33,6 +33,7 @@ export const logRequest = (method: string, url: string, statusCode: number, dura
     url,
     statusCode,
     durationMs: duration,
+    timestamp: new Date().toISOString(),
   });
 };
 
@@ -41,7 +42,8 @@ export const logError = (error: Error, context?: Record<string, unknown>) => {
     type: "error",
     message: error.message,
     stack: error.stack,
-    ...context,
+    context: context || {},
+    timestamp: new Date().toISOString(),
   });
 };
 
@@ -51,5 +53,25 @@ export const logWebhook = (provider: string, eventType: string, success: boolean
     provider,
     eventType,
     success,
+    timestamp: new Date().toISOString(),
+  });
+};
+
+export const logSSE = (userId: string, eventType: string) => {
+  logger.info({
+    type: "sse",
+    userId,
+    eventType,
+    timestamp: new Date().toISOString(),
+  });
+};
+
+export const logMessageStatus = (messageId: number, status: string, userId?: number) => {
+  logger.info({
+    type: "message_status",
+    messageId,
+    status,
+    userId,
+    timestamp: new Date().toISOString(),
   });
 };

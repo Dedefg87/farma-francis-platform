@@ -392,3 +392,397 @@ async function testGoogle(
     },
   };
 }
+
+import { logger } from "./logger";
+
+const AI_CONTEXT_MANAGEMENT = {
+  conversationMemory: {
+    maxTurns: 20,
+    ttlMinutes: 30,
+    keyFields: ["customerId", "channel", "phoneNumber"]
+  },
+  
+  sessionContext: {
+    customerInfo: {
+      name: "",
+      phone: "",
+      history: []
+    },
+    currentFlow: {
+      name: "",
+      step: 0,
+      data: {}
+    },
+    preferences: {
+      language: "pt-BR",
+      timezone: "America/Sao_Paulo",
+      notification: true
+    }
+  }
+};
+
+const AI_ERROR_HANDLING = {
+  fallbackMessages: [
+    "Desculpe, não consegui entender sua pergunta. Poderia reformular?",
+    "Parece que tuvimos um problema técnico. Deixe-me transferir para um atendente humano.",
+    "Gostaria de falar com um de nossos atendentes? Eles podem ajudar melhor com sua solicitação."
+  ],
+  
+  validationRules: {
+    maxLength: 2000,
+    prohibitedContent: ["conteúdo explícito", "discurso de ódio", "informações falsas"],
+    medicalRestrictions: ["prescrever medicamentos", "diagnosticar doenças", "dar conselhos médicos"]
+  }
+};
+
+const AI_INTEGRATION_CONFIG = {
+  providers: {
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY || "",
+      model: "gpt-3.5-turbo",
+      baseURL: "https://api.openai.com/v1"
+    },
+    anthropic: {
+      apiKey: process.env.ANTHROPIC_API_KEY || "",
+      model: "claude-3-sonnet-20240229",
+      baseURL: "https://api.anthropic.com/v1"
+    },
+    google: {
+      apiKey: process.env.GOOGLE_API_KEY || "",
+      model: "gemini-pro",
+      baseURL: "https://generativelanguage.googleapis.com/v1"
+    }
+  },
+  
+  embeddings: {
+    model: "text-embedding-ada-002",
+    dimensions: 1536,
+    similarityThreshold: 0.7
+  },
+  
+  rateLimits: {
+    messagesPerMinute: 60,
+    messagesPerHour: 1000,
+    concurrentRequests: 5
+  }
+};
+
+interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  sanitizedContent?: string;
+}
+
+interface FallbackResult {
+  usedFallback: boolean;
+  fallbackType: 'human' | 'retry' | 'default' | 'cached';
+  response: string;
+  confidence: number;
+}
+
+class AIValidator {
+  private prohibitedPatterns = [
+    /prescrever|receitar|indicar\s+medicamento/i,
+    /diagnóstic|diagnosticar/i,
+    /tratamento\s+para|cura\s+do/i,
+    /tomar\s+\d+\s+comprimidos/i,
+    /doses?\s+diárias?\s+de/i,
+    /consulte\s+um\s+médico/i,
+    /automédicação/i,
+  ];
+
+  private sensitivePatterns = [
+    /cpf|cnpj|número\s+do\s+cartão/i,
+    /senha|password/i,
+    /dados\s+pessoais/i,
+  ];
+
+  private medicalDisclaimerPatterns = [
+    /não\s+sou\s+um\s+médico/i,
+    /consulte\s+um\s+profissional/i,
+    /informação\s+generalizada/i,
+  ];
+
+  async validateResponse(content: string): Promise<ValidationResult> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    let sanitizedContent = content;
+
+    if (content.length > AI_ERROR_HANDLING.validationRules.maxLength) {
+      errors.push(`Response too long: ${content.length} chars (max: ${AI_ERROR_HANDLING.validationRules.maxLength})`);
+      sanitizedContent = sanitizedContent.substring(0, AI_ERROR_HANDLING.validationRules.maxLength);
+    }
+
+    for (const pattern of this.prohibitedPatterns) {
+      if (pattern.test(content)) {
+        errors.push(`Prohibited content detected: ${pattern.source}`);
+        sanitizedContent = sanitizedContent.replace(pattern, '[INFORMAÇÃO REMOVIDA]');
+      }
+    }
+
+    for (const pattern of this.sensitivePatterns) {
+      if (pattern.test(content)) {
+        warnings.push(`Sensitive information detected: ${pattern.source}`);
+        sanitizedContent = sanitizedContent.replace(pattern, '[DADOS SENSÍVEIS]');
+      }
+    }
+
+    const hasDisclaimer = this.medicalDisclaimerPatterns.some(pattern => pattern.test(content));
+    if (!hasDisclaimer && this.containsMedicalContent(content)) {
+      warnings.push('Medical content without disclaimer');
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+      sanitizedContent
+    };
+  }
+
+  private containsMedicalContent(content: string): boolean {
+    const medicalTerms = [
+      'medicamento', 'remédio', 'dosagem', 'efeito', 'colateral',
+      'tratamento', 'sintoma', 'doença', 'farmácia', 'droga'
+    ];
+    return medicalTerms.some(term => content.toLowerCase().includes(term));
+  }
+
+  validateConversationContext(context: Record<string, unknown>): ValidationResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!context.customerId) {
+      errors.push('Missing required field: customerId');
+    }
+    if (!context.channelId) {
+      errors.push('Missing required field: channelId');
+    }
+
+    const memory = context.memory as Array<{ role: string; content: string }> | undefined;
+    if (memory && memory.length > AI_CONTEXT_MANAGEMENT.conversationMemory.maxTurns) {
+      warnings.push(`Conversation memory exceeds ${AI_CONTEXT_MANAGEMENT.conversationMemory.maxTurns} turns`);
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
+}
+
+class AIFallbackManager {
+  private validator = new AIValidator();
+  private retryCount = new Map<string, number>();
+  private cache = new Map<string, { response: string; timestamp: number }>();
+
+  async getFallback(
+    originalResponse: string,
+    context: {
+      customerId: number;
+      channelId: string;
+      conversationId: string;
+      intent?: string;
+    },
+    error?: Error
+  ): Promise<FallbackResult> {
+    const retryKey = `${context.customerId}-${context.conversationId}`;
+    const currentRetry = this.retryCount.get(retryKey) || 0;
+
+    if (currentRetry < AI_INTEGRATION_CONFIG.rateLimits.concurrentRequests) {
+      const validation = await this.validator.validateResponse(originalResponse);
+      
+      if (validation.isValid) {
+        this.retryCount.delete(retryKey);
+        return {
+          usedFallback: false,
+          fallbackType: 'cached',
+          response: validation.sanitizedContent || originalResponse,
+          confidence: 0.9
+        };
+      }
+
+      if (validation.sanitizedContent) {
+        this.retryCount.set(retryKey, currentRetry + 1);
+        return {
+          usedFallback: true,
+          fallbackType: 'retry',
+          response: validation.sanitizedContent,
+          confidence: 0.7
+        };
+      }
+    }
+
+    const defaultMessage = this.getDefaultFallbackMessage(context.intent);
+    
+    return {
+      usedFallback: true,
+      fallbackType: 'human',
+      response: defaultMessage,
+      confidence: 0.5
+    };
+  }
+
+  private getDefaultFallbackMessage(intent?: string): string {
+    const messages = AI_ERROR_HANDLING.fallbackMessages;
+    
+    switch (intent) {
+      case 'products':
+        return 'Desculpe, não consegui encontrar informações sobre os produtos. Um de nossos atendentes está disponível para ajudá-lo.';
+      case 'scheduling':
+        return 'Tivemos uma dificuldade para processar seu agendamento. Por favor, entre em contato diretamente ou aguarde um atendente.';
+      case 'prices':
+        return 'Não foi possível recuperar as informações de preço no momento. Nossa equipe entrará em contato em breve.';
+      default:
+        return messages[Math.floor(Math.random() * messages.length)];
+    }
+  }
+
+  clearRetryCount(conversationId: string) {
+    for (const [key] of this.retryCount) {
+      if (key.includes(conversationId)) {
+        this.retryCount.delete(key);
+      }
+    }
+  }
+
+  getCache(key: string): string | null {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < 300000) {
+      return cached.response;
+    }
+    this.cache.delete(key);
+    return null;
+  }
+
+  setCache(key: string, response: string) {
+    this.cache.set(key, { response, timestamp: Date.now() });
+  }
+}
+
+class AIRateLimiter {
+  private requestCount = new Map<string, { count: number; resetTime: number }>();
+
+  async checkLimit(
+    key: string,
+    limits: {
+      perMinute: number;
+      perHour: number;
+    } = AI_INTEGRATION_CONFIG.rateLimits
+  ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
+    const now = Date.now();
+    const minuteReset = now + 60000;
+
+    let record = this.requestCount.get(key);
+    
+    if (!record || now > record.resetTime) {
+      record = { count: 1, resetTime: minuteReset };
+    } else {
+      record.count++;
+    }
+
+    this.requestCount.set(key, record);
+
+    const remaining = Math.min(limits.perMinute - record.count, limits.perHour - record.count);
+
+    return {
+      allowed: record.count < limits.perMinute && record.count < limits.perHour,
+      remaining: Math.max(0, remaining),
+      resetTime: record.resetTime
+    };
+  }
+
+  reset(key: string) {
+    this.requestCount.delete(key);
+  }
+}
+
+class AIConversationManager {
+  private contextStore = new Map<string, {
+    context: Record<string, unknown>;
+    lastActivity: number;
+  }>();
+
+  private readonly CONTEXT_TTL = AI_CONTEXT_MANAGEMENT.conversationMemory.ttlMinutes * 60000;
+  private readonly MAX_TURNS = AI_CONTEXT_MANAGEMENT.conversationMemory.maxTurns;
+
+  async getContext(conversationId: string): Promise<Record<string, unknown> | null> {
+    const record = this.contextStore.get(conversationId);
+    
+    if (!record) {
+      return null;
+    }
+
+    if (Date.now() - record.lastActivity > this.CONTEXT_TTL) {
+      this.contextStore.delete(conversationId);
+      return null;
+    }
+
+    return record.context;
+  }
+
+  async updateContext(
+    conversationId: string,
+    update: {
+      message?: { role: string; content: string };
+      data?: Record<string, unknown>;
+    }
+  ): Promise<Record<string, unknown>> {
+    let record = this.contextStore.get(conversationId);
+    
+    if (!record) {
+      record = {
+        context: {
+          conversationId,
+          startTime: new Date().toISOString(),
+          memory: [],
+          preferences: AI_CONTEXT_MANAGEMENT.sessionContext.preferences
+        },
+        lastActivity: Date.now()
+      };
+    }
+
+    if (update.message) {
+      const memory = record.context.memory as Array<{ role: string; content: string }>;
+      memory.push(update.message);
+
+      if (memory.length > this.MAX_TURNS) {
+        memory.splice(0, memory.length - this.MAX_TURNS);
+      }
+    }
+
+    if (update.data) {
+      record.context = { ...record.context, ...update.data };
+    }
+
+    record.lastActivity = Date.now();
+    this.contextStore.set(conversationId, record);
+
+    return record.context;
+  }
+
+  async clearContext(conversationId: string): Promise<void> {
+    this.contextStore.delete(conversationId);
+    logger.info({ type: 'ai_context', conversationId, action: 'cleared' });
+  }
+
+  getActiveConversations(): string[] {
+    const active: string[] = [];
+    const now = Date.now();
+
+    for (const [conversationId, record] of this.contextStore) {
+      if (now - record.lastActivity < this.CONTEXT_TTL) {
+        active.push(conversationId);
+      }
+    }
+
+    return active;
+  }
+}
+
+export const aiValidator = new AIValidator();
+export const aiFallbackManager = new AIFallbackManager();
+export const aiRateLimiter = new AIRateLimiter();
+export const aiConversationManager = new AIConversationManager();
