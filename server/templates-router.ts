@@ -27,7 +27,7 @@ export async function getTemplates(req: Request, res: Response) {
       }))
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'templates' });
+    logger.error({ err: error as Error, type: 'templates' });
     res.status(500).json({ error: "Failed to get templates" });
   }
 }
@@ -46,7 +46,7 @@ export async function getTemplateConfig(req: Request, res: Response) {
       template
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'template_config' });
+    logger.error({ err: error as Error, type: 'template_config' });
     res.status(500).json({ error: "Failed to get template config" });
   }
 }
@@ -74,7 +74,7 @@ export async function selectTemplate(req: Request, res: Response) {
       }
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'template_select' });
+    logger.error({ err: error as Error, type: 'template_select' });
     res.status(500).json({ error: "Failed to select template" });
   }
 }
@@ -91,7 +91,7 @@ export async function executeAutomation(req: Request, res: Response) {
       errors: result.errors
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'execute_automation' });
+    logger.error({ err: error as Error, type: 'execute_automation' });
     res.status(500).json({ error: "Failed to execute automation" });
   }
 }
@@ -110,7 +110,7 @@ export async function executeFlow(req: Request, res: Response) {
       errors: result.errors
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'execute_flow' });
+    logger.error({ err: error as Error, type: 'execute_flow' });
     res.status(500).json({ error: "Failed to execute flow" });
   }
 }
@@ -219,7 +219,7 @@ export async function processMessage(req: Request, res: Response) {
       suggestedActions: getSuggestedActions(template.id, intent.intent)
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'process_message' });
+    logger.error({ err: error as Error, type: 'process_message' });
     res.status(500).json({ error: "Failed to process message" });
   }
 }
@@ -307,7 +307,7 @@ export async function getURAContent(req: Request, res: Response) {
       ura: template.ura
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'ura_content' });
+    logger.error({ err: error as Error, type: 'ura_content' });
     res.status(500).json({ error: "Failed to get URA content" });
   }
 }
@@ -332,7 +332,7 @@ export async function applyTemplate(req: Request, res: Response) {
       uraConfigured: template.ura.id
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'apply_template' });
+    logger.error({ err: error as Error, type: 'apply_template' });
     res.status(500).json({ error: "Failed to apply template" });
   }
 }

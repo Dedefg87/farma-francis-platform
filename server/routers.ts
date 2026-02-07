@@ -23,11 +23,24 @@ import { customersRouter } from './routers-customers';
 import { contactFetchRouter } from './routers-contact-fetch';
 import { apiConfigRouter } from './routers-api-config';
 import { templatesRouter } from './templates-router';
+import * as testFlowsRouter from './test-flows';
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   apiConfig: apiConfigRouter,
+  
+  // Test Routes - Sistema de Teste de Fluxos
+  test: router({
+    status: testFlowsRouter.getSystemStatus,
+    flows: testFlowsRouter.listAllFlows,
+    activate: testFlowsRouter.activateFlow,
+    simulate: testFlowsRouter.simulateMessage,
+    trigger: testFlowsRouter.triggerFlowManually,
+    messages: testFlowsRouter.listRecentMessages,
+    health: testFlowsRouter.healthCheck,
+    clear: testFlowsRouter.clearTestMessages,
+  }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     login: publicProcedure

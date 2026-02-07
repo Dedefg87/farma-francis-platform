@@ -41,7 +41,59 @@ async function processMessage(message: any) {
   // Find or create customer
   const customer = await findOrCreateCustomerByPhone(message.fromNumber, message.fromName);
 
-  // Get active automation flows for this provider
+  // PRIORITY 1: Check visual flows (N8N-style flows) first - imported flows
+  const visualFlowsList = await db
+    .select()
+    .from(visualFlows)
+    .where(
+      and(
+        eq(visualFlows.isActive, 1)
+      )
+    );
+
+  // Check if any visual flow matches
+  let matchedVisualFlow = null;
+  for (const flow of visualFlowsList) {
+    // For visual flows, check if it has a trigger node in its data
+    try {
+      const flowData = JSON.parse(flow.flowData || '{}');
+      const triggerNodes = flowData.nodes?.filter((n: any) => n.type === 'trigger');
+      
+      if (triggerNodes && triggerNodes.length > 0) {
+        // Check if message matches any trigger condition
+        for (const triggerNode of triggerNodes) {
+          if (matchesVisualFlowTrigger(message, triggerNode)) {
+            matchedVisualFlow = flow;
+            break;
+          }
+        }
+      }
+      
+      if (matchedVisualFlow) break;
+    } catch (e) {
+      console.error(`[Flow Engine] Error parsing visual flow ${flow.id}:`, e);
+    }
+  }
+
+  if (matchedVisualFlow) {
+    console.log(`[Flow Engine] Message matched visual flow: ${matchedVisualFlow.name}`);
+
+    try {
+      // Execute visual flow
+      await executeVisualFlow(message, matchedVisualFlow.id, customer);
+
+      // Mark as processed
+      await markMessageAsProcessed(message.id, {
+        customerId: customer.id,
+        automationFlowId: matchedVisualFlow.id,
+      });
+      return;
+    } catch (error) {
+      console.error(`[Flow Engine] Error executing visual flow:`, error);
+    }
+  }
+
+  // PRIORITY 2: Check simple automation flows
   const flows = await db
     .select()
     .from(automationFlows)
@@ -79,6 +131,32 @@ async function processMessage(message: any) {
       customerId: customer.id,
     });
   }
+}
+
+/**
+ * Check if message matches visual flow trigger node
+ */
+function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
+  const config = triggerNode.data?.config || {};
+  const messageText = message.messageText?.toLowerCase() || "";
+  
+  // Get trigger type and keywords from node config
+  const triggerType = config.type || 'message_received';
+  const keywords = config.keywords || [];
+  
+  // If no specific keywords/trigger configured, match all messages
+  if (!keywords || keywords.length === 0) {
+    return true;
+  }
+  
+  // Check if message matches any keyword
+  for (const keyword of keywords) {
+    if (messageText.includes(keyword.toLowerCase())) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**

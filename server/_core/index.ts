@@ -92,9 +92,21 @@ async function startServer() {
 
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+
   // Webhook routes for WhatsApp and Instagram
   const webhookRouter = await import("../webhooks");
   app.use("/api/webhooks", webhookRouter.default);
+
+  // Test Routes - Sistema de Teste de Fluxos
+  const testFlowsRouter = await import("../test-flows");
+  app.get("/api/test/status", testFlowsRouter.getSystemStatus);
+  app.get("/api/test/flows", testFlowsRouter.listAllFlows);
+  app.post("/api/test/activate/:id", testFlowsRouter.activateFlow);
+  app.post("/api/test/simulate-message", testFlowsRouter.simulateMessage);
+  app.post("/api/test/trigger-flow", testFlowsRouter.triggerFlowManually);
+  app.get("/api/test/messages", testFlowsRouter.listRecentMessages);
+  app.get("/api/test/health", testFlowsRouter.healthCheck);
+  app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
   // tRPC API
   app.use(
     "/api/trpc",
