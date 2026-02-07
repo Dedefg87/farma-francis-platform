@@ -25,6 +25,8 @@ export default function Automation() {
   const [newFlowDescription, setNewFlowDescription] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
 
@@ -101,6 +103,9 @@ export default function Automation() {
       return;
     }
 
+    setImportLoading(true);
+    setImportProgress(10);
+
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
@@ -115,6 +120,8 @@ export default function Automation() {
           }
         }
         
+        setImportProgress(20);
+        
         const flowData = JSON.parse(content);
         
         let nodes, edges, flowName;
@@ -126,35 +133,56 @@ export default function Automation() {
           isN8N = true;
         }
         
+        // Usar setTimeout para não bloquear a UI
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         try {
           if (isN8N) {
             // Usar sistema completo de interligação para N8N
-            toast.info('Detectado fluxo N8N. Interligando nós automaticamente...');
+            toast.info('Processando fluxo N8N...');
             console.log('Iniciando conversão N8N:', flowData.name, 'com', flowData.nodes?.length, 'nós');
             
+            setImportProgress(30);
+            
             try {
-              const result = fullyInterlinkFlow(flowData);
-              nodes = result.nodes;
-              edges = result.edges;
+              // Processar em chunks para não travar
+              const result = await new Promise((resolve, reject) => {
+                setTimeout(() => {
+                  try {
+                    const res = fullyInterlinkFlow(flowData);
+                    resolve(res);
+                  } catch (err) {
+                    reject(err);
+                  }
+                }, 100);
+              });
+              
+              nodes = (result as any).nodes;
+              edges = (result as any).edges;
               flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
               
+              setImportProgress(70);
+              
               // Mostrar relatório de interligação
-              if (result.report.validation.errors.length > 0) {
-                console.warn('Problemas no fluxo:', result.report.validation.errors);
+              if ((result as any).report.validation.errors.length > 0) {
+                console.warn('Problemas no fluxo:', (result as any).report.validation.errors);
               }
               
-              if (result.report.autoConnect.length > 0) {
-                toast.success(`Auto-conectados ${result.report.autoConnect.length} nós`);
+              if ((result as any).report.autoConnect.length > 0) {
+                toast.success(`Auto-conectados ${(result as any).report.autoConnect.length} nós`);
               }
               
               // Mostrar estatísticas
-              const stats = result.report.finalStats;
+              const stats = (result as any).report.finalStats;
               toast.info(`Fluxo: ${stats.totalNodes} nós, ${stats.totalEdges} conexões`);
             } catch (n8nError) {
               console.error('Erro no fullyInterlinkFlow:', n8nError);
               toast.error(`Erro ao processar N8N: ${n8nError instanceof Error ? n8nError.message : 'Erro desconhecido'}`);
               
               // Fallback: tentar conversão simples
+              setImportProgress(40);
+              await new Promise(resolve => setTimeout(resolve, 50));
+              
               try {
                 const converted = convertToReactFlow(content);
                 nodes = converted.nodes;
@@ -167,11 +195,17 @@ export default function Automation() {
             }
           } else {
             // Tentar usar o conversor universal para outros formatos
+            setImportProgress(40);
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
             const converted = convertToReactFlow(content);
             nodes = converted.nodes;
             edges = converted.edges;
             flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
           }
+          
+          setImportProgress(80);
+          await new Promise(resolve => setTimeout(resolve, 50));
         } catch (conversionError) {
           console.error('Erro completo na conversão:', conversionError);
           
@@ -185,6 +219,7 @@ export default function Automation() {
               flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
             } catch (error) {
               toast.error('Erro ao converter arquivo IVR');
+              setImportLoading(false);
               return;
             }
           } else if (flowData.nodes && flowData.edges) {
@@ -195,9 +230,13 @@ export default function Automation() {
           } else {
             const errorMsg = conversionError instanceof Error ? conversionError.message : 'Erro desconhecido';
             toast.error(`Erro: ${errorMsg}. Formatos: React Flow, N8N, IVR, Drawflow.`);
+            setImportLoading(false);
             return;
           }
         }
+        
+        setImportProgress(85);
+        await new Promise(resolve => setTimeout(resolve, 50));
         
         // Validar integridade do fluxo antes de salvar
         const validation = validateFlowIntegrity(nodes, edges);
@@ -206,6 +245,8 @@ export default function Automation() {
           toast.warning('Fluxo importado com problemas. Verifique o console.');
         }
         
+        setImportProgress(90);
+        
         // Criar novo fluxo com dados importados
         createFlow.mutate({
           name: flowName,
@@ -213,12 +254,17 @@ export default function Automation() {
           flowData: JSON.stringify({ nodes, edges }),
         });
 
+        setImportProgress(100);
         toast.success('Fluxo importado e interligado com sucesso!');
         setIsImporting(false);
         setImportFile(null);
+        setImportLoading(false);
+        setImportProgress(0);
       } catch (error) {
         console.error('Erro ao importar:', error);
         toast.error('Erro ao processar arquivo. Verifique se é um JSON válido.');
+        setImportLoading(false);
+        setImportProgress(0);
       }
     };
     reader.readAsText(importFile);
@@ -273,8 +319,27 @@ export default function Automation() {
                         </div>
                       </div>
                     )}
-                    <Button onClick={handleImportFlow} className="w-full" disabled={!importFile}>
-                      Importar
+                    {importLoading && (
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div 
+                          className="bg-primary h-2 rounded-full transition-all duration-300" 
+                          style={{ width: `${importProgress}%` }}
+                        />
+                      </div>
+                    )}
+                    <Button 
+                      onClick={handleImportFlow} 
+                      className="w-full" 
+                      disabled={!importFile || importLoading}
+                    >
+                      {importLoading ? (
+                        <>
+                          <span className="animate-spin mr-2">⏳</span>
+                          Processando... {importProgress}%
+                        </>
+                      ) : (
+                        'Importar'
+                      )}
                     </Button>
                   </div>
                 </DialogContent>
