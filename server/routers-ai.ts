@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { router, publicProcedure, protectedProcedure } from './_core/trpc';
+import { router, publicProcedure, protectedProcedure, adminProcedure } from './_core/trpc';
 import { invokeLLM } from './_core/llm';
 import { transcribeAudio } from './_core/voiceTranscription';
 import { getDb } from './db';
@@ -12,6 +12,78 @@ import { messages } from '../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 export const aiRouter = router({
+  /**
+   * Get AI Configuration
+   */
+  getConfig: adminProcedure.query(async () => {
+    return {
+      providers: {
+        openai: { apiKey: !!process.env.OPENAI_API_KEY, model: "gpt-3.5-turbo" },
+        anthropic: { apiKey: !!process.env.ANTHROPIC_API_KEY, model: "claude-3-sonnet" },
+        google: { apiKey: !!process.env.GOOGLE_API_KEY, model: "gemini-pro" },
+      },
+      knowledgeBases: ["faq_farmacia", "produtos_farmacia", "politicas_farmacia"],
+      defaultPrompt: "Você é um assistente virtual da Farmácia Francis. Forneça informações precisas e profissionais sobre medicamentos, produtos e serviços.",
+      maxTokens: 1000,
+      temperature: 0.3,
+      fallbackEnabled: true,
+      validationEnabled: true,
+      maxResponseTime: 10000,
+      maxRetries: 3,
+    };
+  }),
+
+  /**
+   * Process AI Conversation
+   */
+  processConversation: adminProcedure
+    .input((raw: unknown) => {
+      return z.object({
+        templateId: z.string(),
+        customerId: z.number(),
+        channelId: z.string(),
+        message: z.string(),
+        context: z.record(z.unknown()).optional(),
+      }).parse(raw);
+    })
+    .mutation(async ({ input }) => {
+      const { processAIConversation } = await import("./ai-integration");
+      const req = {
+        body: input,
+        headers: {},
+      } as any;
+      const res = {
+        json: (data: unknown) => data,
+        status: (code: number) => res,
+      } as any;
+      return await processAIConversation(req, res);
+    }),
+
+  /**
+   * Process Automation Flow
+   */
+  processAutomation: adminProcedure
+    .input((raw: unknown) => {
+      return z.object({
+        flowId: z.string(),
+        triggerType: z.string(),
+        triggerData: z.record(z.unknown()).optional(),
+        customerId: z.number().optional(),
+      }).parse(raw);
+    })
+    .mutation(async ({ input }) => {
+      const { processAutomationFlow } = await import("./ai-integration");
+      const req = {
+        body: input,
+        headers: {},
+      } as any;
+      const res = {
+        json: (data: unknown) => data,
+        status: (code: number) => res,
+      } as any;
+      return await processAutomationFlow(req, res);
+    }),
+
   /**
    * Transcrever áudio usando Whisper
    */
