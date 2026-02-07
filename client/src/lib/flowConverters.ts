@@ -1,4 +1,5 @@
 import { Node, Edge } from 'reactflow';
+import { convertN8NNodeType, getN8NNodeInfo } from '@/utils/n8n-node-mapping';
 
 // Mapa de tipos de nós entre formatos
 const nodeTypeMap: Record<string, string> = {
@@ -17,24 +18,25 @@ const nodeTypeMap: Record<string, string> = {
   ai: 'ai',
 };
 
-// Mapa de tipos N8N para React Flow
-const n8nTypeMap: Record<string, string> = {
-  'n8n-nodes-base.webhook': 'trigger',
-  'n8n-nodes-base.scheduleTrigger': 'trigger',
-  'n8n-nodes-base.if': 'condition',
-  'n8n-nodes-base.switch': 'condition',
-  'n8n-nodes-base.httpRequest': 'api',
-  'n8n-nodes-base.function': 'function',
-  'n8n-nodes-base.set': 'set',
-  'n8n-nodes-base.wait': 'wait',
-  'n8n-nodes-base.delay': 'delay',
-  'n8n-nodes-base.splitInBatches': 'action',
-  'n8n-nodes-base.stickyNote': 'stickyNote',
-  'n8n-nodes-base.code': 'function',
-  '@n8n/n8n-nodes-langchain.lmChatOpenAi': 'ai',
-  '@n8n/n8n-nodes-langchain.agent': 'ai',
-  'n8n-nodes-base.zendesk': 'api',
-  'n8n-nodes-base.supabase': 'api',
+// Mapeamento de categorias para cores
+const categoryColors: Record<string, string> = {
+  trigger: '#f59e0b',
+  message: '#3b82f6',
+  ai: '#a855f7',
+  condition: '#f97316',
+  transfer: '#10b981',
+  wait: '#ef4444',
+  delay: '#f56565',
+  api: '#2563eb',
+  set: '#ec4899',
+  function: '#6366f1',
+  uraMenu: '#14b8a6',
+  createTicket: '#eab308',
+  database: '#00758F',
+  split: '#EC4899',
+  loop: '#06B6D4',
+  merge: '#8B5CF6',
+  action: '#818cf8',
 };
 
 /**
@@ -193,65 +195,281 @@ function isN8NFormat(data: any): boolean {
 function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
+  const nodeMap = new Map<string, any>(); // Mapear nome do nó para ID
 
   if (!data.nodes || !Array.isArray(data.nodes)) {
     throw new Error('Formato N8N inválido: nodes não encontrado');
   }
 
-  // Converter nós N8N para React Flow
+  // PRIMEIRO: Criar mapeamento de nome para ID
+  data.nodes.forEach((n8nNode: any) => {
+    if (n8nNode.name) {
+      nodeMap.set(n8nNode.name, n8nNode);
+    }
+  });
+
+  // SEGUNDO: Converter nós N8N para React Flow
   data.nodes.forEach((n8nNode: any) => {
     // Ignorar sticky notes
     if (n8nNode.type === 'n8n-nodes-base.stickyNote') {
       return;
     }
 
-    const nodeType = n8nTypeMap[n8nNode.type] || 'action';
+    const nodeInfo = getN8NNodeInfo(n8nNode.type);
+    const nodeType = nodeInfo.internalType;
+    const nodeColor = nodeInfo.color || categoryColors[nodeType] || '#818cf8';
     
     // Posição no N8N é array [x, y], no React Flow é objeto {x, y}
     const position = Array.isArray(n8nNode.position) 
       ? { x: n8nNode.position[0], y: n8nNode.position[1] }
       : { x: 0, y: 0 };
 
+    // Extrair configurações relevantes
+    const config: any = {
+      ...n8nNode.parameters,
+      n8nType: n8nNode.type,
+      typeVersion: n8nNode.typeVersion,
+    };
+
+    // Configurações específicas por tipo
+    if (nodeType === 'ai' && n8nNode.parameters) {
+      config.model = n8nNode.parameters.model;
+      config.options = n8nNode.parameters.options;
+    }
+
+    if (nodeType === 'condition' && n8nNode.parameters?.conditions) {
+      config.conditions = n8nNode.parameters.conditions;
+    }
+
     nodes.push({
-      id: n8nNode.id,
+      id: n8nNode.id || n8nNode.name,
       type: nodeType,
       position,
       data: {
         label: n8nNode.name || n8nNode.id,
-        description: n8nNode.type,
+        description: nodeInfo.label || n8nNode.type,
         nodeType,
-        config: n8nNode.parameters || {},
+        config,
         n8nType: n8nNode.type,
+        icon: nodeInfo.icon,
+        color: nodeColor,
+      },
+      style: {
+        background: nodeColor,
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        padding: '10px',
+        fontSize: '14px',
+        fontWeight: '500',
       },
     });
   });
 
-  // Converter conexões N8N para edges React Flow
+  // TERCEIRO: Converter conexões N8N para edges React Flow
   if (data.connections) {
-    Object.entries(data.connections).forEach(([sourceId, connection]: [string, any]) => {
-      // connection pode ter múltiplos outputs (main, etc)
+    Object.entries(data.connections).forEach(([sourceNodeName, connection]: [string, any]) => {
+      // Encontrar o nó de origem pelo nome
+      const sourceNode = nodeMap.get(sourceNodeName);
+      if (!sourceNode) {
+        console.warn(`Nó de origem não encontrado: ${sourceNodeName}`);
+        return;
+      }
+
+      const sourceId = sourceNode.id || sourceNodeName;
+
+      // connection pode ter múltiplos outputs (main, ai_languageModel, etc)
       Object.entries(connection).forEach(([outputType, outputConnections]: [string, any]) => {
-        if (Array.isArray(outputConnections)) {
-          outputConnections.forEach((connArray: any[]) => {
-            if (Array.isArray(connArray)) {
-              connArray.forEach((conn: any) => {
-                if (conn && conn.node) {
-                  edges.push({
-                    id: `e-${sourceId}-${conn.node}`,
-                    source: sourceId,
-                    target: conn.node,
-                    sourceHandle: outputType,
-                    targetHandle: conn.input || 'main',
-                    animated: true,
-                  });
-                }
-              });
-            }
-          });
+        if (!Array.isArray(outputConnections)) {
+          return;
         }
+
+        outputConnections.forEach((branchArray: any[], branchIndex: number) => {
+          if (!Array.isArray(branchArray)) {
+            return;
+          }
+
+          branchArray.forEach((conn: any, connIndex: number) => {
+            if (!conn || !conn.node) {
+              return;
+            }
+
+            // Encontrar o nó de destino pelo nome
+            const targetNode = nodeMap.get(conn.node);
+            if (!targetNode) {
+              console.warn(`Nó de destino não encontrado: ${conn.node}`);
+              return;
+            }
+
+            const targetId = targetNode.id || conn.node;
+
+            // Criar edge
+            edges.push({
+              id: `e-${sourceId}-${targetId}-${branchIndex}-${connIndex}`,
+              source: sourceId,
+              target: targetId,
+              sourceHandle: outputType,
+              targetHandle: conn.type || 'main',
+              animated: true,
+              label: getConnectionLabel(outputType, branchIndex, connection),
+              style: {
+                stroke: getConnectionColor(outputType),
+                strokeWidth: 2,
+              },
+            });
+          });
+        });
       });
     });
   }
 
-  return { nodes, edges };
+  // QUARTO: Reorganizar posições se necessário
+  const { nodes: reorganizedNodes, edges: reorganizedEdges } = reorganizeFlowPositions(nodes, edges);
+
+  return { nodes: reorganizedNodes, edges: reorganizedEdges };
+}
+
+/**
+ * Obtém label para a conexão baseado no tipo
+ */
+function getConnectionLabel(outputType: string, branchIndex: number, connection: any): string | undefined {
+  // Para condições IF/Switch, identificar true/false
+  if (outputType === 'main' && connection.main && connection.main.length > 1) {
+    if (branchIndex === 0) return 'true';
+    if (branchIndex === 1) return 'false';
+  }
+  return undefined;
+}
+
+/**
+ * Obtém cor para a conexão baseado no tipo
+ */
+function getConnectionColor(outputType: string): string {
+  const colors: Record<string, string> = {
+    main: '#6b7280',
+    ai_languageModel: '#a855f7',
+    ai_chatModel: '#10A37F',
+  };
+  return colors[outputType] || '#6b7280';
+}
+
+/**
+ * Reorganiza as posições dos nós para melhor visualização
+ */
+function reorganizeFlowPositions(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
+  if (nodes.length === 0) return { nodes, edges };
+
+  // Calcular bounds atuais
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  nodes.forEach(node => {
+    minX = Math.min(minX, node.position.x);
+    maxX = Math.max(maxX, node.position.x);
+    minY = Math.min(minY, node.position.y);
+    maxY = Math.max(maxY, node.position.y);
+  });
+
+  // Se o fluxo já está bem posicionado (range razoável), manter
+  const xRange = maxX - minX;
+  const yRange = maxY - minY;
+  
+  if (xRange < 2000 && yRange < 1500 && minX >= 0 && minY >= 0) {
+    return { nodes, edges };
+  }
+
+  // Normalizar posições para começar em (100, 100)
+  const offsetX = minX < 0 ? -minX + 100 : 100 - minX;
+  const offsetY = minY < 0 ? -minY + 100 : 100 - minY;
+
+  const normalizedNodes = nodes.map(node => ({
+    ...node,
+    position: {
+      x: node.position.x + offsetX,
+      y: node.position.y + offsetY,
+    },
+  }));
+
+  return { nodes: normalizedNodes, edges };
+}
+
+/**
+ * Valida e corrige conexões de um fluxo
+ */
+export function validateAndFixFlowConnections(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[]; issues: string[] } {
+  const issues: string[] = [];
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const validEdges: Edge[] = [];
+
+  // Verificar edges inválidas
+  edges.forEach(edge => {
+    const sourceExists = nodeIds.has(edge.source);
+    const targetExists = nodeIds.has(edge.target);
+
+    if (!sourceExists) {
+      issues.push(`Edge ${edge.id}: source node ${edge.source} não existe`);
+    }
+    if (!targetExists) {
+      issues.push(`Edge ${edge.id}: target node ${edge.target} não existe`);
+    }
+
+    if (sourceExists && targetExists) {
+      validEdges.push(edge);
+    }
+  });
+
+  // Verificar nós sem conexões (exceto triggers)
+  const connectedNodeIds = new Set<string>();
+  validEdges.forEach(edge => {
+    connectedNodeIds.add(edge.source);
+    connectedNodeIds.add(edge.target);
+  });
+
+  nodes.forEach(node => {
+    if (!connectedNodeIds.has(node.id) && node.type !== 'trigger') {
+      issues.push(`Node ${node.data?.label || node.id}: não está conectado ao fluxo`);
+    }
+  });
+
+  return { nodes, edges: validEdges, issues };
+}
+
+/**
+ * Gera um fluxo completo e interligado a partir de dados N8N
+ */
+export function generateCompleteFlow(n8nData: any): { 
+  nodes: Node[]; 
+  edges: Edge[]; 
+  metadata: { 
+    totalNodes: number; 
+    totalEdges: number; 
+    nodeTypes: Record<string, number>;
+    issues: string[];
+  } 
+} {
+  try {
+    // Converter para React Flow
+    const { nodes, edges } = convertN8NToReactFlow(n8nData);
+    
+    // Validar e corrigir
+    const { nodes: validatedNodes, edges: validatedEdges, issues } = validateAndFixFlowConnections(nodes, edges);
+    
+    // Contar tipos de nós
+    const nodeTypes: Record<string, number> = {};
+    validatedNodes.forEach(node => {
+      const type = node.type || 'unknown';
+      nodeTypes[type] = (nodeTypes[type] || 0) + 1;
+    });
+
+    return {
+      nodes: validatedNodes,
+      edges: validatedEdges,
+      metadata: {
+        totalNodes: validatedNodes.length,
+        totalEdges: validatedEdges.length,
+        nodeTypes,
+        issues,
+      },
+    };
+  } catch (error) {
+    throw new Error(`Erro ao gerar fluxo completo: ${error}`);
+  }
 }

@@ -15,7 +15,8 @@ import N8NSidebar from '@/components/flow/N8NSidebar';
 import N8NNodeConfig from '@/components/flow/N8NNodeConfig';
 import { Node } from 'reactflow';
 import { convertIVRToReactFlow } from '@/lib/ivrConverter';
-import { convertToReactFlow } from '@/lib/flowConverters';
+import { convertToReactFlow, generateCompleteFlow } from '@/lib/flowConverters';
+import { fullyInterlinkFlow, validateFlowIntegrity } from '@/lib/flowLinker';
 
 export default function Automation() {
   const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
@@ -117,13 +118,42 @@ export default function Automation() {
         const flowData = JSON.parse(content);
         
         let nodes, edges, flowName;
+        let isN8N = false;
+        
+        // Detectar se é formato N8N
+        if (flowData.nodes && Array.isArray(flowData.nodes) && 
+            flowData.nodes.some((n: any) => n.type?.startsWith('n8n-') || n.type?.startsWith('@n8n/'))) {
+          isN8N = true;
+        }
         
         try {
-          // Tentar usar o conversor universal que detecta automaticamente o formato
-          const converted = convertToReactFlow(content);
-          nodes = converted.nodes;
-          edges = converted.edges;
-          flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+          if (isN8N) {
+            // Usar sistema completo de interligação para N8N
+            toast.info('Detectado fluxo N8N. Interligando nós automaticamente...');
+            const result = fullyInterlinkFlow(flowData);
+            nodes = result.nodes;
+            edges = result.edges;
+            flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+            
+            // Mostrar relatório de interligação
+            if (result.report.validation.errors.length > 0) {
+              console.warn('Problemas no fluxo:', result.report.validation.errors);
+            }
+            
+            if (result.report.autoConnect.length > 0) {
+              toast.success(`Auto-conectados ${result.report.autoConnect.length} nós`);
+            }
+            
+            // Mostrar estatísticas
+            const stats = result.report.finalStats;
+            toast.info(`Fluxo: ${stats.totalNodes} nós, ${stats.totalEdges} conexões`);
+          } else {
+            // Tentar usar o conversor universal para outros formatos
+            const converted = convertToReactFlow(content);
+            nodes = converted.nodes;
+            edges = converted.edges;
+            flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+          }
         } catch (conversionError) {
           // Se falhar, tentar detectar formato manualmente
           if (flowData.options && typeof flowData.options === 'string') {
@@ -148,6 +178,13 @@ export default function Automation() {
           }
         }
         
+        // Validar integridade do fluxo antes de salvar
+        const validation = validateFlowIntegrity(nodes, edges);
+        if (!validation.isValid) {
+          console.error('Problemas de validação:', validation.errors);
+          toast.warning('Fluxo importado com problemas. Verifique o console.');
+        }
+        
         // Criar novo fluxo com dados importados
         createFlow.mutate({
           name: flowName,
@@ -155,7 +192,7 @@ export default function Automation() {
           flowData: JSON.stringify({ nodes, edges }),
         });
 
-        toast.success('Fluxo importado com sucesso!');
+        toast.success('Fluxo importado e interligado com sucesso!');
         setIsImporting(false);
         setImportFile(null);
       } catch (error) {
