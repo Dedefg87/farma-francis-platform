@@ -116,27 +116,6 @@ async function startServer() {
   app.get("/api/test/health", testFlowsRouter.healthCheck);
   app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
   
-  // Diagnostic Routes - Ferramentas de Diagnóstico
-  const diagnosticRouter = await import("../diagnostic");
-  app.get("/api/diagnostic/overview", diagnosticRouter.getDiagnosticOverview);
-  app.get("/api/diagnostic/messages", diagnosticRouter.getDiagnosticMessages);
-  app.get("/api/diagnostic/webhook", diagnosticRouter.getWebhookStatus);
-  app.post("/api/diagnostic/test-webhook", diagnosticRouter.testWebhookReception);
-  app.get("/api/diagnostic/flows", diagnosticRouter.getFlowStatus);
-  app.post("/api/diagnostic/configure-evolution", diagnosticRouter.configureEvolutionAPI);
-  
-  // Debug Routes - Sistema de Logs e Debug
-  try {
-    const debugRouter = await import("../debug");
-    app.get("/api/debug/logs", debugRouter.getLogs);
-    app.get("/api/debug/clear", debugRouter.clearLogs);
-    app.get("/api/debug/stats", debugRouter.getLogStats);
-    app.get("/api/debug/system", debugRouter.getSystemStatus);
-    app.post("/api/debug/test", debugRouter.addManualLog);
-  } catch (e) {
-    console.error("[Server] Debug router not loaded");
-  }
-  
   // tRPC API
   app.use(
     "/api/trpc",
