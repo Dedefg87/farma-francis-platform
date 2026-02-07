@@ -192,7 +192,7 @@ function isN8NFormat(data: any): boolean {
 /**
  * Converte formato N8N para React Flow
  */
-function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
+export function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const nodeMap = new Map<string, any>(); // Mapear nome do nó para ID

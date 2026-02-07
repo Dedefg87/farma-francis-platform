@@ -1,4 +1,5 @@
 import { Node, Edge } from 'reactflow';
+import { convertN8NToReactFlow } from './flowConverters';
 
 /**
  * FlowLinker - Utilitário avançado para interligação de nós em fluxos
@@ -424,8 +425,8 @@ export function fullyInterlinkFlow(n8nData: any): {
   };
 
   // 1. Converter N8N para React Flow
-  const { convertN8NToReactFlow } = require('./flowConverters');
-  let { nodes, edges } = convertN8NToReactFlow(n8nData);
+  const result = convertN8NToReactFlow(n8nData);
+  let { nodes, edges } = result;
   report.conversion.push(`Convertido ${nodes.length} nós e ${edges.length} edges do N8N`);
 
   // 2. Validar

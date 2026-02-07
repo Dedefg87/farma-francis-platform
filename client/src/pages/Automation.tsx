@@ -130,23 +130,41 @@ export default function Automation() {
           if (isN8N) {
             // Usar sistema completo de interligação para N8N
             toast.info('Detectado fluxo N8N. Interligando nós automaticamente...');
-            const result = fullyInterlinkFlow(flowData);
-            nodes = result.nodes;
-            edges = result.edges;
-            flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+            console.log('Iniciando conversão N8N:', flowData.name, 'com', flowData.nodes?.length, 'nós');
             
-            // Mostrar relatório de interligação
-            if (result.report.validation.errors.length > 0) {
-              console.warn('Problemas no fluxo:', result.report.validation.errors);
+            try {
+              const result = fullyInterlinkFlow(flowData);
+              nodes = result.nodes;
+              edges = result.edges;
+              flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+              
+              // Mostrar relatório de interligação
+              if (result.report.validation.errors.length > 0) {
+                console.warn('Problemas no fluxo:', result.report.validation.errors);
+              }
+              
+              if (result.report.autoConnect.length > 0) {
+                toast.success(`Auto-conectados ${result.report.autoConnect.length} nós`);
+              }
+              
+              // Mostrar estatísticas
+              const stats = result.report.finalStats;
+              toast.info(`Fluxo: ${stats.totalNodes} nós, ${stats.totalEdges} conexões`);
+            } catch (n8nError) {
+              console.error('Erro no fullyInterlinkFlow:', n8nError);
+              toast.error(`Erro ao processar N8N: ${n8nError instanceof Error ? n8nError.message : 'Erro desconhecido'}`);
+              
+              // Fallback: tentar conversão simples
+              try {
+                const converted = convertToReactFlow(content);
+                nodes = converted.nodes;
+                edges = converted.edges;
+                flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+                toast.info('Usando conversão simplificada');
+              } catch (fallbackError) {
+                throw fallbackError;
+              }
             }
-            
-            if (result.report.autoConnect.length > 0) {
-              toast.success(`Auto-conectados ${result.report.autoConnect.length} nós`);
-            }
-            
-            // Mostrar estatísticas
-            const stats = result.report.finalStats;
-            toast.info(`Fluxo: ${stats.totalNodes} nós, ${stats.totalEdges} conexões`);
           } else {
             // Tentar usar o conversor universal para outros formatos
             const converted = convertToReactFlow(content);
@@ -155,6 +173,8 @@ export default function Automation() {
             flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
           }
         } catch (conversionError) {
+          console.error('Erro completo na conversão:', conversionError);
+          
           // Se falhar, tentar detectar formato manualmente
           if (flowData.options && typeof flowData.options === 'string') {
             // Formato IVR legado
@@ -173,7 +193,8 @@ export default function Automation() {
             edges = flowData.edges;
             flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
           } else {
-            toast.error('Arquivo inválido. Formatos suportados: React Flow, N8N, IVR, Drawflow.');
+            const errorMsg = conversionError instanceof Error ? conversionError.message : 'Erro desconhecido';
+            toast.error(`Erro: ${errorMsg}. Formatos: React Flow, N8N, IVR, Drawflow.`);
             return;
           }
         }
