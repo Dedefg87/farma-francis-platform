@@ -22,6 +22,7 @@ import { customers } from '../drizzle/schema';
 import { customersRouter } from './routers-customers';
 import { contactFetchRouter } from './routers-contact-fetch';
 import { apiConfigRouter } from './routers-api-config';
+import { templatesRouter } from './templates-router';
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -631,6 +632,9 @@ export const appRouter = router({
 
   // AI Features (Whisper, Suggestions, Sentiment, OCR)
   ai: aiRouter,
+
+  // Templates Management
+  templates: templatesRouter,
 
   // Tags management
   // tags: tagsRouter, // Removido - tabelas de tags comentadas
