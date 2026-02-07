@@ -4,6 +4,8 @@
  * Validates API tokens for different AI providers by making real API calls
  */
 
+import { logger } from "./_core/logger";
+
 type AIProvider = "openai" | "anthropic" | "google" | "meta";
 
 interface ValidationResult {
@@ -393,79 +395,7 @@ async function testGoogle(
   };
 }
 
-import { logger } from "./logger";
-
-const AI_CONTEXT_MANAGEMENT = {
-  conversationMemory: {
-    maxTurns: 20,
-    ttlMinutes: 30,
-    keyFields: ["customerId", "channel", "phoneNumber"]
-  },
-  
-  sessionContext: {
-    customerInfo: {
-      name: "",
-      phone: "",
-      history: []
-    },
-    currentFlow: {
-      name: "",
-      step: 0,
-      data: {}
-    },
-    preferences: {
-      language: "pt-BR",
-      timezone: "America/Sao_Paulo",
-      notification: true
-    }
-  }
-};
-
-const AI_ERROR_HANDLING = {
-  fallbackMessages: [
-    "Desculpe, não consegui entender sua pergunta. Poderia reformular?",
-    "Parece que tuvimos um problema técnico. Deixe-me transferir para um atendente humano.",
-    "Gostaria de falar com um de nossos atendentes? Eles podem ajudar melhor com sua solicitação."
-  ],
-  
-  validationRules: {
-    maxLength: 2000,
-    prohibitedContent: ["conteúdo explícito", "discurso de ódio", "informações falsas"],
-    medicalRestrictions: ["prescrever medicamentos", "diagnosticar doenças", "dar conselhos médicos"]
-  }
-};
-
-const AI_INTEGRATION_CONFIG = {
-  providers: {
-    openai: {
-      apiKey: process.env.OPENAI_API_KEY || "",
-      model: "gpt-3.5-turbo",
-      baseURL: "https://api.openai.com/v1"
-    },
-    anthropic: {
-      apiKey: process.env.ANTHROPIC_API_KEY || "",
-      model: "claude-3-sonnet-20240229",
-      baseURL: "https://api.anthropic.com/v1"
-    },
-    google: {
-      apiKey: process.env.GOOGLE_API_KEY || "",
-      model: "gemini-pro",
-      baseURL: "https://generativelanguage.googleapis.com/v1"
-    }
-  },
-  
-  embeddings: {
-    model: "text-embedding-ada-002",
-    dimensions: 1536,
-    similarityThreshold: 0.7
-  },
-  
-  rateLimits: {
-    messagesPerMinute: 60,
-    messagesPerHour: 1000,
-    concurrentRequests: 5
-  }
-};
+import { AI_ERROR_HANDLING, AI_INTEGRATION_CONFIG, AI_CONTEXT_MANAGEMENT } from "../ai-templates";
 
 interface ValidationResult {
   isValid: boolean;

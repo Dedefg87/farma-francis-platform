@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { createContext } from "./context";
-import { logger } from "./logger";
-import { sseManager, EVENTS } from "./sse";
+import { logger } from "./_core/logger";
+import { sseManager, EVENTS } from "./_core/sse";
 import { 
   AI_CONVERSATION_TEMPLATES, 
   AI_NODE_TYPES, 
@@ -10,7 +10,7 @@ import {
   AI_ERROR_HANDLING, 
   AI_CONTEXT_MANAGEMENT, 
   AI_INTEGRATION_CONFIG 
-} from "../ai-templates";
+} from "./ai-templates";
 
 /**
  * Process AI conversation flow
