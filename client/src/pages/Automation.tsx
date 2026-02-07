@@ -15,6 +15,7 @@ import N8NSidebar from '@/components/flow/N8NSidebar';
 import N8NNodeConfig from '@/components/flow/N8NNodeConfig';
 import { Node } from 'reactflow';
 import { convertIVRToReactFlow } from '@/lib/ivrConverter';
+import { convertToReactFlow } from '@/lib/flowConverters';
 
 export default function Automation() {
   const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
@@ -117,26 +118,34 @@ export default function Automation() {
         
         let nodes, edges, flowName;
         
-        // Detectar se é arquivo .ivr (tem campo 'options' como string)
-        if (flowData.options && typeof flowData.options === 'string') {
-          // Converter formato IVR para React Flow
-          try {
-            const converted = convertIVRToReactFlow(flowData);
-            nodes = converted.nodes;
-            edges = converted.edges;
+        try {
+          // Tentar usar o conversor universal que detecta automaticamente o formato
+          const converted = convertToReactFlow(content);
+          nodes = converted.nodes;
+          edges = converted.edges;
+          flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+        } catch (conversionError) {
+          // Se falhar, tentar detectar formato manualmente
+          if (flowData.options && typeof flowData.options === 'string') {
+            // Formato IVR legado
+            try {
+              const converted = convertIVRToReactFlow(flowData);
+              nodes = converted.nodes;
+              edges = converted.edges;
+              flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
+            } catch (error) {
+              toast.error('Erro ao converter arquivo IVR');
+              return;
+            }
+          } else if (flowData.nodes && flowData.edges) {
+            // Formato React Flow nativo
+            nodes = flowData.nodes;
+            edges = flowData.edges;
             flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-          } catch (error) {
-            toast.error('Erro ao converter arquivo IVR');
+          } else {
+            toast.error('Arquivo inválido. Formatos suportados: React Flow, N8N, IVR, Drawflow.');
             return;
           }
-        } else if (flowData.nodes && flowData.edges) {
-          // Formato React Flow nativo
-          nodes = flowData.nodes;
-          edges = flowData.edges;
-          flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-        } else {
-          toast.error('Arquivo inválido. Deve ser .ivr ou conter nodes e edges.');
-          return;
         }
         
         // Criar novo fluxo com dados importados

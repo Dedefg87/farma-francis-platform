@@ -6,8 +6,9 @@ import { getTemplate, getAllTemplates, TEMPLATES } from "./templates";
 import { AutomationEngine, executeTemplateAutomation, executeTemplateFlow, AutomationContext } from "./automation-engine";
 import { getDb } from "./db";
 import { customers, conversations, conversationMessages } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
+import appConfig from "./config/app-config.json";
 
 export async function getTemplates(req: Request, res: Response) {
   try {
@@ -375,6 +376,18 @@ export async function getAnalytics(req: Request, res: Response) {
   }
 }
 
+export async function getConfig(req: Request, res: Response) {
+  try {
+    res.json({
+      success: true,
+      config: appConfig
+    });
+  } catch (error) {
+    logger.error(error as Error, { type: 'config' });
+    res.status(500).json({ error: "Failed to get config" });
+  }
+}
+
 export default {
   getTemplates,
   getTemplateConfig,
@@ -384,5 +397,19 @@ export default {
   processMessage,
   getURAContent,
   applyTemplate,
-  getAnalytics
+  getAnalytics,
+  getConfig
+};
+
+export const templatesRouter = {
+  getTemplates,
+  getTemplateConfig,
+  selectTemplate,
+  executeAutomation,
+  executeFlow,
+  processMessage,
+  getURAContent,
+  applyTemplate,
+  getAnalytics,
+  getConfig
 };

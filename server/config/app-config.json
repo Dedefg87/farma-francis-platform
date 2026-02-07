@@ -1,0 +1,39 @@
+{
+  "templates": {
+    "premium": {
+      "name": "Premium",
+      "enabled": true,
+      "features": ["vip", "priority", "concierge"]
+    },
+    "sales": {
+      "name": "Vendas", 
+      "enabled": true,
+      "features": ["lead_scoring", "cart_recovery", "upsell"]
+    },
+    "pharma": {
+      "name": "Farmacêutico",
+      "enabled": true,
+      "features": ["drug_interactions", "compliance", "alerts"]
+    },
+    "scheduling": {
+      "name": "Agendamento",
+      "enabled": true,
+      "features": ["smart_scheduling", "reminders", "followup"]
+    }
+  },
+  "ai": {
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "maxTokens": 150
+  },
+  "integrations": {
+    "whatsapp": {
+      "enabled": true,
+      "webhook": "/api/webhooks/whatsapp"
+    },
+    "instagram": {
+      "enabled": true,
+      "webhook": "/api/webhooks/instagram"
+    }
+  }
+}
