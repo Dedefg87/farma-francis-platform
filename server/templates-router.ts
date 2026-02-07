@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { createContext } from "./context";
 import { logger } from "./_core/logger";
 import { sseManager, EVENTS } from "./_core/sse";
-import { getTemplate, Template, getAllTemplates, TEMPLATES } from "../templates";
+import { getTemplate, getAllTemplates, TEMPLATES } from "./templates";
 import { AutomationEngine, executeTemplateAutomation, executeTemplateFlow, AutomationContext } from "./automation-engine";
 import { getDb } from "./db";
 import { customers, conversations, conversationMessages } from "../drizzle/schema";

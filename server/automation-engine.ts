@@ -1,10 +1,9 @@
 import { logger } from "./_core/logger";
-import { getTemplate, Template, AutomationConfig, FlowConfig } from "../templates";
+import { getTemplate, AutomationConfig, FlowConfig } from "./templates";
 import { sseManager, EVENTS } from "./_core/sse";
 import { getDb } from "./db";
-import { customers, conversations, conversationMessages, users, agentStatus } from "../drizzle/schema";
+import { customers, conversations, conversationMessages } from "../drizzle/schema";
 import { eq, desc, and, or } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
 
 export interface AutomationContext {
   customerId?: number;
