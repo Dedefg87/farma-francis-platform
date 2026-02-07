@@ -17,6 +17,7 @@ import { Node } from 'reactflow';
 import { convertIVRToReactFlow } from '@/lib/ivrConverter';
 import { convertToReactFlow, generateCompleteFlow } from '@/lib/flowConverters';
 import { fullyInterlinkFlow, validateFlowIntegrity } from '@/lib/flowLinker';
+import { useFlowImportWorker } from '@/hooks/useFlowImportWorker';
 
 export default function Automation() {
   const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
@@ -33,6 +34,17 @@ export default function Automation() {
   const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
   const { data: automationFlows } = trpc.automation.list.useQuery();
   const { data: uraMenus } = trpc.uraMenus.list.useQuery();
+
+  // Web Worker para processar importação sem travar a UI
+  const { isProcessing: workerProcessing, progress: workerProgress, parseJSON, convertN8N } = useFlowImportWorker({
+    onProgress: (progress) => {
+      setImportProgress(progress);
+    },
+    onError: (error) => {
+      toast.error(`Erro no processamento: ${error}`);
+      setImportLoading(false);
+    },
+  });
 
   const createFlow = trpc.visualFlows.create.useMutation({
     onSuccess: (data) => {
@@ -104,7 +116,7 @@ export default function Automation() {
     }
 
     setImportLoading(true);
-    setImportProgress(10);
+    setImportProgress(5);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -120,134 +132,71 @@ export default function Automation() {
           }
         }
         
-        setImportProgress(20);
+        setImportProgress(10);
         
-        const flowData = JSON.parse(content);
-        
-        let nodes, edges, flowName;
-        let isN8N = false;
-        
-        // Detectar se é formato N8N
-        if (flowData.nodes && Array.isArray(flowData.nodes) && 
-            flowData.nodes.some((n: any) => n.type?.startsWith('n8n-') || n.type?.startsWith('@n8n/'))) {
-          isN8N = true;
+        // Usar Web Worker para processar o JSON
+        let parseResult;
+        try {
+          parseResult = await parseJSON(content);
+        } catch (parseError) {
+          // Fallback: parse direto
+          parseResult = { 
+            parsed: JSON.parse(content),
+            isN8N: false 
+          };
         }
         
-        // Usar setTimeout para não bloquear a UI
-        await new Promise(resolve => setTimeout(resolve, 100));
+        const flowData = parseResult.parsed;
+        const isN8N = parseResult.isN8N;
+        const flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
         
-        try {
-          if (isN8N) {
-            // Usar sistema completo de interligação para N8N
-            toast.info('Processando fluxo N8N...');
-            console.log('Iniciando conversão N8N:', flowData.name, 'com', flowData.nodes?.length, 'nós');
+        let nodes, edges;
+        
+        if (isN8N) {
+          // Usar Web Worker para converter N8N
+          toast.info(`Processando fluxo N8N (${parseResult.nodeCount} nós)...`);
+          console.log('Iniciando conversão N8N via Worker:', flowData.name, 'com', flowData.nodes?.length, 'nós');
+          
+          try {
+            const result = await convertN8N(flowData);
+            nodes = result.nodes;
+            edges = result.edges;
             
-            setImportProgress(30);
+            toast.success(`Convertido: ${result.stats.totalNodes} nós, ${result.stats.totalEdges} conexões`);
+          } catch (n8nError) {
+            console.error('Erro no Worker:', n8nError);
+            toast.error('Erro no processamento. Tentando conversão local...');
             
-            try {
-              // Processar em chunks para não travar
-              const result = await new Promise((resolve, reject) => {
-                setTimeout(() => {
-                  try {
-                    const res = fullyInterlinkFlow(flowData);
-                    resolve(res);
-                  } catch (err) {
-                    reject(err);
-                  }
-                }, 100);
-              });
-              
-              nodes = (result as any).nodes;
-              edges = (result as any).edges;
-              flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-              
-              setImportProgress(70);
-              
-              // Mostrar relatório de interligação
-              if ((result as any).report.validation.errors.length > 0) {
-                console.warn('Problemas no fluxo:', (result as any).report.validation.errors);
-              }
-              
-              if ((result as any).report.autoConnect.length > 0) {
-                toast.success(`Auto-conectados ${(result as any).report.autoConnect.length} nós`);
-              }
-              
-              // Mostrar estatísticas
-              const stats = (result as any).report.finalStats;
-              toast.info(`Fluxo: ${stats.totalNodes} nós, ${stats.totalEdges} conexões`);
-            } catch (n8nError) {
-              console.error('Erro no fullyInterlinkFlow:', n8nError);
-              toast.error(`Erro ao processar N8N: ${n8nError instanceof Error ? n8nError.message : 'Erro desconhecido'}`);
-              
-              // Fallback: tentar conversão simples
-              setImportProgress(40);
-              await new Promise(resolve => setTimeout(resolve, 50));
-              
-              try {
-                const converted = convertToReactFlow(content);
-                nodes = converted.nodes;
-                edges = converted.edges;
-                flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-                toast.info('Usando conversão simplificada');
-              } catch (fallbackError) {
-                throw fallbackError;
-              }
-            }
-          } else {
-            // Tentar usar o conversor universal para outros formatos
-            setImportProgress(40);
-            await new Promise(resolve => setTimeout(resolve, 50));
-            
+            // Fallback para conversão local simplificada
             const converted = convertToReactFlow(content);
             nodes = converted.nodes;
             edges = converted.edges;
-            flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
           }
-          
-          setImportProgress(80);
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } catch (conversionError) {
-          console.error('Erro completo na conversão:', conversionError);
-          
-          // Se falhar, tentar detectar formato manualmente
-          if (flowData.options && typeof flowData.options === 'string') {
-            // Formato IVR legado
-            try {
-              const converted = convertIVRToReactFlow(flowData);
-              nodes = converted.nodes;
-              edges = converted.edges;
-              flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-            } catch (error) {
-              toast.error('Erro ao converter arquivo IVR');
-              setImportLoading(false);
-              return;
-            }
-          } else if (flowData.nodes && flowData.edges) {
-            // Formato React Flow nativo
-            nodes = flowData.nodes;
-            edges = flowData.edges;
-            flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-          } else {
-            const errorMsg = conversionError instanceof Error ? conversionError.message : 'Erro desconhecido';
-            toast.error(`Erro: ${errorMsg}. Formatos: React Flow, N8N, IVR, Drawflow.`);
-            setImportLoading(false);
-            return;
-          }
-        }
-        
-        setImportProgress(85);
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
-        // Validar integridade do fluxo antes de salvar
-        const validation = validateFlowIntegrity(nodes, edges);
-        if (!validation.isValid) {
-          console.error('Problemas de validação:', validation.errors);
-          toast.warning('Fluxo importado com problemas. Verifique o console.');
+        } else if (flowData.options && typeof flowData.options === 'string') {
+          // Formato IVR
+          const converted = convertIVRToReactFlow(flowData);
+          nodes = converted.nodes;
+          edges = converted.edges;
+        } else if (flowData.nodes && flowData.edges) {
+          // React Flow nativo
+          nodes = flowData.nodes;
+          edges = flowData.edges;
+        } else {
+          // Tentar conversão universal
+          const converted = convertToReactFlow(content);
+          nodes = converted.nodes;
+          edges = converted.edges;
         }
         
         setImportProgress(90);
         
-        // Criar novo fluxo com dados importados
+        // Validar e salvar
+        const validation = validateFlowIntegrity(nodes, edges);
+        if (!validation.isValid) {
+          console.warn('Problemas no fluxo:', validation.errors);
+        }
+        
+        // Criar novo fluxo
         createFlow.mutate({
           name: flowName,
           description: flowData.description || 'Fluxo importado',
@@ -255,14 +204,14 @@ export default function Automation() {
         });
 
         setImportProgress(100);
-        toast.success('Fluxo importado e interligado com sucesso!');
+        toast.success('Fluxo importado com sucesso!');
         setIsImporting(false);
         setImportFile(null);
         setImportLoading(false);
         setImportProgress(0);
       } catch (error) {
         console.error('Erro ao importar:', error);
-        toast.error('Erro ao processar arquivo. Verifique se é um JSON válido.');
+        toast.error(`Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
         setImportLoading(false);
         setImportProgress(0);
       }

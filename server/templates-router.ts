@@ -371,7 +371,7 @@ export async function getAnalytics(req: Request, res: Response) {
       }
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'analytics' });
+    logger.error({ err: error as Error, type: 'analytics' });
     res.status(500).json({ error: "Failed to get analytics" });
   }
 }
@@ -383,7 +383,7 @@ export async function getConfig(req: Request, res: Response) {
       config: appConfig
     });
   } catch (error) {
-    logger.error(error as Error, { type: 'config' });
+    logger.error({ err: error as Error, type: 'config' });
     res.status(500).json({ error: "Failed to get config" });
   }
 }

@@ -636,7 +636,7 @@ async function processEvolutionWebhook(body: any) {
       externalId: messageId,
       fromNumber,
       fromName: pushName || null,
-      messageType: content.type,
+      messageType: content.type as "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker" | "reaction" | "unknown",
       messageText: content.text,
       mediaUrl: content.mediaUrl,
       mimeType: content.mimeType,

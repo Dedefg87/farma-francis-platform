@@ -382,7 +382,7 @@ export const TEMPLATES: Record<TemplateType, Template> = {
           { id: 'end', type: 'message', name: 'Aguardar Contato', config: { template: 'pharma_escalation' } }
         ],
         conditions: [
-          { field: 'urgency_level', operator: 'equals', value: 'high', trueStep: 'escalate-pharma', falseStep: 'search-kb' }
+          { id: 'urgency-check', field: 'urgency_level', operator: 'equals', value: 'high', trueStep: 'escalate-pharma', falseStep: 'search-kb' }
         ]
       },
       {
