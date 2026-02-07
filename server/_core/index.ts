@@ -60,6 +60,14 @@ async function startServer() {
   );
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+  // Debug logging middleware
+  try {
+    const debugModule = await import("../debug");
+    app.use(debugModule.webhookLogger);
+  } catch (e) {
+    console.error("[Server] Debug module not loaded");
+  }
+
   app.use("/api/", apiLimiter);
 
   app.get("/api/events", async (req, res) => {
@@ -116,6 +124,18 @@ async function startServer() {
   app.post("/api/diagnostic/test-webhook", diagnosticRouter.testWebhookReception);
   app.get("/api/diagnostic/flows", diagnosticRouter.getFlowStatus);
   app.post("/api/diagnostic/configure-evolution", diagnosticRouter.configureEvolutionAPI);
+  
+  // Debug Routes - Sistema de Logs e Debug
+  try {
+    const debugRouter = await import("../debug");
+    app.get("/api/debug/logs", debugRouter.getLogs);
+    app.get("/api/debug/clear", debugRouter.clearLogs);
+    app.get("/api/debug/stats", debugRouter.getLogStats);
+    app.get("/api/debug/system", debugRouter.getSystemStatus);
+    app.post("/api/debug/test", debugRouter.addManualLog);
+  } catch (e) {
+    console.error("[Server] Debug router not loaded");
+  }
   
   // tRPC API
   app.use(

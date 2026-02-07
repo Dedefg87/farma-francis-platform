@@ -6,8 +6,25 @@ import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
 
+// Import debug module
+let debugModule: any = null;
+try {
+  debugModule = require("./debug");
+} catch (e) {
+  console.error("[Webhooks] Debug module not loaded");
+}
+
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";
+
+const addDebugLog = debugModule?.addLog || ((level: string, category: string, message: string, data?: any) => {
+  console.log(`[${level.toUpperCase()}] [${category}]`, message, data);
+});
+
+const addDebugLogWebhook = debugModule?.webhookLogger || ((req: any, res: any, next: any) => {
+  console.log(`[WEBHOOK] ${req.method} ${req.url}`);
+  next();
+});
 
 function normalizeInboundNumber(value: string | undefined | null) {
   if (!value) return null;
@@ -572,11 +589,128 @@ function parseEvolutionMessageContent(message: any) {
 }
 
 async function processEvolutionWebhook(body: any) {
+  addDebugLog('info', 'evolution_webhook_start', 'Processing Evolution webhook', {
+    event: body?.event,
+    hasData: !!body?.data,
+    bodyKeys: Object.keys(body)
+  });
+
   try {
     const db = await getDb();
     if (!db) {
+      addDebugLog('error', 'evolution_webhook', 'Database not available');
       throw new Error("Database not available");
     }
+
+    const eventName = body?.event || body?.data?.event;
+    if (!eventName) {
+      addDebugLog('warn', 'evolution_webhook', 'No event name in payload');
+      return;
+    }
+
+    addDebugLog('info', 'evolution_webhook_event', `Processing event: ${eventName}`);
+
+    if (String(eventName).startsWith("contacts.")) {
+      const payload = body?.data || body;
+      const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id;
+      const fromNumber = normalizeInboundNumber(remoteJid);
+      
+      if (!fromNumber) {
+        addDebugLog('warn', 'evolution_contacts', 'No phone number found', { remoteJid });
+        return;
+      }
+
+      const pushName = payload?.pushName || payload?.name || null;
+      addDebugLog('info', 'evolution_contacts', `Contact update: ${fromNumber} - ${pushName}`);
+
+      const customer = await findOrCreateCustomerByPhone(fromNumber, pushName);
+      addDebugLog('debug', 'evolution_contacts', `Customer: ${customer?.insertId || 'existing'} - ${fromNumber}`);
+      return;
+    }
+
+    if (String(eventName).startsWith("messages.")) {
+      const payload = body?.data || body;
+      const message = extractEvolutionMessage(body);
+      
+      if (!message) {
+        addDebugLog('warn', 'evolution_messages', 'No message extracted', {
+          eventName,
+          bodyKeys: Object.keys(payload || {})
+        });
+        return;
+      }
+
+      addDebugLog('info', 'evolution_messages', `Message received: ${message.messageId} from ${message.remoteJid}`, {
+        fromMe: message.fromMe,
+        messageType: message.content.type,
+        hasText: !!message.content.text
+      });
+
+      // Verificar se a mensagem é do próprio bot
+      if (message.fromMe) {
+        addDebugLog('debug', 'evolution_messages', 'Ignoring message from self (fromMe=true)');
+        return;
+      }
+
+      const existing = await getReceivedMessageByExternalId(message.messageId, "whatsapp");
+      if (existing) {
+        addDebugLog('warn', 'evolution_messages', `Duplicate message ignored: ${message.messageId}`);
+        return;
+      }
+
+      const messageTimestamp = body?.data?.messageTimestamp || body?.data?.message?.messageTimestamp;
+      const timestamp = Number(messageTimestamp || Math.floor(Date.now() / 1000));
+      
+      addDebugLog('debug', 'evolution_messages', `Saving message to database: ${message.messageId}`, {
+        fromNumber: message.remoteJid,
+        fromName: message.pushName,
+        messageType: message.content.type,
+        hasMedia: !!message.content.mediaUrl
+      });
+
+      await db.insert(receivedMessages).values({
+        provider: "whatsapp",
+        externalId: message.messageId,
+        fromNumber: message.remoteJid,
+        fromName: message.pushName || null,
+        messageType: message.content.type as "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker" | "reaction" | "unknown",
+        messageText: message.content.text,
+        mediaUrl: message.content.mediaUrl,
+        mimeType: message.content.mimeType,
+        caption: message.content.caption,
+        timestamp,
+        rawPayload: JSON.stringify(body),
+        processed: 0,
+      });
+
+      addDebugLog('info', 'evolution_messages', `Message saved successfully: ${message.messageId}`, {
+        fromNumber: message.remoteJid,
+        wasProcessed: false
+      });
+
+      await ingestInboundConversationMessage({
+        provider: "whatsapp",
+        externalId: message.messageId,
+        fromNumber: message.remoteJid,
+        fromName: message.pushName || null,
+        messageText: message.content.text,
+        messageMediaUrl: message.content.mediaUrl,
+        messageMediaType: message.content.type,
+      });
+      
+      addDebugLog('success', 'evolution_webhook', 'Webhook processed successfully', {
+        messageId: message.messageId,
+        fromNumber: message.remoteJid
+      });
+    }
+  } catch (error) {
+    addDebugLog('error', 'evolution_webhook', 'Error processing webhook', {
+      error: String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    throw error;
+  }
+}
 
     const eventName = body?.event || body?.data?.event;
     if (!eventName) {
