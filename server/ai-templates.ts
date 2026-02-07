@@ -973,29 +973,3 @@ export const AI_INTEGRATION_CONFIG = {
     concurrentRequests: 5
   }
 };
-
-export const AI_CONTEXT_MANAGEMENT = {
-  conversationMemory: {
-    maxTurns: 20,
-    ttlMinutes: 30,
-    keyFields: ["customerId", "channel", "phoneNumber"]
-  },
-  
-  sessionContext: {
-    customerInfo: {
-      name: "",
-      phone: "",
-      history: []
-    },
-    currentFlow: {
-      name: "",
-      step: 0,
-      data: {}
-    },
-    preferences: {
-      language: "pt-BR",
-      timezone: "America/Sao_Paulo",
-      notification: true
-    }
-  }
-};

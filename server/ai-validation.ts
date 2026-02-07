@@ -395,7 +395,7 @@ async function testGoogle(
   };
 }
 
-import { AI_ERROR_HANDLING, AI_INTEGRATION_CONFIG, AI_CONTEXT_MANAGEMENT } from "../ai-templates";
+import { AI_ERROR_HANDLING, AI_INTEGRATION_CONFIG, AI_CONTEXT_MANAGEMENT } from "./ai-templates";
 
 interface ValidationResult {
   isValid: boolean;
