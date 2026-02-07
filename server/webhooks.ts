@@ -712,12 +712,7 @@ async function processEvolutionWebhook(body: any) {
   }
 }
 
-    const eventName = body?.event || body?.data?.event;
-    if (!eventName) {
-      return;
-    }
-
-    if (String(eventName).startsWith("contacts.")) {
+/**
       const payload = body?.data || body;
       const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id;
       const fromNumber = normalizeInboundNumber(remoteJid);
