@@ -229,12 +229,25 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
  */
 router.post("/evolution", async (req: Request, res: Response) => {
   try {
+    console.log('[Evolution Webhook] ================= NEW REQUEST =================');
+    console.log('[Evolution Webhook] Method:', req.method);
+    console.log('[Evolution Webhook] URL:', req.originalUrl);
+    console.log('[Evolution Webhook] Headers:', JSON.stringify(req.headers).substring(0, 500));
+    console.log('[Evolution Webhook] Body type:', typeof req.body);
+    console.log('[Evolution Webhook] Body:', JSON.stringify(req.body).substring(0, 500));
+    
     const body = req.body;
     const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
     
     console.log('[Evolution Webhook] Received request from:', fullUrl);
-    console.log('[Evolution Webhook] Body keys:', Object.keys(body || {}));
-    console.log('[Evolution Webhook] Body preview:', JSON.stringify(body || {}).substring(0, 300));
+
+    // Verificar se body está vazio
+    if (!body || Object.keys(body).length === 0) {
+      console.error('[Evolution Webhook] ERROR: Body is empty! Raw body might not be parsed.');
+      // Tentar ler o raw body
+      const raw = (req as any).rawBody;
+      console.log('[Evolution Webhook] Raw body:', raw ? raw.toString().substring(0, 500) : 'undefined');
+    }
 
     // Detectar evento pela URL quando o Evolution API envia no formato: /presence-update, /chats-update, etc
     let eventName = body?.event || body?.data?.event;
@@ -276,19 +289,24 @@ router.post("/evolution", async (req: Request, res: Response) => {
       });
 
       if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected) {
-        console.error('[Evolution Webhook] Invalid API Key');
+        console.error('[Evolution Webhook] Invalid API Key - REJECTING');
         if (isProduction) {
           return res.status(403).send("Invalid API key");
         }
+      } else {
+        console.log('[Evolution Webhook] Auth passed');
       }
     } else {
-      console.log('[Evolution Webhook] No integration settings found');
+      console.log('[Evolution Webhook] No integration settings found - skipping auth');
     }
 
-    console.log('[Evolution Webhook] Processing event:', eventName);
+    console.log('[Evolution Webhook] Calling processEvolutionWebhook with event:', eventName);
     res.status(200).send("EVENT_RECEIVED");
 
-    processEvolutionWebhook({ ...body, event: eventName }).catch((error) => {
+    console.log('[Evolution Webhook] Response sent, processing async...');
+    processEvolutionWebhook({ ...body, event: eventName }).then(() => {
+      console.log('[Evolution Webhook] processEvolutionWebhook completed');
+    }).catch((error) => {
       console.error('[Evolution Webhook] Processing error:', error);
     });
   } catch (error) {
