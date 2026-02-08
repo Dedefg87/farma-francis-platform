@@ -253,12 +253,21 @@ router.post("/webhooks/evolution", async (req: Request, res: Response) => {
         ((req.headers["apikey"] || req.headers["x-api-key"]) as string | undefined) ||
         (req.query["apikey"] as string | undefined);
 
+      console.log('[Evolution Webhook] Auth Check:', { 
+        hasExpected: !!expectedApiKey, 
+        hasProvided: !!providedApiKey,
+        match: expectedApiKey === providedApiKey,
+        providedSource: req.query["apikey"] ? "query" : (req.headers["apikey"] ? "header" : "none")
+      });
+
       if (expectedApiKey && providedApiKey !== expectedApiKey) {
+        console.error('[Evolution Webhook] Invalid API Key provided via ' + (req.query["apikey"] ? "query string" : "headers"));
         if (isProduction) {
-          console.error('[Evolution Webhook] Invalid API Key');
           return res.status(403).send("Invalid API key");
         }
       }
+    } else {
+      console.log('[Evolution Webhook] No integration settings found for evolution_api, skipping auth');
     }
 
     console.log('[Evolution Webhook] Calling processEvolutionWebhook...');
