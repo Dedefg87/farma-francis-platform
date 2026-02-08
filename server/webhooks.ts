@@ -822,6 +822,16 @@ async function processEvolutionWebhook(body: any) {
       return;
     }
 
+    // Connection update - quando a conexão é estabelecida
+    if (normalizedEvent === 'connection_update') {
+      console.log('[Evolution Webhook] Connection update event received');
+      const payload = body?.data || body;
+      const profileName = payload?.profileName || payload?.profile?.name || null;
+      const profilePicture = payload?.profilePictureUrl || payload?.profile?.picture || null;
+      console.log('[Evolution Webhook] Connection established:', { profileName, profilePicture });
+      return;
+    }
+
     console.log('[Evolution Webhook] Unhandled event type:', eventName);
   } catch (error) {
     console.error('[Evolution Webhook] Error processing webhook:', error);
