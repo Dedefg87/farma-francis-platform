@@ -230,9 +230,23 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 router.post("/webhooks/evolution", async (req: Request, res: Response) => {
   try {
     const body = req.body;
-    console.log('[Evolution Webhook] Received request');
+    const urlPath = req.path || req.url;
+    const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+    
+    console.log('[Evolution Webhook] Received request from:', fullUrl);
     console.log('[Evolution Webhook] Body keys:', Object.keys(body || {}));
-    console.log('[Evolution Webhook] Body preview:', JSON.stringify(body || {}).substring(0, 500));
+    console.log('[Evolution Webhook] Body preview:', JSON.stringify(body || {}).substring(0, 300));
+
+    // Detectar evento pela URL quando o Evolution API envia no formato: /presence-update, /chats-update, etc
+    let eventName = body?.event || body?.data?.event;
+    if (!eventName) {
+      const urlParts = fullUrl.split('/api/webhooks/evolution')[1] || '';
+      const eventMatch = urlParts.match(/\/(presence-update|chats-update|contacts-update|messages-update)/i);
+      if (eventMatch) {
+        eventName = eventMatch[1];
+        console.log('[Evolution Webhook] Event extracted from URL:', eventName);
+      }
+    }
 
     const db = await getDb();
     if (!db) {
@@ -240,6 +254,7 @@ router.post("/webhooks/evolution", async (req: Request, res: Response) => {
       return res.status(500).send("Database not available");
     }
 
+    // Extrair apikey da URL (pode vir com ou sem @)
     const [configRow] = await db
       .select()
       .from(integrationSettings)
@@ -249,31 +264,32 @@ router.post("/webhooks/evolution", async (req: Request, res: Response) => {
     if (configRow) {
       const configData = typeof configRow.config === "string" ? JSON.parse(configRow.config) : configRow.config;
       const expectedApiKey = configData.apiKey || configData.accessToken;
-      const providedApiKey =
-        ((req.headers["apikey"] || req.headers["x-api-key"]) as string | undefined) ||
-        (req.query["apikey"] as string | undefined);
+      
+      // Buscar apikey na query string - pode ter formato: ?apikey=@Afrancis87/presence-update
+      const queryApikey = (req.query["apikey"] as string | undefined) || '';
+      const cleanApikey = queryApikey.split('/')[0].replace('@', '');
+      const cleanExpected = expectedApiKey?.replace('@', '') || '';
 
       console.log('[Evolution Webhook] Auth Check:', { 
-        hasExpected: !!expectedApiKey, 
-        hasProvided: !!providedApiKey,
-        match: expectedApiKey === providedApiKey,
-        providedSource: req.query["apikey"] ? "query" : (req.headers["apikey"] ? "header" : "none")
+        expectedHasValue: !!expectedApiKey,
+        providedHasValue: !!queryApikey,
+        cleanMatch: cleanApikey === cleanExpected
       });
 
-      if (expectedApiKey && providedApiKey !== expectedApiKey) {
-        console.error('[Evolution Webhook] Invalid API Key provided via ' + (req.query["apikey"] ? "query string" : "headers"));
+      if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected) {
+        console.error('[Evolution Webhook] Invalid API Key');
         if (isProduction) {
           return res.status(403).send("Invalid API key");
         }
       }
     } else {
-      console.log('[Evolution Webhook] No integration settings found for evolution_api, skipping auth');
+      console.log('[Evolution Webhook] No integration settings found');
     }
 
-    console.log('[Evolution Webhook] Calling processEvolutionWebhook...');
+    console.log('[Evolution Webhook] Processing event:', eventName);
     res.status(200).send("EVENT_RECEIVED");
 
-    processEvolutionWebhook(body).catch((error) => {
+    processEvolutionWebhook({ ...body, event: eventName }).catch((error) => {
       console.error('[Evolution Webhook] Processing error:', error);
     });
   } catch (error) {
@@ -612,7 +628,16 @@ async function processEvolutionWebhook(body: any) {
       throw new Error("Database not available");
     }
 
-    const eventName = body?.event || body?.data?.event;
+    // Normalizar nome do evento - pode vir de várias formas
+    let eventName = body?.event || body?.data?.event || '';
+    
+    // Se o evento vier vazio mas houver dados, tentar detectar pelo conteúdo
+    if (!eventName && body?.key) {
+      eventName = 'messages.upsert';
+    } else if (!eventName && body?.remoteJid) {
+      eventName = 'messages.upsert';
+    }
+    
     console.log('[Evolution Webhook] Event name:', eventName);
 
     if (!eventName) {
@@ -621,13 +646,15 @@ async function processEvolutionWebhook(body: any) {
       return;
     }
 
-    console.log('[Evolution Webhook] Processing event:', eventName);
+    // Normalizar o nome do evento para consistência
+    const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, '_');
+    console.log('[Evolution Webhook] Normalized event:', normalizedEvent);
 
-    // Handle contacts events
-    if (String(eventName).startsWith("contacts.")) {
+    // Verificar se é evento de contatos
+    if (normalizedEvent.includes('contact') || normalizedEvent === 'contacts_update') {
       console.log('[Evolution Webhook] Handling contacts event');
       const payload = body?.data || body;
-      const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id;
+      const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id || body?.jid;
       const fromNumber = normalizeInboundNumber(remoteJid);
       
       if (!fromNumber) {
@@ -635,7 +662,7 @@ async function processEvolutionWebhook(body: any) {
         return;
       }
 
-      const pushName = payload?.pushName || payload?.name || null;
+      const pushName = payload?.pushName || payload?.name || payload?.notify || null;
       console.log('[Evolution Webhook] Contact update:', { fromNumber, pushName });
 
       const customer = await findOrCreateCustomerByPhone(fromNumber, pushName);
@@ -643,22 +670,25 @@ async function processEvolutionWebhook(body: any) {
       return;
     }
 
-    // Handle messages events
-    if (String(eventName).startsWith("messages.")) {
+    // Verificar se é evento de mensagens
+    if (normalizedEvent.includes('message') || normalizedEvent === 'messages_update' || normalizedEvent === 'chats_update') {
       console.log('[Evolution Webhook] Handling messages event');
 
-      // Try multiple ways to extract message
+      // Tentar extrair mensagem de várias estruturas possíveis
       const data = body?.data || body;
-      const messageEntry = data?.message || data?.messages?.[0] || body?.message || {};
-      const key = data?.key || messageEntry?.key || {};
+      
+      // Diferentes estruturas que o Evolution API pode usar
+      const messageData = data?.message || data?.messages?.[0] || body || {};
+      const key = data?.key || messageData?.key || {};
+      const messageContent = messageData?.message || messageData;
+      
+      // Extrair dados
+      const messageId = key?.id || data?.id || messageData?.id || `evo-${Date.now()}`;
+      const remoteJid = key?.remoteJid || data?.remoteJid || messageData?.remoteJid || body?.remoteJid;
+      const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName;
+      const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
 
-      const messageId = key?.id || data?.id || messageEntry?.id || `evo-${Date.now()}`;
-      const remoteJid = key?.remoteJid || data?.remoteJid || messageEntry?.remoteJid;
-      const pushName = data?.pushName || data?.senderName || messageEntry?.pushName;
-      const fromMe = key?.fromMe ?? data?.fromMe ?? messageEntry?.fromMe;
-      const messageContent = messageEntry?.message || messageEntry;
-
-      console.log('[Evolution Webhook] Extracted message:', {
+      console.log('[Evolution Webhook] Extracted data:', {
         messageId,
         remoteJid,
         pushName,
@@ -667,62 +697,69 @@ async function processEvolutionWebhook(body: any) {
       });
 
       if (!remoteJid) {
-        console.warn('[Evolution Webhook] No remoteJid found in message');
+        console.warn('[Evolution Webhook] No remoteJid found');
         return;
       }
 
-      // Ignore messages from self
-      if (fromMe === true || fromMe === 'true') {
+      // Ignorar mensagens do próprio bot
+      if (fromMe === true || fromMe === 'true' || fromMe === 1) {
         console.log('[Evolution Webhook] Ignoring message from self (fromMe=true)');
         return;
       }
 
+      // Verificar duplicata
       const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
       if (existing) {
         console.log(`[Evolution Webhook] Duplicate message ${messageId} ignored`);
         return;
       }
 
-      // Determine message type and content
+      // Determinar tipo e conteúdo da mensagem
       let messageType = "unknown";
       let messageText = null;
       let caption = null;
       let mediaUrl = null;
       let mimeType = null;
 
-      if (messageContent?.conversation) {
+      if (messageContent?.conversation || messageContent?.text) {
         messageType = "text";
-        messageText = messageContent.conversation;
+        messageText = messageContent.conversation || messageContent.text;
       } else if (messageContent?.extendedTextMessage?.text) {
         messageType = "text";
         messageText = messageContent.extendedTextMessage.text;
       } else if (messageContent?.imageMessage) {
         messageType = "image";
         caption = messageContent.imageMessage.caption || null;
-        mediaUrl = messageContent.imageMessage.url || null;
+        mediaUrl = messageContent.imageMessage.url || messageContent.imageMessage.mediaUrl || null;
         mimeType = messageContent.imageMessage.mimetype || null;
       } else if (messageContent?.videoMessage) {
         messageType = "video";
         caption = messageContent.videoMessage.caption || null;
-        mediaUrl = messageContent.videoMessage.url || null;
+        mediaUrl = messageContent.videoMessage.url || messageContent.videoMessage.mediaUrl || null;
         mimeType = messageContent.videoMessage.mimetype || null;
       } else if (messageContent?.audioMessage) {
         messageType = "audio";
-        mediaUrl = messageContent.audioMessage.url || null;
+        mediaUrl = messageContent.audioMessage.url || messageContent.audioMessage.mediaUrl || null;
         mimeType = messageContent.audioMessage.mimetype || null;
       } else if (messageContent?.documentMessage) {
         messageType = "document";
         caption = messageContent.documentMessage.caption || null;
-        mediaUrl = messageContent.documentMessage.url || null;
+        mediaUrl = messageContent.documentMessage.url || messageContent.documentMessage.mediaUrl || null;
         mimeType = messageContent.documentMessage.mimetype || null;
       } else if (messageContent?.locationMessage) {
         messageType = "location";
+      } else if (messageContent?.stickerMessage) {
+        messageType = "sticker";
+      } else if (messageContent?.reactionMessage) {
+        messageType = "reaction";
+        messageText = messageContent.reactionMessage?.text || null;
       }
 
       console.log('[Evolution Webhook] Parsed message:', { messageType, messageText, caption });
 
-      const messageTimestamp = data?.messageTimestamp || messageContent?.messageTimestamp || Math.floor(Date.now() / 1000);
+      const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
 
+      // Salvar mensagem no banco
       await db.insert(receivedMessages).values({
         provider: "whatsapp",
         externalId: messageId,
@@ -740,6 +777,7 @@ async function processEvolutionWebhook(body: any) {
 
       console.log('[Evolution Webhook] Message saved to database:', messageId);
 
+      // Ingerir na conversa
       await ingestInboundConversationMessage({
         provider: "whatsapp",
         fromNumber: remoteJid,
@@ -749,12 +787,25 @@ async function processEvolutionWebhook(body: any) {
         caption,
         mediaUrl,
         mimeType,
-});
-       
+      });
+        
       console.log('[Evolution Webhook] Webhook processed successfully:', { messageId, fromNumber: remoteJid });
-    } else {
-      console.log('[Evolution Webhook] Unhandled event type:', eventName);
+      return;
     }
+
+    // Eventos de presença - não precisamos processar
+    if (normalizedEvent.includes('presence') || normalizedEvent === 'status_update') {
+      console.log('[Evolution Webhook] Presence event ignored:', normalizedEvent);
+      return;
+    }
+
+    // Chats update - pode ser útil para atualizar status
+    if (normalizedEvent === 'chats_update') {
+      console.log('[Evolution Webhook] Chats update event received');
+      return;
+    }
+
+    console.log('[Evolution Webhook] Unhandled event type:', eventName);
   } catch (error) {
     console.error('[Evolution Webhook] Error processing webhook:', error);
     console.error('[Evolution Webhook] Stack:', error instanceof Error ? error.stack : '');
