@@ -76,6 +76,46 @@ async function sendEvolutionText(params: { to: string; message: string }) {
 }
 
 /**
+ * Fetch profile info from Evolution API
+ */
+export async function fetchEvolutionProfile(phone: string) {
+  const config = await getEvolutionConfig();
+  if (!config) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `${config.apiUrl}/chat/fetchProfile/${config.instanceName}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: config.apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          number: normalizeWhatsAppNumber(phone),
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    return {
+      name: data.name || data.pushname || null,
+      profilePicture: data.picture || data.profilePictureUrl || null,
+      phone: phone,
+    };
+  } catch (error) {
+    console.error("[Evolution API] Error fetching profile:", error);
+    return null;
+  }
+}
+
+/**
  * Send a text message via WhatsApp Business API
  */
 export async function sendWhatsAppMessage(params: {

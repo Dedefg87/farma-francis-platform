@@ -6,10 +6,10 @@ import { integrationSettings } from '../drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { fetchWhatsAppProfile } from './integrations/whatsapp-business';
 import { fetchInstagramProfile, fetchInstagramProfilePublic } from './integrations/instagram-graph';
+import { fetchEvolutionProfile } from './messaging';
 
 /**
  * Router para busca automática de informações de contato
- * Busca nome e informações de perfil do Instagram e WhatsApp
  */
 
 export const contactFetchRouter = router({
@@ -27,6 +27,19 @@ export const contactFetchRouter = router({
       try {
         const db = await getDb();
         if (!db) throw new Error('Database not available');
+
+        // Tentar primeiro Evolution API se houver configuração ativa
+        const evolutionProfile = await fetchEvolutionProfile(input.phone);
+        if (evolutionProfile && evolutionProfile.name) {
+          return {
+            success: true,
+            name: evolutionProfile.name,
+            phone: input.phone,
+            source: 'evolution',
+            profilePicture: evolutionProfile.profilePicture || null,
+            usingFallback: false,
+          };
+        }
 
         // Buscar configuração ativa do WhatsApp Business
         const [config] = await db
@@ -175,8 +188,18 @@ export const contactFetchRouter = router({
 
         switch (input.channel) {
           case 'whatsapp':
-            // Buscar do WhatsApp - implementação inline
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Tentar Evolution API primeiro
+            const evoProfile = await fetchEvolutionProfile(input.identifier);
+            if (evoProfile && evoProfile.name) {
+              contactInfo = {
+                name: evoProfile.name,
+                source: 'evolution',
+                profilePicture: evoProfile.profilePicture || null,
+              };
+              break;
+            }
+
+            // Buscar do WhatsApp - fallback anterior
             const mockWhatsAppNames: Record<string, string> = {
               '5511999999999': 'João Silva',
               '5511988888888': 'Maria Santos',
