@@ -40,6 +40,7 @@ export const appRouter = router({
     messages: testFlowsRouter.listRecentMessages,
     health: testFlowsRouter.healthCheck,
     clear: testFlowsRouter.clearTestMessages,
+    logs: testFlowsRouter.getDebugLogs,
   }),
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

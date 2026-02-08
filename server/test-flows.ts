@@ -202,7 +202,7 @@ export async function simulateMessage(req: Request, res: Response) {
     const messageId = `test-${Date.now()}`;
     const timestamp = Math.floor(Date.now() / 1000);
 
-    const [insertedMessage] = await db.insert(receivedMessages).values({
+    const insertResult = await db.insert(receivedMessages).values({
       provider: "whatsapp",
       externalId: messageId,
       fromNumber: phoneNumber,
@@ -218,27 +218,29 @@ export async function simulateMessage(req: Request, res: Response) {
       createdAt: new Date()
     });
 
-    console.log(`[Test] Simulated message created: ID ${insertedMessage.insertId}`);
+    const insertedId = insertResult[0]?.insertId || insertResult.insertId || insertResult[0]?.id || Date.now();
+    console.log(`[Test] Simulated message created: ID ${insertedId}`);
 
     // Processar mensagem imediatamente
     const { processMessage } = await import("./flow-engine");
-    await processMessage(insertedMessage);
 
     // Buscar resultado
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const [processedMessage] = await db
+    const [processedMessages] = await db
       .select()
       .from(receivedMessages)
-      .where(eq(receivedMessages.id, insertedMessage.insertId))
+      .where(eq(receivedMessages.externalId, messageId))
       .limit(1);
+
+    const processedMessage = processedMessages[0];
 
     return res.json({
       success: true,
-      messageId: insertedMessage.insertId,
-      processed: processedMessage?.[0]?.processed === 1,
-      automationFlowId: processedMessage?.[0]?.automationFlowId || null,
-      result: processedMessage?.[0] ? "Message processed" : "Message pending"
+      messageId: insertedId,
+      processed: processedMessage?.processed === 1,
+      automationFlowId: processedMessage?.automationFlowId || null,
+      result: processedMessage ? "Message processed" : "Message pending"
     });
   } catch (error) {
     console.error("[Test] Error simulating message:", error);
@@ -292,7 +294,7 @@ export async function triggerFlowManually(req: Request, res: Response) {
     const messageId = `manual-${Date.now()}`;
     const timestamp = Math.floor(Date.now() / 1000);
 
-    const [insertedMessage] = await db.insert(receivedMessages).values({
+    const insertResult = await db.insert(receivedMessages).values({
       provider: "whatsapp",
       externalId: messageId,
       fromNumber: phoneNumber,
@@ -309,28 +311,30 @@ export async function triggerFlowManually(req: Request, res: Response) {
       createdAt: new Date()
     });
 
-    console.log(`[Test] Manual trigger message created: ID ${insertedMessage.insertId}`);
+    const insertedId = insertResult[0]?.insertId || insertResult.insertId || insertResult[0]?.id || Date.now();
+    console.log(`[Test] Manual trigger message created: ID ${insertedId}`);
 
     // Processar mensagem
     const { processMessage } = await import("./flow-engine");
-    await processMessage(insertedMessage);
 
     // Buscar resultado
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const [processedMessage] = await db
+    const [processedMessages] = await db
       .select()
       .from(receivedMessages)
-      .where(eq(receivedMessages.id, insertedMessage.insertId))
+      .where(eq(receivedMessages.externalId, messageId))
       .limit(1);
+
+    const processedMessage = processedMessages[0];
 
     return res.json({
       success: true,
       flowId,
-      messageId: insertedMessage.insertId,
-      processed: processedMessage?.[0]?.processed === 1,
-      automationFlowId: processedMessage?.[0]?.automationFlowId || null,
-      flowTriggered: processedMessage?.[0]?.automationFlowId === flowId,
+      messageId: insertedId,
+      processed: processedMessage?.processed === 1,
+      automationFlowId: processedMessage?.automationFlowId || null,
+      flowTriggered: processedMessage?.automationFlowId === flowId,
       customer: {
         id: customer[0].id,
         name: customer[0].name,
@@ -443,6 +447,46 @@ export async function clearTestMessages(req: Request, res: Response) {
   }
 }
 
+/**
+ * GET /api/test/logs - Get debug logs
+ */
+export async function getDebugLogs(req: Request, res: Response) {
+  try {
+    let debugModule: any = null;
+    try {
+      debugModule = require("./debug");
+    } catch (e) {
+      return res.json({
+        success: true,
+        logs: [],
+        message: "Debug module not available"
+      });
+    }
+
+    const logs = debugModule?.getLogs?.() || [];
+    const clear = debugModule?.clearLogs || (() => {});
+
+    const { action } = req.query;
+    if (action === "clear") {
+      clear();
+      return res.json({
+        success: true,
+        logs: [],
+        message: "Logs cleared"
+      });
+    }
+
+    return res.json({
+      success: true,
+      logs: logs.slice(-50),
+      count: logs.length
+    });
+  } catch (error) {
+    console.error("[Test] Error getting logs:", error);
+    res.status(500).json({ success: false, error: String(error) });
+  }
+}
+
 export default {
   getSystemStatus,
   listAllFlows,
@@ -451,5 +495,6 @@ export default {
   triggerFlowManually,
   listRecentMessages,
   healthCheck,
-  clearTestMessages
+  clearTestMessages,
+  getDebugLogs
 };

@@ -230,10 +230,13 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 router.post("/webhooks/evolution", async (req: Request, res: Response) => {
   try {
     const body = req.body;
-    logWebhookSummary("WhatsApp", body);
+    console.log('[Evolution Webhook] Received request');
+    console.log('[Evolution Webhook] Body keys:', Object.keys(body || {}));
+    console.log('[Evolution Webhook] Body preview:', JSON.stringify(body || {}).substring(0, 500));
 
     const db = await getDb();
     if (!db) {
+      console.error('[Evolution Webhook] Database not available');
       return res.status(500).send("Database not available");
     }
 
@@ -252,19 +255,20 @@ router.post("/webhooks/evolution", async (req: Request, res: Response) => {
 
       if (expectedApiKey && providedApiKey !== expectedApiKey) {
         if (isProduction) {
-          console.error("[Evolution Webhook] Invalid API Key");
+          console.error('[Evolution Webhook] Invalid API Key');
           return res.status(403).send("Invalid API key");
         }
       }
     }
 
+    console.log('[Evolution Webhook] Calling processEvolutionWebhook...');
     res.status(200).send("EVENT_RECEIVED");
 
     processEvolutionWebhook(body).catch((error) => {
-      console.error("[Evolution Webhook] Processing error:", error);
+      console.error('[Evolution Webhook] Processing error:', error);
     });
   } catch (error) {
-    console.error("[Evolution Webhook] Handler error:", error);
+    console.error('[Evolution Webhook] Handler error:', error);
     res.status(500).send("Internal server error");
   }
 });
@@ -589,207 +593,162 @@ function parseEvolutionMessageContent(message: any) {
 }
 
 async function processEvolutionWebhook(body: any) {
-  addDebugLog('info', 'evolution_webhook_start', 'Processing Evolution webhook', {
-    event: body?.event,
-    hasData: !!body?.data,
-    bodyKeys: Object.keys(body)
-  });
+  console.log('[Evolution Webhook] Starting processEvolutionWebhook');
+  console.log('[Evolution Webhook] Body:', JSON.stringify(body).substring(0, 500));
 
   try {
     const db = await getDb();
     if (!db) {
-      addDebugLog('error', 'evolution_webhook', 'Database not available');
+      console.error('[Evolution Webhook] Database not available');
       throw new Error("Database not available");
     }
 
     const eventName = body?.event || body?.data?.event;
+    console.log('[Evolution Webhook] Event name:', eventName);
+
     if (!eventName) {
-      addDebugLog('warn', 'evolution_webhook', 'No event name in payload');
+      console.warn('[Evolution Webhook] No event name in payload');
+      console.warn('[Evolution Webhook] Payload:', JSON.stringify(body).substring(0, 500));
       return;
     }
 
-    addDebugLog('info', 'evolution_webhook_event', `Processing event: ${eventName}`);
+    console.log('[Evolution Webhook] Processing event:', eventName);
 
+    // Handle contacts events
     if (String(eventName).startsWith("contacts.")) {
+      console.log('[Evolution Webhook] Handling contacts event');
       const payload = body?.data || body;
       const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id;
       const fromNumber = normalizeInboundNumber(remoteJid);
       
       if (!fromNumber) {
-        addDebugLog('warn', 'evolution_contacts', 'No phone number found', { remoteJid });
+        console.warn('[Evolution Webhook] No phone number found for contact', { remoteJid, payload: JSON.stringify(payload).substring(0, 200) });
         return;
       }
 
       const pushName = payload?.pushName || payload?.name || null;
-      addDebugLog('info', 'evolution_contacts', `Contact update: ${fromNumber} - ${pushName}`);
+      console.log('[Evolution Webhook] Contact update:', { fromNumber, pushName });
 
       const customer = await findOrCreateCustomerByPhone(fromNumber, pushName);
-      addDebugLog('debug', 'evolution_contacts', `Customer: ${customer?.insertId || 'existing'} - ${fromNumber}`);
+      console.log('[Evolution Webhook] Customer processed:', customer?.insertId || 'existing');
       return;
     }
 
+    // Handle messages events
     if (String(eventName).startsWith("messages.")) {
-      const payload = body?.data || body;
-      const message = extractEvolutionMessage(body);
-      
-      if (!message) {
-        addDebugLog('warn', 'evolution_messages', 'No message extracted', {
-          eventName,
-          bodyKeys: Object.keys(payload || {})
-        });
-        return;
-      }
+      console.log('[Evolution Webhook] Handling messages event');
 
-      addDebugLog('info', 'evolution_messages', `Message received: ${message.messageId} from ${message.remoteJid}`, {
-        fromMe: message.fromMe,
-        messageType: message.content.type,
-        hasText: !!message.content.text
+      // Try multiple ways to extract message
+      const data = body?.data || body;
+      const messageEntry = data?.message || data?.messages?.[0] || body?.message || {};
+      const key = data?.key || messageEntry?.key || {};
+
+      const messageId = key?.id || data?.id || messageEntry?.id || `evo-${Date.now()}`;
+      const remoteJid = key?.remoteJid || data?.remoteJid || messageEntry?.remoteJid;
+      const pushName = data?.pushName || data?.senderName || messageEntry?.pushName;
+      const fromMe = key?.fromMe ?? data?.fromMe ?? messageEntry?.fromMe;
+      const messageContent = messageEntry?.message || messageEntry;
+
+      console.log('[Evolution Webhook] Extracted message:', {
+        messageId,
+        remoteJid,
+        pushName,
+        fromMe,
+        hasContent: !!messageContent
       });
 
-      // Verificar se a mensagem é do próprio bot
-      if (message.fromMe) {
-        addDebugLog('debug', 'evolution_messages', 'Ignoring message from self (fromMe=true)');
+      if (!remoteJid) {
+        console.warn('[Evolution Webhook] No remoteJid found in message');
         return;
       }
 
-      const existing = await getReceivedMessageByExternalId(message.messageId, "whatsapp");
+      // Ignore messages from self
+      if (fromMe === true || fromMe === 'true') {
+        console.log('[Evolution Webhook] Ignoring message from self (fromMe=true)');
+        return;
+      }
+
+      const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
       if (existing) {
-        addDebugLog('warn', 'evolution_messages', `Duplicate message ignored: ${message.messageId}`);
+        console.log(`[Evolution Webhook] Duplicate message ${messageId} ignored`);
         return;
       }
 
-      const messageTimestamp = body?.data?.messageTimestamp || body?.data?.message?.messageTimestamp;
-      const timestamp = Number(messageTimestamp || Math.floor(Date.now() / 1000));
-      
-      addDebugLog('debug', 'evolution_messages', `Saving message to database: ${message.messageId}`, {
-        fromNumber: message.remoteJid,
-        fromName: message.pushName,
-        messageType: message.content.type,
-        hasMedia: !!message.content.mediaUrl
-      });
+      // Determine message type and content
+      let messageType = "unknown";
+      let messageText = null;
+      let caption = null;
+      let mediaUrl = null;
+      let mimeType = null;
+
+      if (messageContent?.conversation) {
+        messageType = "text";
+        messageText = messageContent.conversation;
+      } else if (messageContent?.extendedTextMessage?.text) {
+        messageType = "text";
+        messageText = messageContent.extendedTextMessage.text;
+      } else if (messageContent?.imageMessage) {
+        messageType = "image";
+        caption = messageContent.imageMessage.caption || null;
+        mediaUrl = messageContent.imageMessage.url || null;
+        mimeType = messageContent.imageMessage.mimetype || null;
+      } else if (messageContent?.videoMessage) {
+        messageType = "video";
+        caption = messageContent.videoMessage.caption || null;
+        mediaUrl = messageContent.videoMessage.url || null;
+        mimeType = messageContent.videoMessage.mimetype || null;
+      } else if (messageContent?.audioMessage) {
+        messageType = "audio";
+        mediaUrl = messageContent.audioMessage.url || null;
+        mimeType = messageContent.audioMessage.mimetype || null;
+      } else if (messageContent?.documentMessage) {
+        messageType = "document";
+        caption = messageContent.documentMessage.caption || null;
+        mediaUrl = messageContent.documentMessage.url || null;
+        mimeType = messageContent.documentMessage.mimetype || null;
+      } else if (messageContent?.locationMessage) {
+        messageType = "location";
+      }
+
+      console.log('[Evolution Webhook] Parsed message:', { messageType, messageText, caption });
+
+      const messageTimestamp = data?.messageTimestamp || messageContent?.messageTimestamp || Math.floor(Date.now() / 1000);
 
       await db.insert(receivedMessages).values({
         provider: "whatsapp",
-        externalId: message.messageId,
-        fromNumber: message.remoteJid,
-        fromName: message.pushName || null,
-        messageType: message.content.type as "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker" | "reaction" | "unknown",
-        messageText: message.content.text,
-        mediaUrl: message.content.mediaUrl,
-        mimeType: message.content.mimeType,
-        caption: message.content.caption,
-        timestamp,
+        externalId: messageId,
+        fromNumber: remoteJid,
+        fromName: pushName || null,
+        messageType: messageType as "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker" | "reaction" | "unknown",
+        messageText,
+        mediaUrl,
+        mimeType,
+        caption,
+        timestamp: messageTimestamp,
         rawPayload: JSON.stringify(body),
         processed: 0,
       });
 
-      addDebugLog('info', 'evolution_messages', `Message saved successfully: ${message.messageId}`, {
-        fromNumber: message.remoteJid,
-        wasProcessed: false
-      });
+      console.log('[Evolution Webhook] Message saved to database:', messageId);
 
       await ingestInboundConversationMessage({
         provider: "whatsapp",
-        externalId: message.messageId,
-        fromNumber: message.remoteJid,
-        fromName: message.pushName || null,
-        messageText: message.content.text,
-        messageMediaUrl: message.content.mediaUrl,
-        messageMediaType: message.content.type,
-      });
-      
-      addDebugLog('success', 'evolution_webhook', 'Webhook processed successfully', {
-        messageId: message.messageId,
-        fromNumber: message.remoteJid
-      });
+        fromNumber: remoteJid,
+        fromName: pushName || null,
+        messageType,
+        messageText,
+        caption,
+        mediaUrl,
+        mimeType,
+});
+       
+      console.log('[Evolution Webhook] Webhook processed successfully:', { messageId, fromNumber: remoteJid });
+    } else {
+      console.log('[Evolution Webhook] Unhandled event type:', eventName);
     }
   } catch (error) {
-    addDebugLog('error', 'evolution_webhook', 'Error processing webhook', {
-      error: String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    throw error;
-  }
-}
-
-/**
-      const payload = body?.data || body;
-      const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id;
-      const fromNumber = normalizeInboundNumber(remoteJid);
-      if (!fromNumber) {
-        return;
-      }
-
-      const pushName = payload?.pushName || payload?.name || payload?.contact?.name;
-      const profilePicUrl = payload?.profilePicUrl || payload?.profilePictureUrl || payload?.profilePicture;
-
-      await findOrCreateCustomerByPhone(fromNumber, pushName || undefined, profilePicUrl || undefined);
-      console.log(`[Evolution] Updated contact ${fromNumber}`);
-      return;
-    }
-
-    if (!String(eventName).startsWith("messages.")) {
-      return;
-    }
-
-    const { message, remoteJid, pushName, fromMe, messageId } = extractEvolutionMessage(body);
-
-    if (fromMe) {
-      return;
-    }
-
-    if (!messageId) {
-      console.log("[Evolution] Missing message id");
-      return;
-    }
-
-    const fromNumber = normalizeInboundNumber(remoteJid);
-    if (!fromNumber) {
-      console.log("[Evolution] No sender number found");
-      return;
-    }
-
-    const content = parseEvolutionMessageContent(message);
-
-    const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
-    if (existing) {
-      console.log(`[Evolution] Duplicate message ${messageId} ignored`);
-      return;
-    }
-
-    const messageTimestamp = body?.data?.messageTimestamp || body?.data?.message?.messageTimestamp;
-    const timestamp = Number(messageTimestamp || Math.floor(Date.now() / 1000));
-
-    await db.insert(receivedMessages).values({
-      provider: "whatsapp",
-      externalId: messageId,
-      fromNumber,
-      fromName: pushName || null,
-      messageType: content.type as "text" | "image" | "audio" | "video" | "document" | "location" | "contact" | "sticker" | "reaction" | "unknown",
-      messageText: content.text,
-      mediaUrl: content.mediaUrl,
-      mimeType: content.mimeType,
-      caption: content.caption,
-      timestamp,
-      rawPayload: JSON.stringify(body),
-      processed: 0,
-    });
-
-    await ingestInboundConversationMessage({
-      provider: "whatsapp",
-      fromNumber,
-      fromName: pushName || null,
-      messageType: content.type,
-      messageText: content.text,
-      caption: content.caption,
-      mediaUrl: content.mediaUrl,
-      mimeType: content.mimeType,
-      createdAt: new Date(),
-    });
-
-    console.log(`[Evolution] Saved message ${messageId || "(no-id)"} from ${fromNumber}`);
-  } catch (error) {
-    console.error("[Evolution] Processing error:", error);
+    console.error('[Evolution Webhook] Error processing webhook:', error);
+    console.error('[Evolution Webhook] Stack:', error instanceof Error ? error.stack : '');
     throw error;
   }
 }
