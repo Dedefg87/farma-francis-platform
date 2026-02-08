@@ -311,6 +311,16 @@ async function executeNode(node: any, nodes: any[], edges: any[], context: any, 
       await executeHttpRequestNode(config, context);
       break;
 
+    case "set":
+    case "setVariable":
+      executeSetVariableNode(config, context);
+      break;
+
+    case "action":
+    case "aiAssistant":
+      await executeAIAssistantNode(config, context, message);
+      break;
+
     case "uraMenu":
       await executeURAMenuNode(config, context, message);
       return; // Wait for user response
