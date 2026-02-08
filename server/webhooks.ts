@@ -670,16 +670,28 @@ async function processEvolutionWebhook(body: any) {
     // Verificar se é evento de contatos
     if (normalizedEvent.includes('contact') || normalizedEvent === 'contacts_update') {
       console.log('[Evolution Webhook] Handling contacts event');
-      const payload = body?.data || body;
-      const remoteJid = payload?.remoteJid || payload?.contact?.id || payload?.id || body?.jid;
+      
+      // Tentar extrair remoteJid de várias estruturas possíveis
+      let remoteJid = body?.data?.remoteJid || body?.remoteJid;
+      
+      // Se o body for um array, pegar o primeiro elemento
+      if (!remoteJid && Array.isArray(body)) {
+        remoteJid = body[0]?.remoteJid;
+      }
+      
       const fromNumber = normalizeInboundNumber(remoteJid);
       
       if (!fromNumber) {
-        console.warn('[Evolution Webhook] No phone number found for contact', { remoteJid, payload: JSON.stringify(payload).substring(0, 200) });
+        console.warn('[Evolution Webhook] No phone number found for contact', { 
+          remoteJid, 
+          bodyKeys: Object.keys(body || {}),
+          bodyIsArray: Array.isArray(body),
+          sample: Array.isArray(body) ? JSON.stringify(body[0]).substring(0, 200) : 'N/A'
+        });
         return;
       }
 
-      const pushName = payload?.pushName || payload?.name || payload?.notify || null;
+      const pushName = body?.data?.profileName || body?.profileName || body?.data?.name || body?.name || null;
       console.log('[Evolution Webhook] Contact update:', { fromNumber, pushName });
 
       const customer = await findOrCreateCustomerByPhone(fromNumber, pushName);
