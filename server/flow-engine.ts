@@ -82,10 +82,9 @@ async function processMessage(message: any) {
       // Execute visual flow
       await executeVisualFlow(message, matchedVisualFlow.id, customer);
 
-      // Mark as processed
+      // Mark as processed - Visual flows don't reference automation_flows FK
       await markMessageAsProcessed(message.id, {
         customerId: customer.id,
-        automationFlowId: matchedVisualFlow.id,
       });
       return;
     } catch (error) {
@@ -114,7 +113,13 @@ async function processMessage(message: any) {
   }
 
   if (matchedFlow) {
-    console.log(`[Flow Engine] Message matched flow: ${matchedFlow.name}`);
+    console.log(`[Flow Engine] Message matched flow: ${matchedFlow.name} (ID: ${matchedFlow.id})`);
+
+    // Verify flow exists in database before updating
+    if (!matchedFlow.id) {
+      console.error(`[Flow Engine] Flow ID is invalid, skipping update`);
+      return;
+    }
 
     // Execute simple automation flow
     await executeSimpleFlow(message, matchedFlow, customer);
