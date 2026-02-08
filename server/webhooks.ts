@@ -227,10 +227,9 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 /**
  * Evolution API Webhook (POST)
  */
-router.post("/webhooks/evolution", async (req: Request, res: Response) => {
+router.post("/evolution", async (req: Request, res: Response) => {
   try {
     const body = req.body;
-    const urlPath = req.path || req.url;
     const fullUrl = `${req.protocol}://${req.get('host')}${req.originalUrl}`;
     
     console.log('[Evolution Webhook] Received request from:', fullUrl);
@@ -240,7 +239,7 @@ router.post("/webhooks/evolution", async (req: Request, res: Response) => {
     // Detectar evento pela URL quando o Evolution API envia no formato: /presence-update, /chats-update, etc
     let eventName = body?.event || body?.data?.event;
     if (!eventName) {
-      const urlParts = fullUrl.split('/api/webhooks/evolution')[1] || '';
+      const urlParts = fullUrl.split('/evolution')[1] || '';
       const eventMatch = urlParts.match(/\/(presence-update|chats-update|contacts-update|messages-update)/i);
       if (eventMatch) {
         eventName = eventMatch[1];
