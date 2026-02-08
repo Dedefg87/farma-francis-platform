@@ -655,6 +655,12 @@ export const appRouter = router({
 
   // Agent Area (Atendimento)
   agent: agentRouter,
+
+  // Conversations management
+  conversations: conversationsRouter,
+
+  // Messages management  
+  messages: messagesRouter,
 });
 
 export type AppRouter = typeof appRouter;

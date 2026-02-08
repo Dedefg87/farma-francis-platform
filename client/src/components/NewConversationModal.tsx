@@ -30,20 +30,28 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
     onSuccess: (data) => {
       setAutoFetchedName(data.name);
       toast.success(`Nome encontrado: ${data.name}`);
+      console.log('[NewConversation] Nome encontrado:', data);
     },
-    onError: () => {
-      toast.error('Não foi possível buscar o nome automaticamente');
+    onError: (error) => {
+      console.log('[NewConversation] Erro ao buscar nome (pode ser normal):', error.message);
+      // Don't show error toast for this - it's expected to fail sometimes
     },
   });
 
   const createConversationMutation = trpc.conversations.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setPhoneOrEmail('');
       setSearchQuery('');
       setMode(null);
       setAutoFetchedName(null);
       onOpenChange(false);
       onSuccess();
+      toast.success('Conversa criada com sucesso!');
+      console.log('[NewConversation] Conversa criada:', data);
+    },
+    onError: (error) => {
+      toast.error(`Erro ao criar conversa: ${error.message}`);
+      console.error('[NewConversation] Erro:', error);
     },
   });
 
@@ -67,12 +75,15 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
   const handleCreateWithInput = () => {
     if (!phoneOrEmail.trim()) return;
     
+    console.log('[NewConversation] Criando conversa com:', { phoneOrEmail: phoneOrEmail.trim(), channel });
+    
     createConversationMutation.mutate({
       phoneOrEmail: phoneOrEmail.trim(),
     });
   };
 
   const handleSelectCustomer = (customerId: number) => {
+    console.log('[NewConversation] Selecionando cliente existente:', customerId);
     createConversationMutation.mutate({
       customerId,
     });
