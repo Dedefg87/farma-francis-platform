@@ -1,7 +1,6 @@
 import { useLocation, Link } from 'wouter';
 import { MessageSquare, ListOrdered, LogOut } from 'lucide-react';
 import { useAuth } from '@/_core/hooks/useAuth';
-import { getLoginUrl } from '@/const';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -89,7 +88,7 @@ export default function AgentTopBar() {
               <DropdownMenuItem
                 onClick={async () => {
                   await logout();
-                  window.location.href = getLoginUrl();
+                  window.location.href = '/login';
                 }}
                 className="cursor-pointer"
               >
