@@ -31,11 +31,11 @@ const normalizePhoneNumber = (value: string): string => {
       if (cleaned.length === 13) {
         cleaned = cleaned.substring(0, 2) + cleaned.substring(4);
       }
-      return cleaned;
+      return "+" + cleaned;
     }
     
-    // Se não começa com 55, adicionar
-    return "55" + cleaned;
+    // Se não começa com 55, adicionar 55 na frente
+    return "+55" + cleaned;
   };
 
   const { data: customers } = trpc.customers.search.useQuery(

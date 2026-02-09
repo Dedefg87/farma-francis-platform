@@ -10,6 +10,7 @@ import { sseManager, EVENTS } from './_core/sse';
 /**
  * Normalizar número de telefone brasileiro
  * Remove o 9 do celular se presente (padroniza para DDD + número fixo)
+ * Adiciona o + no início para consistência
  */
 function normalizeBrazilianNumber(value: string): string {
   const cleaned = value.replace(/\D/g, "");
@@ -28,16 +29,18 @@ function normalizeBrazilianNumber(value: string): string {
     normalized = normalized.substring(0, 2) + normalized.substring(3);
   }
   
-  return normalized;
+  // Sempre adicionar o + no início
+  return "+" + normalized;
 }
 
 /**
  * Verificar se dois números são o mesmo contato brasileiro
+ * Compara sem o + para consistência
  */
 function isSameNumber(num1: string, num2: string): boolean {
-  const n1 = normalizeBrazilianNumber(num1);
-  const n2 = normalizeBrazilianNumber(num2);
-  return n1 === n2;
+  // Remover o + para comparação
+  const clean = (n: string) => n.replace(/\D/g, "").replace(/^55/, "");
+  return clean(num1) === clean(num2);
 }
 
 export const conversationsRouter = router({
