@@ -266,33 +266,55 @@ export const apiConfigRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
-        // First, create or update the instance settings in Evolution API
-        const createResponse = await fetch(`${input.apiUrl}/instance/create`, {
-          method: "POST",
+        const cleanApiUrl = input.apiUrl.replace(/\/$/, "");
+
+        // First, check if instance already exists
+        const instancesResponse = await fetch(`${cleanApiUrl}/instance/fetchInstances`, {
           headers: {
-            "Content-Type": "application/json",
             apikey: input.apiKey,
           },
-          body: JSON.stringify({
-            instanceName: input.instanceName,
-            qr: true,
-            integration: "WHATSAPP",
-            webhook: {
-              url: `${process.env.APP_URL || "https://innovative-enjoyment-production-ed8f.up.railway.app"}/api/webhooks/evolution?apikey=${input.apiKey}`,
-              events: ["messages.upsert", "contacts.upsert", "connection.update"],
-            },
-          }),
         });
 
-        if (!createResponse.ok) {
-          // If instance already exists, try to get QR code
-          const errorText = await createResponse.text();
-          console.log("[QR Code] Instance might already exist, trying to get QR:", errorText);
+        let instanceExists = false;
+        if (instancesResponse.ok) {
+          const instances = await instancesResponse.json();
+          instanceExists = Array.isArray(instances) && instances.some(
+            (inst: any) => inst.instanceName === input.instanceName
+          );
+        }
+
+        if (!instanceExists) {
+          // Create new instance
+          console.log("[QR Code] Creating new instance:", input.instanceName);
+          const createResponse = await fetch(`${cleanApiUrl}/instance/create`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: input.apiKey,
+            },
+            body: JSON.stringify({
+              instanceName: input.instanceName,
+              qr: true,
+              integration: "WHATSAPP",
+              webhook: {
+                url: `${process.env.APP_URL || "https://innovative-enjoyment-production-ed8f.up.railway.app"}/api/webhooks/evolution?apikey=${input.apiKey}`,
+                events: ["messages.upsert", "contacts.upsert", "connection.update"],
+              },
+            }),
+          });
+
+          if (!createResponse.ok) {
+            const errorText = await createResponse.text();
+            console.log("[QR Code] Create response:", errorText);
+          }
+        } else {
+          console.log("[QR Code] Instance already exists:", input.instanceName);
         }
 
         // Now get the QR code
+        console.log("[QR Code] Getting QR code for:", input.instanceName);
         const qrResponse = await fetch(
-          `${input.apiUrl}/instance/connect/${input.instanceName}`,
+          `${cleanApiUrl}/instance/connect/${input.instanceName}`,
           {
             headers: {
               apikey: input.apiKey,
@@ -301,18 +323,30 @@ export const apiConfigRouter = router({
         );
 
         if (!qrResponse.ok) {
+          const errorText = await qrResponse.text();
+          console.log("[QR Code] Error response:", errorText);
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "Erro ao gerar QR Code. Verifique se a instância existe.",
+            message: `Erro ao gerar QR Code: ${errorText}`,
           });
         }
 
         const qrData = await qrResponse.json();
+        console.log("[QR Code] QR Data keys:", Object.keys(qrData));
 
         // The QR code comes as base64 image
+        const qrCode = qrData.base64 || qrData.qrcode || qrData.data || qrData.pairingCode;
+        
+        if (!qrCode) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "QR Code não foi gerado. A instância pode já estar conectada.",
+          });
+        }
+
         return {
           success: true,
-          qrCode: qrData.base64 || qrData.qrcode || qrData.data,
+          qrCode: qrCode,
           message: "QR Code gerado com sucesso! Escaneie com o WhatsApp.",
         };
       } catch (error) {
