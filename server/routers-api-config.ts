@@ -268,120 +268,119 @@ export const apiConfigRouter = router({
       try {
         const cleanApiUrl = input.apiUrl.replace(/\/$/, "");
 
-        // First, check instance status
-        console.log("[QR Code] Checking instance status:", input.instanceName);
-        const statusResponse = await fetch(
-          `${cleanApiUrl}/instance/connectionState/${input.instanceName}`,
-          {
-            headers: {
-              apikey: input.apiKey,
-            },
-          }
-        );
+        // First, try to create instance with QR code
+        console.log("[QR Code] Creating instance with QR...");
+        const createResponse = await fetch(`${cleanApiUrl}/instance/create`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: input.apiKey,
+          },
+          body: JSON.stringify({
+            instanceName: input.instanceName,
+            qr: true,
+            integration: "WHATSAPP",
+          }),
+        });
 
-        let instanceStatus = "unknown";
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          instanceStatus = statusData.state || statusData.status || "unknown";
-          console.log("[QR Code] Instance status:", instanceStatus);
-        }
+        const createText = await createResponse.text();
+        console.log("[QR Code] Create response:", createText.substring(0, 500));
 
-        // If instance is already connected (state: "open"), we need to restart it
-        if (instanceStatus === "open") {
-          console.log("[QR Code] Instance already connected, restarting...");
-          
-          // Restart the instance to get a new QR code
-          const restartResponse = await fetch(
-            `${cleanApiUrl}/instance/restart/${input.instanceName}`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                apikey: input.apiKey,
-              },
-              body: JSON.stringify({
-                delay: 2000,
-                hours: 0,
-                minutes: 0,
-                seconds: 5,
-              }),
-            }
-          );
-
-          if (!restartResponse.ok) {
-            console.log("[QR Code] Restart failed, trying to delete and recreate...");
-          }
-          
-          // If restart doesn't work, try to delete and recreate
-          // Note: This will disconnect the current WhatsApp session
-        }
-
-        // Get the QR code
-        console.log("[QR Code] Getting QR code for:", input.instanceName);
-        const qrResponse = await fetch(
+        // Try different endpoints to get QR code
+        const endpoints = [
           `${cleanApiUrl}/instance/qrcode/${input.instanceName}`,
-          {
-            headers: {
-              apikey: input.apiKey,
-            },
-          }
-        );
+          `${cleanApiUrl}/instance/connect/${input.instanceName}`,
+          `${cleanApiUrl}/instance/QRCode/${input.instanceName}`,
+        ];
 
-        // If qrcode endpoint doesn't work, try connect endpoint
         let qrData = null;
-        if (qrResponse.ok) {
-          qrData = await qrResponse.json();
-        } else {
-          console.log("[QR Code] qrcode endpoint failed, trying connect...");
-          const connectResponse = await fetch(
-            `${cleanApiUrl}/instance/connect/${input.instanceName}`,
-            {
+        let workedEndpoint = null;
+
+        for (const endpoint of endpoints) {
+          console.log("[QR Code] Trying endpoint:", endpoint);
+          try {
+            const qrResponse = await fetch(endpoint, {
               headers: {
                 apikey: input.apiKey,
               },
+            });
+
+            if (qrResponse.ok) {
+              const data = await qrResponse.text();
+              console.log("[QR Code] Response from", endpoint, ":", data.substring(0, 500));
+              
+              try {
+                qrData = JSON.parse(data);
+                workedEndpoint = endpoint;
+                break;
+              } catch {
+                // Maybe it's not JSON, could be base64 directly
+                if (data.startsWith("data:image") || data.length > 100) {
+                  qrData = { base64: data };
+                  workedEndpoint = endpoint;
+                  break;
+                }
+              }
             }
-          );
-          
-          if (connectResponse.ok) {
-            qrData = await connectResponse.json();
+          } catch (e) {
+            console.log("[QR Code] Endpoint failed:", endpoint, e);
           }
         }
 
         if (!qrData) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Não foi possível gerar o QR Code. A instância pode já estar conectada.",
+          // Try to check if instance exists and is connected
+          console.log("[QR Code] Checking instance status...");
+          const statusResponse = await fetch(`${cleanApiUrl}/instance/fetchInstances`, {
+            headers: {
+              apikey: input.apiKey,
+            },
           });
+
+          if (statusResponse.ok) {
+            const instances = await statusResponse.json();
+            console.log("[QR Code] Instances:", JSON.stringify(instances).substring(0, 500));
+          }
         }
 
-        console.log("[QR Code] QR Data keys:", Object.keys(qrData));
+        console.log("[QR Code] Final qrData:", qrData);
 
-        // The QR code can come in different formats
-        let qrCode = qrData.base64 || qrData.qrcode || qrData.data || qrData.pairingCode || qrData.code;
-        
+        if (!qrData) {
+          return {
+            success: false,
+            message: "Não foi possível gerar o QR Code. A instância pode já estar conectada ou os endpoints podem ter mudado.",
+            hint: "Tente desconectar a instância manualmente no Evolution API e tente novamente.",
+          };
+        }
+
+        // Try to find QR code in response
+        let qrCode = qrData.base64 || qrData.qrcode || qrData.data || qrData.qr || qrData.code || qrData.pairingCode;
+
+        if (!qrCode && qrData.instance?.qrcode) {
+          qrCode = qrData.instance.qrcode;
+        }
+
+        if (!qrCode && qrData.status === "created") {
+          // Instance was just created, might need to wait
+          return {
+            success: true,
+            qrCode: null,
+            message: "Instância criada! Aguarde uns segundos e tente novamente para gerar o QR Code.",
+            justCreated: true,
+          };
+        }
+
         if (!qrCode) {
-          // Check if there's a status field indicating it's connected
-          const status = qrData.status || qrData.state || "";
-          if (status === "connected" || status === "open") {
-            return {
-              success: true,
-              qrCode: null,
-              message: "O WhatsApp já está conectado! Se quiser gerar um novo QR Code, primeiro desconecte a sessão atual no Evolution API.",
-              alreadyConnected: true,
-            };
-          }
-          
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "QR Code não foi gerado. Verifique o status da instância no Evolution API.",
-          });
+          return {
+            success: false,
+            message: "QR Code não encontrado na resposta. Verifique o status da instância.",
+            debug: workedEndpoint,
+          };
         }
 
         return {
           success: true,
           qrCode: qrCode,
           message: "QR Code gerado com sucesso! Escaneie com o WhatsApp.",
-          alreadyConnected: false,
         };
       } catch (error) {
         console.error("[QR Code] Error:", error);
