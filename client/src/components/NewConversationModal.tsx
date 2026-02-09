@@ -57,7 +57,7 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
 
   // Buscar nome automaticamente quando o usuário digitar telefone/username
   useEffect(() => {
-    if (phoneOrEmail.length > 5 && mode === 'input') {
+    if (phoneOrEmail.length > 5 && mode === 'input' && channel === 'whatsapp') {
       // Debounce de 1 segundo
       const timer = setTimeout(() => {
         fetchContactInfoMutation.mutate({
@@ -79,6 +79,7 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
     
     createConversationMutation.mutate({
       phoneOrEmail: phoneOrEmail.trim(),
+      channel,
     });
   };
 

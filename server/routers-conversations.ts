@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from './_core/trpc';
 import { getDb } from './db';
-import { conversations, conversationMessages, customers, users, agentStatus } from '../drizzle/schema';
+import { conversations, conversationMessages, customers, users, agentStatus, integrationSettings } from '../drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { storagePut } from './storage';
-import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage } from './messaging';
+import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage, fetchEvolutionProfile } from './messaging';
 import { sseManager, EVENTS } from './_core/sse';
 
 export const conversationsRouter = router({
@@ -14,6 +14,7 @@ export const conversationsRouter = router({
       z.object({
         customerId: z.number().optional(),
         phoneOrEmail: z.string().optional(),
+        channel: z.enum(['whatsapp', 'instagram']).default('whatsapp'),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -21,6 +22,7 @@ export const conversationsRouter = router({
       if (!db) throw new Error('Database not available');
 
       let customerId = input.customerId;
+      let fetchedName: string | null = null;
 
       // Se forneceu phoneOrEmail, criar ou encontrar customer
       if (input.phoneOrEmail && !customerId) {
@@ -40,11 +42,26 @@ export const conversationsRouter = router({
         if (existingCustomer) {
           customerId = existingCustomer.id;
         } else {
-          // Criar novo customer
+          // Novo customer - tentar buscar nome do WhatsApp
+          if (input.channel === 'whatsapp' && !isEmail) {
+            console.log('[Conversations] Buscando nome do WhatsApp para:', input.phoneOrEmail);
+            try {
+              const profile = await fetchEvolutionProfile(input.phoneOrEmail);
+              if (profile?.name) {
+                fetchedName = profile.name;
+                console.log('[Conversations] Nome encontrado:', fetchedName);
+              }
+            } catch (err) {
+              console.log('[Conversations] Erro ao buscar nome (continuando com telefone):', err);
+            }
+          }
+
+          // Criar novo customer com nome encontrado ou telefone
+          const customerName = fetchedName || input.phoneOrEmail;
           const newCustomer = await db
             .insert(customers)
             .values({
-              name: input.phoneOrEmail,
+              name: customerName,
               phone: isEmail ? null : input.phoneOrEmail,
               email: isEmail ? input.phoneOrEmail : null,
             }).$returningId();
@@ -67,6 +84,25 @@ export const conversationsRouter = router({
         throw new Error('Customer not found');
       }
 
+      // Se o customer tem apenas telefone e não nome, tentar buscar nome do WhatsApp
+      if (!fetchedName && input.channel === 'whatsapp' && customer.phone && customer.name === customer.phone) {
+        console.log('[Conversations] Atualizando nome do WhatsApp para customer existente:', customer.phone);
+        try {
+          const profile = await fetchEvolutionProfile(customer.phone);
+          if (profile?.name) {
+            // Atualizar o nome do customer
+            await db
+              .update(customers)
+              .set({ name: profile.name, photoUrl: profile.profilePicture || customers.photoUrl })
+              .where(eq(customers.id, customer.id));
+            customer.name = profile.name;
+            console.log('[Conversations] Nome atualizado:', profile.name);
+          }
+        } catch (err) {
+          console.log('[Conversations] Erro ao atualizar nome:', err);
+        }
+      }
+
       // Criar nova conversa
       const newConversation = await db
         .insert(conversations)
@@ -74,7 +110,7 @@ export const conversationsRouter = router({
           customerId: customer.id,
           customerName: customer.name,
           customerPhone: customer.phone,
-          channel: 'whatsapp',
+          channel: input.channel,
           status: 'assigned',
           assignedTo: ctx.user.id,
           openedAt: new Date(),
