@@ -11,22 +11,26 @@ import { sseManager, EVENTS } from './_core/sse';
  * Normalizar número de telefone brasileiro
  * Remove o 9 do celular se presente (padroniza para DDD + número fixo)
  * Adiciona o + no início para consistência
+ * 
+ * Exemplo:
+ * +5531986337081 → +5531986337081 (mantém)
+ * +5531986337081 com 9 → +5531986337081 (remove o 9)
  */
 function normalizeBrazilianNumber(value: string): string {
   const cleaned = value.replace(/\D/g, "");
   
   let normalized = cleaned;
+  
+  // Adicionar 55 se não tiver
   if (!normalized.startsWith("55")) {
-    if (normalized.startsWith("9")) {
-      normalized = "55" + normalized;
-    }
-    if (!normalized.startsWith("55") && normalized.length > 0) {
-      normalized = "55" + normalized;
-    }
+    normalized = "55" + normalized;
   }
   
+  // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), remover o 9
+  // 55 31 9 86337081 → 55 31 86337081
   if (normalized.length === 13 && normalized.startsWith("55")) {
-    normalized = normalized.substring(0, 2) + normalized.substring(3);
+    // Manter 55 + DDD (2 dígitos) + remover o 9 + resto
+    normalized = normalized.substring(0, 4) + normalized.substring(5);
   }
   
   // Sempre adicionar o + no início

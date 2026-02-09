@@ -25,17 +25,18 @@ const normalizePhoneNumber = (value: string): string => {
     // Remove tudo que não é número
     let cleaned = value.replace(/\D/g, "");
     
-    // Se já começa com 55, usar como está
-    if (cleaned.startsWith("55")) {
-      // Se tem 13 dígitos (55 + DDD + 9 + número), remover o 9
-      if (cleaned.length === 13) {
-        cleaned = cleaned.substring(0, 2) + cleaned.substring(4);
-      }
-      return "+" + cleaned;
+    // Adicionar 55 se não tiver
+    if (!cleaned.startsWith("55")) {
+      cleaned = "55" + cleaned;
     }
     
-    // Se não começa com 55, adicionar 55 na frente
-    return "+55" + cleaned;
+    // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), remover o 9
+    // 55 31 9 86337081 → 55 31 86337081
+    if (cleaned.length === 13 && cleaned.startsWith("55")) {
+      cleaned = cleaned.substring(0, 4) + cleaned.substring(5);
+    }
+    
+    return "+" + cleaned;
   };
 
   const { data: customers } = trpc.customers.search.useQuery(
