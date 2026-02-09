@@ -268,53 +268,10 @@ export const apiConfigRouter = router({
       try {
         const cleanApiUrl = input.apiUrl.replace(/\/$/, "");
 
-        // First, check if instance already exists
-        const instancesResponse = await fetch(`${cleanApiUrl}/instance/fetchInstances`, {
-          headers: {
-            apikey: input.apiKey,
-          },
-        });
-
-        let instanceExists = false;
-        if (instancesResponse.ok) {
-          const instances = await instancesResponse.json();
-          instanceExists = Array.isArray(instances) && instances.some(
-            (inst: any) => inst.instanceName === input.instanceName
-          );
-        }
-
-        if (!instanceExists) {
-          // Create new instance
-          console.log("[QR Code] Creating new instance:", input.instanceName);
-          const createResponse = await fetch(`${cleanApiUrl}/instance/create`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              apikey: input.apiKey,
-            },
-            body: JSON.stringify({
-              instanceName: input.instanceName,
-              qr: true,
-              integration: "WHATSAPP",
-              webhook: {
-                url: `${process.env.APP_URL || "https://innovative-enjoyment-production-ed8f.up.railway.app"}/api/webhooks/evolution?apikey=${input.apiKey}`,
-                events: ["messages.upsert", "contacts.upsert", "connection.update"],
-              },
-            }),
-          });
-
-          if (!createResponse.ok) {
-            const errorText = await createResponse.text();
-            console.log("[QR Code] Create response:", errorText);
-          }
-        } else {
-          console.log("[QR Code] Instance already exists:", input.instanceName);
-        }
-
-        // Now get the QR code
-        console.log("[QR Code] Getting QR code for:", input.instanceName);
-        const qrResponse = await fetch(
-          `${cleanApiUrl}/instance/connect/${input.instanceName}`,
+        // First, check instance status
+        console.log("[QR Code] Checking instance status:", input.instanceName);
+        const statusResponse = await fetch(
+          `${cleanApiUrl}/instance/connectionState/${input.instanceName}`,
           {
             headers: {
               apikey: input.apiKey,
@@ -322,25 +279,101 @@ export const apiConfigRouter = router({
           }
         );
 
-        if (!qrResponse.ok) {
-          const errorText = await qrResponse.text();
-          console.log("[QR Code] Error response:", errorText);
+        let instanceStatus = "unknown";
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json();
+          instanceStatus = statusData.state || statusData.status || "unknown";
+          console.log("[QR Code] Instance status:", instanceStatus);
+        }
+
+        // If instance is already connected (state: "open"), we need to restart it
+        if (instanceStatus === "open") {
+          console.log("[QR Code] Instance already connected, restarting...");
+          
+          // Restart the instance to get a new QR code
+          const restartResponse = await fetch(
+            `${cleanApiUrl}/instance/restart/${input.instanceName}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                apikey: input.apiKey,
+              },
+              body: JSON.stringify({
+                delay: 2000,
+                hours: 0,
+                minutes: 0,
+                seconds: 5,
+              }),
+            }
+          );
+
+          if (!restartResponse.ok) {
+            console.log("[QR Code] Restart failed, trying to delete and recreate...");
+          }
+          
+          // If restart doesn't work, try to delete and recreate
+          // Note: This will disconnect the current WhatsApp session
+        }
+
+        // Get the QR code
+        console.log("[QR Code] Getting QR code for:", input.instanceName);
+        const qrResponse = await fetch(
+          `${cleanApiUrl}/instance/qrcode/${input.instanceName}`,
+          {
+            headers: {
+              apikey: input.apiKey,
+            },
+          }
+        );
+
+        // If qrcode endpoint doesn't work, try connect endpoint
+        let qrData = null;
+        if (qrResponse.ok) {
+          qrData = await qrResponse.json();
+        } else {
+          console.log("[QR Code] qrcode endpoint failed, trying connect...");
+          const connectResponse = await fetch(
+            `${cleanApiUrl}/instance/connect/${input.instanceName}`,
+            {
+              headers: {
+                apikey: input.apiKey,
+              },
+            }
+          );
+          
+          if (connectResponse.ok) {
+            qrData = await connectResponse.json();
+          }
+        }
+
+        if (!qrData) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Erro ao gerar QR Code: ${errorText}`,
+            message: "Não foi possível gerar o QR Code. A instância pode já estar conectada.",
           });
         }
 
-        const qrData = await qrResponse.json();
         console.log("[QR Code] QR Data keys:", Object.keys(qrData));
 
-        // The QR code comes as base64 image
-        const qrCode = qrData.base64 || qrData.qrcode || qrData.data || qrData.pairingCode;
+        // The QR code can come in different formats
+        let qrCode = qrData.base64 || qrData.qrcode || qrData.data || qrData.pairingCode || qrData.code;
         
         if (!qrCode) {
+          // Check if there's a status field indicating it's connected
+          const status = qrData.status || qrData.state || "";
+          if (status === "connected" || status === "open") {
+            return {
+              success: true,
+              qrCode: null,
+              message: "O WhatsApp já está conectado! Se quiser gerar um novo QR Code, primeiro desconecte a sessão atual no Evolution API.",
+              alreadyConnected: true,
+            };
+          }
+          
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "QR Code não foi gerado. A instância pode já estar conectada.",
+            message: "QR Code não foi gerado. Verifique o status da instância no Evolution API.",
           });
         }
 
@@ -348,6 +381,7 @@ export const apiConfigRouter = router({
           success: true,
           qrCode: qrCode,
           message: "QR Code gerado com sucesso! Escaneie com o WhatsApp.",
+          alreadyConnected: false,
         };
       } catch (error) {
         console.error("[QR Code] Error:", error);
@@ -356,6 +390,54 @@ export const apiConfigRouter = router({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: `Erro ao gerar QR Code: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  /**
+   * Desconectar instância do WhatsApp (para gerar novo QR Code)
+   */
+  disconnectInstance: adminProcedure
+    .input(z.object({
+      apiUrl: z.string(),
+      apiKey: z.string(),
+      instanceName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const cleanApiUrl = input.apiUrl.replace(/\/$/, "");
+
+        console.log("[QR Code] Disconnecting instance:", input.instanceName);
+        
+        // Delete the instance to force a new QR code
+        const deleteResponse = await fetch(
+          `${cleanApiUrl}/instance/delete/${input.instanceName}`,
+          {
+            method: "DELETE",
+            headers: {
+              apikey: input.apiKey,
+            },
+          }
+        );
+
+        if (!deleteResponse.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Erro ao desconectar instância. Verifique se ela existe no Evolution API.",
+          });
+        }
+
+        return {
+          success: true,
+          message: "Instância desconectada! Agora você pode gerar um novo QR Code.",
+        };
+      } catch (error) {
+        console.error("[QR Code] Disconnect error:", error);
+        if (error instanceof TRPCError) throw error;
+        
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao desconectar: ${(error as Error).message}`,
         });
       }
     }),
