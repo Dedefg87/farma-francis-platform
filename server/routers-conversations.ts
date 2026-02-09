@@ -2,10 +2,43 @@ import { z } from 'zod';
 import { router, protectedProcedure } from './_core/trpc';
 import { getDb } from './db';
 import { conversations, conversationMessages, customers, users, agentStatus, integrationSettings } from '../drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, or } from 'drizzle-orm';
 import { storagePut } from './storage';
 import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage, fetchEvolutionProfile } from './messaging';
 import { sseManager, EVENTS } from './_core/sse';
+
+/**
+ * Normalizar número de telefone brasileiro
+ * Remove o 9 do celular se presente (padroniza para DDD + número fixo)
+ */
+function normalizeBrazilianNumber(value: string): string {
+  const cleaned = value.replace(/\D/g, "");
+  
+  let normalized = cleaned;
+  if (!normalized.startsWith("55")) {
+    if (normalized.startsWith("9")) {
+      normalized = "55" + normalized;
+    }
+    if (!normalized.startsWith("55") && normalized.length > 0) {
+      normalized = "55" + normalized;
+    }
+  }
+  
+  if (normalized.length === 13 && normalized.startsWith("55")) {
+    normalized = normalized.substring(0, 2) + normalized.substring(3);
+  }
+  
+  return normalized;
+}
+
+/**
+ * Verificar se dois números são o mesmo contato brasileiro
+ */
+function isSameNumber(num1: string, num2: string): boolean {
+  const n1 = normalizeBrazilianNumber(num1);
+  const n2 = normalizeBrazilianNumber(num2);
+  return n1 === n2;
+}
 
 export const conversationsRouter = router({
   // Criar nova conversa
@@ -28,20 +61,60 @@ export const conversationsRouter = router({
       if (input.phoneOrEmail && !customerId) {
         const isEmail = input.phoneOrEmail.includes('@');
         
-        // Tentar encontrar customer existente
-        const [existingCustomer] = await db
-          .select()
-          .from(customers)
-          .where(
-            isEmail
-              ? eq(customers.email, input.phoneOrEmail)
-              : eq(customers.phone, input.phoneOrEmail)
-          )
-          .limit(1);
+        if (!isEmail) {
+          // É telefone - normalizar número brasileiro
+          const normalizedPhone = normalizeBrazilianNumber(input.phoneOrEmail);
+          console.log('[Conversations] Número normalizado:', { original: input.phoneOrEmail, normalized: normalizedPhone });
 
-        if (existingCustomer) {
-          customerId = existingCustomer.id;
+          // Buscar customer existente por número normalizado (com ou sem 9)
+          const [existingCustomer] = await db
+            .select()
+            .from(customers)
+            .where(eq(customers.phone, normalizedPhone))
+            .limit(1);
+
+          if (existingCustomer) {
+            console.log('[Conversations] Customer encontrado pelo número normalizado:', existingCustomer.name);
+            customerId = existingCustomer.id;
+          } else {
+            // Tentar buscar por outros formatos possíveis
+            const possibleFormats = [
+              normalizedPhone,
+              normalizedPhone.startsWith('55') ? normalizedPhone.substring(0, 2) + normalizedPhone.substring(4) : normalizedPhone, // sem 9
+            ];
+            
+            console.log('[Conversations] Procurando formatos alternativos:', possibleFormats);
+            
+            // Tentar cada formato
+            for (const format of possibleFormats) {
+              const [altCustomer] = await db
+                .select()
+                .from(customers)
+                .where(eq(customers.phone, format))
+                .limit(1);
+              
+              if (altCustomer) {
+                console.log('[Conversations] Customer encontrado por formato alternativo:', altCustomer.name);
+                customerId = altCustomer.id;
+                break;
+              }
+            }
+          }
         } else {
+          // É email
+          const [existingCustomer] = await db
+            .select()
+            .from(customers)
+            .where(eq(customers.email, input.phoneOrEmail))
+            .limit(1);
+
+          if (existingCustomer) {
+            customerId = existingCustomer.id;
+          }
+        }
+
+        // Se ainda não encontrou, criar novo customer
+        if (!customerId) {
           // Novo customer - tentar buscar nome do WhatsApp
           if (input.channel === 'whatsapp' && !isEmail) {
             console.log('[Conversations] Buscando nome do WhatsApp para:', input.phoneOrEmail);
@@ -52,20 +125,20 @@ export const conversationsRouter = router({
                 console.log('[Conversations] Nome encontrado:', fetchedName);
               }
             } catch (err) {
-              console.log('[Conversations] Erro ao buscar nome (continuando com telefone):', err);
+              console.log('[Conversations] Erro ao buscar nome (continuando):', err);
             }
           }
 
-          // Criar novo customer com nome encontrado ou telefone
           const customerName = fetchedName || input.phoneOrEmail;
           const newCustomer = await db
             .insert(customers)
             .values({
               name: customerName,
-              phone: isEmail ? null : input.phoneOrEmail,
+              phone: normalizeBrazilianNumber(input.phoneOrEmail),
               email: isEmail ? input.phoneOrEmail : null,
             }).$returningId();
           customerId = newCustomer[0].id;
+          console.log('[Conversations] Novo customer criado:', customerName);
         }
       }
 

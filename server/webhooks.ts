@@ -26,11 +26,62 @@ const addDebugLogWebhook = debugModule?.webhookLogger || ((req: any, res: any, n
   next();
 });
 
+/**
+ * Normalizar número de telefone brasileiro
+ * Remove o 9 do celular se presente (padroniza para DDD + número fixo)
+ * Garante que número brasileiro tenha formato correto
+ */
+function normalizeBrazilianNumber(value: string): string {
+  // Remove todos os caracteres não numéricos
+  const cleaned = value.replace(/\D/g, "");
+  
+  // Se não começar com 55 (Brasil), adiciona
+  let normalized = cleaned;
+  if (!normalized.startsWith("55")) {
+    if (normalized.startsWith("9")) {
+      // Número começa com 9, adiciona 55 na frente
+      normalized = "55" + normalized;
+    }
+    // Se não começar com 9 nem 55, adiciona 55
+    if (!normalized.startsWith("55") && normalized.length > 0) {
+      normalized = "55" + normalized;
+    }
+  }
+  
+  // Agora normaliza para formato brasileiro sem 9
+  // Se tem 13 dígitos (55 + DDD + 9 + número), remove o 9
+  if (normalized.length === 13 && normalized.startsWith("55")) {
+    normalized = normalized.substring(0, 2) + normalized.substring(3);
+  }
+  
+  return normalized;
+}
+
 function normalizeInboundNumber(value: string | undefined | null) {
   if (!value) return null;
   const stripped = value.split("@")[0].replace(/\D/g, "");
   if (!stripped) return null;
-  return stripped.startsWith("+") ? stripped : `+${stripped}`;
+  
+  // Usar normalização brasileira
+  const normalized = normalizeBrazilianNumber(stripped);
+  return normalized.startsWith("+") ? normalized : `+${normalized}`;
+}
+
+/**
+ * Normalizar número para busca no banco (sem +)
+ */
+function normalizeForDb(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+/**
+ * Verificar se dois números brasileiros são o mesmo contato
+ * Considera números com ou sem 9 como o mesmo contato
+ */
+function isSameBrazilianNumber(num1: string, num2: string): boolean {
+  const n1 = normalizeBrazilianNumber(num1);
+  const n2 = normalizeBrazilianNumber(num2);
+  return n1 === n2;
 }
 
 function logWebhookSummary(provider: "WhatsApp" | "Instagram", payload: unknown) {

@@ -20,6 +20,24 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
   const [autoFetchedName, setAutoFetchedName] = useState<string | null>(null);
   const [channel, setChannel] = useState<'whatsapp' | 'instagram' | 'telegram' | 'email'>('whatsapp');
 
+  // Normalizar número brasileiro (adicionar 55 se necessário, remover 9)
+  const normalizePhoneNumber = (value: string): string => {
+    // Remove tudo que não é número
+    let cleaned = value.replace(/\D/g, "");
+    
+    // Se começa com 9, adiciona 55 na frente
+    if (cleaned.startsWith("9")) {
+      cleaned = "55" + cleaned;
+    }
+    
+    // Se não começa com 55 e tem mais de 2 dígitos, adiciona 55
+    if (!cleaned.startsWith("55") && cleaned.length > 2) {
+      cleaned = "55" + cleaned;
+    }
+    
+    return cleaned;
+  };
+
   const { data: customers } = trpc.customers.search.useQuery(
     { query: searchQuery },
     { enabled: mode === 'search' && searchQuery.length > 0 }
@@ -75,10 +93,17 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
   const handleCreateWithInput = () => {
     if (!phoneOrEmail.trim()) return;
     
-    console.log('[NewConversation] Criando conversa com:', { phoneOrEmail: phoneOrEmail.trim(), channel });
+    // Normalizar número para WhatsApp
+    let finalPhone = phoneOrEmail.trim();
+    if (channel === 'whatsapp') {
+      finalPhone = normalizePhoneNumber(phoneOrEmail);
+      console.log('[NewConversation] Número final (+55):', finalPhone);
+    }
+    
+    console.log('[NewConversation] Criando conversa com:', { phoneOrEmail: finalPhone, channel });
     
     createConversationMutation.mutate({
-      phoneOrEmail: phoneOrEmail.trim(),
+      phoneOrEmail: finalPhone,
       channel,
     });
   };
@@ -157,16 +182,39 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
                    channel === 'telegram' ? 'Username do Telegram' : 'Email'}
                 </Label>
                 <div className="relative">
+                  {channel === 'whatsapp' && (
+                    <span className="absolute left-3 top-2.5 text-gray-400 font-medium">
+                      +55
+                    </span>
+                  )}
                   <Input
                     id="contact"
                     placeholder={
-                      channel === 'whatsapp' ? '+55 11 99999-9999' :
+                      channel === 'whatsapp' ? '(DDD) 9xxxx-xxxx' :
                       channel === 'instagram' ? '@username' :
                       channel === 'telegram' ? '@username' : 'email@exemplo.com'
                     }
                     value={phoneOrEmail}
-                    onChange={(e) => setPhoneOrEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateWithInput()}
+                    onChange={(e) => {
+                      if (channel === 'whatsapp') {
+                        // Normalizar número brasileiro
+                        const value = e.target.value.replace(/\D/g, "");
+                        // Manter apenas os últimos 8-9 dígitos
+                        const normalized = value.slice(-9);
+                        setPhoneOrEmail(normalized);
+                      } else {
+                        setPhoneOrEmail(e.target.value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && channel === 'whatsapp') {
+                        // Enter cria o número com +55
+                        handleCreateWithInput();
+                      } else if (e.key === 'Enter') {
+                        handleCreateWithInput();
+                      }
+                    }}
+                    className={channel === 'whatsapp' ? "pl-12" : ""}
                   />
                   {fetchContactInfoMutation.isPending && (
                     <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-3 text-gray-400" />
@@ -177,6 +225,11 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
                     <span>✓</span>
                     <span>Nome encontrado: <strong>{autoFetchedName}</strong></span>
                   </div>
+                )}
+                {channel === 'whatsapp' && phoneOrEmail.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Número: +55 {phoneOrEmail.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')}
+                  </p>
                 )}
               </div>
             </div>
