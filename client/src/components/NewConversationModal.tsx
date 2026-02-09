@@ -21,21 +21,21 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
   const [channel, setChannel] = useState<'whatsapp' | 'instagram' | 'telegram' | 'email'>('whatsapp');
 
   // Normalizar número brasileiro (adicionar 55 se necessário, remover 9)
-  const normalizePhoneNumber = (value: string): string => {
+const normalizePhoneNumber = (value: string): string => {
     // Remove tudo que não é número
     let cleaned = value.replace(/\D/g, "");
     
-    // Se começa com 9, adiciona 55 na frente
-    if (cleaned.startsWith("9")) {
-      cleaned = "55" + cleaned;
+    // Se já começa com 55, usar como está
+    if (cleaned.startsWith("55")) {
+      // Se tem 13 dígitos (55 + DDD + 9 + número), remover o 9
+      if (cleaned.length === 13) {
+        cleaned = cleaned.substring(0, 2) + cleaned.substring(4);
+      }
+      return cleaned;
     }
     
-    // Se não começa com 55 e tem mais de 2 dígitos, adiciona 55
-    if (!cleaned.startsWith("55") && cleaned.length > 2) {
-      cleaned = "55" + cleaned;
-    }
-    
-    return cleaned;
+    // Se não começa com 55, adicionar
+    return "55" + cleaned;
   };
 
   const { data: customers } = trpc.customers.search.useQuery(
