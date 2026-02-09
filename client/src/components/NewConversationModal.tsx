@@ -187,7 +187,7 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
                       +55
                     </span>
                   )}
-                  <Input
+<Input
                     id="contact"
                     placeholder={
                       channel === 'whatsapp' ? '(DDD) 9xxxx-xxxx' :
@@ -195,25 +195,8 @@ export default function NewConversationModal({ open, onOpenChange, onSuccess }: 
                       channel === 'telegram' ? '@username' : 'email@exemplo.com'
                     }
                     value={phoneOrEmail}
-                    onChange={(e) => {
-                      if (channel === 'whatsapp') {
-                        // Normalizar número brasileiro
-                        const value = e.target.value.replace(/\D/g, "");
-                        // Manter apenas os últimos 8-9 dígitos
-                        const normalized = value.slice(-9);
-                        setPhoneOrEmail(normalized);
-                      } else {
-                        setPhoneOrEmail(e.target.value);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && channel === 'whatsapp') {
-                        // Enter cria o número com +55
-                        handleCreateWithInput();
-                      } else if (e.key === 'Enter') {
-                        handleCreateWithInput();
-                      }
-                    }}
+                    onChange={(e) => setPhoneOrEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateWithInput()}
                     className={channel === 'whatsapp' ? "pl-12" : ""}
                   />
                   {fetchContactInfoMutation.isPending && (
