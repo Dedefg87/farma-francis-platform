@@ -237,9 +237,9 @@ export const apiConfigRouter = router({
       }
     }),
 
-  /**
-   * Deletar configuração
-   */
+/**
+    * Deletar configuração
+    */
   delete: adminProcedure
     .input(z.object({
       integrationType: z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"]),
@@ -253,5 +253,76 @@ export const apiConfigRouter = router({
         .where(eq(integrationSettings.integrationType, input.integrationType));
 
       return { success: true };
+    }),
+
+  /**
+   * Gerar QR Code para conectar WhatsApp via Evolution API
+   */
+  generateQrCode: adminProcedure
+    .input(z.object({
+      apiUrl: z.string(),
+      apiKey: z.string(),
+      instanceName: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        // First, create or update the instance settings in Evolution API
+        const createResponse = await fetch(`${input.apiUrl}/instance/create`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: input.apiKey,
+          },
+          body: JSON.stringify({
+            instanceName: input.instanceName,
+            qr: true,
+            integration: "WHATSAPP",
+            webhook: {
+              url: `${process.env.APP_URL || "https://innovative-enjoyment-production-ed8f.up.railway.app"}/api/webhooks/evolution?apikey=${input.apiKey}`,
+              events: ["messages.upsert", "contacts.upsert", "connection.update"],
+            },
+          }),
+        });
+
+        if (!createResponse.ok) {
+          // If instance already exists, try to get QR code
+          const errorText = await createResponse.text();
+          console.log("[QR Code] Instance might already exist, trying to get QR:", errorText);
+        }
+
+        // Now get the QR code
+        const qrResponse = await fetch(
+          `${input.apiUrl}/instance/connect/${input.instanceName}`,
+          {
+            headers: {
+              apikey: input.apiKey,
+            },
+          }
+        );
+
+        if (!qrResponse.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Erro ao gerar QR Code. Verifique se a instância existe.",
+          });
+        }
+
+        const qrData = await qrResponse.json();
+
+        // The QR code comes as base64 image
+        return {
+          success: true,
+          qrCode: qrData.base64 || qrData.qrcode || qrData.data,
+          message: "QR Code gerado com sucesso! Escaneie com o WhatsApp.",
+        };
+      } catch (error) {
+        console.error("[QR Code] Error:", error);
+        if (error instanceof TRPCError) throw error;
+        
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Erro ao gerar QR Code: ${(error as Error).message}`,
+        });
+      }
     }),
 });

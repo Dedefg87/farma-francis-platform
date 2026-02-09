@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Check, X, Phone, Instagram, Zap } from "lucide-react";
+import { Loader2, Check, X, Phone, Instagram, Zap, QrCode } from "lucide-react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
+import QrCodeModal from "@/components/QrCodeModal";
 
 export default function APISettings() {
   // WhatsApp Business API
@@ -27,6 +28,7 @@ export default function APISettings() {
   const [evolutionApiUrl, setEvolutionApiUrl] = useState("");
   const [evolutionApiKey, setEvolutionApiKey] = useState("");
   const [evolutionInstanceName, setEvolutionInstanceName] = useState("");
+  const [showQrModal, setShowQrModal] = useState(false);
 
   const utils = trpc.useUtils();
   
@@ -230,6 +232,14 @@ export default function APISettings() {
       accessToken: evolutionApiKey,
       apiUrl: evolutionApiUrl,
     });
+  };
+
+  const handleOpenQrModal = () => {
+    if (!evolutionApiUrl || !evolutionApiKey || !evolutionInstanceName) {
+      toast.error("Preencha a URL, API Key e Instance Name primeiro");
+      return;
+    }
+    setShowQrModal(true);
   };
 
   return (
@@ -583,12 +593,28 @@ export default function APISettings() {
                     {testEvolution.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Testar Conexão
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleOpenQrModal}
+                    disabled={!evolutionApiUrl || !evolutionApiKey || !evolutionInstanceName}
+                  >
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Gerar QR Code
+                  </Button>
                 </div>
               </>
             )}
           </CardContent>
         </Card>
       </div>
+
+      <QrCodeModal
+        open={showQrModal}
+        onOpenChange={setShowQrModal}
+        apiUrl={evolutionApiUrl}
+        apiKey={evolutionApiKey}
+        instanceName={evolutionInstanceName}
+      />
     </FarmaDashboardLayout>
   );
 }
