@@ -1,10 +1,21 @@
-import { bigint, decimal, int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, boolean } from "drizzle-orm/mysql-core";
+import {
+  bigint,
+  decimal,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  json,
+  boolean,
+} from "drizzle-orm/mysql-core";
 
 // Export execution and analytics tables (SQLite-based)
-export * from './schema_executions';
+export * from "./schema_executions";
 
 // Export tags tables (SQLite-based)
-export * from './schema_tags';
+export * from "./schema_tags";
 
 /**
  * Core user table backing auth flow.
@@ -48,7 +59,9 @@ export const customers = mysqlTable("customers", {
   zipCode: varchar("zip_code", { length: 10 }),
   tags: text("tags"), // JSON array of tags
   notes: text("notes"),
-  status: mysqlEnum("status", ["active", "inactive", "blocked"]).default("active").notNull(),
+  status: mysqlEnum("status", ["active", "inactive", "blocked"])
+    .default("active")
+    .notNull(),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -67,7 +80,16 @@ export const leads = mysqlTable("leads", {
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
   source: varchar("source", { length: 100 }), // whatsapp, instagram, website, etc
-  stage: mysqlEnum("stage", ["prospect", "qualified", "proposal", "negotiation", "closed_won", "closed_lost"]).default("prospect").notNull(),
+  stage: mysqlEnum("stage", [
+    "prospect",
+    "qualified",
+    "proposal",
+    "negotiation",
+    "closed_won",
+    "closed_lost",
+  ])
+    .default("prospect")
+    .notNull(),
   value: int("value"), // potential deal value
   assignedTo: int("assigned_to").references(() => users.id),
   followUpDate: timestamp("follow_up_date"),
@@ -89,10 +111,26 @@ export const tickets = mysqlTable("tickets", {
   customerId: int("customer_id").references(() => customers.id),
   subject: varchar("subject", { length: 255 }).notNull(),
   description: text("description"),
-  status: mysqlEnum("status", ["open", "in_progress", "pending", "resolved", "closed"]).default("open").notNull(),
-  priority: mysqlEnum("priority", ["low", "medium", "high", "critical"]).default("medium").notNull(),
+  status: mysqlEnum("status", [
+    "open",
+    "in_progress",
+    "pending",
+    "resolved",
+    "closed",
+  ])
+    .default("open")
+    .notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high", "critical"])
+    .default("medium")
+    .notNull(),
   category: varchar("category", { length: 100 }),
-  channel: mysqlEnum("channel", ["whatsapp", "instagram", "email", "phone", "web"]),
+  channel: mysqlEnum("channel", [
+    "whatsapp",
+    "instagram",
+    "email",
+    "phone",
+    "web",
+  ]),
   assignedTo: int("assigned_to").references(() => users.id),
   slaDeadline: timestamp("sla_deadline"),
   resolvedAt: timestamp("resolved_at"),
@@ -111,7 +149,9 @@ export type InsertTicket = typeof tickets.$inferInsert;
  */
 export const ticketComments = mysqlTable("ticket_comments", {
   id: int("id").autoincrement().primaryKey(),
-  ticketId: int("ticket_id").references(() => tickets.id, { onDelete: "cascade" }).notNull(),
+  ticketId: int("ticket_id")
+    .references(() => tickets.id, { onDelete: "cascade" })
+    .notNull(),
   userId: int("user_id").references(() => users.id),
   content: text("content").notNull(),
   isInternal: int("is_internal").default(0).notNull(), // 0 = false, 1 = true (internal notes vs customer-visible)
@@ -126,10 +166,19 @@ export type InsertTicketComment = typeof ticketComments.$inferInsert;
  */
 export const interactions = mysqlTable("interactions", {
   id: int("id").autoincrement().primaryKey(),
-  customerId: int("customer_id").references(() => customers.id, { onDelete: "cascade" }).notNull(),
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
   ticketId: int("ticket_id").references(() => tickets.id),
   leadId: int("lead_id").references(() => leads.id),
-  type: mysqlEnum("type", ["call", "email", "whatsapp", "instagram", "meeting", "note"]).notNull(),
+  type: mysqlEnum("type", [
+    "call",
+    "email",
+    "whatsapp",
+    "instagram",
+    "meeting",
+    "note",
+  ]).notNull(),
   subject: varchar("subject", { length: 255 }),
   content: text("content"),
   userId: int("user_id").references(() => users.id),
@@ -144,13 +193,18 @@ export type InsertInteraction = typeof interactions.$inferInsert;
  */
 export const employees = mysqlTable("employees", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").references(() => users.id, { onDelete: "cascade" }).notNull().unique(),
+  userId: int("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
   cpf: varchar("cpf", { length: 14 }).unique(),
   phone: varchar("phone", { length: 20 }),
   position: varchar("position", { length: 100 }),
   department: varchar("department", { length: 100 }),
   hireDate: timestamp("hire_date"),
-  status: mysqlEnum("status", ["active", "inactive", "vacation"]).default("active").notNull(),
+  status: mysqlEnum("status", ["active", "inactive", "vacation"])
+    .default("active")
+    .notNull(),
   skills: text("skills"), // JSON array
   photoUrl: varchar("photo_url", { length: 500 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -241,7 +295,9 @@ export type InsertAuditLog = typeof auditLogs.$inferInsert;
  */
 export const notifications = mysqlTable("notifications", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  userId: int("user_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content"),
   type: mysqlEnum("type", ["ticket", "lead", "system", "goal"]).notNull(),
@@ -266,7 +322,8 @@ export const aiChats = mysqlTable("ai_chats", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export type AiChat = typeof aiChats.$inferSelect;export type InsertAiChat = typeof aiChats.$inferInsert;
+export type AiChat = typeof aiChats.$inferSelect;
+export type InsertAiChat = typeof aiChats.$inferInsert;
 
 /**
  * Visual automation flows (N8N-style)
@@ -320,7 +377,11 @@ export const apiConfigurations = mysqlTable("api_configurations", {
   appSecret: varchar("app_secret", { length: 255 }), // For HMAC signature validation
   isActive: int("is_active").default(1).notNull(),
   lastTestedAt: timestamp("last_tested_at"),
-  testStatus: mysqlEnum("test_status", ["success", "failed", "not_tested"]).default("not_tested"),
+  testStatus: mysqlEnum("test_status", [
+    "success",
+    "failed",
+    "not_tested",
+  ]).default("not_tested"),
   testMessage: text("test_message"),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -340,7 +401,18 @@ export const receivedMessages = mysqlTable("received_messages", {
   externalId: varchar("external_id", { length: 255 }).notNull(), // Message ID from provider
   fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone number or Instagram user ID
   fromName: varchar("from_name", { length: 255 }), // Sender name if available
-  messageType: mysqlEnum("message_type", ["text", "image", "audio", "video", "document", "location", "contact", "sticker", "reaction", "unknown"]).notNull(),
+  messageType: mysqlEnum("message_type", [
+    "text",
+    "image",
+    "audio",
+    "video",
+    "document",
+    "location",
+    "contact",
+    "sticker",
+    "reaction",
+    "unknown",
+  ]).notNull(),
   messageText: text("message_text"), // Text content
   mediaUrl: varchar("media_url", { length: 512 }), // URL for media files
   mediaId: varchar("media_id", { length: 255 }), // Media ID from provider
@@ -354,7 +426,9 @@ export const receivedMessages = mysqlTable("received_messages", {
   processedAt: timestamp("processed_at"),
   customerId: int("customer_id").references(() => customers.id), // Link to customer if identified
   ticketId: int("ticket_id").references(() => tickets.id), // Link to ticket if created
-  automationFlowId: int("automation_flow_id").references(() => automationFlows.id), // Flow that processed this message
+  automationFlowId: int("automation_flow_id").references(
+    () => automationFlows.id
+  ), // Flow that processed this message
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -367,9 +441,22 @@ export type InsertReceivedMessage = typeof receivedMessages.$inferInsert;
  */
 export const workflowExecutions = mysqlTable("workflow_executions", {
   id: int("id").autoincrement().primaryKey(),
-  workflowId: int("workflow_id").references(() => visualFlows.id).notNull(),
-  status: mysqlEnum("status", ["running", "success", "error", "waiting", "canceled"]).notNull(),
-  mode: mysqlEnum("mode", ["manual", "trigger", "webhook", "schedule"]).notNull(),
+  workflowId: int("workflow_id")
+    .references(() => visualFlows.id)
+    .notNull(),
+  status: mysqlEnum("status", [
+    "running",
+    "success",
+    "error",
+    "waiting",
+    "canceled",
+  ]).notNull(),
+  mode: mysqlEnum("mode", [
+    "manual",
+    "trigger",
+    "webhook",
+    "schedule",
+  ]).notNull(),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   finishedAt: timestamp("finished_at"),
   executionTime: int("execution_time"), // Milliseconds
@@ -388,7 +475,9 @@ export type InsertWorkflowExecution = typeof workflowExecutions.$inferInsert;
  */
 export const executionData = mysqlTable("execution_data", {
   id: int("id").autoincrement().primaryKey(),
-  executionId: int("execution_id").references(() => workflowExecutions.id).notNull(),
+  executionId: int("execution_id")
+    .references(() => workflowExecutions.id)
+    .notNull(),
   nodeId: varchar("node_id", { length: 255 }).notNull(), // ID do nó no workflow
   nodeName: varchar("node_name", { length: 255 }).notNull(),
   nodeType: varchar("node_type", { length: 100 }).notNull(),
@@ -415,7 +504,9 @@ export const workflowCredentials = mysqlTable("workflow_credentials", {
   name: varchar("name", { length: 255 }).notNull(),
   type: varchar("type", { length: 100 }).notNull(), // http, oauth2, api_key, database, etc
   data: text("data").notNull(), // Encrypted JSON with credentials
-  createdBy: int("created_by").references(() => users.id).notNull(),
+  createdBy: int("created_by")
+    .references(() => users.id)
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -429,10 +520,18 @@ export type InsertWorkflowCredential = typeof workflowCredentials.$inferInsert;
  */
 export const workflowWebhooks = mysqlTable("workflow_webhooks", {
   id: int("id").autoincrement().primaryKey(),
-  workflowId: int("workflow_id").references(() => visualFlows.id).notNull(),
+  workflowId: int("workflow_id")
+    .references(() => visualFlows.id)
+    .notNull(),
   webhookId: varchar("webhook_id", { length: 255 }).notNull().unique(), // UUID único
   path: varchar("path", { length: 255 }).notNull(), // /webhook/abc123
-  method: mysqlEnum("method", ["GET", "POST", "PUT", "DELETE", "PATCH"]).notNull(),
+  method: mysqlEnum("method", [
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+  ]).notNull(),
   isActive: int("is_active").default(1).notNull(),
   lastTriggeredAt: timestamp("last_triggered_at"),
   triggerCount: int("trigger_count").default(0).notNull(),
@@ -448,9 +547,13 @@ export type InsertWorkflowWebhook = typeof workflowWebhooks.$inferInsert;
  */
 export const workflowSchedules = mysqlTable("workflow_schedules", {
   id: int("id").autoincrement().primaryKey(),
-  workflowId: int("workflow_id").references(() => visualFlows.id).notNull(),
+  workflowId: int("workflow_id")
+    .references(() => visualFlows.id)
+    .notNull(),
   cronExpression: varchar("cron_expression", { length: 255 }).notNull(), // 0 0 * * * *
-  timezone: varchar("timezone", { length: 100 }).default("America/Sao_Paulo").notNull(),
+  timezone: varchar("timezone", { length: 100 })
+    .default("America/Sao_Paulo")
+    .notNull(),
   isActive: int("is_active").default(1).notNull(),
   lastRunAt: timestamp("last_run_at"),
   nextRunAt: timestamp("next_run_at"),
@@ -479,11 +582,18 @@ export const conversations = mysqlTable("conversations", {
   customerPhone: varchar("customer_phone", { length: 50 }),
   queueId: int("queue_id").references(() => queues.id), // Fila de atendimento
   channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
-  status: mysqlEnum("status", ["open", "assigned", "closed"]).default("open").notNull(),
+  status: mysqlEnum("status", ["open", "assigned", "closed"])
+    .default("open")
+    .notNull(),
   assignedTo: int("assigned_to").references(() => users.id), // Agente responsável
   openedAt: timestamp("opened_at").defaultNow().notNull(),
   closedAt: timestamp("closed_at"),
-  closeReason: mysqlEnum("close_reason", ["venda", "orcamento", "conversa_anterior", "engano"]),
+  closeReason: mysqlEnum("close_reason", [
+    "venda",
+    "orcamento",
+    "conversa_anterior",
+    "engano",
+  ]),
   lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
   unreadCount: int("unread_count").default(0).notNull(),
 });
@@ -500,7 +610,9 @@ export const quickReplies = mysqlTable("quick_replies", {
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   category: varchar("category", { length: 100 }), // saudacao, endereco, pagamento, etc
-  createdBy: int("created_by").references(() => users.id).notNull(),
+  createdBy: int("created_by")
+    .references(() => users.id)
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -514,9 +626,13 @@ export type InsertQuickReply = typeof quickReplies.$inferInsert;
  */
 export const agentStatus = mysqlTable("agent_status", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").references(() => users.id).notNull(),
+  userId: int("user_id")
+    .references(() => users.id)
+    .notNull(),
   channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
-  status: mysqlEnum("status", ["online", "paused", "offline"]).default("offline").notNull(),
+  status: mysqlEnum("status", ["online", "paused", "offline"])
+    .default("offline")
+    .notNull(),
   lastActivity: timestamp("last_activity").defaultNow().notNull(),
 });
 
@@ -546,12 +662,21 @@ export type InsertQueueSetting = typeof queueSettings.$inferInsert;
  */
 export const agentPauses = mysqlTable("agent_pauses", {
   id: int("id").autoincrement().primaryKey(),
-  agentId: int("agent_id").references(() => users.id).notNull(),
-  pauseType: mysqlEnum("pause_type", ["lunch", "snack", "bathroom", "other"]).notNull(),
+  agentId: int("agent_id")
+    .references(() => users.id)
+    .notNull(),
+  pauseType: mysqlEnum("pause_type", [
+    "lunch",
+    "snack",
+    "bathroom",
+    "other",
+  ]).notNull(),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
   durationMinutes: int("duration_minutes"), // Duração planejada em minutos
-  status: mysqlEnum("status", ["active", "completed"]).default("active").notNull(),
+  status: mysqlEnum("status", ["active", "completed"])
+    .default("active")
+    .notNull(),
 });
 
 export type AgentPause = typeof agentPauses.$inferSelect;
@@ -565,7 +690,9 @@ export const queues = mysqlTable("queues", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  status: mysqlEnum("status", ["active", "inactive"]).default("active").notNull(),
+  status: mysqlEnum("status", ["active", "inactive"])
+    .default("active")
+    .notNull(),
   maxConcurrentChats: int("max_concurrent_chats").default(3).notNull(), // Máximo de chats por agente
   priority: int("priority").default(0).notNull(), // Prioridade da fila (maior = mais prioritária)
   color: varchar("color", { length: 7 }).default("#D32F2F"), // Cor da fila em hex
@@ -583,8 +710,12 @@ export type InsertQueue = typeof queues.$inferInsert;
  */
 export const queueAgents = mysqlTable("queue_agents", {
   id: int("id").autoincrement().primaryKey(),
-  queueId: int("queue_id").references(() => queues.id).notNull(),
-  agentId: int("agent_id").references(() => users.id).notNull(),
+  queueId: int("queue_id")
+    .references(() => queues.id)
+    .notNull(),
+  agentId: int("agent_id")
+    .references(() => users.id)
+    .notNull(),
   isActive: int("is_active").default(1).notNull(), // Agente ativo na fila?
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
 });
@@ -592,14 +723,15 @@ export const queueAgents = mysqlTable("queue_agents", {
 export type QueueAgent = typeof queueAgents.$inferSelect;
 export type InsertQueueAgent = typeof queueAgents.$inferInsert;
 
-
 /**
  * Conversation Messages - Mensagens de conversas de atendimento
  * Armazena mensagens trocadas entre agentes e clientes
  */
 export const conversationMessages = mysqlTable("conversation_messages", {
   id: int("id").autoincrement().primaryKey(),
-  conversationId: int("conversation_id").references(() => conversations.id).notNull(),
+  conversationId: int("conversation_id")
+    .references(() => conversations.id)
+    .notNull(),
   senderId: int("sender_id").references(() => users.id), // ID do agente (null se for cliente)
   senderType: mysqlEnum("sender_type", ["agent", "customer"]).notNull(),
   content: text("content").notNull(),
@@ -613,7 +745,8 @@ export const conversationMessages = mysqlTable("conversation_messages", {
 });
 
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
-export type InsertConversationMessage = typeof conversationMessages.$inferInsert;
+export type InsertConversationMessage =
+  typeof conversationMessages.$inferInsert;
 
 /**
  * Tags - Etiquetas para categorizar conversas
@@ -661,21 +794,90 @@ export type InsertConversationMessage = typeof conversationMessages.$inferInsert
  */
 export const integrationSettings = mysqlTable("integration_settings", {
   id: int("id").autoincrement().primaryKey(),
-  integrationType: mysqlEnum("integration_type", ["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"]).notNull(),
+  integrationType: mysqlEnum("integration_type", [
+    "whatsapp_business",
+    "instagram_graph",
+    "evolution_api",
+    "telegram",
+    "email",
+  ]).notNull(),
   name: varchar("name", { length: 255 }).notNull(), // Nome descritivo da configuração
   isActive: boolean("is_active").default(true).notNull(),
-  
+
   // Configurações gerais (JSON)
   config: json("config").notNull(), // Armazena { accessToken, phoneNumberId, etc }
-  
+
   // Metadados
-  createdBy: int("created_by").references(() => users.id).notNull(),
+  createdBy: int("created_by")
+    .references(() => users.id)
+    .notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
   lastTestedAt: timestamp("last_tested_at"), // Última vez que a conexão foi testada
-  testStatus: mysqlEnum("test_status", ["success", "failed", "pending"]).default("pending"),
+  testStatus: mysqlEnum("test_status", [
+    "success",
+    "failed",
+    "pending",
+  ]).default("pending"),
   testMessage: text("test_message"), // Mensagem de erro/sucesso do último teste
 });
 
 export type IntegrationSetting = typeof integrationSettings.$inferSelect;
 export type InsertIntegrationSetting = typeof integrationSettings.$inferInsert;
+
+/**
+ * CRM - Customer Treatments (Medicamentos de Uso Contínuo)
+ * Armazena informações sobre tratamentos e medicamentos de clientes
+ */
+export const customerTreatments = mysqlTable("customer_treatments", {
+  id: int("id").autoincrement().primaryKey(),
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  nomeMedicamento: varchar("nome_medicamento", { length: 255 }).notNull(),
+  posologiaDiaria: int("posologia_diaria").notNull(), // Qtd comprimidos/dia
+  qtdCaixa: int("qtd_caixa").notNull(), // Qtd total na caixa
+  dataUltimaCompra: timestamp("data_ultima_compra"),
+  dataFimPrevisto: timestamp("data_fim_previsto"), // Campo calculado para query performática
+  observacoes: text("observacoes"),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CustomerTreatment = typeof customerTreatments.$inferSelect;
+export type InsertCustomerTreatment = typeof customerTreatments.$inferInsert;
+
+/**
+ * CRM - Tags para Segmentação de Clientes
+ * Relacionamento Many-to-Many com Clientes
+ */
+export const tags = mysqlTable("tags", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+  color: varchar("color", { length: 7 }).default("#6366f1"), // Cor em hex
+  description: text("description"),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Tag = typeof tags.$inferSelect;
+export type InsertTag = typeof tags.$inferInsert;
+
+/**
+ * CRM - Relacionamento Cliente-Tags
+ */
+export const customerTags = mysqlTable("customer_tags", {
+  id: int("id").autoincrement().primaryKey(),
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  tagId: int("tag_id")
+    .references(() => tags.id, { onDelete: "cascade" })
+    .notNull(),
+  addedBy: int("added_by").references(() => users.id),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+});
+
+export type CustomerTag = typeof customerTags.$inferSelect;
+export type InsertCustomerTag = typeof customerTags.$inferInsert;

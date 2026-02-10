@@ -1,9 +1,14 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import {
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+  router,
+} from "./_core/trpc";
 import { z } from "zod";
-import { like, or } from 'drizzle-orm';
+import { like, or } from "drizzle-orm";
 import { inboxRouter } from "./routers-inbox";
 import { dashboardRouter } from "./routers-dashboard";
 import { executionsRouter } from "./routers-executions";
@@ -14,22 +19,23 @@ import { agentRouter } from "./routers-agent";
 import { queuesRouter } from "./routers-queues";
 import { conversationsRouter, messagesRouter } from "./routers-conversations";
 import { quickRepliesRouter } from "./routers-quick-replies";
-import { pausesRouter } from './routers-pauses';
-import { dashboardStatsRouter } from './routers-dashboard-stats';
-import { dashboardDrilldownRouter } from './routers-dashboard-drilldown';
-import { getDb } from './db';
-import { customers } from '../drizzle/schema';
-import { customersRouter } from './routers-customers';
-import { contactFetchRouter } from './routers-contact-fetch';
-import { apiConfigRouter } from './routers-api-config';
-import { templatesRouter } from './templates-router';
-import * as testFlowsRouter from './test-flows';
+import { pausesRouter } from "./routers-pauses";
+import { dashboardStatsRouter } from "./routers-dashboard-stats";
+import { dashboardDrilldownRouter } from "./routers-dashboard-drilldown";
+import { getDb } from "./db";
+import { customers } from "../drizzle/schema";
+import { customersRouter } from "./routers-customers";
+import { contactFetchRouter } from "./routers-contact-fetch";
+import { apiConfigRouter } from "./routers-api-config";
+import { templatesRouter } from "./templates-router";
+import { crmRouter } from "./routers-crm";
+import * as testFlowsRouter from "./test-flows";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
+  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   apiConfig: apiConfigRouter,
-  
+
   // Test Routes - Sistema de Teste de Fluxos
   test: router({
     status: testFlowsRouter.getSystemStatus,
@@ -46,10 +52,12 @@ export const appRouter = router({
     me: publicProcedure.query(opts => opts.ctx.user),
     login: publicProcedure
       .input((raw: unknown) => {
-        return z.object({
-          email: z.string(), // Aceita username ou email
-          password: z.string().min(5),
-        }).parse(raw);
+        return z
+          .object({
+            email: z.string(), // Aceita username ou email
+            password: z.string().min(5),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
@@ -59,57 +67,70 @@ export const appRouter = router({
         const jwtModule = await import("jsonwebtoken");
         const jwt = jwtModule.default || jwtModule;
         const { JWT_SECRET } = await import("./_core/env");
-        
+
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        console.log('[LOGIN] Tentativa de login:', { email: input.email });
+        console.log("[LOGIN] Tentativa de login:", { email: input.email });
 
         // Buscar usuário por email (aceita username ou email)
-        const [user] = await db.select().from(users).where(eq(users.email, input.email));
-        
-        console.log('[LOGIN] Usuário encontrado:', user ? { id: user.id, email: user.email, hasHash: !!user.passwordHash } : 'Não encontrado');
-        
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, input.email));
+
+        console.log(
+          "[LOGIN] Usuário encontrado:",
+          user
+            ? { id: user.id, email: user.email, hasHash: !!user.passwordHash }
+            : "Não encontrado"
+        );
+
         if (!user) {
-          console.log('[LOGIN] ERRO: Usuário não encontrado');
+          console.log("[LOGIN] ERRO: Usuário não encontrado");
           throw new Error("Usuário ou senha incorretos");
         }
 
         // Verificar senha (se existir hash)
         if (user.passwordHash) {
-          console.log('[LOGIN] Verificando senha com bcrypt...');
-          const isValid = await bcrypt.compare(input.password, user.passwordHash);
+          console.log("[LOGIN] Verificando senha com bcrypt...");
+          const isValid = await bcrypt.compare(
+            input.password,
+            user.passwordHash
+          );
           if (!isValid) {
-            console.log('[LOGIN] ERRO: Senha incorreta');
+            console.log("[LOGIN] ERRO: Senha incorreta");
             throw new Error("Usuário ou senha incorretos");
           }
         } else {
           // Se não tem hash, criar um (primeiro login)
           const hash = await bcrypt.hash(input.password, 10);
-          await db.update(users)
+          await db
+            .update(users)
             .set({ passwordHash: hash, updatedAt: new Date() })
             .where(eq(users.id, user.id));
         }
 
         // Criar token JWT usando SDK
         const { sdk } = await import("./_core/sdk");
-        console.log('[LOGIN] Criando session token para openId:', user.openId);
-        
+        console.log("[LOGIN] Criando session token para openId:", user.openId);
+
         const token = await sdk.createSessionToken(user.openId, {
-          name: user.name || '',
-          expiresInMs: 7 * 24 * 60 * 60 * 1000 // 7 dias
+          name: user.name || "",
+          expiresInMs: 7 * 24 * 60 * 60 * 1000, // 7 dias
         });
-        
-        console.log('[LOGIN] Token criado');
+
+        console.log("[LOGIN] Token criado");
 
         // Definir cookie de sessão
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        console.log('[LOGIN] Cookie options:', cookieOptions);
+        console.log("[LOGIN] Cookie options:", cookieOptions);
         ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-        console.log('[LOGIN] Cookie definido com nome:', COOKIE_NAME);
+        console.log("[LOGIN] Cookie definido com nome:", COOKIE_NAME);
 
         // Atualizar lastSignedIn
-        await db.update(users)
+        await db
+          .update(users)
           .set({ lastSignedIn: new Date() })
           .where(eq(users.id, user.id));
 
@@ -140,20 +161,22 @@ export const appRouter = router({
     }),
     create: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          name: z.string(),
-          email: z.string(),
-          password: z.string().min(6),
-          cpf: z.string().optional(),
-          phone: z.string().optional(),
-          position: z.string().optional(),
-          department: z.string().optional(),
-          hireDate: z.date().optional(),
-          status: z.enum(["active", "inactive", "vacation"]).optional(),
-          skills: z.string().optional(),
-          photoUrl: z.string().optional(),
-          role: z.enum(["admin", "user"]).optional(),
-        }).parse(raw);
+        return z
+          .object({
+            name: z.string(),
+            email: z.string(),
+            password: z.string().min(6),
+            cpf: z.string().optional(),
+            phone: z.string().optional(),
+            position: z.string().optional(),
+            department: z.string().optional(),
+            hireDate: z.date().optional(),
+            status: z.enum(["active", "inactive", "vacation"]).optional(),
+            skills: z.string().optional(),
+            photoUrl: z.string().optional(),
+            role: z.enum(["admin", "user"]).optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { getDb } = await import("./db");
@@ -181,7 +204,10 @@ export const appRouter = router({
         });
 
         // Buscar o usuário recém-criado pelo openId
-        const [newUser] = await db.select().from(users).where(eq(users.openId, openId));
+        const [newUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.openId, openId));
         if (!newUser) throw new Error("Failed to create user");
 
         // Criar employee vinculado ao usuário
@@ -203,9 +229,11 @@ export const appRouter = router({
       }),
     delete: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          userId: z.number(),
-        }).parse(raw);
+        return z
+          .object({
+            userId: z.number(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { getDb } = await import("./db");
@@ -216,7 +244,7 @@ export const appRouter = router({
 
         // Deletar employee primeiro (devido a foreign key)
         await db.delete(employees).where(eq(employees.userId, input.userId));
-        
+
         // Deletar usuário
         await db.delete(users).where(eq(users.id, input.userId));
 
@@ -224,17 +252,19 @@ export const appRouter = router({
       }),
     update: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          userId: z.number(),
-          name: z.string().optional(),
-          email: z.string().optional(),
-          cpf: z.string().optional(),
-          phone: z.string().optional(),
-          position: z.string().optional(),
-          department: z.string().optional(),
-          status: z.enum(["active", "inactive", "vacation"]).optional(),
-          role: z.enum(["admin", "user"]).optional(),
-        }).parse(raw);
+        return z
+          .object({
+            userId: z.number(),
+            name: z.string().optional(),
+            email: z.string().optional(),
+            cpf: z.string().optional(),
+            phone: z.string().optional(),
+            position: z.string().optional(),
+            department: z.string().optional(),
+            status: z.enum(["active", "inactive", "vacation"]).optional(),
+            role: z.enum(["admin", "user"]).optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { getDb } = await import("./db");
@@ -246,7 +276,8 @@ export const appRouter = router({
         // Atualizar usuário
         // IMPORTANTE: input.name = username (usado para login), input.email = nome completo
         if (input.name || input.email || input.role !== undefined) {
-          await db.update(users)
+          await db
+            .update(users)
             .set({
               ...(input.name && { email: input.name }), // Username (usado para login)
               ...(input.email && { name: input.email }), // Nome completo
@@ -257,8 +288,15 @@ export const appRouter = router({
         }
 
         // Atualizar employee
-        if (input.cpf || input.phone || input.position || input.department || input.status) {
-          await db.update(employees)
+        if (
+          input.cpf ||
+          input.phone ||
+          input.position ||
+          input.department ||
+          input.status
+        ) {
+          await db
+            .update(employees)
             .set({
               ...(input.cpf && { cpf: input.cpf }),
               ...(input.phone && { phone: input.phone }),
@@ -282,7 +320,6 @@ export const appRouter = router({
     }),
     getById: adminProcedure
       .input((raw: unknown) => {
-
         return z.object({ id: z.number() }).parse(raw);
       })
       .query(async ({ input }) => {
@@ -291,20 +328,21 @@ export const appRouter = router({
       }),
     create: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          name: z.string(),
-          email: z.string().optional(),
-          phone: z.string().optional(),
-          cpfCnpj: z.string().optional(),
-          address: z.string().optional(),
-          city: z.string().optional(),
-          state: z.string().optional(),
-          zipCode: z.string().optional(),
-          tags: z.string().optional(),
-          notes: z.string().optional(),
-          status: z.enum(["active", "inactive", "blocked"]).optional(),
-        }).parse(raw);
+        return z
+          .object({
+            name: z.string(),
+            email: z.string().optional(),
+            phone: z.string().optional(),
+            cpfCnpj: z.string().optional(),
+            address: z.string().optional(),
+            city: z.string().optional(),
+            state: z.string().optional(),
+            zipCode: z.string().optional(),
+            tags: z.string().optional(),
+            notes: z.string().optional(),
+            status: z.enum(["active", "inactive", "blocked"]).optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { createCustomer } = await import("./db");
@@ -318,7 +356,7 @@ export const appRouter = router({
       )
       .query(async ({ input }) => {
         const db = await getDb();
-        if (!db) throw new Error('Database not available');
+        if (!db) throw new Error("Database not available");
 
         const { query } = input;
 
@@ -355,19 +393,29 @@ export const appRouter = router({
     }),
     create: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          customerId: z.number().optional(),
-          name: z.string(),
-          email: z.string().optional(),
-          phone: z.string().optional(),
-          source: z.string().optional(),
-          stage: z.enum(["prospect", "qualified", "proposal", "negotiation", "closed_won", "closed_lost"]).optional(),
-          value: z.number().optional(),
-          assignedTo: z.number().optional(),
-          followUpDate: z.date().optional(),
-          notes: z.string().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            customerId: z.number().optional(),
+            name: z.string(),
+            email: z.string().optional(),
+            phone: z.string().optional(),
+            source: z.string().optional(),
+            stage: z
+              .enum([
+                "prospect",
+                "qualified",
+                "proposal",
+                "negotiation",
+                "closed_won",
+                "closed_lost",
+              ])
+              .optional(),
+            value: z.number().optional(),
+            assignedTo: z.number().optional(),
+            followUpDate: z.date().optional(),
+            notes: z.string().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { createLead } = await import("./db");
@@ -383,7 +431,6 @@ export const appRouter = router({
     }),
     getById: adminProcedure
       .input((raw: unknown) => {
-
         return z.object({ id: z.number() }).parse(raw);
       })
       .query(async ({ input }) => {
@@ -392,18 +439,23 @@ export const appRouter = router({
       }),
     create: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          ticketNumber: z.string(),
-          customerId: z.number().optional(),
-          subject: z.string(),
-          description: z.string().optional(),
-          status: z.enum(["open", "in_progress", "pending", "resolved", "closed"]).optional(),
-          priority: z.enum(["low", "medium", "high", "critical"]).optional(),
-          category: z.string().optional(),
-          channel: z.enum(["whatsapp", "instagram", "email", "phone", "web"]).optional(),
-          assignedTo: z.number().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            ticketNumber: z.string(),
+            customerId: z.number().optional(),
+            subject: z.string(),
+            description: z.string().optional(),
+            status: z
+              .enum(["open", "in_progress", "pending", "resolved", "closed"])
+              .optional(),
+            priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+            category: z.string().optional(),
+            channel: z
+              .enum(["whatsapp", "instagram", "email", "phone", "web"])
+              .optional(),
+            assignedTo: z.number().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { createTicket } = await import("./db");
@@ -427,14 +479,15 @@ export const appRouter = router({
     }),
     create: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          name: z.string(),
-          description: z.string().optional(),
-          channel: z.enum(["whatsapp", "instagram", "both"]),
-          trigger: z.string(),
-          response: z.string(),
-        }).parse(raw);
+        return z
+          .object({
+            name: z.string(),
+            description: z.string().optional(),
+            channel: z.enum(["whatsapp", "instagram", "both"]),
+            trigger: z.string(),
+            response: z.string(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { createAutomationFlow } = await import("./db");
@@ -442,15 +495,16 @@ export const appRouter = router({
       }),
     update: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          id: z.number(),
-          name: z.string().optional(),
-          description: z.string().optional(),
-          channel: z.enum(["whatsapp", "instagram", "both"]).optional(),
-          trigger: z.string().optional(),
-          response: z.string().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+            name: z.string().optional(),
+            description: z.string().optional(),
+            channel: z.enum(["whatsapp", "instagram", "both"]).optional(),
+            trigger: z.string().optional(),
+            response: z.string().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { updateAutomationFlow } = await import("./db");
@@ -459,10 +513,11 @@ export const appRouter = router({
       }),
     delete: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          id: z.number(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { deleteAutomationFlow } = await import("./db");
@@ -470,11 +525,12 @@ export const appRouter = router({
       }),
     toggle: adminProcedure
       .input((raw: unknown) => {
-
-        return z.object({
-          id: z.number(),
-          isActive: z.boolean(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+            isActive: z.boolean(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { toggleAutomationFlow } = await import("./db");
@@ -498,11 +554,13 @@ export const appRouter = router({
       }),
     create: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          name: z.string(),
-          description: z.string().optional(),
-          flowData: z.string(), // JSON string
-        }).parse(raw);
+        return z
+          .object({
+            name: z.string(),
+            description: z.string().optional(),
+            flowData: z.string(), // JSON string
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { createVisualFlow } = await import("./db");
@@ -510,12 +568,14 @@ export const appRouter = router({
       }),
     update: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          id: z.number(),
-          name: z.string().optional(),
-          description: z.string().optional(),
-          flowData: z.string().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+            name: z.string().optional(),
+            description: z.string().optional(),
+            flowData: z.string().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { updateVisualFlow } = await import("./db");
@@ -532,10 +592,12 @@ export const appRouter = router({
       }),
     toggle: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          id: z.number(),
-          isActive: z.boolean(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+            isActive: z.boolean(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { toggleVisualFlow } = await import("./db");
@@ -563,13 +625,15 @@ export const appRouter = router({
       }),
     create: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          name: z.string(),
-          welcomeMessage: z.string(),
-          menuData: z.string(), // JSON string
-          workingHours: z.string().optional(),
-          offHoursMessage: z.string().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            name: z.string(),
+            welcomeMessage: z.string(),
+            menuData: z.string(), // JSON string
+            workingHours: z.string().optional(),
+            offHoursMessage: z.string().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input, ctx }) => {
         const { createUraMenu } = await import("./db");
@@ -577,14 +641,16 @@ export const appRouter = router({
       }),
     update: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          id: z.number(),
-          name: z.string().optional(),
-          welcomeMessage: z.string().optional(),
-          menuData: z.string().optional(),
-          workingHours: z.string().optional(),
-          offHoursMessage: z.string().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+            name: z.string().optional(),
+            welcomeMessage: z.string().optional(),
+            menuData: z.string().optional(),
+            workingHours: z.string().optional(),
+            offHoursMessage: z.string().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { updateUraMenu } = await import("./db");
@@ -601,10 +667,12 @@ export const appRouter = router({
       }),
     toggle: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          id: z.number(),
-          isActive: z.boolean(),
-        }).parse(raw);
+        return z
+          .object({
+            id: z.number(),
+            isActive: z.boolean(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { toggleUraMenu } = await import("./db");
@@ -616,27 +684,31 @@ export const appRouter = router({
   aiAgents: router({
     validateToken: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          provider: z.enum(["openai", "anthropic", "google", "meta"]),
-          apiKey: z.string().min(1),
-        }).parse(raw);
+        return z
+          .object({
+            provider: z.enum(["openai", "anthropic", "google", "meta"]),
+            apiKey: z.string().min(1),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { validateAIToken } = await import("./ai-validation");
         return await validateAIToken(input.provider, input.apiKey);
       }),
-    
+
     testAgent: adminProcedure
       .input((raw: unknown) => {
-        return z.object({
-          provider: z.enum(["openai", "anthropic", "google", "meta"]),
-          apiKey: z.string().min(1),
-          model: z.string(),
-          prompt: z.string(),
-          testMessage: z.string(),
-          maxTokens: z.number().optional(),
-          temperature: z.number().optional(),
-        }).parse(raw);
+        return z
+          .object({
+            provider: z.enum(["openai", "anthropic", "google", "meta"]),
+            apiKey: z.string().min(1),
+            model: z.string(),
+            prompt: z.string(),
+            testMessage: z.string(),
+            maxTokens: z.number().optional(),
+            temperature: z.number().optional(),
+          })
+          .parse(raw);
       })
       .mutation(async ({ input }) => {
         const { testAIAgent } = await import("./ai-validation");
@@ -659,8 +731,11 @@ export const appRouter = router({
   // Conversations management
   conversations: conversationsRouter,
 
-  // Messages management  
+  // Messages management
   messages: messagesRouter,
+
+  // CRM - Gestão de Clientes e Recorrência
+  crm: crmRouter,
 });
 
 export type AppRouter = typeof appRouter;
