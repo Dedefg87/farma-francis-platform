@@ -1,0 +1,384 @@
+import React, { useState, useMemo } from "react";
+import { trpc } from "@/lib/trpc";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Pill, Calendar, Plus, AlertCircle, Tag } from "lucide-react";
+import { format, addDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
+
+interface CRMPanelProps {
+  customerId: number | null;
+  customerName: string;
+  customerPhone: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export default function CRMPanel({
+  customerId,
+  customerName,
+  customerPhone,
+  open,
+  onOpenChange,
+}: CRMPanelProps) {
+  const [showAddTreatment, setShowAddTreatment] = useState(false);
+  const [newTreatment, setNewTreatment] = useState({
+    nomeMedicamento: "",
+    posologiaDiaria: 1,
+    qtdCaixa: 30,
+    dataUltimaCompra: new Date().toISOString().split("T")[0],
+    observacoes: "",
+  });
+
+  const { data: customerData, refetch: refetchCustomer } =
+    trpc.crm.getCustomerFullData.useQuery(
+      { customerId: customerId! },
+      { enabled: !!customerId && open }
+    );
+
+  const { data: scripts } = trpc.crm.getScripts.useQuery(undefined, {
+    enabled: open,
+  });
+
+  const createTreatmentMutation = trpc.crm.createTreatment.useMutation({
+    onSuccess: () => {
+      toast.success("Tratamento adicionado com sucesso");
+      setShowAddTreatment(false);
+      setNewTreatment({
+        nomeMedicamento: "",
+        posologiaDiaria: 1,
+        qtdCaixa: 30,
+        dataUltimaCompra: new Date().toISOString().split("T")[0],
+        observacoes: "",
+      });
+      refetchCustomer();
+    },
+    onError: error => {
+      toast.error(`Erro ao adicionar tratamento: ${error.message}`);
+    },
+  });
+
+  const updateTreatmentMutation = trpc.crm.updateTreatment.useMutation({
+    onSuccess: () => {
+      toast.success("Tratamento atualizado");
+      refetchCustomer();
+    },
+    onError: error => {
+      toast.error(`Erro ao atualizar: ${error.message}`);
+    },
+  });
+
+  const duration = useMemo(() => {
+    if (!newTreatment.qtdCaixa || !newTreatment.posologiaDiaria) return 0;
+    return Math.floor(newTreatment.qtdCaixa / newTreatment.posologiaDiaria);
+  }, [newTreatment.qtdCaixa, newTreatment.posologiaDiaria]);
+
+  const endDate = useMemo(() => {
+    if (!newTreatment.dataUltimaCompra || duration <= 0) return null;
+    const date = addDays(new Date(newTreatment.dataUltimaCompra), duration);
+    return format(date, "dd/MM/yyyy", { locale: ptBR });
+  }, [newTreatment.dataUltimaCompra, duration]);
+
+  const handleAddTreatment = () => {
+    if (!customerId || !newTreatment.nomeMedicamento) {
+      toast.error("Preencha o nome do medicamento");
+      return;
+    }
+    createTreatmentMutation.mutate({
+      customerId,
+      ...newTreatment,
+    });
+  };
+
+  const handleUseScript = (template: string) => {
+    const filled = template
+      .replace("{nome}", customerName || "Cliente")
+      .replace(
+        "{remedio}",
+        customerData?.treatments?.[0]?.nomeMedicamento || "seu medicamento"
+      )
+      .replace(
+        "{data}",
+        customerData?.treatments?.[0]?.dataFimPrevisto
+          ? format(
+              new Date(customerData.treatments[0].dataFimPrevisto),
+              "dd/MM/yyyy",
+              { locale: ptBR }
+            )
+          : "em breve"
+      );
+
+    navigator.clipboard.writeText(filled);
+    toast.success("Texto copiado para área de transferência");
+  };
+
+  if (!customerId) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Tag className="w-5 h-5" />
+            CRM - {customerName || "Cliente"}
+          </DialogTitle>
+          <DialogDescription>
+            {customerPhone} • Gerencie tratamentos e tags
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Tags */}
+          <div>
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Tag className="w-4 h-4" /> Tags
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {customerData?.tags?.map((tag: any) => (
+                <Badge key={tag.id} style={{ backgroundColor: tag.color }}>
+                  {tag.name}
+                </Badge>
+              ))}
+              {(!customerData?.tags || customerData.tags.length === 0) && (
+                <span className="text-sm text-gray-500">
+                  Nenhuma tag adicionada
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Tratamentos */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium flex items-center gap-2">
+                <Pill className="w-4 h-4" /> Tratamentos
+              </h4>
+              <Button size="sm" onClick={() => setShowAddTreatment(true)}>
+                <Plus className="w-4 h-4 mr-1" /> Adicionar
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {customerData?.treatments?.map((treatment: any) => {
+                const daysLeft = treatment.dataFimPrevisto
+                  ? Math.ceil(
+                      (new Date(treatment.dataFimPrevisto).getTime() -
+                        Date.now()) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                  : null;
+
+                return (
+                  <Card key={treatment.id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {treatment.nomeMedicamento}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {treatment.posologiaDiaria}x/dia •{" "}
+                          {treatment.qtdCaixa} comprimidos
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        {daysLeft !== null && (
+                          <Badge
+                            variant={
+                              daysLeft <= 3
+                                ? "destructive"
+                                : daysLeft <= 7
+                                  ? "secondary"
+                                  : "outline"
+                            }
+                          >
+                            {daysLeft > 0 ? `${daysLeft} dias` : "Acabando!"}
+                          </Badge>
+                        )}
+                        {treatment.dataFimPrevisto && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Fim:{" "}
+                            {format(
+                              new Date(treatment.dataFimPrevisto),
+                              "dd/MM/yyyy",
+                              { locale: ptBR }
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+              {(!customerData?.treatments ||
+                customerData.treatments.length === 0) && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Nenhum tratamento cadastrado
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Scripts Rápidos */}
+          {scripts && scripts.length > 0 && (
+            <div>
+              <h4 className="font-medium mb-2">Scripts Rápidos</h4>
+              <div className="grid grid-cols-1 gap-2">
+                {scripts.map((script: any) => (
+                  <Button
+                    key={script.id}
+                    variant="outline"
+                    size="sm"
+                    className="justify-start h-auto py-2 px-3"
+                    onClick={() => handleUseScript(script.template)}
+                  >
+                    <span className="text-xs text-gray-500 mr-2">
+                      {script.name}
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+
+      {/* Dialog Adicionar Tratamento */}
+      <Dialog open={showAddTreatment} onOpenChange={setShowAddTreatment}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Tratamento</DialogTitle>
+            <DialogDescription>
+              Adicione um medicamento para este cliente
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Medicamento</label>
+              <Input
+                value={newTreatment.nomeMedicamento}
+                onChange={e =>
+                  setNewTreatment({
+                    ...newTreatment,
+                    nomeMedicamento: e.target.value,
+                  })
+                }
+                placeholder="Nome do medicamento"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Por dia</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={newTreatment.posologiaDiaria}
+                  onChange={e =>
+                    setNewTreatment({
+                      ...newTreatment,
+                      posologiaDiaria: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Qtd. caixa</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={newTreatment.qtdCaixa}
+                  onChange={e =>
+                    setNewTreatment({
+                      ...newTreatment,
+                      qtdCaixa: Number(e.target.value),
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">
+                Data da última compra
+              </label>
+              <Input
+                type="date"
+                value={newTreatment.dataUltimaCompra}
+                onChange={e =>
+                  setNewTreatment({
+                    ...newTreatment,
+                    dataUltimaCompra: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {duration > 0 && (
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  <AlertCircle className="w-4 h-4 inline mr-1" />
+                  Duração estimada: <strong>{duration} dias</strong>
+                  {endDate && ` (acaba em ${endDate})`}
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="text-sm font-medium">Observações</label>
+              <Input
+                value={newTreatment.observacoes}
+                onChange={e =>
+                  setNewTreatment({
+                    ...newTreatment,
+                    observacoes: e.target.value,
+                  })
+                }
+                placeholder="Observações opcionais"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAddTreatment(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleAddTreatment}
+              disabled={createTreatmentMutation.isPending}
+            >
+              {createTreatmentMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Dialog>
+  );
+}
