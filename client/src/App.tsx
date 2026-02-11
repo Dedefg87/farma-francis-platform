@@ -108,11 +108,6 @@ function Router() {
           <AgentPerformance />
         </AdminRoute>
       </Route>
-      <Route path={"/api-settings"}>
-        <AdminRoute>
-          <APISettings />
-        </AdminRoute>
-      </Route>
       <Route path={"/settings/api"}>
         <AdminRoute>
           <APISettings />
@@ -134,15 +129,15 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </ThemeProvider>
+        <ThemeProvider
+          defaultTheme="light"
+          // switchable
+        >
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
