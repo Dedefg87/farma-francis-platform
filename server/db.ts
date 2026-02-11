@@ -24,47 +24,11 @@ export async function getDbRaw() {
     console.error("[Database] Database not available");
     return null;
   }
-  
-  // Agora temos acesso direto ao MySQL Pool para queries brutas
+
   const mysql = (db as any).getClient().getClient();
-  
+
   return {
     raw: (sql: string, values?: any[]) => mysql.execute(sql, values),
-    ...db
+    ...db,
   };
-}
-  }
-  return _db;
-}
-
-export type DbType = ReturnType<typeof drizzle>;
-
-export async function getDbRaw() {
-  const db = await getDb();
-  if (!db) {
-    console.error("[Database] Database not available");
-    return null;
-  }
-  
-  // Agora temos acesso direto ao MySQL Pool para queries brutas
-  const mysql = (db as any).getClient().getClient();
-  
-  return {
-    raw: (sql: string, values?: any[]) => mysql.execute(sql, values),
-    ...db
-  };
-}
-  }
-  return _db;
-}
-
-export type DbType = ReturnType<typeof drizzle>;
-
-export async function getDbRaw() {
-  const db = await getDb();
-  if (!db) {
-    console.error("[Database] Database not available");
-    return null;
-  }
-  return db;
 }
