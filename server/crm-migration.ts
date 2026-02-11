@@ -1,5 +1,4 @@
 import { getDb } from "./db";
-import { eq } from "drizzle-orm";
 
 export async function runCRMMigration() {
   const db = await getDb();
@@ -11,7 +10,7 @@ export async function runCRMMigration() {
   try {
     console.log("[CRM Migration] Starting...");
 
-    // Criar tabelas se não existirem (MySQL)
+    // Primeiro criar tabelas se não existirem
     await db.execute(`
       CREATE TABLE IF NOT EXISTS customer_treatments (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -52,20 +51,46 @@ export async function runCRMMigration() {
       )
     `);
 
-    // Inserir tags iniciais
-    await db.execute(`
-      INSERT IGNORE INTO tags (name, color, description) VALUES 
-      ('Diabético', '#ef4444', 'Paciente com diabetes'),
-      ('Hipertenso', '#f97316', 'Paciente com hipertensão arterial'),
-      ('Dermo', '#8b5cf6', 'Produtos dermatológicos'),
-      ('Infantil', '#22c55e', 'Produtos infantil'),
-      ('Idoso', '#64748b', 'Paciente idoso'),
-      ('VIP', '#eab308', 'Cliente VIP'),
-      ('Gestante', '#ec4899', 'Cliente gestante'),
-      ('Oncológico', '#06b6d4', 'Tratamento oncológico')
-    `);
+    console.log("[CRM Migration] Tables created successfully");
 
-    console.log("[CRM Migration] Tables created and tags seeded successfully");
+    // Depois inserir as tags iniciais
+    const initialTags = [
+      {
+        name: "Diabético",
+        color: "#ef4444",
+        description: "Paciente com diabetes",
+      },
+      {
+        name: "Hipertenso",
+        color: "#f97316",
+        description: "Paciente com hipertensão arterial",
+      },
+      {
+        name: "Dermo",
+        color: "#8b5cf6",
+        description: "Produtos dermatológicos",
+      },
+      { name: "Infantil", color: "#22c55e", description: "Produtos infantil" },
+      { name: "Idoso", color: "#64748b", description: "Paciente idoso" },
+      { name: "VIP", color: "#eab308", description: "Cliente VIP" },
+      { name: "Gestante", color: "#ec4899", description: "Cliente gestante" },
+      {
+        name: "Oncológico",
+        color: "#06b6d4",
+        description: "Tratamento oncológico",
+      },
+    ];
+
+    for (const tag of initialTags) {
+      await db.execute(
+        `
+        INSERT IGNORE INTO tags (name, color, description) VALUES (?, ?, ?)
+      `,
+        [tag.name, tag.color, tag.description]
+      );
+    }
+
+    console.log("[CRM Migration] Tags seeded successfully");
     return true;
   } catch (error) {
     console.error("[CRM Migration] Error:", error);
