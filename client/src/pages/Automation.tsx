@@ -990,122 +990,28 @@ export default function Automation() {
                   id: "chatbot-atendimento",
                   name: "Chatbot de Atendimento",
                   description:
-                    "Fluxo completo com regras de horário, saudações, ligações WhatsApp e finalização",
+                    "Fluxo inteligente: Horário → Ligação → Finalização → Saudação",
                   icon: MessageSquare,
                   color: "bg-indigo-600",
                   nodes: [
-                    // Trigger inicial
+                    // COLUNA 1: Trigger
                     {
                       id: "trigger-1",
                       type: "default",
-                      position: { x: 50, y: 300 },
+                      position: { x: 50, y: 200 },
                       data: {
-                        label: "Nova Mensagem",
+                        label: "📩 Nova Mensagem",
                         config: { event: "message_received" },
                       },
                     },
 
-                    // Verificar se é ligação WhatsApp
-                    {
-                      id: "condition-ligacao",
-                      type: "default",
-                      position: { x: 250, y: 300 },
-                      data: {
-                        label: "É Ligação?",
-                        config: {
-                          condition:
-                            'message_type == "call" || message_type == "video"',
-                        },
-                      },
-                    },
-                    {
-                      id: "message-ligacao",
-                      type: "default",
-                      position: { x: 450, y: 200 },
-                      data: {
-                        label: "Recusar Ligação",
-                        config: {
-                          message:
-                            "Não atendemos ligações de áudio ou vídeo pelo WhatsApp, por favor envie *UMA MENSAGEM* ou ligue pelo no número de telefone 3180-0030 e 3180-0033.",
-                        },
-                      },
-                    },
-
-                    // Verificar tipo de finalização
-                    {
-                      id: "condition-venda",
-                      type: "default",
-                      position: { x: 450, y: 350 },
-                      data: {
-                        label: "Fechou Venda?",
-                        config: { condition: 'close_reason == "venda"' },
-                      },
-                    },
-                    {
-                      id: "message-venda",
-                      type: "default",
-                      position: { x: 650, y: 300 },
-                      data: {
-                        label: "Pesquisa Venda",
-                        config: {
-                          message:
-                            "Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\nDigite 5️⃣ Muito satisfeito 😍\nDigite 4️⃣ Satisfeito 😀\nDigite 3️⃣ Indiferente 😐\nDigite 2️⃣ Insatisfeito ☹️\nDigite 1️⃣ Muito insatisfeito 😞",
-                        },
-                      },
-                    },
-
-                    {
-                      id: "condition-orcamento",
-                      type: "default",
-                      position: { x: 650, y: 450 },
-                      data: {
-                        label: "Foi Orçamento?",
-                        config: { condition: 'close_reason == "orcamento"' },
-                      },
-                    },
-                    {
-                      id: "message-orcamento",
-                      type: "default",
-                      position: { x: 850, y: 400 },
-                      data: {
-                        label: "Agradecer Orçamento",
-                        config: {
-                          message:
-                            "Agradecemos seu contato, e estaremos sempre à disposição.😉",
-                        },
-                      },
-                    },
-
-                    // Verificar silêncio (conversa anterior ou engano)
-                    {
-                      id: "condition-silencio",
-                      type: "default",
-                      position: { x: 450, y: 500 },
-                      data: {
-                        label: "Silêncio?",
-                        config: {
-                          condition:
-                            'close_reason == "conversa_anterior" || close_reason == "engano"',
-                        },
-                      },
-                    },
-                    {
-                      id: "action-silencio",
-                      type: "default",
-                      position: { x: 650, y: 550 },
-                      data: {
-                        label: "Não Responder",
-                        config: { action: "no_response" },
-                      },
-                    },
-
-                    // Verificar horário de funcionamento
+                    // COLUNA 2: VERIFICAR HORÁRIO PRIMEIRO!
                     {
                       id: "condition-horario",
                       type: "default",
-                      position: { x: 450, y: 650 },
+                      position: { x: 250, y: 200 },
                       data: {
-                        label: "Horário Comercial?",
+                        label: "🕐 Horário Comercial?",
                         config: {
                           condition: "working_hours",
                           schedule: {
@@ -1118,9 +1024,9 @@ export default function Automation() {
                     {
                       id: "message-fora-horario",
                       type: "default",
-                      position: { x: 650, y: 650 },
+                      position: { x: 450, y: 100 },
                       data: {
-                        label: "Fora de Horário",
+                        label: "⛔ Fora de Horário",
                         config: {
                           message:
                             "Nosso horário de atendimento é de 08h as 20h de Segunda a Sábado\nAos Domingos e Feriados de 8h ás 12h\nRetornaremos no próximo horário disponível.",
@@ -1128,24 +1034,119 @@ export default function Automation() {
                       },
                     },
 
-                    // Verificar se usuário está logado
+                    // COLUNA 3: É Ligação?
+                    {
+                      id: "condition-ligacao",
+                      type: "default",
+                      position: { x: 450, y: 200 },
+                      data: {
+                        label: "📞 É Ligação?",
+                        config: {
+                          condition:
+                            'message_type == "call" || message_type == "video"',
+                        },
+                      },
+                    },
+                    {
+                      id: "message-ligacao",
+                      type: "default",
+                      position: { x: 650, y: 100 },
+                      data: {
+                        label: "❌ Recusar Ligação",
+                        config: {
+                          message:
+                            "Não atendemos ligações de áudio ou vídeo pelo WhatsApp, por favor envie *UMA MENSAGEM* ou ligue pelo no número de telefone 3180-0030 e 3180-0033.",
+                        },
+                      },
+                    },
+
+                    // COLUNA 4: Fechou Venda?
+                    {
+                      id: "condition-venda",
+                      type: "default",
+                      position: { x: 650, y: 200 },
+                      data: {
+                        label: "💰 Fechou Venda?",
+                        config: { condition: 'close_reason == "venda"' },
+                      },
+                    },
+                    {
+                      id: "message-venda",
+                      type: "default",
+                      position: { x: 850, y: 150 },
+                      data: {
+                        label: "⭐ Pesquisa Venda",
+                        config: {
+                          message:
+                            "Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\nDigite 5️⃣ Muito satisfeito 😍\nDigite 4️⃣ Satisfeito 😀\nDigite 3️⃣ Indiferente 😐\nDigite 2️⃣ Insatisfeito ☹️\nDigite 1️⃣ Muito insatisfeito 😞",
+                        },
+                      },
+                    },
+
+                    // COLUNA 5: Foi Orçamento?
+                    {
+                      id: "condition-orcamento",
+                      type: "default",
+                      position: { x: 850, y: 250 },
+                      data: {
+                        label: "📋 Foi Orçamento?",
+                        config: { condition: 'close_reason == "orcamento"' },
+                      },
+                    },
+                    {
+                      id: "message-orcamento",
+                      type: "default",
+                      position: { x: 1050, y: 200 },
+                      data: {
+                        label: "✅ Agradecer Orçamento",
+                        config: {
+                          message:
+                            "Agradecemos seu contato, e estaremos sempre à disposição.😉",
+                        },
+                      },
+                    },
+
+                    // COLUNA 6: Silêncio?
+                    {
+                      id: "condition-silencio",
+                      type: "default",
+                      position: { x: 1050, y: 300 },
+                      data: {
+                        label: "🤫 Silêncio?",
+                        config: {
+                          condition:
+                            'close_reason == "conversa_anterior" || close_reason == "engano"',
+                        },
+                      },
+                    },
+                    {
+                      id: "action-silencio",
+                      type: "default",
+                      position: { x: 1250, y: 250 },
+                      data: {
+                        label: "🔇 Não Responder",
+                        config: { action: "no_response" },
+                      },
+                    },
+
+                    // COLUNA 7: Agente Logado?
                     {
                       id: "condition-logado",
                       type: "default",
-                      position: { x: 650, y: 750 },
+                      position: { x: 1250, y: 350 },
                       data: {
-                        label: "Agente Logado?",
+                        label: "👤 Agente Logado?",
                         config: { condition: "agent_logged_in" },
                       },
                     },
 
-                    // Usuário logado - saudação personalizada
+                    // COLUNA 8: Saudação Personalizada
                     {
                       id: "function-saudacao",
                       type: "default",
-                      position: { x: 850, y: 700 },
+                      position: { x: 1450, y: 300 },
                       data: {
-                        label: "Gerar Saudação",
+                        label: "🌅 Gerar Saudação",
                         config: {
                           function: "get_greeting",
                           variables: {
@@ -1158,9 +1159,9 @@ export default function Automation() {
                     {
                       id: "message-logado",
                       type: "default",
-                      position: { x: 1050, y: 700 },
+                      position: { x: 1650, y: 300 },
                       data: {
-                        label: "Saudação Personalizada",
+                        label: "💬 Saudação Personalizada",
                         config: {
                           message:
                             "{{greeting}} eu sou {{agent_name}}, como posso te ajudar?",
@@ -1168,13 +1169,13 @@ export default function Automation() {
                       },
                     },
 
-                    // Usuário não logado - saudação genérica
+                    // COLUNA 8: Saudação Genérica
                     {
                       id: "message-nao-logado",
                       type: "default",
-                      position: { x: 850, y: 800 },
+                      position: { x: 1450, y: 400 },
                       data: {
-                        label: "Saudação Genérica",
+                        label: "💬 Saudação Genérica",
                         config: {
                           message:
                             "{{greeting}} um momento que já já vamos te atender!",
@@ -1183,71 +1184,94 @@ export default function Automation() {
                     },
                   ],
                   edges: [
+                    // 1. Trigger → Horário Comercial (PRIMEIRA VERIFICAÇÃO!)
                     {
-                      id: "e1-2",
+                      id: "e1-horario",
                       source: "trigger-1",
-                      target: "condition-ligacao",
-                    },
-                    {
-                      id: "e2-lig",
-                      source: "condition-ligacao",
-                      target: "message-ligacao",
-                      label: "Sim",
-                    },
-                    {
-                      id: "e2-venda",
-                      source: "condition-ligacao",
-                      target: "condition-venda",
-                      label: "Não",
-                    },
-                    {
-                      id: "e-venda-sim",
-                      source: "condition-venda",
-                      target: "message-venda",
-                      label: "Sim",
-                    },
-                    {
-                      id: "e-venda-nao",
-                      source: "condition-venda",
-                      target: "condition-orcamento",
-                      label: "Não",
-                    },
-                    {
-                      id: "e-orc-sim",
-                      source: "condition-orcamento",
-                      target: "message-orcamento",
-                      label: "Sim",
-                    },
-                    {
-                      id: "e-orc-nao",
-                      source: "condition-orcamento",
-                      target: "condition-silencio",
-                      label: "Não",
-                    },
-                    {
-                      id: "e-sil-sim",
-                      source: "condition-silencio",
-                      target: "action-silencio",
-                      label: "Sim",
-                    },
-                    {
-                      id: "e-sil-nao",
-                      source: "condition-silencio",
                       target: "condition-horario",
-                      label: "Não",
                     },
+
+                    // 2. Horário Comercial (Não) → Fora de Horário [PARA]
                     {
                       id: "e-hora-nao",
                       source: "condition-horario",
                       target: "message-fora-horario",
                       label: "Não",
                     },
+
+                    // 3. Horário Comercial (Sim) → É Ligação?
                     {
                       id: "e-hora-sim",
                       source: "condition-horario",
-                      target: "condition-logado",
+                      target: "condition-ligacao",
                       label: "Sim",
                     },
+
+                    // 4. É Ligação? (Sim) → Recusar Ligação [PARA]
+                    {
+                      id: "e-lig-sim",
+                      source: "condition-ligacao",
+                      target: "message-ligacao",
+                      label: "Sim",
+                    },
+
+                    // 5. É Ligação? (Não) → Fechou Venda?
+                    {
+                      id: "e-lig-nao",
+                      source: "condition-ligacao",
+                      target: "condition-venda",
+                      label: "Não",
+                    },
+
+                    // 6. Fechou Venda? (Sim) → Pesquisa Venda [PARA]
+                    {
+                      id: "e-venda-sim",
+                      source: "condition-venda",
+                      target: "message-venda",
+                      label: "Sim",
+                    },
+
+                    // 7. Fechou Venda? (Não) → Foi Orçamento?
+                    {
+                      id: "e-venda-nao",
+                      source: "condition-venda",
+                      target: "condition-orcamento",
+                      label: "Não",
+                    },
+
+                    // 8. Foi Orçamento? (Sim) → Agradecer Orçamento [PARA]
+                    {
+                      id: "e-orc-sim",
+                      source: "condition-orcamento",
+                      target: "message-orcamento",
+                      label: "Sim",
+                    },
+
+                    // 9. Foi Orçamento? (Não) → Silêncio?
+                    {
+                      id: "e-orc-nao",
+                      source: "condition-orcamento",
+                      target: "condition-silencio",
+                      label: "Não",
+                    },
+
+                    // 10. Silêncio? (Sim) → Não Responder [PARA]
+                    {
+                      id: "e-sil-sim",
+                      source: "condition-silencio",
+                      target: "action-silencio",
+                      label: "Sim",
+                    },
+
+                    // 11. Silêncio? (Não) → Agente Logado?
+                    {
+                      id: "e-sil-nao",
+                      source: "condition-silencio",
+                      target: "condition-logado",
+                      label: "Não",
+                    },
+
+                    // 12. Agente Logado? (Sim) → Gerar Saudação → Saudação Personalizada
                     {
                       id: "e-log-sim",
                       source: "condition-logado",
@@ -1255,10 +1279,12 @@ export default function Automation() {
                       label: "Sim",
                     },
                     {
-                      id: "e-func-msg",
+                      id: "e-func-saud",
                       source: "function-saudacao",
                       target: "message-logado",
                     },
+
+                    // 13. Agente Logado? (Não) → Saudação Genérica
                     {
                       id: "e-log-nao",
                       source: "condition-logado",
