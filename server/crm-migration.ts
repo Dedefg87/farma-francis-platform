@@ -10,7 +10,46 @@ export async function runCRMMigration() {
   try {
     console.log("[CRM Migration] Starting...");
 
-    // Primeiro criar tabelas se não existirem
+    // Verificar se a tabela tags existe e se tem a coluna description
+    const [existingTagsTable] = await db.execute(`
+      SHOW TABLES LIKE 'tags'
+    `);
+
+    console.log("[CRM Migration] Tags table check:", existingTagsTable);
+
+    // Se não existir, criar tabela com a coluna description
+    if (!existingTagsTable || existingTagsTable.length === 0) {
+      console.log(
+        "[CRM Migration] Creating tags table with description column"
+      );
+      await db.execute(`
+        CREATE TABLE tags (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(50) NOT NULL UNIQUE,
+          color VARCHAR(7) DEFAULT '#6366f1' NOT NULL COMMENT 'Cor em hex',
+          description TEXT,
+          created_by INT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+        )
+      `);
+    } else {
+      // Se tabela existe mas não tem description, adicionar a coluna
+      console.log("[CRM Migration] Checking if description column exists");
+      const [descriptionColumn] = await db.execute(`
+        SHOW COLUMNS FROM tags LIKE 'description'
+      `);
+
+      if (!descriptionColumn || descriptionColumn.length === 0) {
+        console.log(
+          "[CRM Migration] Adding description column to existing tags table"
+        );
+        await db.execute(`
+          ALTER TABLE tags ADD COLUMN description TEXT
+        `);
+      }
+    }
+
+    // Criar outras tabelas se não existirem
     await db.execute(`
       CREATE TABLE IF NOT EXISTS customer_treatments (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -29,17 +68,6 @@ export async function runCRMMigration() {
     `);
 
     await db.execute(`
-      CREATE TABLE IF NOT EXISTS tags (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(50) NOT NULL UNIQUE,
-        color VARCHAR(7) DEFAULT '#6366f1' NOT NULL COMMENT 'Cor em hex',
-        description TEXT,
-        created_by INT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
-      )
-    `);
-
-    await db.execute(`
       CREATE TABLE IF NOT EXISTS customer_tags (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
@@ -53,7 +81,7 @@ export async function runCRMMigration() {
 
     console.log("[CRM Migration] Tables created successfully");
 
-    // Depois inserir as tags iniciais
+    // Inserir tags iniciais
     const initialTags = [
       {
         name: "Diabético",
