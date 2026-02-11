@@ -1,173 +1,143 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * Hook for handling SSE events from automation
  * Provides real-time updates when automation actions are executed
+ *
+ * @param customerId - The customer ID to listen for events
+ * @returns Object with messages array and lastEvent
  */
 export function useAutomationSSE(customerId?: number) {
   const [messages, setMessages] = useState<any[]>([]);
   const [lastEvent, setLastEvent] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const queryClient = useQueryClient();
 
-  // Process SSE events
+  const handleNewMessage = useCallback((message: any) => {
+    setMessages(prev => {
+      const messageExists = prev.some(msg => msg.id === message.id);
+      if (!messageExists) {
+        return [...prev, message];
+      }
+      return prev;
+    });
+
+    // Play notification sound for agent messages
+    if (message.senderType === "agent") {
+      const audio = new Audio("/notification.mp3");
+      audio.play().catch(() => {
+        // Ignore audio play errors (e.g., user interaction not triggered)
+      });
+    }
+  }, []);
+
+  const handleConversationUpdate = useCallback(() => {
+    // Invalidate conversations query to refresh the list
+    queryClient.invalidateQueries({ queryKey: ["conversations"] });
+  }, [queryClient]);
+
   useEffect(() => {
     if (!customerId) return;
 
-    // EventSource for SSE
-    const eventSource = new EventSource(`/api/automation?userId=${customerId}`);
-    
-    eventSource.onmessage = (event) => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
       try {
-        const data = JSON.parse(event.data);
-        console.log("SSE Event received:", data);
-        
-        setLastEvent(data);
-        
-        // Handle automation events
-        if (data.type === "MESSAGE_NEW") {
-          setMessages(prev => {
-            const newMessage = data.data.message;
-            const messageExists = prev.some(msg => msg.id === newMessage.id);
-            
-            if (!messageExists) {
-              setMessages(prev => [...prev, newMessage]);
-              
-              // Play notification for agent messages
-              if (newMessage.senderType === "agent") {
-                (window as any).playNotificationSound?.();
+        // CORRECTED: Use proper SSE endpoint
+        eventSource = new EventSource(`/api/sse?userId=${customerId}`);
+
+        eventSource.onopen = () => {
+          console.log("[SSE] Connection opened for customer:", customerId);
+          setIsConnected(true);
+          setReconnectAttempt(0);
+        };
+
+        eventSource.onmessage = event => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log("[SSE] Event received:", data);
+
+            setLastEvent(data);
+
+            switch (data.type) {
+              case "MESSAGE_NEW": {
+                const message = data.data?.message;
+                if (message) {
+                  handleNewMessage(message);
+                }
+                break;
               }
+
+              case "CONVERSATION_UPDATE": {
+                handleConversationUpdate();
+                break;
+              }
+
+              case "AGENT_STATUS": {
+                console.log("[SSE] Agent status update:", data.data);
+                break;
+              }
+
+              default:
+                console.log("[SSE] Unknown event type:", data.type);
             }
+          } catch (error) {
+            console.error("[SSE] Error parsing message:", error);
           }
-        }
-        
-        // Handle conversation updates
-        if (data.type === "CONVERSATION_UPDATE") {
-          if ("refetchConversations" in window) {
-            (window as any).refetchConversations?.();
-          }
-          }
-        
-        // Handle agent status updates
-        if (data.type === "AGENT_STATUS") {
-          console.log("Agent status update:", data.data);
-        }
-        
-        // Handle other events
-        if (data.type) {
-          setLastEvent(data);
-        }
-        
-        setLastEvent(data);
+        };
+
+        eventSource.onerror = error => {
+          console.error("[SSE] Connection error:", error);
+          setIsConnected(false);
+
+          // Attempt reconnection with exponential backoff
+          const maxReconnectDelay = 30000; // 30 seconds
+          const reconnectDelay = Math.min(
+            1000 * Math.pow(2, reconnectAttempt),
+            maxReconnectDelay
+          );
+
+          console.log(
+            `[SSE] Reconnecting in ${reconnectDelay}ms (attempt ${reconnectAttempt + 1})`
+          );
+
+          reconnectTimeout = setTimeout(() => {
+            setReconnectAttempt(prev => prev + 1);
+            connect();
+          }, reconnectDelay);
+        };
       } catch (error) {
-        console.error("SSE Error:", error);
+        console.error("[SSE] Error creating EventSource:", error);
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("SSE Error:", error);
-    };
-
-    eventSource.onopen = () => {
-      console.log("SSE Connection opened");
-    };
-
-    eventSource.onclose = () => {
-      console.log("SSE connection closed");
-    };
+    connect();
 
     // Cleanup
     return () => {
-      eventSource.close();
-    };
-  }, [customerId]);
-
-  return { messages, lastEvent };
-}
-            }
-          }
-        }
-        
-        // Handle conversation updates
-        if (data.type === "CONVERSATION_UPDATE") {
-          if ("refetchConversations" in window) {
-            (window as any).refetchConversations?.();
-          }
-        }
-        }
-        
-        // Handle agent status updates
-        if (data.type === "AGENT_STATUS") {
-          console.log("Agent status update:", data.data);
-          setLastEvent(data);
-        }
-        
-        setLastEvent(data);
-      } catch (error) {
-        console.error("SSE Error:", error);
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
       }
     };
+  }, [
+    customerId,
+    reconnectAttempt,
+    handleNewMessage,
+    handleConversationUpdate,
+  ]);
 
-    eventSource.onerror = (error) => {
-      console.error("SSE Error:", error);
-    };
-
-    eventSource.onopen = () => {
-      console.log("SSE Connection opened");
-    };
-
-    eventSource.onclose = () => {
-      console.log("SSE Connection closed");
-    };
-
-    // Cleanup
-    return () => {
-      eventSource.close();
-    };
-  }, [customerId]);
-
-  return { messages, lastEvent };
+  return {
+    messages,
+    lastEvent,
+    isConnected,
+    reconnectAttempt,
+  };
 }
-            }
-          }
-        }
-        
-        // Handle conversation updates
-        if (data.type === "CONVERSATION_UPDATE") {
-          // Refresh conversations list when conversation is updated
-          if ("refetchConversations" in window) {
-            (window as any).refetchConversations();
-          }
-        }
-        }
-        
-        // Handle agent status updates
-        if (data.type === "AGENT_STATUS") {
-          // Handle agent status changes if needed
-          console.log("Agent status update:", data.data);
-        }
-        
-        setLastEvent(data);
-      } catch (error) {
-        console.error("SSE Error:", error);
-      }
-    };
 
-    eventSource.onerror = (error) => {
-      console.error("SSE Error:", error);
-    };
-
-    eventSource.onopen = () => {
-      console.log("SSE Connection opened");
-    };
-
-    eventSource.onclose = () => {
-      console.log("SSE Connection closed");
-    };
-
-    // Cleanup
-    return () => {
-      eventSource.close();
-    };
-  }, [customerId]);
-
-  return { messages, lastEvent };
-}
+export default useAutomationSSE;
