@@ -25,7 +25,7 @@ export async function getDbRaw() {
     return null;
   }
 
-  const mysql = (db as any).getClient().getClient();
+  const mysql = (db as any).$client;
 
   return {
     raw: (sql: string, values?: any[]) => mysql.execute(sql, values),
