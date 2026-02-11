@@ -20,7 +20,6 @@ import {
   findOrCreateCustomerByPhone,
 } from "./db-messages";
 import { invokeLLM } from "./_core/llm";
-import { WorkflowExecutor } from "./workflow-executor";
 
 /**
  * Process pending messages through automation flows
@@ -36,6 +35,8 @@ export async function processPendingMessages() {
     .from(receivedMessages)
     .where(eq(receivedMessages.processed, 0))
     .limit(10);
+
+  console.log(`[Flow Engine] Found ${pending.length} pending messages`);
 
   for (const message of pending) {
     try {
@@ -66,7 +67,7 @@ async function processMessage(message: any) {
     message.fromName
   );
 
-  // PRIORITY 1: Check visual flows (N8N-style flows) first - imported flows
+  // PRIORITY 1: Check visual flows (N8N-style flows) first
   const visualFlowsList = await db
     .select()
     .from(visualFlows)
@@ -75,7 +76,6 @@ async function processMessage(message: any) {
   // Check if any visual flow matches
   let matchedVisualFlow = null;
   for (const flow of visualFlowsList) {
-    // For visual flows, check if it has a trigger node in its data
     try {
       const flowData = JSON.parse(flow.flowData || "{}");
       const triggerNodes = flowData.nodes?.filter(
@@ -83,7 +83,6 @@ async function processMessage(message: any) {
       );
 
       if (triggerNodes && triggerNodes.length > 0) {
-        // Check if message matches any trigger condition
         for (const triggerNode of triggerNodes) {
           if (matchesVisualFlowTrigger(message, triggerNode)) {
             matchedVisualFlow = flow;
@@ -104,10 +103,7 @@ async function processMessage(message: any) {
     );
 
     try {
-      // Execute visual flow
       await executeVisualFlow(message, matchedVisualFlow.id, customer);
-
-      // Mark as processed - Visual flows don't reference automation_flows FK
       await markMessageAsProcessed(message.id, {
         customerId: customer.id,
       });
@@ -128,7 +124,6 @@ async function processMessage(message: any) {
       )
     );
 
-  // Check if message matches any trigger
   let matchedFlow = null;
   for (const flow of flows) {
     if (matchesTrigger(message, flow)) {
@@ -142,22 +137,17 @@ async function processMessage(message: any) {
       `[Flow Engine] Message matched flow: ${matchedFlow.name} (ID: ${matchedFlow.id})`
     );
 
-    // Verify flow exists in database before updating
     if (!matchedFlow.id) {
       console.error(`[Flow Engine] Flow ID is invalid, skipping update`);
       return;
     }
 
-    // Execute simple automation flow
     await executeSimpleFlow(message, matchedFlow, customer);
-
-    // Mark as processed
     await markMessageAsProcessed(message.id, {
       customerId: customer.id,
       automationFlowId: matchedFlow.id,
     });
   } else {
-    // No flow matched - mark as processed but unhandled
     console.log(`[Flow Engine] No flow matched for message ${message.id}`);
     await markMessageAsProcessed(message.id, {
       customerId: customer.id,
@@ -170,25 +160,80 @@ async function processMessage(message: any) {
  */
 function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
   const config = triggerNode.data?.config || {};
+  const triggerType = config.event || "message_received";
   const messageText = message.messageText?.toLowerCase() || "";
 
-  // Get trigger type and keywords from node config
-  const triggerType = config.type || "message_received";
-  const keywords = config.keywords || [];
+  console.log(`[Flow Engine] Trigger type: ${triggerType}`);
+  console.log(`[Flow Engine] Message text: ${messageText?.substring(0, 50)}`);
+  console.log(`[Flow Engine] Trigger config:`, config);
 
-  // If no specific keywords/trigger configured, match all messages
-  if (!keywords || keywords.length === 0) {
+  // Check if this is a message_received trigger (all messages)
+  if (triggerType === "message_received") {
+    console.log(
+      `[Flow Engine] Message trigger matched - processing ALL messages`
+    );
     return true;
   }
 
-  // Check if message matches any keyword
-  for (const keyword of keywords) {
-    if (messageText.includes(keyword.toLowerCase())) {
-      return true;
+  // If no trigger type, match all messages by default
+  if (!triggerType) {
+    console.log(
+      `[Flow Engine] No trigger type - matching ALL messages by default`
+    );
+    return true;
+  }
+
+  // For other trigger types, check conditions
+  if (config.condition) {
+    try {
+      const conditionResult = evaluateTriggerCondition(
+        config.condition,
+        message
+      );
+      console.log(`[Flow Engine] Condition result: ${conditionResult}`);
+      return conditionResult;
+    } catch (error) {
+      console.error(`[Flow Engine] Condition evaluation error:`, error);
+      return false;
     }
   }
 
-  return false;
+  return true;
+}
+
+/**
+ * Evaluate trigger condition expression
+ */
+function evaluateTriggerCondition(condition: string, message: any): boolean {
+  const messageText = message.messageText?.toLowerCase() || "";
+  const messageType = message.messageType || "text";
+
+  // Check for call/video
+  if (condition.includes("message_type")) {
+    if (condition.includes("call") || condition.includes("video")) {
+      return messageType === "call" || messageType === "video";
+    }
+  }
+
+  // Check for close_reason
+  if (condition.includes("close_reason")) {
+    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
+    const actualReason = message.closeReason || message.close_reason || "";
+    return actualReason === expectedReason;
+  }
+
+  // Simple text matching
+  if (condition.includes("message_text")) {
+    const expectedText = condition
+      .split("==")[1]
+      ?.trim()
+      .replace(/"/g, "")
+      .replace(/'/g, "");
+    return messageText.includes(expectedText.toLowerCase());
+  }
+
+  // Default to true for unknown conditions
+  return true;
 }
 
 /**
@@ -198,12 +243,10 @@ function matchesTrigger(message: any, flow: any): boolean {
   const trigger = flow.trigger?.toLowerCase() || "";
   const messageText = message.messageText?.toLowerCase() || "";
 
-  // Simple keyword matching
   if (trigger && messageText.includes(trigger)) {
     return true;
   }
 
-  // Match all messages if no specific trigger
   if (!trigger || trigger === "*" || trigger === "all") {
     return true;
   }
@@ -212,61 +255,16 @@ function matchesTrigger(message: any, flow: any): boolean {
 }
 
 /**
- * Check if message matches visual flow trigger node - Enhanced
- */
-function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
-  console.log(
-    `[Flow Engine] Checking trigger match for message:`,
-    message.messageText?.substring(0, 50)
-  );
-  console.log(`[Flow Engine] Trigger node:`, triggerNode);
-
-  const config = triggerNode.data?.config || {};
-  const triggerType = config.event || "message_received";
-  const messageText = message.messageText?.toLowerCase() || "";
-  const messageType = message.messageType || "text";
-
-  console.log(
-    `[Flow Engine] Trigger type: ${triggerType}, message type: ${messageType}, text: ${messageText}`
-  );
-
-  // Check if this is a message_received trigger (all messages)
-  if (triggerType === "message_received") {
-    console.log(
-      `[Flow Engine] Message trigger matched - this will match all messages`
-    );
-    return true;
-  }
-
-  // Check for specific keywords if any are defined
-  const keywords = config.keywords || [];
-  if (keywords && keywords.length > 0) {
-    for (const keyword of keywords) {
-      if (messageText.includes(keyword.toLowerCase())) {
-        console.log(`[Flow Engine] Keyword match: ${keyword}`);
-        return true;
-      }
-    }
-  }
-
-  // If no specific conditions, match all
-  console.log(`[Flow Engine] No specific conditions - matching all messages`);
-  return true;
-}
-
-/**
  * Execute a simple automation flow (from automation_flows table)
  */
 async function executeSimpleFlow(message: any, flow: any, customer: any) {
   const response = flow.response || "Obrigado pela sua mensagem!";
 
-  // Replace variables in response
   const processedResponse = replaceVariables(response, {
     customer,
     message,
   });
 
-  // Send response
   if (message.provider === "whatsapp") {
     await sendWhatsAppMessage({
       to: message.fromNumber,
@@ -284,57 +282,183 @@ async function executeSimpleFlow(message: any, flow: any, customer: any) {
 }
 
 /**
- * Execute a single node in the flow
+ * Execute a visual flow (N8N-style flow) with proper conditional logic
  */
-async function executeNode(
+export async function executeVisualFlow(
+  message: any,
+  flowId: number,
+  customer: any
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const flowData = await db
+    .select()
+    .from(visualFlows)
+    .where(eq(visualFlows.id, flowId))
+    .limit(1);
+
+  if (flowData.length === 0) {
+    console.error(`[Flow Engine] Visual flow ${flowId} not found`);
+    return;
+  }
+
+  const flow = flowData[0];
+  const parsedFlowData = JSON.parse(flow.flowData || "{}");
+  const nodes = parsedFlowData.nodes || [];
+  const edges = parsedFlowData.edges || [];
+
+  console.log(
+    `[Chatbot Flow] Executing flow "${flow.name}" for ${customer.phone}`
+  );
+
+  let agentName = null;
+
+  const [activeConversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.customerId, customer.id),
+        eq(conversations.status, "assigned")
+      )
+    )
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(1);
+
+  if (activeConversation?.assignedTo) {
+    const [agent] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, activeConversation.assignedTo))
+      .limit(1);
+    if (agent) {
+      agentName = agent.name;
+    }
+  }
+
+  const context = {
+    message: {
+      text: message.messageText || message.caption || "",
+      type: message.messageType || "text",
+      from: message.fromNumber,
+      provider: message.provider,
+    },
+    customer: {
+      id: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+    },
+    agent_name: agentName,
+    assignedTo: activeConversation?.assignedTo,
+    variables: {} as Record<string, any>,
+  };
+
+  await executeFlowFromTrigger(nodes, edges, context, message);
+}
+
+/**
+ * Execute flow starting from trigger node following edges
+ */
+async function executeFlowFromTrigger(
+  nodes: any[],
+  edges: any[],
+  context: any,
+  message: any
+): Promise<void> {
+  const triggerNode = nodes.find((n: any) => n.type === "trigger");
+  if (!triggerNode) {
+    console.error(`[Chatbot Flow] No trigger node found`);
+    return;
+  }
+
+  console.log(
+    `[Chatbot Flow] Starting from trigger: ${triggerNode.data?.label || triggerNode.id}`
+  );
+
+  await executeNodeWithEdges(triggerNode, nodes, edges, context, message);
+}
+
+/**
+ * Execute a single node and follow its outgoing edges
+ */
+async function executeNodeWithEdges(
   node: any,
   nodes: any[],
   edges: any[],
   context: any,
   message: any
-) {
-  console.log(`[Flow Engine] Executing node: ${node.type} (${node.id})`);
+): Promise<void> {
+  console.log(
+    `[Chatbot Flow] Executing node: ${node.data?.label || node.id} (${node.type})`
+  );
 
   const config = node.data?.config || {};
+  let conditionResult: boolean | null = null;
 
   switch (node.type) {
     case "trigger":
-      // Trigger node just starts the flow
-      break;
-
-    case "message":
-      await executeMessageNode(config, context, message);
       break;
 
     case "condition":
-      const conditionResult = await executeConditionNode(config, context);
-      // Find next node based on condition result
-      const nextEdge = edges.find(
-        (e: any) =>
-          e.source === node.id &&
-          e.sourceHandle === (conditionResult ? "true" : "false")
+      conditionResult = evaluateConditionNode(config, context);
+      console.log(
+        `[Chatbot Flow] Condition "${node.data?.label}": ${conditionResult ? "TRUE" : "FALSE"}`
       );
-      if (nextEdge) {
-        const nextNode = nodes.find((n: any) => n.id === nextEdge.target);
-        if (nextNode) {
-          await executeNode(nextNode, nodes, edges, context, message);
-        }
+      break;
+
+    case "message":
+      const messageText = replaceVariables(config.message || "", context);
+      console.log(
+        `[Chatbot Flow] Sending message: "${messageText.substring(0, 50)}..."`
+      );
+
+      if (message.provider === "whatsapp") {
+        await sendWhatsAppMessage({
+          to: message.fromNumber,
+          message: messageText,
+        });
+      } else if (message.provider === "instagram") {
+        await sendInstagramMessage({
+          to: message.fromNumber,
+          message: messageText,
+        });
       }
-      return; // Stop here to avoid executing next node twice
+
+      if (config.terminal || isTerminalMessage(node)) {
+        console.log(`[Chatbot Flow] Terminal message sent, stopping flow`);
+        return;
+      }
+      break;
+
+    case "function":
+      if (config.function === "get_greeting") {
+        const hour = new Date().getHours();
+        let greeting = "Bom dia";
+        if (hour >= 12 && hour < 18) greeting = "Boa tarde";
+        else if (hour >= 18) greeting = "Boa noite";
+
+        context.greeting = greeting;
+        context.agent_name = context.agent_name || "Atendente";
+        console.log(`[Chatbot Flow] Generated greeting: ${greeting}`);
+      }
+      break;
 
     case "aiAssistant":
       await executeAIAssistantNode(config, context, message);
       break;
 
+    case "transfer":
     case "transferHuman":
+      console.log(`[Chatbot Flow] Transfer to human`);
       await executeTransferHumanNode(config, context, message);
-      return; // Stop automation after transfer
+      return;
 
     case "createTicket":
       await executeCreateTicketNode(config, context, message);
       break;
 
-case "wait":
+    case "wait":
       console.log(`[Flow Engine] Wait node: ${JSON.stringify(config)}`);
       const delay = config.delay || config.duration || 1000;
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -348,116 +472,155 @@ case "wait":
       await executeHttpRequestNode(config, context);
       break;
 
-    case "set":
-    case "setVariable":
-      executeSetVariableNode(config, context);
-      break;
-
-    case "action":
-    case "aiAssistant":
-      await executeAIAssistantNode(config, context, message);
-      break;
-
     case "uraMenu":
       await executeURAMenuNode(config, context, message);
-      return; // Wait for user response
+      return;
 
     default:
-      console.log(`[Flow Engine] Unknown node type: ${node.type}`);
+      console.log(`[Chatbot Flow] Unknown node type: ${node.type}`);
   }
 
-  // Find and execute next node
-  const nextEdge = edges.find((e: any) => e.source === node.id);
-  if (nextEdge) {
-    const nextNode = nodes.find((n: any) => n.id === nextEdge.target);
-    if (nextNode) {
-      await executeNode(nextNode, nodes, edges, context, message);
+  const outgoingEdges = edges.filter((e: any) => e.source === node.id);
+
+  if (outgoingEdges.length === 0) {
+    console.log(`[Chatbot Flow] No outgoing edges, flow complete`);
+    return;
+  }
+
+  if (node.type === "condition" && conditionResult !== null) {
+    const trueEdge = outgoingEdges.find(
+      (e: any) =>
+        e.label?.toLowerCase() === "sim" ||
+        e.sourceHandle === "true" ||
+        e.sourceHandle === "0"
+    );
+    const falseEdge = outgoingEdges.find(
+      (e: any) =>
+        e.label?.toLowerCase() === "não" ||
+        e.label?.toLowerCase() === "nao" ||
+        e.sourceHandle === "false" ||
+        e.sourceHandle === "1"
+    );
+
+    const nextEdge = conditionResult ? trueEdge : falseEdge;
+
+    if (nextEdge) {
+      const nextNode = nodes.find((n: any) => n.id === nextEdge.target);
+      if (nextNode) {
+        await executeNodeWithEdges(nextNode, nodes, edges, context, message);
+      }
+    }
+  } else {
+    for (const edge of outgoingEdges) {
+      const nextNode = nodes.find((n: any) => n.id === edge.target);
+      if (nextNode) {
+        await executeNodeWithEdges(nextNode, nodes, edges, context, message);
+      }
     }
   }
 }
 
 /**
- * Execute message node - send a message
+ * Evaluate a condition node
  */
-async function executeMessageNode(config: any, context: any, message: any) {
-  const messageText = replaceVariables(
-    config.message || config.text || "",
-    context
-  );
-  const messageType = config.messageType || "text";
+function evaluateConditionNode(config: any, context: any): boolean {
+  const condition = config.condition;
 
-  if (messageType === "text") {
-    if (message.provider === "whatsapp") {
-      await sendWhatsAppMessage({
-        to: message.fromNumber,
-        message: messageText,
-      });
-    } else if (message.provider === "instagram") {
-      await sendInstagramMessage({
-        to: message.fromNumber,
-        message: messageText,
-      });
-    }
-  } else if (messageType === "image" && config.imageUrl) {
-    const imageUrl = replaceVariables(config.imageUrl, context);
-    if (message.provider === "whatsapp") {
-      await sendWhatsAppImage({
-        to: message.fromNumber,
-        imageUrl,
-        caption: messageText,
-      });
-    } else if (message.provider === "instagram") {
-      await sendInstagramImage({
-        to: message.fromNumber,
-        imageUrl,
-      });
+  if (!condition) return true;
+
+  if (condition === "working_hours") {
+    return checkWorkingHours(config.schedule);
+  }
+
+  if (condition === "agent_logged_in") {
+    return !!context.agent_name || !!context.assignedTo;
+  }
+
+  if (condition.includes("close_reason")) {
+    const closeReason = context.close_reason || context.closeReason;
+    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
+    return closeReason === expectedReason;
+  }
+
+  if (condition.includes("message_type")) {
+    const messageType = context.message?.type || "text";
+    if (condition.includes("call") || condition.includes("video")) {
+      return messageType === "call" || messageType === "video";
     }
   }
+
+  return true;
 }
 
 /**
- * Execute condition node - evaluate condition
+ * Check if current time is within working hours
  */
-async function executeConditionNode(
-  config: any,
-  context: any
-): Promise<boolean> {
-  const conditionType = config.conditionType || "text";
+function checkWorkingHours(schedule?: any): boolean {
+  const now = new Date();
+  const day = now.getDay();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const currentTime = hour * 60 + minute;
 
-  if (conditionType === "text") {
-    const value = replaceVariables(config.value || "", context);
-    const comparison = config.comparison || "contains";
-    const compareWith = config.compareWith || "";
+  const monSatStart = schedule?.mon_sat?.start || "08:00";
+  const monSatEnd = schedule?.mon_sat?.end || "19:40";
+  const sunHolidayStart = schedule?.sun_holiday?.start || "08:00";
+  const sunHolidayEnd = schedule?.sun_holiday?.end || "11:40";
 
-    switch (comparison) {
-      case "contains":
-        return value.toLowerCase().includes(compareWith.toLowerCase());
-      case "equals":
-        return value.toLowerCase() === compareWith.toLowerCase();
-      case "startsWith":
-        return value.toLowerCase().startsWith(compareWith.toLowerCase());
-      case "endsWith":
-        return value.toLowerCase().endsWith(compareWith.toLowerCase());
-      default:
-        return false;
-    }
-  } else if (conditionType === "time") {
-    const currentHour = new Date().getHours();
-    const startHour = parseInt(config.startHour || "0");
-    const endHour = parseInt(config.endHour || "23");
-    return currentHour >= startHour && currentHour <= endHour;
-  } else if (conditionType === "variable") {
-    const variableName = config.variableName || "";
-    const variableValue = context.variables[variableName];
-    const compareWith = config.compareWith || "";
-    return variableValue == compareWith;
+  const parseTime = (timeStr: string) => {
+    const [h, m] = timeStr.split(":").map(Number);
+    return h * 60 + m;
+  };
+
+  const isSundayOrHoliday = day === 0;
+
+  if (isSundayOrHoliday) {
+    const start = parseTime(sunHolidayStart);
+    const end = parseTime(sunHolidayEnd);
+    return currentTime >= start && currentTime <= end;
+  } else {
+    const start = parseTime(monSatStart);
+    const end = parseTime(monSatEnd);
+    return currentTime >= start && currentTime <= end;
   }
-
-  return false;
 }
 
 /**
- * Execute AI Assistant node - get response from LLM
+ * Check if a message node is terminal (should stop the flow)
+ */
+function isTerminalMessage(node: any): boolean {
+  const label = (node.data?.label || "").toLowerCase();
+  const terminalLabels = [
+    "fora de horário",
+    "fora de horario",
+    "recusar",
+    "pesquisa",
+    "agradecer",
+    "não responder",
+    "nao responder",
+  ];
+  return terminalLabels.some(term => label.includes(term));
+}
+
+/**
+ * Replace variables in text with context values
+ */
+function replaceVariables(text: string, context: any): string {
+  return text.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
+    const parts = path.trim().split(".");
+    let value: any = context;
+
+    for (const part of parts) {
+      value = value?.[part];
+      if (value === undefined) break;
+    }
+
+    return value !== undefined ? String(value) : match;
+  });
+}
+
+/**
+ * Execute AI Assistant node
  */
 async function executeAIAssistantNode(config: any, context: any, message: any) {
   const systemPrompt = replaceVariables(
@@ -479,7 +642,6 @@ async function executeAIAssistantNode(config: any, context: any, message: any) {
         ? response.choices[0].message.content
         : JSON.stringify(response.choices[0].message.content);
 
-    // Send AI response
     if (message.provider === "whatsapp") {
       await sendWhatsAppMessage({
         to: message.fromNumber,
@@ -497,7 +659,7 @@ async function executeAIAssistantNode(config: any, context: any, message: any) {
 }
 
 /**
- * Execute Transfer Human node - transfer to human agent
+ * Execute Transfer Human node
  */
 async function executeTransferHumanNode(
   config: any,
@@ -507,7 +669,6 @@ async function executeTransferHumanNode(
   const db = await getDb();
   if (!db) return;
 
-  // Create a ticket for human agent
   const department = config.department || "Suporte";
   const priority = config.priority || "medium";
 
@@ -525,7 +686,6 @@ async function executeTransferHumanNode(
 
   await db.insert(tickets).values(ticketData);
 
-  // Send confirmation message
   const confirmMessage = replaceVariables(
     config.message || "Você será atendido por um de nossos agentes em breve.",
     context
@@ -579,240 +739,6 @@ async function executeCreateTicketNode(
   context.ticket = result;
 
   console.log(`[Flow Engine] Created ticket: ${subject}`);
-}
-
-/**
- * Execute a visual flow (N8N-style flow) with proper conditional logic
- */
-export async function executeVisualFlow(
-  message: any,
-  flowId: number,
-  customer: any
-) {
-  const db = await getDb();
-  if (!db) return;
-
-  // Get flow data
-  const flowData = await db
-    .select()
-    .from(visualFlows)
-    .where(eq(visualFlows.id, flowId))
-    .limit(1);
-
-  if (flowData.length === 0) {
-    console.error(`[Flow Engine] Visual flow ${flowId} not found`);
-    return;
-  }
-
-  const flow = flowData[0];
-  const parsedFlowData = JSON.parse(flow.flowData || "{}");
-  const nodes = parsedFlowData.nodes || [];
-  const edges = parsedFlowData.edges || [];
-
-  console.log(
-    `[Chatbot Flow] Executing flow "${flow.name}" for ${customer.phone}`
-  );
-
-  // Get conversation and agent info for chatbot context
-  let agentName = null;
-
-  // Try to find active conversation for this customer
-  const [activeConversation] = await db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.customerId, customer.id),
-        eq(conversations.status, "assigned")
-      )
-    )
-    .orderBy(desc(conversations.lastMessageAt))
-    .limit(1);
-
-  if (activeConversation?.assignedTo) {
-    const [agent] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, activeConversation.assignedTo))
-      .limit(1);
-    if (agent) {
-      agentName = agent.name;
-    }
-  }
-
-  // Prepare context data
-  const context = {
-    message: {
-      text: message.messageText || message.caption || "",
-      type: message.messageType || "text",
-      from: message.fromNumber,
-      provider: message.provider,
-    },
-    customer: {
-      id: customer.id,
-      name: customer.name,
-      phone: customer.phone,
-    },
-    agent_name: agentName,
-    assignedTo: activeConversation?.assignedTo,
-  };
-
-  // Execute flow starting from trigger
-  await executeFlowFromTrigger(nodes, edges, context, message);
-}
-
-/**
- * Check if message matches visual flow trigger node - Enhanced
- */
-function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
-  const config = triggerNode.data?.config || {};
-  const triggerType = config.event || "message_received";
-
-  console.log(`[Flow Engine] Trigger type: ${triggerType}`);
-  console.log(`[Flow Engine] Message text: ${message.messageText?.substring(0, 50)}`);
-  console.log(`[Flow Engine] Trigger config:`, config);
-
-  // Check if this is a message_received trigger (all messages)
-  if (triggerType === "message_received") {
-    console.log(`[Flow Engine] Message trigger matched - processing ALL messages`);
-    return true;
-  }
-
-  // If no trigger type, match all messages by default
-  if (!triggerType) {
-    console.log(`[Flow Engine] No trigger type - matching ALL messages by default`);
-    return true;
-  }
-
-  // For other trigger types, check conditions
-  if (config.condition) {
-    try {
-      // Evaluate the condition
-      const conditionResult = evaluateTriggerCondition(config.condition, message);
-      console.log(`[Flow Engine] Condition result: ${conditionResult}`);
-      return conditionResult;
-    } catch (error) {
-      console.error(`[Flow Engine] Condition evaluation error:`, error);
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Evaluate trigger condition expression
- */
-function evaluateTriggerCondition(condition: string, message: any): boolean {
-  const messageText = message.messageText?.toLowerCase() || "";
-  const messageType = message.messageType || "text";
-
-  // Check for call/video
-  if (condition.includes("message_type")) {
-    if (condition.includes("call") || condition.includes("video")) {
-      return messageType === "call" || messageType === "video";
-    }
-  }
-
-  // Check for close_reason
-  if (condition.includes("close_reason")) {
-    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
-    const actualReason = message.closeReason || message.close_reason || message.closeReason || "";
-    return actualReason === expectedReason;
-  }
-
-  // Simple text matching
-  if (condition.includes("message_text")) {
-    const expectedText = condition.split("==")[1]?.trim().replace(/"/g, "").replace(/'/g, "");
-    return messageText.includes(expectedText.toLowerCase());
-  }
-
-  // Default to true for unknown conditions
-  return true;
-}
-
-  // If no trigger type, match all messages by default
-  if (!triggerType) {
-    console.log(
-      `[Flow Engine] No trigger type - matching ALL messages by default`
-    );
-    return true;
-  }
-
-  // For other trigger types, check conditions
-  if (config.condition) {
-    try {
-      // Evaluate the condition
-      const conditionResult = evaluateTriggerCondition(
-        config.condition,
-        message
-      );
-      console.log(`[Flow Engine] Condition result: ${conditionResult}`);
-      return conditionResult;
-    } catch (error) {
-      console.error(`[Flow Engine] Condition evaluation error:`, error);
-      return false;
-    }
-  }
-
-  return true;
-}
-
-/**
- * Evaluate trigger condition expression
- */
-function evaluateTriggerCondition(condition: string, message: any): boolean {
-  const messageText = message.messageText?.toLowerCase() || "";
-  const messageType = message.messageType || "text";
-
-  // Check for call/video
-  if (condition.includes("message_type")) {
-    if (condition.includes("call") || condition.includes("video")) {
-      return messageType === "call" || messageType === "video";
-    }
-  }
-
-  // Check for close_reason
-  if (condition.includes("close_reason")) {
-    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
-    const actualReason =
-      message.closeReason || message.close_reason || message.closeReason || "";
-    return actualReason === expectedReason;
-  }
-
-  // Simple text matching
-  if (condition.includes("message_text")) {
-    const expectedText = condition
-      .split("==")[1]
-      ?.trim()
-      .replace(/"/g, "")
-      .replace(/'/g, "");
-    return messageText.includes(expectedText.toLowerCase());
-  }
-
-  // Default to true for unknown conditions
-  return true;
-}
-
-/**
- * Resolve message variables
- */
-function resolveMessageVariables(template: string, data: any): string {
-  return template
-    .replace(/\{\{greeting\}\}/g, getGreeting())
-    .replace(/\{\{agent_name\}\}/g, data.agent_name || "Atendente")
-    .replace(/\{\{customer\.name\}\}/g, data.customer?.name || "Cliente")
-    .replace(/\{\{customer\.phone\}\}/g, data.customer?.phone || "");
-}
-
-/**
- * Get appropriate greeting based on time
- */
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour >= 12 && hour < 18) return "Boa tarde";
-  if (hour >= 18) return "Boa noite";
-  return "Bom dia";
 }
 
 /**
@@ -874,268 +800,14 @@ async function executeURAMenuNode(config: any, context: any, message: any) {
       message: menuMessage,
     });
   }
-
-  // TODO: Store URA state to handle user response in next message
-}
-
-/**
- * Execute flow starting from trigger node following edges
- */
-async function executeFlowFromTrigger(
-  nodes: any[],
-  edges: any[],
-  context: any,
-  message: any
-): Promise<void> {
-  // Find trigger node
-  const triggerNode = nodes.find((n: any) => n.type === "trigger");
-  if (!triggerNode) {
-    console.error(`[Chatbot Flow] No trigger node found`);
-    return;
-  }
-
-  console.log(
-    `[Chatbot Flow] Starting from trigger: ${triggerNode.data?.label || triggerNode.id}`
-  );
-
-  // Execute from trigger following the flow
-  await executeNodeWithEdges(triggerNode, nodes, edges, context, message);
-}
-
-/**
- * Execute a single node and follow its outgoing edges
- */
-async function executeNodeWithEdges(
-  node: any,
-  nodes: any[],
-  edges: any[],
-  context: any,
-  message: any
-): Promise<void> {
-  console.log(
-    `[Chatbot Flow] Executing node: ${node.data?.label || node.id} (${node.type})`
-  );
-
-  const config = node.data?.config || {};
-  let shouldContinue = true;
-  let conditionResult: boolean | null = null;
-
-  switch (node.type) {
-    case "trigger":
-      // Trigger just starts the flow
-      break;
-
-    case "condition":
-      conditionResult = evaluateConditionNode(config, context);
-      console.log(
-        `[Chatbot Flow] Condition "${node.data?.label}": ${conditionResult ? "TRUE" : "FALSE"}`
-      );
-      break;
-
-    case "message":
-      // Send message
-      const messageText = replaceVariables(config.message || "", context);
-      console.log(
-        `[Chatbot Flow] Sending message: "${messageText.substring(0, 50)}..."`
-      );
-
-      if (message.provider === "whatsapp") {
-        await sendWhatsAppMessage({
-          to: message.fromNumber,
-          message: messageText,
-        });
-      } else if (message.provider === "instagram") {
-        await sendInstagramMessage({
-          to: message.fromNumber,
-          message: messageText,
-        });
-      }
-
-      // If this is a terminal message (like "Fora de Horário", "Recusar Ligação", etc.), stop here
-      if (config.terminal || isTerminalMessage(node)) {
-        console.log(`[Chatbot Flow] Terminal message sent, stopping flow`);
-        return;
-      }
-      break;
-
-    case "function":
-      // Execute function (like get_greeting)
-      if (config.function === "get_greeting") {
-        const hour = new Date().getHours();
-        let greeting = "Bom dia";
-        if (hour >= 12 && hour < 18) greeting = "Boa tarde";
-        else if (hour >= 18) greeting = "Boa noite";
-
-        context.greeting = greeting;
-        context.agent_name = context.agent_name || "Atendente";
-        console.log(`[Chatbot Flow] Generated greeting: ${greeting}`);
-      }
-      break;
-
-    case "transfer":
-    case "transferHuman":
-      console.log(`[Chatbot Flow] Transfer to human`);
-      // Transfer logic here
-      return; // Stop flow after transfer
-
-    default:
-      console.log(`[Chatbot Flow] Unknown node type: ${node.type}`);
-  }
-
-  // Find outgoing edges
-  const outgoingEdges = edges.filter((e: any) => e.source === node.id);
-
-  if (outgoingEdges.length === 0) {
-    console.log(`[Chatbot Flow] No outgoing edges, flow complete`);
-    return;
-  }
-
-  // For condition nodes, follow the appropriate edge based on result
-  if (node.type === "condition" && conditionResult !== null) {
-    // Find edge matching the condition result
-    const trueEdge = outgoingEdges.find(
-      (e: any) =>
-        e.label?.toLowerCase() === "sim" ||
-        e.sourceHandle === "true" ||
-        e.sourceHandle === "0"
-    );
-    const falseEdge = outgoingEdges.find(
-      (e: any) =>
-        e.label?.toLowerCase() === "não" ||
-        e.label?.toLowerCase() === "nao" ||
-        e.sourceHandle === "false" ||
-        e.sourceHandle === "1"
-    );
-
-    const nextEdge = conditionResult ? trueEdge : falseEdge;
-
-    if (nextEdge) {
-      const nextNode = nodes.find((n: any) => n.id === nextEdge.target);
-      if (nextNode) {
-        await executeNodeWithEdges(nextNode, nodes, edges, context, message);
-      }
-    }
-  } else {
-    // For non-condition nodes, follow all outgoing edges (usually just one)
-    for (const edge of outgoingEdges) {
-      const nextNode = nodes.find((n: any) => n.id === edge.target);
-      if (nextNode) {
-        await executeNodeWithEdges(nextNode, nodes, edges, context, message);
-      }
-    }
-  }
-}
-
-/**
- * Evaluate a condition node
- */
-function evaluateConditionNode(config: any, context: any): boolean {
-  const condition = config.condition;
-
-  if (!condition) return true;
-
-  // Check for specific condition types
-  if (condition === "working_hours") {
-    return checkWorkingHours(config.schedule);
-  }
-
-  if (condition === "agent_logged_in") {
-    return !!context.agent_name || !!context.assignedTo;
-  }
-
-  if (condition.includes("close_reason")) {
-    const closeReason = context.close_reason || context.closeReason;
-    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
-    return closeReason === expectedReason;
-  }
-
-  if (condition.includes("message_type")) {
-    const messageType = context.message?.type || "text";
-    if (condition.includes("call") || condition.includes("video")) {
-      return messageType === "call" || messageType === "video";
-    }
-  }
-
-  // Default: return true for unknown conditions
-  return true;
-}
-
-/**
- * Check if current time is within working hours
- */
-function checkWorkingHours(schedule?: any): boolean {
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sunday, 6 = Saturday
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const currentTime = hour * 60 + minute;
-
-  const monSatStart = schedule?.mon_sat?.start || "08:00";
-  const monSatEnd = schedule?.mon_sat?.end || "19:40";
-  const sunHolidayStart = schedule?.sun_holiday?.start || "08:00";
-  const sunHolidayEnd = schedule?.sun_holiday?.end || "11:40";
-
-  const parseTime = (timeStr: string) => {
-    const [h, m] = timeStr.split(":").map(Number);
-    return h * 60 + m;
-  };
-
-  const isSundayOrHoliday = day === 0;
-
-  if (isSundayOrHoliday) {
-    const start = parseTime(sunHolidayStart);
-    const end = parseTime(sunHolidayEnd);
-    return currentTime >= start && currentTime <= end;
-  } else {
-    const start = parseTime(monSatStart);
-    const end = parseTime(monSatEnd);
-    return currentTime >= start && currentTime <= end;
-  }
-}
-
-/**
- * Check if a message node is terminal (should stop the flow)
- */
-function isTerminalMessage(node: any): boolean {
-  const label = (node.data?.label || "").toLowerCase();
-  const terminalLabels = [
-    "fora de horário",
-    "fora de horario",
-    "recusar",
-    "pesquisa",
-    "agradecer",
-    "não responder",
-    "nao responder",
-  ];
-  return terminalLabels.some(term => label.includes(term));
-}
-
-/**
- * Replace variables in text with context values
- * Supports: {{customer.name}}, {{customer.phone}}, {{message.text}}, {{ticket.id}}, {{variable.name}}
- */
-function replaceVariables(text: string, context: any): string {
-  return text.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-    const parts = path.trim().split(".");
-    let value: any = context;
-
-    for (const part of parts) {
-      value = value?.[part];
-      if (value === undefined) break;
-    }
-
-    return value !== undefined ? String(value) : match;
-  });
 }
 
 /**
  * Start the flow engine processor
- * Call this once when server starts
  */
 export function startFlowEngine() {
   console.log("[Flow Engine] Starting...");
 
-  // Process pending messages every 5 seconds
   setInterval(() => {
     processPendingMessages().catch(error => {
       console.error("[Flow Engine] Error in processor:", error);
