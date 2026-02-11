@@ -11,7 +11,7 @@ export async function runCRMMigration() {
     console.log("[CRM Migration] Starting...");
 
     // Verificar se a tabela tags existe e se tem a coluna description
-    const [existingTagsTable] = await db.execute(`
+    const existingTagsTable = await db.execute(`
       SHOW TABLES LIKE 'tags'
     `);
 
@@ -35,7 +35,7 @@ export async function runCRMMigration() {
     } else {
       // Se tabela existe mas não tem description, adicionar a coluna
       console.log("[CRM Migration] Checking if description column exists");
-      const [descriptionColumn] = await db.execute(`
+      const descriptionColumn = await db.execute(`
         SHOW COLUMNS FROM tags LIKE 'description'
       `);
 
