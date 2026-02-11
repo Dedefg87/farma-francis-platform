@@ -722,6 +722,11 @@ export const appRouter = router({
   // Templates Management
   templates: templatesRouter,
 
+  // Queues and Pauses management
+  queues: queuesRouter,
+  pauses: pausesRouter,
+  contactFetch: contactFetchRouter,
+
   // Tags management
   // tags: tagsRouter, // Removido - tabelas de tags comentadas
 
