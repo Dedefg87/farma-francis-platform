@@ -25,9 +25,7 @@ export async function getReceivedMessages(filters?: {
 
   let query = db.select().from(receivedMessages);
 
-  const conditions = [
-    eq(receivedMessages.isSurveyResponse, 0), // Never show survey responses in message lists
-  ];
+  const conditions = [];
   if (filters?.provider) {
     conditions.push(eq(receivedMessages.provider, filters.provider));
   }
@@ -38,7 +36,9 @@ export async function getReceivedMessages(filters?: {
     conditions.push(eq(receivedMessages.customerId, filters.customerId));
   }
 
-  query = query.where(and(...conditions)) as any;
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
 
   query = query.orderBy(desc(receivedMessages.createdAt)) as any;
 
@@ -98,7 +98,6 @@ export async function markMessageAsProcessed(
     customerId?: number;
     ticketId?: number;
     automationFlowId?: number;
-    isSurveyResponse?: number;
   }
 ) {
   const db = await getDb();
@@ -385,15 +384,15 @@ export async function getMessageStatistics(filters?: {
       byProvider: {},
     };
 
-  const conditions = [
-    eq(receivedMessages.isSurveyResponse, 0), // Exclude survey responses from stats
-  ];
+  const conditions = [];
   if (filters?.provider) {
     conditions.push(eq(receivedMessages.provider, filters.provider));
   }
 
   let query = db.select().from(receivedMessages);
-  query = query.where(and(...conditions)) as any;
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
 
   const messages = await query;
 

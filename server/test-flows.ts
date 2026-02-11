@@ -210,12 +210,10 @@ export async function simulateMessage(req: Request, res: Response) {
     const { phoneNumber, message, provider = "whatsapp" } = req.body;
 
     if (!phoneNumber || !message) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "phoneNumber and message are required",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "phoneNumber and message are required",
+      });
     }
 
     const db = await getDb();
@@ -330,12 +328,10 @@ export async function triggerFlowManually(req: Request, res: Response) {
       .limit(1);
 
     if (!customer || customer.length === 0) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: "Customer not found. Please create a customer first.",
-        });
+      return res.status(404).json({
+        success: false,
+        error: "Customer not found. Please create a customer first.",
+      });
     }
 
     // Criar mensagem simulada
@@ -415,14 +411,9 @@ export async function listRecentMessages(req: Request, res: Response) {
 
     let query = db.select().from(receivedMessages);
 
-    // Always exclude survey responses
-    const conditions = [eq(receivedMessages.isSurveyResponse, 0)];
-
     if (unprocessedOnly === "true") {
-      conditions.push(eq(receivedMessages.processed, 0));
+      query = query.where(eq(receivedMessages.processed, 0));
     }
-
-    query = query.where(and(...conditions));
 
     const messages = await query
       .orderBy(desc(receivedMessages.createdAt))
