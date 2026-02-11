@@ -1,7 +1,12 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ENV } from "./_core/env";
-import { users } from "../drizzle/schema";
+import {
+  users,
+  visualFlows,
+  automationFlows,
+  uraMenus,
+} from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -90,4 +95,252 @@ export async function getDbRaw() {
     raw: (sql: string, values?: any[]) => mysql.execute(sql, values),
     ...db,
   };
+}
+
+// ==================== VISUAL FLOWS ====================
+
+export async function getAllVisualFlows() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .select()
+    .from(visualFlows)
+    .orderBy(desc(visualFlows.updatedAt));
+}
+
+export async function getVisualFlowById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select()
+    .from(visualFlows)
+    .where(eq(visualFlows.id, id))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createVisualFlow(data: {
+  name: string;
+  description?: string;
+  flowData: string;
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(visualFlows).values({
+    name: data.name,
+    description: data.description || null,
+    flowData: data.flowData,
+    isActive: 0,
+    executionCount: 0,
+    createdBy: data.createdBy,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return result;
+}
+
+export async function updateVisualFlow(
+  id: number,
+  updates: Partial<{
+    name: string;
+    description: string;
+    flowData: string;
+  }>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .update(visualFlows)
+    .set({
+      ...updates,
+      updatedAt: new Date(),
+    })
+    .where(eq(visualFlows.id, id));
+}
+
+export async function deleteVisualFlow(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.delete(visualFlows).where(eq(visualFlows.id, id));
+}
+
+export async function toggleVisualFlow(id: number, isActive: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .update(visualFlows)
+    .set({
+      isActive: isActive ? 1 : 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(visualFlows.id, id));
+}
+
+// ==================== AUTOMATION FLOWS ====================
+
+export async function getAllAutomationFlows() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .select()
+    .from(automationFlows)
+    .orderBy(desc(automationFlows.updatedAt));
+}
+
+export async function createAutomationFlow(data: {
+  name: string;
+  description?: string;
+  channel: "whatsapp" | "instagram" | "both";
+  trigger: string;
+  response: string;
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(automationFlows).values({
+    name: data.name,
+    description: data.description || null,
+    channel: data.channel,
+    trigger: data.trigger,
+    response: data.response,
+    isActive: 1,
+    responseCount: 0,
+    createdBy: data.createdBy,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return result;
+}
+
+export async function updateAutomationFlow(
+  id: number,
+  updates: Partial<{
+    name: string;
+    description: string;
+    channel: "whatsapp" | "instagram" | "both";
+    trigger: string;
+    response: string;
+  }>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .update(automationFlows)
+    .set({
+      ...updates,
+      updatedAt: new Date(),
+    })
+    .where(eq(automationFlows.id, id));
+}
+
+export async function deleteAutomationFlow(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.delete(automationFlows).where(eq(automationFlows.id, id));
+}
+
+export async function toggleAutomationFlow(id: number, isActive: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .update(automationFlows)
+    .set({
+      isActive: isActive ? 1 : 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(automationFlows.id, id));
+}
+
+// ==================== URA MENUS ====================
+
+export async function getAllUraMenus() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.select().from(uraMenus).orderBy(desc(uraMenus.updatedAt));
+}
+
+export async function getUraMenuById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select()
+    .from(uraMenus)
+    .where(eq(uraMenus.id, id))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getActiveUraMenu() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select()
+    .from(uraMenus)
+    .where(eq(uraMenus.isActive, 1))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createUraMenu(data: {
+  name: string;
+  welcomeMessage: string;
+  menuData: string;
+  workingHours?: string;
+  offHoursMessage?: string;
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(uraMenus).values({
+    name: data.name,
+    welcomeMessage: data.welcomeMessage,
+    menuData: data.menuData,
+    workingHours: data.workingHours || null,
+    offHoursMessage: data.offHoursMessage || null,
+    isActive: 1,
+    createdBy: data.createdBy,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return result;
+}
+
+export async function updateUraMenu(
+  id: number,
+  updates: Partial<{
+    name: string;
+    welcomeMessage: string;
+    menuData: string;
+    workingHours: string;
+    offHoursMessage: string;
+  }>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .update(uraMenus)
+    .set({
+      ...updates,
+      updatedAt: new Date(),
+    })
+    .where(eq(uraMenus.id, id));
+}
+
+export async function deleteUraMenu(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.delete(uraMenus).where(eq(uraMenus.id, id));
+}
+
+export async function toggleUraMenu(id: number, isActive: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .update(uraMenus)
+    .set({
+      isActive: isActive ? 1 : 0,
+      updatedAt: new Date(),
+    })
+    .where(eq(uraMenus.id, id));
 }
