@@ -355,8 +355,14 @@ export async function handleSurveyResponse(message: any, customer: any) {
       customerId: customer.id,
     });
 
+    // Delete the original message from receivedMessages to prevent it from showing in UI
+    // The survey response is already saved in surveyResponses table
+    await db
+      .delete(receivedMessages)
+      .where(eq(receivedMessages.id, message.id));
+
     console.log(
-      "[CHATBOT] Survey response processed and saved to survey_responses table"
+      "[CHATBOT] Survey response processed, original message deleted from UI"
     );
   } catch (error) {
     console.error("[CHATBOT] Error handling survey response:", error);
