@@ -2,14 +2,14 @@ import { Request, Response } from "express";
 import { createContext } from "./context";
 import { logger } from "./_core/logger";
 import { sseManager, EVENTS } from "./_core/sse";
-import { 
-  AI_CONVERSATION_TEMPLATES, 
-  AI_NODE_TYPES, 
-  AI_KNOWLEDGE_BASES, 
-  AI_DEFAULT_PROMPT, 
-  AI_ERROR_HANDLING, 
-  AI_CONTEXT_MANAGEMENT, 
-  AI_INTEGRATION_CONFIG 
+import {
+  AI_CONVERSATION_TEMPLATES,
+  AI_NODE_TYPES,
+  AI_KNOWLEDGE_BASES,
+  AI_DEFAULT_PROMPT,
+  AI_ERROR_HANDLING,
+  AI_CONTEXT_MANAGEMENT,
+  AI_INTEGRATION_CONFIG,
 } from "./ai-templates";
 
 /**
@@ -17,18 +17,12 @@ import {
  */
 export async function processAIConversation(req: Request, res: Response) {
   try {
-    const { 
-      templateId, 
-      customerId, 
-      channelId, 
-      message, 
-      context 
-    } = req.body;
+    const { templateId, customerId, channelId, message, context } = req.body;
 
     if (!templateId || !customerId || !channelId || !message) {
-      return res.status(400).json({ 
-        error: "Missing required parameters", 
-        required: ["templateId", "customerId", "channelId", "message"] 
+      return res.status(400).json({
+        error: "Missing required parameters",
+        required: ["templateId", "customerId", "channelId", "message"],
       });
     }
 
@@ -39,7 +33,11 @@ export async function processAIConversation(req: Request, res: Response) {
     }
 
     // Initialize context
-    const conversationContext = initializeContext(customerId, channelId, context);
+    const conversationContext = initializeContext(
+      customerId,
+      channelId,
+      context
+    );
 
     // Process flow
     const result = await processFlow(template, message, conversationContext);
@@ -53,14 +51,13 @@ export async function processAIConversation(req: Request, res: Response) {
     res.json({
       success: true,
       result,
-      context: conversationContext
+      context: conversationContext,
     });
-
   } catch (error) {
     logger.error(error as Error, { context: req.body });
-    res.status(500).json({ 
-      error: "Internal server error", 
-      message: (error as Error).message 
+    res.status(500).json({
+      error: "Internal server error",
+      message: (error as Error).message,
     });
   }
 }
@@ -70,17 +67,12 @@ export async function processAIConversation(req: Request, res: Response) {
  */
 export async function processAutomationFlow(req: Request, res: Response) {
   try {
-    const { 
-      flowId, 
-      triggerType, 
-      triggerData, 
-      customerId 
-    } = req.body;
+    const { flowId, triggerType, triggerData, customerId } = req.body;
 
     if (!flowId || !triggerType) {
-      return res.status(400).json({ 
-        error: "Missing required parameters", 
-        required: ["flowId", "triggerType"] 
+      return res.status(400).json({
+        error: "Missing required parameters",
+        required: ["flowId", "triggerType"],
       });
     }
 
@@ -91,19 +83,23 @@ export async function processAutomationFlow(req: Request, res: Response) {
     }
 
     // Process flow
-    const result = await executeFlow(flow, triggerType, triggerData, customerId);
+    const result = await executeFlow(
+      flow,
+      triggerType,
+      triggerData,
+      customerId
+    );
 
     res.json({
       success: true,
       result,
-      executionId: result.executionId
+      executionId: result.executionId,
     });
-
   } catch (error) {
     logger.error(error as Error, { context: req.body });
-    res.status(500).json({ 
-      error: "Internal server error", 
-      message: (error as Error).message 
+    res.status(500).json({
+      error: "Internal server error",
+      message: (error as Error).message,
     });
   }
 }
@@ -121,7 +117,7 @@ export async function getAITemplates(req: Request, res: Response) {
       defaultPrompt: AI_DEFAULT_PROMPT,
       errorHandling: AI_ERROR_HANDLING,
       contextManagement: AI_CONTEXT_MANAGEMENT,
-      integrationConfig: AI_INTEGRATION_CONFIG
+      integrationConfig: AI_INTEGRATION_CONFIG,
     });
   } catch (error) {
     logger.error(error as Error);
@@ -132,9 +128,13 @@ export async function getAITemplates(req: Request, res: Response) {
 /**
  * Initialize conversation context
  */
-function initializeContext(customerId: number, channelId: string, existingContext?: any) {
+function initializeContext(
+  customerId: number,
+  channelId: string,
+  existingContext?: any
+) {
   const context = existingContext || {};
-  
+
   return {
     ...context,
     customerId,
@@ -146,8 +146,8 @@ function initializeContext(customerId: number, channelId: string, existingContex
     preferences: context.preferences || {
       language: "pt-BR",
       timezone: "America/Sao_Paulo",
-      notification: true
-    }
+      notification: true,
+    },
   };
 }
 
@@ -164,13 +164,13 @@ async function processFlow(template: any, message: string, context: any) {
     actions: [],
     finalResponse: "",
     needsHuman: false,
-    contextUpdate: {}
+    contextUpdate: {},
   };
 
   // Process each node in the flow
   for (const node of template.nodes) {
     const nodeResult = await processNode(node, message, context, result);
-    
+
     // Add to result
     if (nodeResult.message) {
       result.messages.push(nodeResult.message);
@@ -181,10 +181,10 @@ async function processFlow(template: any, message: string, context: any) {
     if (nodeResult.action) {
       result.actions.push(nodeResult.action);
     }
-    
+
     // Update context
     context.turnCount = (context.turnCount || 0) + 1;
-    
+
     // Check for end conditions
     if (node.type === "end" || nodeResult.shouldEnd) {
       break;
@@ -200,56 +200,61 @@ async function processFlow(template: any, message: string, context: any) {
 /**
  * Process individual node
  */
-async function processNode(node: any, message: string, context: any, result: any) {
+async function processNode(
+  node: any,
+  message: string,
+  context: any,
+  result: any
+) {
   switch (node.type) {
     case "trigger":
       return await processTriggerNode(node, message, context);
-    
+
     case "message":
       return await processMessageNode(node, context);
-    
+
     case "ai-classify":
       return await processAICLassifyNode(node, message, context);
-    
+
     case "condition":
       return await processConditionNode(node, result, context);
-    
+
     case "ai-response":
       return await processAIResponseNode(node, message, context);
-    
+
     case "ai-recommendation":
       return await processAIRecommendationNode(node, message, context);
-    
+
     case "ai-extract":
       return await processAIExtractNode(node, message, context);
-    
+
     case "ai-select":
       return await processAISelectNode(node, result, context);
-    
+
     case "ai-format":
       return await processAIFormatNode(node, result, context);
-    
+
     case "ai-confirm":
       return await processAIConfirmNode(node, message, context);
-    
+
     case "ai-checkout":
       return await processAICheckoutNode(node, message, context);
-    
+
     case "knowledge-search":
       return await processKnowledgeSearchNode(node, message, context);
-    
+
     case "api-call":
       return await processAPICallNode(node, context);
-    
+
     case "schedule":
       return await processScheduleNode(node, context);
-    
+
     case "transfer":
       return await processTransferNode(node, context);
-    
+
     case "end":
       return await processEndNode(node, context);
-    
+
     default:
       return { message: `Unknown node type: ${node.type}` };
   }
@@ -261,22 +266,22 @@ async function processNode(node: any, message: string, context: any, result: any
 async function processTriggerNode(node: any, message: string, context: any) {
   const keywords = node.config.keywords;
   const channels = node.config.channels;
-  
+
   // Check if message contains trigger keywords
   const messageLower = message.toLowerCase();
-  const matchedKeyword = keywords.find(keyword => 
+  const matchedKeyword = keywords.find(keyword =>
     messageLower.includes(keyword.toLowerCase())
   );
-  
+
   return {
-    message: matchedKeyword 
-      ? `Trigger detected: "${matchedKeyword}"` 
+    message: matchedKeyword
+      ? `Trigger detected: "${matchedKeyword}"`
       : "No trigger keyword matched",
     decision: {
       type: "trigger",
       matched: !!matchedKeyword,
-      keyword: matchedKeyword
-    }
+      keyword: matchedKeyword,
+    },
   };
 }
 
@@ -289,8 +294,8 @@ async function processMessageNode(node: any, context: any) {
       type: "bot",
       content: node.config.message,
       delay: node.config.delay || 0,
-      timestamp: new Date().toISOString()
-    }
+      timestamp: new Date().toISOString(),
+    },
   };
 }
 
@@ -303,31 +308,41 @@ async function processAICLassifyNode(node: any, message: string, context: any) {
       model: node.config.model,
       prompt: node.config.prompt,
       messages: [{ role: "user", content: message }],
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
     const classification = response.choices[0].message.content.trim();
-    
+
     return {
       message: `Classificação: ${classification}`,
       decision: {
         type: "classification",
         category: classification,
-        confidence: response.choices[0].index || 0.8
+        confidence: response.choices[0].index || 0.8,
       },
       action: {
         type: "update-context",
         field: "classification",
-        value: classification
-      }
+        value: classification,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[0],
       decision: {
         type: "error",
-        error: "AI classification failed"
-      }
+        error: "AI classification failed",
+      },
     };
   }
 }
@@ -341,7 +356,7 @@ async function processConditionNode(node: any, result: any, context: any) {
 
   for (const condition of conditions) {
     const nodeValue = result[condition.node]?.[condition.field];
-    
+
     switch (condition.operator) {
       case "equals":
         if (nodeValue !== condition.value) {
@@ -370,12 +385,12 @@ async function processConditionNode(node: any, result: any, context: any) {
     decision: {
       type: "condition",
       condition: node.config.conditions,
-      result: shouldFollowTruePath
+      result: shouldFollowTruePath,
     },
     action: {
       type: "route",
-      path: shouldFollowTruePath ? node.config.truePath : node.config.falsePath
-    }
+      path: shouldFollowTruePath ? node.config.truePath : node.config.falsePath,
+    },
   };
 }
 
@@ -401,32 +416,42 @@ ${node.config.prompt}
       prompt,
       messages: [{ role: "user", content: message }],
       maxTokens: node.config.maxTokens,
-      temperature: node.config.temperature || 0.3
+      temperature: node.config.temperature || 0.3,
     });
 
     const aiResponse = response.choices[0].message.content.trim();
-    
+
     return {
       message: {
         type: "bot",
         content: aiResponse,
         timestamp: new Date().toISOString(),
         aiModel: node.config.model,
-        knowledgeBase: node.config.knowledgeBase
+        knowledgeBase: node.config.knowledgeBase,
       },
       action: {
         type: "response",
         content: aiResponse,
-        model: node.config.model
-      }
+        model: node.config.model,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[1],
       decision: {
         type: "error",
-        error: "AI response failed"
-      }
+        error: "AI response failed",
+      },
     };
   }
 }
@@ -434,7 +459,11 @@ ${node.config.prompt}
 /**
  * Process AI recommendation node
  */
-async function processAIRecommendationNode(node: any, message: string, context: any) {
+async function processAIRecommendationNode(
+  node: any,
+  message: string,
+  context: any
+) {
   try {
     const prompt = `
 ${AI_DEFAULT_PROMPT}
@@ -453,31 +482,33 @@ ${node.config.prompt}
       model: node.config.model,
       prompt,
       messages: [{ role: "user", content: message }],
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
-    const recommendations = parseRecommendations(response.choices[0].message.content);
-    
+    const recommendations = parseRecommendations(
+      response.choices[0].message.content
+    );
+
     return {
       message: {
         type: "bot",
         content: generateRecommendationsMessage(recommendations),
         timestamp: new Date().toISOString(),
-        recommendations
+        recommendations,
       },
       action: {
         type: "recommendations",
         products: recommendations,
-        model: node.config.model
-      }
+        model: node.config.model,
+      },
     };
   } catch (error) {
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[2],
       decision: {
         type: "error",
-        error: "AI recommendation failed"
-      }
+        error: "AI recommendation failed",
+      },
     };
   }
 }
@@ -491,30 +522,40 @@ async function processAIExtractNode(node: any, message: string, context: any) {
       model: node.config.model,
       prompt: node.config.prompt,
       messages: [{ role: "user", content: message }],
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
     const extractedData = response.choices[0].message.content.trim();
-    
+
     return {
       message: `Informações extraídas: ${extractedData}`,
       decision: {
         type: "extraction",
-        data: extractedData
+        data: extractedData,
       },
       action: {
         type: "update-context",
         field: "extractedData",
-        value: extractedData
-      }
+        value: extractedData,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[0],
       decision: {
         type: "error",
-        error: "AI extraction failed"
-      }
+        error: "AI extraction failed",
+      },
     };
   }
 }
@@ -524,15 +565,16 @@ async function processAIExtractNode(node: any, message: string, context: any) {
  */
 async function processAISelectNode(node: any, result: any, context: any) {
   try {
-    const options = result[Object.keys(result).find(key => key.includes("options"))] || [];
-    
+    const options =
+      result[Object.keys(result).find(key => key.includes("options"))] || [];
+
     if (options.length === 0) {
       return {
         message: "Nenhuma opção disponível para seleção",
         decision: {
           type: "selection",
-          result: null
-        }
+          result: null,
+        },
       };
     }
 
@@ -544,27 +586,38 @@ ${node.config.prompt}
 ## Opções disponíveis:
 ${options.map((opt: any, i: number) => `${i + 1}. ${JSON.stringify(opt)}`).join("\n")}
 `,
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
-    const selectedIndex = parseInt(response.choices[0].message.content.trim()) - 1;
+    const selectedIndex =
+      parseInt(response.choices[0].message.content.trim()) - 1;
     const selectedOption = options[selectedIndex];
-    
+
     return {
       message: `Opção selecionada: ${JSON.stringify(selectedOption)}`,
       decision: {
         type: "selection",
         selected: selectedOption,
-        index: selectedIndex
-      }
+        index: selectedIndex,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[0],
       decision: {
         type: "error",
-        error: "AI selection failed"
-      }
+        error: "AI selection failed",
+      },
     };
   }
 }
@@ -574,8 +627,9 @@ ${options.map((opt: any, i: number) => `${i + 1}. ${JSON.stringify(opt)}`).join(
  */
 async function processAIFormatNode(node: any, result: any, context: any) {
   try {
-    const dataToFormat = result[Object.keys(result).find(key => key.includes("data"))] || {};
-    
+    const dataToFormat =
+      result[Object.keys(result).find(key => key.includes("data"))] || {};
+
     const response = await callAIProvider({
       model: node.config.model,
       prompt: `
@@ -584,25 +638,35 @@ ${node.config.prompt}
 ## Dados a serem formatados:
 ${JSON.stringify(dataToFormat, null, 2)}
 `,
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
     const formattedData = response.choices[0].message.content.trim();
-    
+
     return {
       message: `Dados formatados:\n${formattedData}`,
       decision: {
         type: "formatting",
-        formatted: formattedData
-      }
+        formatted: formattedData,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[0],
       decision: {
         type: "error",
-        error: "AI formatting failed"
-      }
+        error: "AI formatting failed",
+      },
     };
   }
 }
@@ -625,27 +689,42 @@ ${node.config.prompt}
       model: node.config.model,
       prompt,
       messages: [{ role: "user", content: message }],
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
-    const confirmation = response.choices[0].message.content.trim().toLowerCase();
-    const isConfirmed = confirmation.includes("sim") || confirmation.includes("confirmo");
-    
+    const confirmation = response.choices[0].message.content
+      .trim()
+      .toLowerCase();
+    const isConfirmed =
+      confirmation.includes("sim") || confirmation.includes("confirmo");
+
     return {
-      message: isConfirmed ? "Confirmação recebida" : "Confirmação não recebida",
+      message: isConfirmed
+        ? "Confirmação recebida"
+        : "Confirmação não recebida",
       decision: {
         type: "confirmation",
         confirmed: isConfirmed,
-        response: confirmation
-      }
+        response: confirmation,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[0],
       decision: {
         type: "error",
-        error: "AI confirmation failed"
-      }
+        error: "AI confirmation failed",
+      },
     };
   }
 }
@@ -670,31 +749,41 @@ ${node.config.prompt}
       model: node.config.model,
       prompt,
       messages: [{ role: "user", content: message }],
-      maxTokens: node.config.maxTokens
+      maxTokens: node.config.maxTokens,
     });
 
     const checkoutData = parseCheckoutData(response.choices[0].message.content);
-    
+
     return {
       message: {
         type: "bot",
         content: generateCheckoutMessage(checkoutData),
         timestamp: new Date().toISOString(),
-        checkoutData
+        checkoutData,
       },
       action: {
         type: "checkout",
         data: checkoutData,
-        model: node.config.model
-      }
+        model: node.config.model,
+      },
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      return {
+        message:
+          "Desculpe, no momento não consigo processar imagens. Por favor, descreva o que você precisa em texto.",
+        decision: {
+          type: "error",
+          error: "Image not supported",
+        },
+      };
+    }
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[1],
       decision: {
         type: "error",
-        error: "AI checkout failed"
-      }
+        error: "AI checkout failed",
+      },
     };
   }
 }
@@ -702,29 +791,37 @@ ${node.config.prompt}
 /**
  * Process knowledge search node
  */
-async function processKnowledgeSearchNode(node: any, message: string, context: any) {
+async function processKnowledgeSearchNode(
+  node: any,
+  message: string,
+  context: any
+) {
   try {
     const knowledgeBase = AI_KNOWLEDGE_BASES[node.config.knowledgeBase];
     if (!knowledgeBase) {
       throw new Error(`Knowledge base ${node.config.knowledgeBase} not found`);
     }
 
-    const results = await searchKnowledgeBase(knowledgeBase, message, node.config.searchType);
-    
+    const results = await searchKnowledgeBase(
+      knowledgeBase,
+      message,
+      node.config.searchType
+    );
+
     return {
       message: `Resultados encontrados: ${results.length} itens`,
       decision: {
         type: "knowledge-search",
-        results: results.slice(0, node.config.maxResults)
-      }
+        results: results.slice(0, node.config.maxResults),
+      },
     };
   } catch (error) {
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[0],
       decision: {
         type: "error",
-        error: "Knowledge search failed"
-      }
+        error: "Knowledge search failed",
+      },
     };
   }
 }
@@ -737,34 +834,36 @@ async function processAPICallNode(node: any, context: any) {
     const response = await fetch(node.config.endpoint, {
       method: node.config.method,
       headers: {
-        'Content-Type': 'application/json',
-        ...node.config.headers
+        "Content-Type": "application/json",
+        ...node.config.headers,
       },
-      body: node.config.body ? JSON.stringify(node.config.body) : undefined
+      body: node.config.body ? JSON.stringify(node.config.body) : undefined,
     });
 
     if (!response.ok) {
-      throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `API call failed: ${response.status} ${response.statusText}`
+      );
     }
 
     const data = await response.json();
-    
+
     return {
       message: `API call successful: ${JSON.stringify(data, null, 2)}`,
       decision: {
         type: "api-call",
         endpoint: node.config.endpoint,
         method: node.config.method,
-        response: data
-      }
+        response: data,
+      },
     };
   } catch (error) {
     return {
       message: AI_ERROR_HANDLING.fallbackMessages[1],
       decision: {
         type: "error",
-        error: `API call failed: ${(error as Error).message}`
-      }
+        error: `API call failed: ${(error as Error).message}`,
+      },
     };
   }
 }
@@ -780,8 +879,8 @@ async function processScheduleNode(node: any, context: any) {
       type: "schedule",
       scheduleType: node.config.scheduleType,
       cronExpression: node.config.cronExpression,
-      interval: node.config.interval
-    }
+      interval: node.config.interval,
+    },
   };
 }
 
@@ -797,21 +896,21 @@ async function processTransferNode(node: any, context: any) {
       transfer: {
         to: "human",
         channels: node.config.channels,
-        priority: node.config.priority || "medium"
-      }
+        priority: node.config.priority || "medium",
+      },
     },
     decision: {
       type: "transfer",
       to: "human",
       channels: node.config.channels,
-      priority: node.config.priority || "medium"
+      priority: node.config.priority || "medium",
     },
     action: {
       type: "transfer",
       to: "human",
       channels: node.config.channels,
-      priority: node.config.priority || "medium"
-    }
+      priority: node.config.priority || "medium",
+    },
   };
 }
 
@@ -824,14 +923,14 @@ async function processEndNode(node: any, context: any) {
       type: "bot",
       content: node.config.message,
       timestamp: new Date().toISOString(),
-      end: true
+      end: true,
     },
     decision: {
       type: "end",
       saveContext: node.config.saveContext || false,
-      followUp: node.config.followUp || false
+      followUp: node.config.followUp || false,
     },
-    shouldEnd: true
+    shouldEnd: true,
   };
 }
 
@@ -859,34 +958,54 @@ function generateFinalResponse(result: any, context: any) {
 async function callAIProvider(options: {
   model: string;
   prompt: string;
-  messages?: Array<{ role: string; content: string }>;
+  messages?: Array<{ role: string; content: any }>;
   maxTokens?: number;
   temperature?: number;
 }) {
   const provider = AI_INTEGRATION_CONFIG.providers.openai;
-  
-  const response = await fetch(`${provider.baseURL}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${provider.apiKey}`
-    },
-    body: JSON.stringify({
-      model: options.model,
-      messages: options.messages || [
-        { role: "system", content: options.prompt },
-        { role: "user", content: options.prompt }
-      ],
-      max_tokens: options.maxTokens || 1000,
-      temperature: options.temperature || 0.3
-    })
-  });
 
-  if (!response.ok) {
-    throw new Error(`AI API call failed: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(`${provider.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${provider.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: options.model,
+        messages: options.messages || [
+          { role: "system", content: options.prompt },
+          { role: "user", content: options.prompt },
+        ],
+        max_tokens: options.maxTokens || 1000,
+        temperature: options.temperature || 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      // Check if it's an image-related error
+      if (
+        errorText.includes("image") ||
+        errorText.includes("image_url") ||
+        errorText.includes("does not support")
+      ) {
+        throw new Error("IMAGE_NOT_SUPPORTED");
+      }
+
+      throw new Error(
+        `AI API call failed: ${response.status} ${response.statusText} – ${errorText}`
+      );
+    }
+
+    return await response.json();
+  } catch (error: any) {
+    if (error.message === "IMAGE_NOT_SUPPORTED") {
+      throw error;
+    }
+    throw new Error(`AI API call failed: ${(error as Error).message}`);
   }
-
-  return await response.json();
 }
 
 /**
@@ -895,23 +1014,23 @@ async function callAIProvider(options: {
 function parseRecommendations(text: string) {
   // Simple parsing logic - in production, use structured output
   const products = [];
-  
+
   // Extract product information from text
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   lines.forEach(line => {
-    if (line.includes('Produto:')) {
-      const parts = line.split(':');
+    if (line.includes("Produto:")) {
+      const parts = line.split(":");
       if (parts.length >= 2) {
         products.push({
           name: parts[1].trim(),
-          description: parts[2]?.trim() || '',
-          price: parts[3]?.trim() || '',
-          image: parts[4]?.trim() || ''
+          description: parts[2]?.trim() || "",
+          price: parts[3]?.trim() || "",
+          image: parts[4]?.trim() || "",
         });
       }
     }
   });
-  
+
   return products;
 }
 
@@ -919,11 +1038,16 @@ function parseRecommendations(text: string) {
  * Generate recommendations message
  */
 function generateRecommendationsMessage(products: any[]) {
-  return `Encontrei estes produtos para você:\n\n` +
-    products.map((p: any, i: number) => 
-      `${i + 1}. ${p.name}\n   ${p.description}\n   Preço: ${p.price}\n\n`
-    ).join('') +
-    `Deseja mais informações sobre algum deles?`;
+  return (
+    `Encontrei estes produtos para você:\n\n` +
+    products
+      .map(
+        (p: any, i: number) =>
+          `${i + 1}. ${p.name}\n   ${p.description}\n   Preço: ${p.price}\n\n`
+      )
+      .join("") +
+    `Deseja mais informações sobre algum deles?`
+  );
 }
 
 /**
@@ -931,18 +1055,18 @@ function generateRecommendationsMessage(products: any[]) {
  */
 function parseCheckoutData(text: string) {
   const data = {};
-  
+
   // Simple parsing logic
-  if (text.includes('Pagamento:')) {
-    data.paymentMethod = text.split('Pagamento:')[1].split('\n')[0].trim();
+  if (text.includes("Pagamento:")) {
+    data.paymentMethod = text.split("Pagamento:")[1].split("\n")[0].trim();
   }
-  if (text.includes('Entrega:')) {
-    data.deliveryOption = text.split('Entrega:')[1].split('\n')[0].trim();
+  if (text.includes("Entrega:")) {
+    data.deliveryOption = text.split("Entrega:")[1].split("\n")[0].trim();
   }
-  if (text.includes('Total:')) {
-    data.total = text.split('Total:')[1].split('\n')[0].trim();
+  if (text.includes("Total:")) {
+    data.total = text.split("Total:")[1].split("\n")[0].trim();
   }
-  
+
   return data;
 }
 
@@ -950,18 +1074,24 @@ function parseCheckoutData(text: string) {
  * Generate checkout message
  */
 function generateCheckoutMessage(data: any) {
-  return `Ótimo! Vou processar seu pedido:\n\n` +
+  return (
+    `Ótimo! Vou processar seu pedido:\n\n` +
     `Pagamento: ${data.paymentMethod}\n` +
     `Entrega: ${data.deliveryOption}\n` +
     `Total: ${data.total}\n\n` +
-    `Por favor, confirme se está tudo correto.`;
+    `Por favor, confirme se está tudo correto.`
+  );
 }
 
 /**
  * Search knowledge base
  */
-async function searchKnowledgeBase(knowledgeBase: any, query: string, searchType: string) {
-  if (searchType === 'semantic') {
+async function searchKnowledgeBase(
+  knowledgeBase: any,
+  query: string,
+  searchType: string
+) {
+  if (searchType === "semantic") {
     // Implement semantic search using embeddings
     return semanticSearch(knowledgeBase.content, query);
   } else {
@@ -985,24 +1115,28 @@ async function semanticSearch(content: string, query: string) {
 function keywordSearch(content: string, query: string) {
   const results = [];
   const queryLower = query.toLowerCase();
-  
+
   if (content.toLowerCase().includes(queryLower)) {
     results.push({ content, score: 1.0 });
   }
-  
+
   return results;
 }
 
 /**
  * Save conversation history
  */
-async function saveConversationHistory(customerId: number, channelId: string, result: any) {
+async function saveConversationHistory(
+  customerId: number,
+  channelId: string,
+  result: any
+) {
   // Save to database
   // Implementation depends on your database schema
-  console.log('Saving conversation history:', {
+  console.log("Saving conversation history:", {
     customerId,
     channelId,
-    result
+    result,
   });
 }
 
@@ -1011,7 +1145,7 @@ async function saveConversationHistory(customerId: number, channelId: string, re
  */
 function emitSSEEvents(customerId: number, result: any) {
   const events = [];
-  
+
   // Emit message events
   result.messages.forEach((message: any) => {
     events.push({
@@ -1019,28 +1153,28 @@ function emitSSEEvents(customerId: number, result: any) {
       data: {
         customerId,
         channelId: result.channelId,
-        message
-      }
+        message,
+      },
     });
   });
-  
+
   // Emit status events
   if (result.needsHuman) {
     events.push({
       type: EVENTS.AGENT_STATUS,
       data: {
         customerId,
-        status: 'needs-human'
-      }
+        status: "needs-human",
+      },
     });
   }
-  
+
   // Emit to SSE manager
   events.forEach(event => {
     sseManager.emitToUser(String(customerId), {
       type: event.type,
       data: event.data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   });
 }
@@ -1053,26 +1187,31 @@ async function getVisualFlow(flowId: string) {
   return {
     id: flowId,
     name: "Flow Name",
-    flowData: "{\"nodes\": [], \"edges\": []}",
-    isActive: true
+    flowData: '{"nodes": [], "edges": []}',
+    isActive: true,
   };
 }
 
 /**
  * Execute visual flow
  */
-async function executeFlow(flow: any, triggerType: string, triggerData: any, customerId: number) {
+async function executeFlow(
+  flow: any,
+  triggerType: string,
+  triggerData: any,
+  customerId: number
+) {
   // Implementation to execute visual flow
   return {
     executionId: `${flow.id}-${Date.now()}`,
     status: "completed",
     result: "Flow executed successfully",
-    executionTime: 1234
+    executionTime: 1234,
   };
 }
 
 export default {
   processAIConversation,
   processAutomationFlow,
-  getAITemplates
+  getAITemplates,
 };
