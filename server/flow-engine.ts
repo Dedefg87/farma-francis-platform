@@ -212,6 +212,49 @@ function matchesTrigger(message: any, flow: any): boolean {
 }
 
 /**
+ * Check if message matches visual flow trigger node - Enhanced
+ */
+function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
+  console.log(
+    `[Flow Engine] Checking trigger match for message:`,
+    message.messageText?.substring(0, 50)
+  );
+  console.log(`[Flow Engine] Trigger node:`, triggerNode);
+
+  const config = triggerNode.data?.config || {};
+  const triggerType = config.event || "message_received";
+  const messageText = message.messageText?.toLowerCase() || "";
+  const messageType = message.messageType || "text";
+
+  console.log(
+    `[Flow Engine] Trigger type: ${triggerType}, message type: ${messageType}, text: ${messageText}`
+  );
+
+  // Check if this is a message_received trigger (all messages)
+  if (triggerType === "message_received") {
+    console.log(
+      `[Flow Engine] Message trigger matched - this will match all messages`
+    );
+    return true;
+  }
+
+  // Check for specific keywords if any are defined
+  const keywords = config.keywords || [];
+  if (keywords && keywords.length > 0) {
+    for (const keyword of keywords) {
+      if (messageText.includes(keyword.toLowerCase())) {
+        console.log(`[Flow Engine] Keyword match: ${keyword}`);
+        return true;
+      }
+    }
+  }
+
+  // If no specific conditions, match all
+  console.log(`[Flow Engine] No specific conditions - matching all messages`);
+  return true;
+}
+
+/**
  * Execute a simple automation flow (from automation_flows table)
  */
 async function executeSimpleFlow(message: any, flow: any, customer: any) {
@@ -291,8 +334,10 @@ async function executeNode(
       await executeCreateTicketNode(config, context, message);
       break;
 
-    case "wait":
-      await executeWaitNode(config);
+case "wait":
+      console.log(`[Flow Engine] Wait node: ${JSON.stringify(config)}`);
+      const delay = config.delay || config.duration || 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
       break;
 
     case "setVariable":
@@ -617,12 +662,136 @@ export async function executeVisualFlow(
 }
 
 /**
- * Execute Wait node
+ * Check if message matches visual flow trigger node - Enhanced
  */
-async function executeWaitNode(config: any) {
-  const delay = config.delay || config.duration || 1000;
-  console.log(`[Flow Engine] Waiting ${delay}ms`);
-  await new Promise(resolve => setTimeout(resolve, delay));
+function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
+  const config = triggerNode.data?.config || {};
+  const triggerType = config.event || "message_received";
+
+  console.log(`[Flow Engine] Trigger type: ${triggerType}`);
+  console.log(`[Flow Engine] Message text: ${message.messageText?.substring(0, 50)}`);
+  console.log(`[Flow Engine] Trigger config:`, config);
+
+  // Check if this is a message_received trigger (all messages)
+  if (triggerType === "message_received") {
+    console.log(`[Flow Engine] Message trigger matched - processing ALL messages`);
+    return true;
+  }
+
+  // If no trigger type, match all messages by default
+  if (!triggerType) {
+    console.log(`[Flow Engine] No trigger type - matching ALL messages by default`);
+    return true;
+  }
+
+  // For other trigger types, check conditions
+  if (config.condition) {
+    try {
+      // Evaluate the condition
+      const conditionResult = evaluateTriggerCondition(config.condition, message);
+      console.log(`[Flow Engine] Condition result: ${conditionResult}`);
+      return conditionResult;
+    } catch (error) {
+      console.error(`[Flow Engine] Condition evaluation error:`, error);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Evaluate trigger condition expression
+ */
+function evaluateTriggerCondition(condition: string, message: any): boolean {
+  const messageText = message.messageText?.toLowerCase() || "";
+  const messageType = message.messageType || "text";
+
+  // Check for call/video
+  if (condition.includes("message_type")) {
+    if (condition.includes("call") || condition.includes("video")) {
+      return messageType === "call" || messageType === "video";
+    }
+  }
+
+  // Check for close_reason
+  if (condition.includes("close_reason")) {
+    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
+    const actualReason = message.closeReason || message.close_reason || message.closeReason || "";
+    return actualReason === expectedReason;
+  }
+
+  // Simple text matching
+  if (condition.includes("message_text")) {
+    const expectedText = condition.split("==")[1]?.trim().replace(/"/g, "").replace(/'/g, "");
+    return messageText.includes(expectedText.toLowerCase());
+  }
+
+  // Default to true for unknown conditions
+  return true;
+}
+
+  // If no trigger type, match all messages by default
+  if (!triggerType) {
+    console.log(
+      `[Flow Engine] No trigger type - matching ALL messages by default`
+    );
+    return true;
+  }
+
+  // For other trigger types, check conditions
+  if (config.condition) {
+    try {
+      // Evaluate the condition
+      const conditionResult = evaluateTriggerCondition(
+        config.condition,
+        message
+      );
+      console.log(`[Flow Engine] Condition result: ${conditionResult}`);
+      return conditionResult;
+    } catch (error) {
+      console.error(`[Flow Engine] Condition evaluation error:`, error);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Evaluate trigger condition expression
+ */
+function evaluateTriggerCondition(condition: string, message: any): boolean {
+  const messageText = message.messageText?.toLowerCase() || "";
+  const messageType = message.messageType || "text";
+
+  // Check for call/video
+  if (condition.includes("message_type")) {
+    if (condition.includes("call") || condition.includes("video")) {
+      return messageType === "call" || messageType === "video";
+    }
+  }
+
+  // Check for close_reason
+  if (condition.includes("close_reason")) {
+    const expectedReason = condition.split("==")[1]?.trim().replace(/"/g, "");
+    const actualReason =
+      message.closeReason || message.close_reason || message.closeReason || "";
+    return actualReason === expectedReason;
+  }
+
+  // Simple text matching
+  if (condition.includes("message_text")) {
+    const expectedText = condition
+      .split("==")[1]
+      ?.trim()
+      .replace(/"/g, "")
+      .replace(/'/g, "");
+    return messageText.includes(expectedText.toLowerCase());
+  }
+
+  // Default to true for unknown conditions
+  return true;
 }
 
 /**
