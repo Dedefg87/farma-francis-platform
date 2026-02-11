@@ -881,3 +881,25 @@ export const customerTags = mysqlTable("customer_tags", {
 
 export type CustomerTag = typeof customerTags.$inferSelect;
 export type InsertCustomerTag = typeof customerTags.$inferInsert;
+
+/**
+ * Survey Responses - Respostas de Pesquisas de Satisfação
+ * Armazena respostas de pesquisas de satisfação após encerramento de conversas
+ */
+export const surveyResponses = mysqlTable("survey_responses", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: int("conversation_id").references(() => conversations.id, {
+    onDelete: "set null",
+  }),
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  rating: int("rating").notNull(), // 1-5 rating
+  feedback: text("feedback"), // Optional feedback text
+  closeReason: varchar("close_reason", { length: 50 }).notNull(), // venda, orcamento, etc
+  agentId: int("agent_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type InsertSurveyResponse = typeof surveyResponses.$inferInsert;

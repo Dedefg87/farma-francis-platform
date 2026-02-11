@@ -3,13 +3,18 @@
  * Transcrição Whisper, Sugestões de Resposta, Análise de Sentimento
  */
 
-import { z } from 'zod';
-import { router, publicProcedure, protectedProcedure, adminProcedure } from './_core/trpc';
-import { invokeLLM } from './_core/llm';
-import { transcribeAudio } from './_core/voiceTranscription';
-import { getDb } from './db';
-import { messages } from '../drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { z } from "zod";
+import {
+  router,
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+} from "./_core/trpc";
+import { invokeLLM } from "./_core/llm";
+import { transcribeAudio } from "./_core/voiceTranscription";
+import { getDb } from "./db";
+import { messages } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 export const aiRouter = router({
   /**
@@ -18,12 +23,23 @@ export const aiRouter = router({
   getConfig: adminProcedure.query(async () => {
     return {
       providers: {
-        openai: { apiKey: !!process.env.OPENAI_API_KEY, model: "gpt-3.5-turbo" },
-        anthropic: { apiKey: !!process.env.ANTHROPIC_API_KEY, model: "claude-3-sonnet" },
+        openai: {
+          apiKey: !!process.env.OPENAI_API_KEY,
+          model: "gpt-3.5-turbo",
+        },
+        anthropic: {
+          apiKey: !!process.env.ANTHROPIC_API_KEY,
+          model: "claude-3-sonnet",
+        },
         google: { apiKey: !!process.env.GOOGLE_API_KEY, model: "gemini-pro" },
       },
-      knowledgeBases: ["faq_farmacia", "produtos_farmacia", "politicas_farmacia"],
-      defaultPrompt: "Você é um assistente virtual da Farmácia Francis. Forneça informações precisas e profissionais sobre medicamentos, produtos e serviços.",
+      knowledgeBases: [
+        "faq_farmacia",
+        "produtos_farmacia",
+        "politicas_farmacia",
+      ],
+      defaultPrompt:
+        "Você é um assistente virtual da Farmácia Francis. Forneça informações precisas e profissionais sobre medicamentos, produtos e serviços.",
       maxTokens: 1000,
       temperature: 0.3,
       fallbackEnabled: true,
@@ -38,13 +54,15 @@ export const aiRouter = router({
    */
   processConversation: adminProcedure
     .input((raw: unknown) => {
-      return z.object({
-        templateId: z.string(),
-        customerId: z.number(),
-        channelId: z.string(),
-        message: z.string(),
-        context: z.record(z.unknown()).optional(),
-      }).parse(raw);
+      return z
+        .object({
+          templateId: z.string(),
+          customerId: z.number(),
+          channelId: z.string(),
+          message: z.string(),
+          context: z.record(z.unknown()).optional(),
+        })
+        .parse(raw);
     })
     .mutation(async ({ input }) => {
       const { processAIConversation } = await import("./ai-integration");
@@ -64,12 +82,14 @@ export const aiRouter = router({
    */
   processAutomation: adminProcedure
     .input((raw: unknown) => {
-      return z.object({
-        flowId: z.string(),
-        triggerType: z.string(),
-        triggerData: z.record(z.unknown()).optional(),
-        customerId: z.number().optional(),
-      }).parse(raw);
+      return z
+        .object({
+          flowId: z.string(),
+          triggerType: z.string(),
+          triggerData: z.record(z.unknown()).optional(),
+          customerId: z.number().optional(),
+        })
+        .parse(raw);
     })
     .mutation(async ({ input }) => {
       const { processAutomationFlow } = await import("./ai-integration");
@@ -98,10 +118,10 @@ export const aiRouter = router({
     .mutation(async ({ input }) => {
       const result = await transcribeAudio({
         audioUrl: input.audioUrl,
-        language: input.language || 'pt',
+        language: input.language || "pt",
       });
 
-      if ('error' in result) {
+      if ("error" in result) {
         throw new Error(result.error);
       }
 
@@ -116,7 +136,7 @@ export const aiRouter = router({
 
       return {
         transcription: result.text,
-        language: result.language || 'pt',
+        language: result.language || "pt",
       };
     }),
 
@@ -136,7 +156,7 @@ export const aiRouter = router({
 
 Cliente: ${input.customerName}
 Mensagem do cliente: "${input.customerMessage}"
-${input.context ? `Contexto adicional: ${input.context}` : ''}
+${input.context ? `Contexto adicional: ${input.context}` : ""}
 
 Gere 3 sugestões de resposta profissionais, empáticas e úteis. As respostas devem:
 1. Ser cordiais e usar o nome do cliente
@@ -149,20 +169,21 @@ Retorne apenas as 3 respostas, uma por linha, sem numeração.`;
       const response = await invokeLLM({
         messages: [
           {
-            role: 'system',
-            content: 'Você é um assistente especializado em atendimento farmacêutico.',
+            role: "system",
+            content:
+              "Você é um assistente especializado em atendimento farmacêutico.",
           },
           {
-            role: 'user',
+            role: "user",
             content: prompt,
           },
         ],
       });
 
       const content3 = response.choices[0].message.content;
-      const text = typeof content3 === 'string' ? content3 : '';
+      const text = typeof content3 === "string" ? content3 : "";
       const suggestions = text
-        .split('\n')
+        .split("\n")
         .filter((line: string) => line.trim().length > 0)
         .slice(0, 3);
 
@@ -193,21 +214,23 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
       const response = await invokeLLM({
         messages: [
           {
-            role: 'system',
-            content: 'Você é um analisador de sentimentos especializado.',
+            role: "system",
+            content: "Você é um analisador de sentimentos especializado.",
           },
           {
-            role: 'user',
+            role: "user",
             content: prompt,
           },
         ],
       });
 
       const content = response.choices[0].message.content;
-      const sentiment = (typeof content === 'string' ? content.trim().toLowerCase() : 'neutral') as 'happy' | 'neutral' | 'frustrated';
+      const sentiment = (
+        typeof content === "string" ? content.trim().toLowerCase() : "neutral"
+      ) as "happy" | "neutral" | "frustrated";
 
       return {
-        sentiment: sentiment || 'neutral',
+        sentiment: sentiment || "neutral",
         confidence: 0.85, // Placeholder - pode ser melhorado com modelo específico
       };
     }),
@@ -224,7 +247,7 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
     .mutation(async ({ input }: { input: { imageUrl: string } }) => {
       // TODO: Integrar com OCR (Tesseract ou Cloud Vision)
       // Por enquanto, retorna estrutura de exemplo
-      
+
       const prompt = `Analise esta imagem de receita médica e extraia:
 1. Nome do medicamento
 2. Dosagem
@@ -236,53 +259,70 @@ Imagem: ${input.imageUrl}
 
 Retorne em formato JSON.`;
 
-      const response = await invokeLLM({
-        messages: [
-          {
-            role: 'system',
-            content: 'Você é um assistente de extração de dados de receitas médicas.',
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: prompt,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: input.imageUrl,
-                },
-              },
-            ],
-          },
-        ],
-      });
-
-      const content2 = response.choices[0].message.content;
-      const text = typeof content2 === 'string' ? content2 : '{}';
-      
       try {
-        const data = JSON.parse(text);
-        return {
-          medication: data.medication || '',
-          dosage: data.dosage || '',
-          quantity: data.quantity || '',
-          doctorName: data.doctorName || '',
-          doctorCRM: data.doctorCRM || '',
-          confidence: 0.75,
-        };
-      } catch {
-        return {
-          medication: '',
-          dosage: '',
-          quantity: '',
-          doctorName: '',
-          doctorCRM: '',
-          confidence: 0,
-          error: 'Não foi possível extrair dados da receita',
-        };
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content:
+                "Você é um assistente de extração de dados de receitas médicas.",
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: prompt,
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: input.imageUrl,
+                  },
+                },
+              ],
+            },
+          ],
+        });
+
+        const content2 = response.choices[0].message.content;
+        const text = typeof content2 === "string" ? content2 : "{}";
+
+        try {
+          const data = JSON.parse(text);
+          return {
+            medication: data.medication || "",
+            dosage: data.dosage || "",
+            quantity: data.quantity || "",
+            doctorName: data.doctorName || "",
+            doctorCRM: data.doctorCRM || "",
+            confidence: 0.75,
+          };
+        } catch {
+          return {
+            medication: "",
+            dosage: "",
+            quantity: "",
+            doctorName: "",
+            doctorCRM: "",
+            confidence: 0,
+            error: "Não foi possível extrair dados da receita",
+          };
+        }
+      } catch (error: any) {
+        if (error.message === "IMAGE_NOT_SUPPORTED") {
+          return {
+            medication: "",
+            dosage: "",
+            quantity: "",
+            doctorName: "",
+            doctorCRM: "",
+            confidence: 0,
+            error:
+              "No momento, não conseguimos processar imagens de receitas. Por favor, digite as informações da receita manualmente.",
+          };
+        }
+        throw error;
       }
     }),
 });

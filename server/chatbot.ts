@@ -8,6 +8,7 @@ import {
   users,
   conversations,
   customerTreatments,
+  surveyResponses,
 } from "../drizzle/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
@@ -23,8 +24,20 @@ export async function processIncomingMessage(message: any) {
   console.log("==========================================");
   console.log("[CHATBOT] Processing message:", message.id);
   console.log("[CHATBOT] From:", message.fromNumber);
+  console.log("[CHATBOT] Type:", message.messageType);
   console.log("[CHATBOT] Text:", message.messageText?.substring(0, 50));
   console.log("==========================================");
+
+  // Handle non-text messages
+  if (message.messageType && message.messageType !== "text") {
+    console.log("[CHATBOT] Non-text message, skipping auto-response");
+
+    const db = await getDb();
+    if (db) {
+      await markMessageAsProcessed(message.id, {});
+    }
+    return;
+  }
 
   try {
     const db = await getDb();
@@ -61,6 +74,26 @@ export async function processIncomingMessage(message: any) {
 
     const isFirstMessage = recentMessageCount === 0;
     console.log("[CHATBOT] Is first message:", isFirstMessage);
+
+    // Check if this is a survey response (1-5)
+    const ratingText = message.messageText?.trim();
+    const rating = parseInt(ratingText?.replace(/[^0-9]/g, "") || "0");
+    const isSurveyResponse =
+      rating >= 1 && rating <= 5 && recentMessageCount > 0;
+
+    console.log(
+      "[CHATBOT] Is survey response:",
+      isSurveyResponse,
+      "Rating:",
+      rating
+    );
+
+    // Handle survey response
+    if (isSurveyResponse) {
+      console.log("[CHATBOT] Handling survey response...");
+      await handleSurveyResponse(message, customer);
+      return;
+    }
 
     const [activeConv] = await db
       .select()
@@ -237,6 +270,90 @@ export async function closeConversation(
     console.log("[CHATBOT] Closing message sent!");
   } catch (error) {
     console.error("[CHATBOT] Error closing conversation:", error);
+  }
+}
+
+/**
+ * Handle survey response from customer (1-5 rating)
+ */
+export async function handleSurveyResponse(message: any, customer: any) {
+  console.log("==========================================");
+  console.log("[CHATBOT] Processing survey response");
+  console.log("[CHATBOT] From:", message.fromNumber);
+  console.log("[CHATBOT] Rating:", message.messageText);
+  console.log("==========================================");
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    // Parse rating from message
+    const ratingText = message.messageText?.trim();
+    const rating = parseInt(ratingText?.replace(/[^0-9]/g, "") || "0");
+
+    if (rating < 1 || rating > 5) {
+      console.log("[CHATBOT] Invalid rating, ignoring");
+      return;
+    }
+
+    console.log("[CHATBOT] Valid rating:", rating);
+
+    // Find the most recent closed conversation with this customer
+    const [recentConv] = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.customerId, customer.id),
+          eq(conversations.status, "closed")
+        )
+      )
+      .orderBy(desc(conversations.closedAt))
+      .limit(1);
+
+    // Save survey response to database
+    await db.insert(surveyResponses).values({
+      conversationId: recentConv?.id || null,
+      customerId: customer.id,
+      rating: rating,
+      closeReason: recentConv?.closeReason || "venda",
+      agentId: recentConv?.assignedTo || null,
+    });
+
+    console.log("[CHATBOT] Survey response saved to database!");
+
+    // Send thank you message
+    let thankYouMessage = "";
+    if (rating >= 4) {
+      thankYouMessage =
+        "Muito obrigado pela sua avaliação! 😊 Fico feliz em ter ajudado!";
+    } else if (rating >= 3) {
+      thankYouMessage =
+        "Obrigado pela sua avaliação! 🙏 Vamos buscar melhorar cada vez mais!";
+    } else {
+      thankYouMessage =
+        "Sentimos muito por não ter atendido suas expectativas. 😔\n\n" +
+        "Já anotamos seu feedback para melhorarmos!";
+    }
+
+    if (message.provider === "whatsapp") {
+      await sendWhatsAppMessage({
+        to: message.fromNumber,
+        message: thankYouMessage,
+      });
+    } else if (message.provider === "instagram") {
+      await sendInstagramMessage({
+        to: message.fromNumber,
+        message: thankYouMessage,
+      });
+    }
+
+    console.log("[CHATBOT] Thank you message sent!");
+
+    // Mark as processed
+    await markMessageAsProcessed(message.id, { customerId: customer.id });
+  } catch (error) {
+    console.error("[CHATBOT] Error handling survey response:", error);
   }
 }
 

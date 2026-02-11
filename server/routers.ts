@@ -29,6 +29,7 @@ import { contactFetchRouter } from "./routers-contact-fetch";
 import { apiConfigRouter } from "./routers-api-config";
 import { templatesRouter } from "./templates-router";
 import { crmRouter } from "./routers-crm";
+import { surveyRouter } from "./routers-survey";
 import * as testFlowsRouter from "./test-flows";
 
 export const appRouter = router({
@@ -741,6 +742,9 @@ export const appRouter = router({
 
   // CRM - Gestão de Clientes e Recorrência
   crm: crmRouter,
+
+  // Survey - Pesquisa de Satisfação
+  survey: surveyRouter,
 });
 
 export type AppRouter = typeof appRouter;

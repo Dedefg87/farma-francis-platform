@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -453,10 +453,32 @@ export default function Automation() {
                       }
                       onSave={(nodes, edges) => {
                         if (selectedFlowId) {
-                          updateFlow.mutate({
-                            id: selectedFlowId,
-                            flowData: JSON.stringify({ nodes, edges }),
-                          });
+                          const updatedFlowData = { nodes, edges };
+
+                          console.log(
+                            "[Automation] Saving flow:",
+                            updatedFlowData
+                          );
+
+                          updateFlow.mutate(
+                            {
+                              id: selectedFlowId,
+                              flowData: JSON.stringify(updatedFlowData),
+                            },
+                            {
+                              onSuccess: () => {
+                                toast.success("Fluxo salvo!");
+                                refetchFlows();
+                              },
+                              onError: error => {
+                                console.error(
+                                  "[Automation] Error saving flow:",
+                                  error
+                                );
+                                toast.error("Erro ao salvar fluxo");
+                              },
+                            }
+                          );
                         }
                       }}
                       onNodeDoubleClick={node => {
@@ -1417,10 +1439,26 @@ export default function Automation() {
             const updatedNodes = flowData.nodes.map((node: Node) =>
               node.id === nodeId ? { ...node, data } : node
             );
-            updateFlow.mutate({
-              id: selectedFlowId,
-              flowData: JSON.stringify({ ...flowData, nodes: updatedNodes }),
-            });
+            const updatedFlowData = { ...flowData, nodes: updatedNodes };
+
+            console.log("[Automation] Saving node:", nodeId, data);
+            console.log("[Automation] Updated flow data:", updatedFlowData);
+
+            updateFlow.mutate(
+              {
+                id: selectedFlowId,
+                flowData: JSON.stringify(updatedFlowData),
+              },
+              {
+                onSuccess: () => {
+                  toast.success("Configuração do nó salva!");
+                },
+                onError: error => {
+                  console.error("[Automation] Error saving node:", error);
+                  toast.error("Erro ao salvar configuração do nó");
+                },
+              }
+            );
           }
         }}
       />
