@@ -241,53 +241,6 @@ async function executeSimpleFlow(message: any, flow: any, customer: any) {
 }
 
 /**
- * Execute a visual flow (from visual_flows table)
- * This is a more complex execution engine for flows created in the Flow Builder
- */
-export async function executeVisualFlow(
-  message: any,
-  flowId: number,
-  customer: any
-) {
-  const db = await getDb();
-  if (!db) return;
-
-  // Get flow data
-  const flowData = await db
-    .select()
-    .from(visualFlows)
-    .where(eq(visualFlows.id, flowId))
-    .limit(1);
-
-  if (flowData.length === 0) {
-    console.error(`[Flow Engine] Visual flow ${flowId} not found`);
-    return;
-  }
-
-  const flow = flowData[0];
-  const parsedFlowData = JSON.parse(flow.flowData || "{}");
-  const nodes = parsedFlowData.nodes || [];
-  const edges = parsedFlowData.edges || [];
-
-  // Find trigger node
-  const triggerNode = nodes.find((n: any) => n.type === "trigger");
-  if (!triggerNode) {
-    console.error(`[Flow Engine] No trigger node found in flow ${flowId}`);
-    return;
-  }
-
-  // Start execution from trigger
-  const context = {
-    customer,
-    message,
-    ticket: null as any,
-    variables: {} as Record<string, any>,
-  };
-
-  await executeNode(triggerNode, nodes, edges, context, message);
-}
-
-/**
  * Execute a single node in the flow
  */
 async function executeNode(
