@@ -10,15 +10,19 @@ export async function runCRMMigration() {
   try {
     console.log("[CRM Migration] Starting...");
 
-    // Verificar se a tabela tags existe e se tem a coluna description
-    const existingTagsTable = await db.execute(`
-      SHOW TABLES LIKE 'tags'
-    `);
+    // Verificar se a tabela tags existe
+    const checkQuery = `
+      SELECT COUNT(*) as count FROM information_schema.tables 
+      WHERE table_schema = DATABASE() AND table_name = 'tags'
+    `;
 
-    console.log("[CRM Migration] Tags table check:", existingTagsTable);
+    const [result] = await db.execute(checkQuery);
+    const tableExists = result && result[0] && result[0].count > 0;
+
+    console.log("[CRM Migration] Tags table exists:", tableExists);
 
     // Se não existir, criar tabela com a coluna description
-    if (!existingTagsTable || existingTagsTable.length === 0) {
+    if (!tableExists) {
       console.log(
         "[CRM Migration] Creating tags table with description column"
       );
@@ -26,20 +30,24 @@ export async function runCRMMigration() {
         CREATE TABLE tags (
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(50) NOT NULL UNIQUE,
-          color VARCHAR(7) DEFAULT '#6366f1' NOT NULL COMMENT 'Cor em hex',
+          color VARCHAR(7) DEFAULT '#6366f1' NOT NULL,
           description TEXT,
           created_by INT,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
         )
       `);
     } else {
-      // Se tabela existe mas não tem description, adicionar a coluna
-      console.log("[CRM Migration] Checking if description column exists");
-      const descriptionColumn = await db.execute(`
-        SHOW COLUMNS FROM tags LIKE 'description'
-      `);
+      // Se tabela existe, verificar se tem a coluna description
+      const checkColumnQuery = `
+        SELECT COUNT(*) as count FROM information_schema.columns 
+        WHERE table_schema = DATABASE() AND table_name = 'tags' AND column_name = 'description'
+      `;
 
-      if (!descriptionColumn || descriptionColumn.length === 0) {
+      const [columnResult] = await db.execute(checkColumnQuery);
+      const columnExists =
+        columnResult && columnResult[0] && columnResult[0].count > 0;
+
+      if (!columnExists) {
         console.log(
           "[CRM Migration] Adding description column to existing tags table"
         );
