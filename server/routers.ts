@@ -747,6 +747,10 @@ export const appRouter = router({
   // Survey - Pesquisa de Satisfação
   survey: surveyRouter,
 
+  // Dashboard Statistics
+  dashboardStats: dashboardStatsRouter,
+  dashboardDrilldown: dashboardDrilldownRouter,
+
   // Automation SSE Integration
   automationSSE: automationRouter,
 });
