@@ -7,8 +7,9 @@ import {
   tickets,
   users,
   conversations,
+  customerTreatments,
 } from "../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
 import {
   markMessageAsProcessed,
@@ -16,20 +17,14 @@ import {
 } from "./db-messages";
 
 /**
- * Simple Chatbot Automation - Guaranteed to Work
+ * Simple Chatbot Automation - Fixed Version
  */
 export async function processIncomingMessage(message: any) {
   console.log("==========================================");
   console.log("[CHATBOT] Processing message:", message.id);
   console.log("[CHATBOT] From:", message.fromNumber);
-  console.log("[CHATBOT] Text:", message.messageText);
+  console.log("[CHATBOT] Text:", message.messageText?.substring(0, 50));
   console.log("==========================================");
-
-  if (!message.messageText && !message.caption) {
-    console.log("[CHATBOT] Message has no text, skipping...");
-    await markMessageAsProcessed(message.id, {});
-    return;
-  }
 
   try {
     const db = await getDb();
@@ -38,16 +33,34 @@ export async function processIncomingMessage(message: any) {
       return;
     }
 
-    // Find or create customer
     const customer = await findOrCreateCustomerByPhone(
       message.fromNumber,
       message.fromName
     );
-    console.log("[CHATBOT] Customer:", customer?.name, "ID:", customer?.id);
 
-    // Check if customer has an active conversation with an agent
-    let agentName = null;
-    let isAgentAvailable = false;
+    if (!customer) {
+      console.log("[CHATBOT] Could not find/create customer");
+      return;
+    }
+
+    console.log("[CHATBOT] Customer:", customer.name, "ID:", customer.id);
+
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const [recentMessages] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(receivedMessages)
+      .where(
+        and(
+          eq(receivedMessages.fromNumber, message.fromNumber),
+          gte(receivedMessages.createdAt, fiveMinutesAgo)
+        )
+      );
+
+    const recentMessageCount = Number(recentMessages?.count) || 0;
+    console.log("[CHATBOT] Recent messages count:", recentMessageCount);
+
+    const isFirstMessage = recentMessageCount === 0;
+    console.log("[CHATBOT] Is first message:", isFirstMessage);
 
     const [activeConv] = await db
       .select()
@@ -61,6 +74,9 @@ export async function processIncomingMessage(message: any) {
       .orderBy(desc(conversations.lastMessageAt))
       .limit(1);
 
+    let agentName: string | null = null;
+    let isAgentAvailable = false;
+
     if (activeConv?.assignedTo) {
       const [agent] = await db
         .select()
@@ -73,10 +89,13 @@ export async function processIncomingMessage(message: any) {
       }
     }
 
-    // Check business hours
     const now = new Date();
-    const day = now.getDay();
     const hour = now.getHours();
+    let greeting = "Bom dia";
+    if (hour >= 12 && hour < 18) greeting = "Boa tarde";
+    else if (hour >= 18) greeting = "Boa noite";
+
+    const day = now.getDay();
     const minute = now.getMinutes();
     const currentTime = hour * 60 + minute;
 
@@ -92,56 +111,132 @@ export async function processIncomingMessage(message: any) {
 
     console.log("[CHATBOT] Business hours:", isBusinessHours);
     console.log("[CHATBOT] Agent available:", isAgentAvailable);
-    console.log("[CHATBOT] Current time:", now.toLocaleTimeString());
 
-    // Generate greeting based on time
-    let greeting = "Bom dia";
-    if (hour >= 12 && hour < 18) greeting = "Boa tarde";
-    else if (hour >= 18) greeting = "Boa noite";
+    if (isFirstMessage) {
+      let welcomeMessage = "";
 
-    // Build response based on conditions
-    let response = "";
+      if (!isBusinessHours) {
+        welcomeMessage =
+          `${greeting}!\n\n` +
+          `Nosso horário de atendimento é de 08h às 20h de Segunda a Sábado.\n` +
+          `Aos Domingos e Feriados de 8h às 12h.\n\n` +
+          `Retornaremos no próximo horário disponível. 😊`;
+      } else if (isAgentAvailable && agentName) {
+        welcomeMessage = `${greeting} eu sou ${agentName}, como posso te ajudar?`;
+      } else {
+        welcomeMessage = `${greeting}! Um momento que já já vamos te atender! 🙏`;
+      }
 
-    if (!isBusinessHours) {
-      response =
-        `${greeting}!\n\n` +
-        `Nosso horário de atendimento é de 08h às 20h de Segunda a Sábado.\n` +
-        `Aos Domingos e Feriados de 8h às 12h.\n\n` +
-        `Retornaremos no próximo horário disponível.`;
-    } else if (isAgentAvailable && agentName) {
-      response = `${greeting} eu sou ${agentName}, como posso te ajudar?`;
-    } else {
-      response = `${greeting}! Um momento que já já vamos te atender!`;
+      console.log("[CHATBOT] Sending welcome message...");
+
+      if (message.provider === "whatsapp") {
+        await sendWhatsAppMessage({
+          to: message.fromNumber,
+          message: welcomeMessage,
+        });
+      } else if (message.provider === "instagram") {
+        await sendInstagramMessage({
+          to: message.fromNumber,
+          message: welcomeMessage,
+        });
+      }
+
+      console.log("[CHATBOT] Welcome message sent!");
     }
 
-    console.log(
-      "[CHATBOT] Sending response:",
-      response.substring(0, 50) + "..."
-    );
-
-    // Send response
-    if (message.provider === "whatsapp") {
-      await sendWhatsAppMessage({
-        to: message.fromNumber,
-        message: response,
-      });
-    } else if (message.provider === "instagram") {
-      await sendInstagramMessage({
-        to: message.fromNumber,
-        message: response,
-      });
-    }
-
-    console.log("[CHATBOT] Response sent successfully!");
-
-    // Mark as processed
-    await markMessageAsProcessed(message.id, {
-      customerId: customer?.id || undefined,
-    });
-
+    await markMessageAsProcessed(message.id, { customerId: customer.id });
     console.log("[CHATBOT] Message marked as processed");
   } catch (error) {
     console.error("[CHATBOT] Error:", error);
+  }
+}
+
+/**
+ * Close a conversation and send appropriate message
+ */
+export async function closeConversation(
+  conversationId: number,
+  closeReason: string
+) {
+  console.log("==========================================");
+  console.log("[CHATBOT] Closing conversation:", conversationId);
+  console.log("[CHATBOT] Reason:", closeReason);
+  console.log("==========================================");
+
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    const [conv] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+
+    if (!conv) {
+      console.log("[CHATBOT] Conversation not found");
+      return;
+    }
+
+    await db
+      .update(conversations)
+      .set({
+        status: "closed",
+        closedAt: new Date(),
+        closeReason: closeReason as any,
+      })
+      .where(eq(conversations.id, conversationId));
+
+    const customerId = conv.customerId;
+    if (!customerId) {
+      console.log("[CHATBOT] Customer ID not found");
+      return;
+    }
+
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, customerId))
+      .limit(1);
+
+    if (!customer || !customer.phone) {
+      console.log("[CHATBOT] Customer or phone not found");
+      return;
+    }
+
+    let closingMessage = "";
+
+    if (closeReason === "venda") {
+      closingMessage =
+        `Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\n` +
+        `Digite 5️⃣ Muito satisfeito 😍\n` +
+        `Digite 4️⃣ Satisfeito 😀\n` +
+        `Digite 3️⃣ Indiferente 😐\n` +
+        `Digite 2️⃣ Insatisfeito ☹️\n` +
+        `Digite 1️⃣ Muito insatisfeito 😞`;
+    } else if (closeReason === "orcamento") {
+      closingMessage = `Agradecemos seu contato, e estaremos sempre à disposição. 😉`;
+    } else {
+      closingMessage = `Obrigado pelo contato! 😊`;
+    }
+
+    console.log("[CHATBOT] Sending closing message...");
+
+    if (conv.channel === "whatsapp") {
+      await sendWhatsAppMessage({
+        to: customer.phone,
+        message: closingMessage,
+      });
+    } else if (conv.channel === "instagram") {
+      await sendInstagramMessage({
+        to: customer.phone,
+        message: closingMessage,
+      });
+    }
+
+    console.log("[CHATBOT] Closing message sent!");
+  } catch (error) {
+    console.error("[CHATBOT] Error closing conversation:", error);
   }
 }
 
@@ -174,17 +269,15 @@ export async function processPendingMessages() {
  */
 export function startChatbot() {
   console.log("==========================================");
-  console.log("[CHATBOT] Starting Simple Chatbot Automation");
-  console.log("[CHATBOT] Version: 1.0 - Working Version");
+  console.log("[CHATBOT] Starting Simple Chatbot Automation - FIXED");
+  console.log("[CHATBOT] Version: 2.0 - With Closing Messages");
   console.log("==========================================");
 
-  // Process immediately
   setTimeout(async () => {
     console.log("[CHATBOT] Running initial check...");
     await processPendingMessages();
   }, 3000);
 
-  // Process every 10 seconds
   setInterval(async () => {
     await processPendingMessages();
   }, 10000);
