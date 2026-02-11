@@ -116,9 +116,7 @@ export async function runCRMMigration() {
 
     for (const tag of initialTags) {
       await db.raw(
-        `
-        INSERT IGNORE INTO tags (name, color, description) VALUES (?, ?, ?)
-      `,
+        `INSERT IGNORE INTO tags (name, color, description) VALUES (?, ?, ?)`,
         [tag.name, tag.color, tag.description]
       );
     }
