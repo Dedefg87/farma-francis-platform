@@ -69,19 +69,6 @@ export async function upsertUser(userData: {
 }
 
 export async function getDb() {
-  // If we have a connection, verify it's still alive
-  if (_db) {
-    try {
-      // Try a simple query to check connection
-      await (_db as any).execute("SELECT 1");
-      return _db;
-    } catch (error) {
-      console.warn("[Database] Connection lost, reconnecting...");
-      _db = null;
-    }
-  }
-
-  // Create new connection if needed
   if (!_db && process.env.DATABASE_URL) {
     try {
       _db = drizzle(process.env.DATABASE_URL);
