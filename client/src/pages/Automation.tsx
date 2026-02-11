@@ -1,29 +1,47 @@
-import { useState } from 'react';
-import FarmaDashboardLayout from '@/components/FarmaDashboardLayout';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Plus, Workflow, Zap, Menu as MenuIcon, Upload, FileJson, Sparkles, MessageSquare, UserCheck, Calendar, Star } from 'lucide-react';
-import { trpc } from '@/lib/trpc';
-import { toast } from 'sonner';
-import N8NFlowEditor from '@/components/flow/N8NFlowEditor';
-import N8NSidebar from '@/components/flow/N8NSidebar';
-import N8NNodeConfig from '@/components/flow/N8NNodeConfig';
-import { Node } from 'reactflow';
-import { convertIVRToReactFlow } from '@/lib/ivrConverter';
-import { convertToReactFlow, generateCompleteFlow } from '@/lib/flowConverters';
-import { fullyInterlinkFlow, validateFlowIntegrity } from '@/lib/flowLinker';
-import { useFlowImportWorker } from '@/hooks/useFlowImportWorker';
+import { useState } from "react";
+import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Plus,
+  Workflow,
+  Zap,
+  Menu as MenuIcon,
+  Upload,
+  FileJson,
+  Sparkles,
+  MessageSquare,
+  UserCheck,
+  Calendar,
+  Star,
+} from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import N8NFlowEditor from "@/components/flow/N8NFlowEditor";
+import N8NSidebar from "@/components/flow/N8NSidebar";
+import N8NNodeConfig from "@/components/flow/N8NNodeConfig";
+import { Node } from "reactflow";
+import { convertIVRToReactFlow } from "@/lib/ivrConverter";
+import { convertToReactFlow, generateCompleteFlow } from "@/lib/flowConverters";
+import { fullyInterlinkFlow, validateFlowIntegrity } from "@/lib/flowLinker";
+import { useFlowImportWorker } from "@/hooks/useFlowImportWorker";
 
 export default function Automation() {
   const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [newFlowName, setNewFlowName] = useState('');
-  const [newFlowDescription, setNewFlowDescription] = useState('');
+  const [newFlowName, setNewFlowName] = useState("");
+  const [newFlowDescription, setNewFlowDescription] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
@@ -31,45 +49,51 @@ export default function Automation() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
 
-  const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
+  const { data: visualFlows, refetch: refetchFlows } =
+    trpc.visualFlows.list.useQuery();
   const { data: automationFlows } = trpc.automation.list.useQuery();
   const { data: uraMenus } = trpc.uraMenus.list.useQuery();
 
   // Web Worker para processar importação sem travar a UI
-  const { isProcessing: workerProcessing, progress: workerProgress, parseJSON, convertN8N } = useFlowImportWorker({
-    onProgress: (progress) => {
+  const {
+    isProcessing: workerProcessing,
+    progress: workerProgress,
+    parseJSON,
+    convertN8N,
+  } = useFlowImportWorker({
+    onProgress: progress => {
       setImportProgress(progress);
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Erro no processamento: ${error}`);
       setImportLoading(false);
     },
   });
 
   const createFlow = trpc.visualFlows.create.useMutation({
-    onSuccess: (data) => {
-      toast.success('Fluxo criado com sucesso!');
+    onSuccess: data => {
+      toast.success("Fluxo criado com sucesso!");
       setSelectedFlowId(data.insertId as number);
       setIsCreating(false);
-      setNewFlowName('');
-      setNewFlowDescription('');
+      setNewFlowName("");
+      setNewFlowDescription("");
       refetchFlows();
     },
     onError: () => {
-      toast.error('Erro ao criar fluxo');
+      toast.error("Erro ao criar fluxo");
     },
   });
 
   const updateFlow = trpc.visualFlows.update.useMutation({
     onSuccess: () => {
-      toast.success('Fluxo atualizado!');
+      toast.success("Fluxo atualizado!");
       refetchFlows();
     },
   });
 
   const deleteFlow = trpc.visualFlows.delete.useMutation({
     onSuccess: () => {
-      toast.success('Fluxo deletado!');
+      toast.success("Fluxo deletado!");
       setSelectedFlowId(null);
       refetchFlows();
     },
@@ -83,7 +107,7 @@ export default function Automation() {
 
   const handleCreateFlow = () => {
     if (!newFlowName.trim()) {
-      toast.error('Nome do fluxo é obrigatório');
+      toast.error("Nome do fluxo é obrigatório");
       return;
     }
 
@@ -105,13 +129,13 @@ export default function Automation() {
 
   const handleExecuteFlow = async (flowData: any) => {
     // TODO: Implement flow execution engine
-    toast.info('Execução de fluxos será implementada em breve');
-    console.log('Execute flow:', flowData);
+    toast.info("Execução de fluxos será implementada em breve");
+    console.log("Execute flow:", flowData);
   };
 
   const handleImportFlow = async () => {
     if (!importFile) {
-      toast.error('Selecione um arquivo para importar');
+      toast.error("Selecione um arquivo para importar");
       return;
     }
 
@@ -119,10 +143,10 @@ export default function Automation() {
     setImportProgress(5);
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = async e => {
       try {
         let content = e.target?.result as string;
-        
+
         // Detectar e decodificar Base64
         if (content.match(/^[A-Za-z0-9+/=]+$/)) {
           try {
@@ -131,48 +155,57 @@ export default function Automation() {
             // Não é Base64 válido, continuar com conteúdo original
           }
         }
-        
+
         setImportProgress(10);
-        
+
         // Usar Web Worker para processar o JSON
         let parseResult;
         try {
           parseResult = await parseJSON(content);
         } catch (parseError) {
           // Fallback: parse direto
-          parseResult = { 
+          parseResult = {
             parsed: JSON.parse(content),
-            isN8N: false 
+            isN8N: false,
           };
         }
-        
+
         const flowData = parseResult.parsed;
         const isN8N = parseResult.isN8N;
-        const flowName = flowData.name || importFile.name.replace(/\.[^/.]+$/, '');
-        
+        const flowName =
+          flowData.name || importFile.name.replace(/\.[^/.]+$/, "");
+
         let nodes, edges;
-        
+
         if (isN8N) {
           // Usar Web Worker para converter N8N
           toast.info(`Processando fluxo N8N (${parseResult.nodeCount} nós)...`);
-          console.log('Iniciando conversão N8N via Worker:', flowData.name, 'com', flowData.nodes?.length, 'nós');
-          
+          console.log(
+            "Iniciando conversão N8N via Worker:",
+            flowData.name,
+            "com",
+            flowData.nodes?.length,
+            "nós"
+          );
+
           try {
             const result = await convertN8N(flowData);
             nodes = result.nodes;
             edges = result.edges;
-            
-            toast.success(`Convertido: ${result.stats.totalNodes} nós, ${result.stats.totalEdges} conexões`);
+
+            toast.success(
+              `Convertido: ${result.stats.totalNodes} nós, ${result.stats.totalEdges} conexões`
+            );
           } catch (n8nError) {
-            console.error('Erro no Worker:', n8nError);
-            toast.error('Erro no processamento. Tentando conversão local...');
-            
+            console.error("Erro no Worker:", n8nError);
+            toast.error("Erro no processamento. Tentando conversão local...");
+
             // Fallback para conversão local simplificada
             const converted = convertToReactFlow(content);
             nodes = converted.nodes;
             edges = converted.edges;
           }
-        } else if (flowData.options && typeof flowData.options === 'string') {
+        } else if (flowData.options && typeof flowData.options === "string") {
           // Formato IVR
           const converted = convertIVRToReactFlow(flowData);
           nodes = converted.nodes;
@@ -187,31 +220,33 @@ export default function Automation() {
           nodes = converted.nodes;
           edges = converted.edges;
         }
-        
+
         setImportProgress(90);
-        
+
         // Validar e salvar
         const validation = validateFlowIntegrity(nodes, edges);
         if (!validation.isValid) {
-          console.warn('Problemas no fluxo:', validation.errors);
+          console.warn("Problemas no fluxo:", validation.errors);
         }
-        
+
         // Criar novo fluxo
         createFlow.mutate({
           name: flowName,
-          description: flowData.description || 'Fluxo importado',
+          description: flowData.description || "Fluxo importado",
           flowData: JSON.stringify({ nodes, edges }),
         });
 
         setImportProgress(100);
-        toast.success('Fluxo importado com sucesso!');
+        toast.success("Fluxo importado com sucesso!");
         setIsImporting(false);
         setImportFile(null);
         setImportLoading(false);
         setImportProgress(0);
       } catch (error) {
-        console.error('Erro ao importar:', error);
-        toast.error(`Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+        console.error("Erro ao importar:", error);
+        toast.error(
+          `Erro: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+        );
         setImportLoading(false);
         setImportProgress(0);
       }
@@ -250,7 +285,9 @@ export default function Automation() {
                       <Input
                         type="file"
                         accept=".json,.ivr,.n8n,.zapier,.make"
-                        onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                        onChange={e =>
+                          setImportFile(e.target.files?.[0] || null)
+                        }
                         className="mt-2"
                       />
                       <p className="text-xs text-muted-foreground mt-2">
@@ -261,7 +298,9 @@ export default function Automation() {
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
                         <FileJson className="w-5 h-5 text-primary" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium">{importFile.name}</p>
+                          <p className="text-sm font-medium">
+                            {importFile.name}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {(importFile.size / 1024).toFixed(2)} KB
                           </p>
@@ -270,15 +309,15 @@ export default function Automation() {
                     )}
                     {importLoading && (
                       <div className="w-full bg-muted rounded-full h-2">
-                        <div 
-                          className="bg-primary h-2 rounded-full transition-all duration-300" 
+                        <div
+                          className="bg-primary h-2 rounded-full transition-all duration-300"
                           style={{ width: `${importProgress}%` }}
                         />
                       </div>
                     )}
-                    <Button 
-                      onClick={handleImportFlow} 
-                      className="w-full" 
+                    <Button
+                      onClick={handleImportFlow}
+                      className="w-full"
                       disabled={!importFile || importLoading}
                     >
                       {importLoading ? (
@@ -287,7 +326,7 @@ export default function Automation() {
                           Processando... {importProgress}%
                         </>
                       ) : (
-                        'Importar'
+                        "Importar"
                       )}
                     </Button>
                   </div>
@@ -301,34 +340,34 @@ export default function Automation() {
                     Novo Fluxo
                   </Button>
                 </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Criar Novo Fluxo</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div>
-                    <Label>Nome do Fluxo</Label>
-                    <Input
-                      value={newFlowName}
-                      onChange={(e) => setNewFlowName(e.target.value)}
-                      placeholder="Atendimento Automático"
-                    />
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Criar Novo Fluxo</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div>
+                      <Label>Nome do Fluxo</Label>
+                      <Input
+                        value={newFlowName}
+                        onChange={e => setNewFlowName(e.target.value)}
+                        placeholder="Atendimento Automático"
+                      />
+                    </div>
+                    <div>
+                      <Label>Descrição (opcional)</Label>
+                      <Textarea
+                        value={newFlowDescription}
+                        onChange={e => setNewFlowDescription(e.target.value)}
+                        placeholder="Descreva o objetivo deste fluxo..."
+                        rows={3}
+                      />
+                    </div>
+                    <Button onClick={handleCreateFlow} className="w-full">
+                      Criar Fluxo
+                    </Button>
                   </div>
-                  <div>
-                    <Label>Descrição (opcional)</Label>
-                    <Textarea
-                      value={newFlowDescription}
-                      onChange={(e) => setNewFlowDescription(e.target.value)}
-                      placeholder="Descreva o objetivo deste fluxo..."
-                      rows={3}
-                    />
-                  </div>
-                  <Button onClick={handleCreateFlow} className="w-full">
-                    Criar Fluxo
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -365,24 +404,30 @@ export default function Automation() {
                     >
                       ← Voltar
                     </Button>
-                    <div className="text-sm font-medium">{selectedFlow.name}</div>
+                    <div className="text-sm font-medium">
+                      {selectedFlow.name}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => toggleFlow.mutate({
-                        id: selectedFlowId,
-                        isActive: !selectedFlow.isActive,
-                      })}
+                      onClick={() =>
+                        toggleFlow.mutate({
+                          id: selectedFlowId,
+                          isActive: !selectedFlow.isActive,
+                        })
+                      }
                     >
-                      {selectedFlow.isActive ? 'Desativar' : 'Ativar'}
+                      {selectedFlow.isActive ? "Desativar" : "Ativar"}
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
                       onClick={() => {
-                        if (confirm('Tem certeza que deseja deletar este fluxo?')) {
+                        if (
+                          confirm("Tem certeza que deseja deletar este fluxo?")
+                        ) {
                           deleteFlow.mutate({ id: selectedFlowId });
                         }
                       }}
@@ -396,8 +441,16 @@ export default function Automation() {
                   <div className="flex-1">
                     <N8NFlowEditor
                       flowId={selectedFlowId}
-                      initialNodes={selectedFlow?.flowData ? JSON.parse(selectedFlow.flowData).nodes : []}
-                      initialEdges={selectedFlow?.flowData ? JSON.parse(selectedFlow.flowData).edges : []}
+                      initialNodes={
+                        selectedFlow?.flowData
+                          ? JSON.parse(selectedFlow.flowData).nodes
+                          : []
+                      }
+                      initialEdges={
+                        selectedFlow?.flowData
+                          ? JSON.parse(selectedFlow.flowData).edges
+                          : []
+                      }
                       onSave={(nodes, edges) => {
                         if (selectedFlowId) {
                           updateFlow.mutate({
@@ -406,7 +459,7 @@ export default function Automation() {
                           });
                         }
                       }}
-                      onNodeDoubleClick={(node) => {
+                      onNodeDoubleClick={node => {
                         setSelectedNode(node);
                         setIsConfigOpen(true);
                       }}
@@ -417,7 +470,7 @@ export default function Automation() {
             ) : (
               <div className="p-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {visualFlows?.map((flow) => (
+                  {visualFlows?.map(flow => (
                     <Card
                       key={flow.id}
                       className="p-4 cursor-pointer hover:shadow-md transition-shadow"
@@ -431,11 +484,11 @@ export default function Automation() {
                         <div
                           className={`px-2 py-0.5 rounded text-xs ${
                             flow.isActive
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-gray-100 text-gray-700'
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-700"
                           }`}
                         >
-                          {flow.isActive ? 'Ativo' : 'Inativo'}
+                          {flow.isActive ? "Ativo" : "Inativo"}
                         </div>
                       </div>
                       {flow.description && (
@@ -446,7 +499,7 @@ export default function Automation() {
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{flow.executionCount || 0} execuções</span>
                         <span>
-                          {new Date(flow.updatedAt).toLocaleDateString('pt-BR')}
+                          {new Date(flow.updatedAt).toLocaleDateString("pt-BR")}
                         </span>
                       </div>
                     </Card>
@@ -455,7 +508,9 @@ export default function Automation() {
                   {(!visualFlows || visualFlows.length === 0) && (
                     <Card className="p-8 col-span-full text-center">
                       <Workflow className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                      <h3 className="font-semibold mb-2">Nenhum fluxo criado</h3>
+                      <h3 className="font-semibold mb-2">
+                        Nenhum fluxo criado
+                      </h3>
                       <p className="text-sm text-muted-foreground mb-4">
                         Crie seu primeiro fluxo visual de automação
                       </p>
@@ -474,132 +529,759 @@ export default function Automation() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 {
-                  id: 'welcome',
-                  name: 'Boas-vindas Automáticas',
-                  description: 'Mensagem de boas-vindas personalizada para novos contatos',
+                  id: "welcome",
+                  name: "Boas-vindas Automáticas",
+                  description:
+                    "Mensagem de boas-vindas personalizada para novos contatos",
                   icon: MessageSquare,
-                  color: 'bg-blue-600',
+                  color: "bg-blue-600",
                   nodes: [
-                    { id: 'trigger-1', type: 'default', position: { x: 100, y: 100 }, data: { label: 'Novo Contato', config: { event: 'new_contact' } } },
-                    { id: 'condition-1', type: 'default', position: { x: 300, y: 100 }, data: { label: 'Horário Comercial?', config: { condition: 'working_hours' } } },
-                    { id: 'message-1', type: 'default', position: { x: 500, y: 50 }, data: { label: 'Boas-vindas Imediato', config: { message: 'Olá! 👋 Bem-vindo(a) à Farma Francis! Como posso ajudar?' } } },
-                    { id: 'message-2', type: 'default', position: { x: 500, y: 150 }, data: { label: 'Boas-vindas Fora de Horário', config: { message: 'Olá! 👋 Estamos fora do horário de atendimento. Retornaremos em breve!' } } },
-                    { id: 'tag-1', type: 'default', position: { x: 700, y: 50 }, data: { label: 'Adicionar Tag', config: { action: 'add_tag', tag: 'novo_cliente' } } },
+                    {
+                      id: "trigger-1",
+                      type: "default",
+                      position: { x: 100, y: 100 },
+                      data: {
+                        label: "Novo Contato",
+                        config: { event: "new_contact" },
+                      },
+                    },
+                    {
+                      id: "condition-1",
+                      type: "default",
+                      position: { x: 300, y: 100 },
+                      data: {
+                        label: "Horário Comercial?",
+                        config: { condition: "working_hours" },
+                      },
+                    },
+                    {
+                      id: "message-1",
+                      type: "default",
+                      position: { x: 500, y: 50 },
+                      data: {
+                        label: "Boas-vindas Imediato",
+                        config: {
+                          message:
+                            "Olá! 👋 Bem-vindo(a) à Farma Francis! Como posso ajudar?",
+                        },
+                      },
+                    },
+                    {
+                      id: "message-2",
+                      type: "default",
+                      position: { x: 500, y: 150 },
+                      data: {
+                        label: "Boas-vindas Fora de Horário",
+                        config: {
+                          message:
+                            "Olá! 👋 Estamos fora do horário de atendimento. Retornaremos em breve!",
+                        },
+                      },
+                    },
+                    {
+                      id: "tag-1",
+                      type: "default",
+                      position: { x: 700, y: 50 },
+                      data: {
+                        label: "Adicionar Tag",
+                        config: { action: "add_tag", tag: "novo_cliente" },
+                      },
+                    },
                   ],
                   edges: [
-                    { id: 'e1-2', source: 'trigger-1', target: 'condition-1' },
-                    { id: 'e2-3', source: 'condition-1', target: 'message-1', label: 'Sim' },
-                    { id: 'e2-4', source: 'condition-1', target: 'message-2', label: 'Não' },
-                    { id: 'e3-5', source: 'message-1', target: 'tag-1' },
+                    { id: "e1-2", source: "trigger-1", target: "condition-1" },
+                    {
+                      id: "e2-3",
+                      source: "condition-1",
+                      target: "message-1",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e2-4",
+                      source: "condition-1",
+                      target: "message-2",
+                      label: "Não",
+                    },
+                    { id: "e3-5", source: "message-1", target: "tag-1" },
                   ],
                 },
                 {
-                  id: 'faq',
-                  name: 'FAQ com IA',
-                  description: 'Responde perguntas frequentes usando inteligência artificial',
+                  id: "faq",
+                  name: "FAQ com IA",
+                  description:
+                    "Responde perguntas frequentes usando inteligência artificial",
                   icon: Sparkles,
-                  color: 'bg-pink-600',
+                  color: "bg-pink-600",
                   nodes: [
-                    { id: 'trigger-1', type: 'default', position: { x: 100, y: 100 }, data: { label: 'Mensagem Recebida', config: { event: 'message_received' } } },
-                    { id: 'condition-1', type: 'default', position: { x: 300, y: 100 }, data: { label: 'Contém Pergunta?', config: { condition: 'contains_question' } } },
-                    { id: 'ai-1', type: 'default', position: { x: 500, y: 50 }, data: { label: 'Consultar IA', config: { model: 'gpt-4', systemPrompt: 'Você é um assistente da Farma Francis. Responda perguntas sobre medicamentos, horários e serviços.' } } },
-                    { id: 'message-1', type: 'default', position: { x: 700, y: 50 }, data: { label: 'Enviar Resposta IA', config: { message: '{{ai_response}}' } } },
-                    { id: 'human-1', type: 'default', position: { x: 500, y: 150 }, data: { label: 'Transferir Humano', config: { action: 'transfer_to_human' } } },
-                    { id: 'log-1', type: 'default', position: { x: 900, y: 50 }, data: { label: 'Registrar Interação', config: { action: 'log', category: 'faq_ia' } } },
+                    {
+                      id: "trigger-1",
+                      type: "default",
+                      position: { x: 100, y: 100 },
+                      data: {
+                        label: "Mensagem Recebida",
+                        config: { event: "message_received" },
+                      },
+                    },
+                    {
+                      id: "condition-1",
+                      type: "default",
+                      position: { x: 300, y: 100 },
+                      data: {
+                        label: "Contém Pergunta?",
+                        config: { condition: "contains_question" },
+                      },
+                    },
+                    {
+                      id: "ai-1",
+                      type: "default",
+                      position: { x: 500, y: 50 },
+                      data: {
+                        label: "Consultar IA",
+                        config: {
+                          model: "gpt-4",
+                          systemPrompt:
+                            "Você é um assistente da Farma Francis. Responda perguntas sobre medicamentos, horários e serviços.",
+                        },
+                      },
+                    },
+                    {
+                      id: "message-1",
+                      type: "default",
+                      position: { x: 700, y: 50 },
+                      data: {
+                        label: "Enviar Resposta IA",
+                        config: { message: "{{ai_response}}" },
+                      },
+                    },
+                    {
+                      id: "human-1",
+                      type: "default",
+                      position: { x: 500, y: 150 },
+                      data: {
+                        label: "Transferir Humano",
+                        config: { action: "transfer_to_human" },
+                      },
+                    },
+                    {
+                      id: "log-1",
+                      type: "default",
+                      position: { x: 900, y: 50 },
+                      data: {
+                        label: "Registrar Interação",
+                        config: { action: "log", category: "faq_ia" },
+                      },
+                    },
                   ],
                   edges: [
-                    { id: 'e1-2', source: 'trigger-1', target: 'condition-1' },
-                    { id: 'e2-3', source: 'condition-1', target: 'ai-1', label: 'Sim' },
-                    { id: 'e2-4', source: 'condition-1', target: 'human-1', label: 'Não' },
-                    { id: 'e3-4', source: 'ai-1', target: 'message-1' },
-                    { id: 'e4-5', source: 'message-1', target: 'log-1' },
+                    { id: "e1-2", source: "trigger-1", target: "condition-1" },
+                    {
+                      id: "e2-3",
+                      source: "condition-1",
+                      target: "ai-1",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e2-4",
+                      source: "condition-1",
+                      target: "human-1",
+                      label: "Não",
+                    },
+                    { id: "e3-4", source: "ai-1", target: "message-1" },
+                    { id: "e4-5", source: "message-1", target: "log-1" },
                   ],
                 },
                 {
-                  id: 'qualification',
-                  name: 'Qualificação de Leads',
-                  description: 'Qualifica leads automaticamente com perguntas',
+                  id: "qualification",
+                  name: "Qualificação de Leads",
+                  description: "Qualifica leads automaticamente com perguntas",
                   icon: UserCheck,
-                  color: 'bg-green-600',
+                  color: "bg-green-600",
                   nodes: [
-                    { id: 'trigger-1', type: 'default', position: { x: 100, y: 150 }, data: { label: 'Novo Lead', config: { event: 'new_lead' } } },
-                    { id: 'message-1', type: 'default', position: { x: 300, y: 150 }, data: { label: 'Pergunta 1: Interesse', config: { message: 'Qual tipo de produto você procura?\n1️⃣ Medicamentos\n2️⃣ Cosméticos\n3️⃣ Suplementos' } } },
-                    { id: 'wait-1', type: 'default', position: { x: 500, y: 150 }, data: { label: 'Aguardar Resposta', config: { timeout: 300 } } },
-                    { id: 'message-2', type: 'default', position: { x: 700, y: 150 }, data: { label: 'Pergunta 2: Urgência', config: { message: 'Quando você precisa?\n1️⃣ Hoje\n2️⃣ Esta semana\n3️⃣ Sem pressa' } } },
-                    { id: 'condition-1', type: 'default', position: { x: 900, y: 100 }, data: { label: 'Lead Qualificado?', config: { condition: 'score >= 7' } } },
-                    { id: 'crm-1', type: 'default', position: { x: 1100, y: 50 }, data: { label: 'Adicionar ao CRM (Quente)', config: { action: 'add_to_crm', status: 'hot' } } },
-                    { id: 'crm-2', type: 'default', position: { x: 1100, y: 150 }, data: { label: 'Adicionar ao CRM (Frio)', config: { action: 'add_to_crm', status: 'cold' } } },
+                    {
+                      id: "trigger-1",
+                      type: "default",
+                      position: { x: 100, y: 150 },
+                      data: {
+                        label: "Novo Lead",
+                        config: { event: "new_lead" },
+                      },
+                    },
+                    {
+                      id: "message-1",
+                      type: "default",
+                      position: { x: 300, y: 150 },
+                      data: {
+                        label: "Pergunta 1: Interesse",
+                        config: {
+                          message:
+                            "Qual tipo de produto você procura?\n1️⃣ Medicamentos\n2️⃣ Cosméticos\n3️⃣ Suplementos",
+                        },
+                      },
+                    },
+                    {
+                      id: "wait-1",
+                      type: "default",
+                      position: { x: 500, y: 150 },
+                      data: {
+                        label: "Aguardar Resposta",
+                        config: { timeout: 300 },
+                      },
+                    },
+                    {
+                      id: "message-2",
+                      type: "default",
+                      position: { x: 700, y: 150 },
+                      data: {
+                        label: "Pergunta 2: Urgência",
+                        config: {
+                          message:
+                            "Quando você precisa?\n1️⃣ Hoje\n2️⃣ Esta semana\n3️⃣ Sem pressa",
+                        },
+                      },
+                    },
+                    {
+                      id: "condition-1",
+                      type: "default",
+                      position: { x: 900, y: 100 },
+                      data: {
+                        label: "Lead Qualificado?",
+                        config: { condition: "score >= 7" },
+                      },
+                    },
+                    {
+                      id: "crm-1",
+                      type: "default",
+                      position: { x: 1100, y: 50 },
+                      data: {
+                        label: "Adicionar ao CRM (Quente)",
+                        config: { action: "add_to_crm", status: "hot" },
+                      },
+                    },
+                    {
+                      id: "crm-2",
+                      type: "default",
+                      position: { x: 1100, y: 150 },
+                      data: {
+                        label: "Adicionar ao CRM (Frio)",
+                        config: { action: "add_to_crm", status: "cold" },
+                      },
+                    },
                   ],
                   edges: [
-                    { id: 'e1-2', source: 'trigger-1', target: 'message-1' },
-                    { id: 'e2-3', source: 'message-1', target: 'wait-1' },
-                    { id: 'e3-4', source: 'wait-1', target: 'message-2' },
-                    { id: 'e4-5', source: 'message-2', target: 'condition-1' },
-                    { id: 'e5-6', source: 'condition-1', target: 'crm-1', label: 'Sim' },
-                    { id: 'e5-7', source: 'condition-1', target: 'crm-2', label: 'Não' },
+                    { id: "e1-2", source: "trigger-1", target: "message-1" },
+                    { id: "e2-3", source: "message-1", target: "wait-1" },
+                    { id: "e3-4", source: "wait-1", target: "message-2" },
+                    { id: "e4-5", source: "message-2", target: "condition-1" },
+                    {
+                      id: "e5-6",
+                      source: "condition-1",
+                      target: "crm-1",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e5-7",
+                      source: "condition-1",
+                      target: "crm-2",
+                      label: "Não",
+                    },
                   ],
                 },
                 {
-                  id: 'scheduling',
-                  name: 'Agendamento de Consultas',
-                  description: 'Permite agendamento automático de consultas',
+                  id: "scheduling",
+                  name: "Agendamento de Consultas",
+                  description: "Permite agendamento automático de consultas",
                   icon: Calendar,
-                  color: 'bg-purple-600',
+                  color: "bg-purple-600",
                   nodes: [
-                    { id: 'trigger-1', type: 'default', position: { x: 100, y: 150 }, data: { label: 'Solicitar Agendamento', config: { keyword: 'agendar' } } },
-                    { id: 'api-1', type: 'default', position: { x: 300, y: 150 }, data: { label: 'Verificar Disponibilidade', config: { endpoint: '/api/availability', method: 'GET' } } },
-                    { id: 'message-1', type: 'default', position: { x: 500, y: 150 }, data: { label: 'Mostrar Horários', config: { message: 'Horários disponíveis:\n{{available_slots}}' } } },
-                    { id: 'wait-1', type: 'default', position: { x: 700, y: 150 }, data: { label: 'Aguardar Escolha', config: { timeout: 600 } } },
-                    { id: 'api-2', type: 'default', position: { x: 900, y: 150 }, data: { label: 'Confirmar Agendamento', config: { endpoint: '/api/appointments', method: 'POST' } } },
-                    { id: 'message-2', type: 'default', position: { x: 1100, y: 100 }, data: { label: 'Confirmação', config: { message: '✅ Agendamento confirmado para {{date}} às {{time}}!' } } },
-                    { id: 'notification-1', type: 'default', position: { x: 1100, y: 200 }, data: { label: 'Enviar Lembrete', config: { action: 'schedule_reminder', time: '-1 day' } } },
+                    {
+                      id: "trigger-1",
+                      type: "default",
+                      position: { x: 100, y: 150 },
+                      data: {
+                        label: "Solicitar Agendamento",
+                        config: { keyword: "agendar" },
+                      },
+                    },
+                    {
+                      id: "api-1",
+                      type: "default",
+                      position: { x: 300, y: 150 },
+                      data: {
+                        label: "Verificar Disponibilidade",
+                        config: {
+                          endpoint: "/api/availability",
+                          method: "GET",
+                        },
+                      },
+                    },
+                    {
+                      id: "message-1",
+                      type: "default",
+                      position: { x: 500, y: 150 },
+                      data: {
+                        label: "Mostrar Horários",
+                        config: {
+                          message: "Horários disponíveis:\n{{available_slots}}",
+                        },
+                      },
+                    },
+                    {
+                      id: "wait-1",
+                      type: "default",
+                      position: { x: 700, y: 150 },
+                      data: {
+                        label: "Aguardar Escolha",
+                        config: { timeout: 600 },
+                      },
+                    },
+                    {
+                      id: "api-2",
+                      type: "default",
+                      position: { x: 900, y: 150 },
+                      data: {
+                        label: "Confirmar Agendamento",
+                        config: {
+                          endpoint: "/api/appointments",
+                          method: "POST",
+                        },
+                      },
+                    },
+                    {
+                      id: "message-2",
+                      type: "default",
+                      position: { x: 1100, y: 100 },
+                      data: {
+                        label: "Confirmação",
+                        config: {
+                          message:
+                            "✅ Agendamento confirmado para {{date}} às {{time}}!",
+                        },
+                      },
+                    },
+                    {
+                      id: "notification-1",
+                      type: "default",
+                      position: { x: 1100, y: 200 },
+                      data: {
+                        label: "Enviar Lembrete",
+                        config: { action: "schedule_reminder", time: "-1 day" },
+                      },
+                    },
                   ],
                   edges: [
-                    { id: 'e1-2', source: 'trigger-1', target: 'api-1' },
-                    { id: 'e2-3', source: 'api-1', target: 'message-1' },
-                    { id: 'e3-4', source: 'message-1', target: 'wait-1' },
-                    { id: 'e4-5', source: 'wait-1', target: 'api-2' },
-                    { id: 'e5-6', source: 'api-2', target: 'message-2' },
-                    { id: 'e5-7', source: 'api-2', target: 'notification-1' },
+                    { id: "e1-2", source: "trigger-1", target: "api-1" },
+                    { id: "e2-3", source: "api-1", target: "message-1" },
+                    { id: "e3-4", source: "message-1", target: "wait-1" },
+                    { id: "e4-5", source: "wait-1", target: "api-2" },
+                    { id: "e5-6", source: "api-2", target: "message-2" },
+                    { id: "e5-7", source: "api-2", target: "notification-1" },
                   ],
                 },
                 {
-                  id: 'satisfaction',
-                  name: 'Pesquisa de Satisfação',
-                  description: 'Coleta feedback dos clientes após atendimento',
+                  id: "satisfaction",
+                  name: "Pesquisa de Satisfação",
+                  description: "Coleta feedback dos clientes após atendimento",
                   icon: Star,
-                  color: 'bg-yellow-600',
+                  color: "bg-yellow-600",
                   nodes: [
-                    { id: 'trigger-1', type: 'default', position: { x: 100, y: 150 }, data: { label: 'Atendimento Finalizado', config: { event: 'ticket_closed' } } },
-                    { id: 'delay-1', type: 'default', position: { x: 300, y: 150 }, data: { label: 'Aguardar 5min', config: { delay: 300 } } },
-                    { id: 'message-1', type: 'default', position: { x: 500, y: 150 }, data: { label: 'Solicitar Avaliação', config: { message: 'Como foi seu atendimento?\n⭐ 1 - Péssimo\n⭐⭐ 2 - Ruim\n⭐⭐⭐ 3 - Regular\n⭐⭐⭐⭐ 4 - Bom\n⭐⭐⭐⭐⭐ 5 - Excelente' } } },
-                    { id: 'wait-1', type: 'default', position: { x: 700, y: 150 }, data: { label: 'Aguardar Resposta', config: { timeout: 600 } } },
-                    { id: 'condition-1', type: 'default', position: { x: 900, y: 100 }, data: { label: 'Nota >= 4?', config: { condition: 'rating >= 4' } } },
-                    { id: 'message-2', type: 'default', position: { x: 1100, y: 50 }, data: { label: 'Agradecer', config: { message: '🙏 Obrigado pelo feedback positivo!' } } },
-                    { id: 'message-3', type: 'default', position: { x: 1100, y: 150 }, data: { label: 'Pedir Detalhes', config: { message: 'Sentimos muito. Pode nos contar o que aconteceu?' } } },
-                    { id: 'database-1', type: 'default', position: { x: 1300, y: 100 }, data: { label: 'Salvar Feedback', config: { action: 'save_to_database', table: 'feedback' } } },
+                    {
+                      id: "trigger-1",
+                      type: "default",
+                      position: { x: 100, y: 150 },
+                      data: {
+                        label: "Atendimento Finalizado",
+                        config: { event: "ticket_closed" },
+                      },
+                    },
+                    {
+                      id: "delay-1",
+                      type: "default",
+                      position: { x: 300, y: 150 },
+                      data: { label: "Aguardar 5min", config: { delay: 300 } },
+                    },
+                    {
+                      id: "message-1",
+                      type: "default",
+                      position: { x: 500, y: 150 },
+                      data: {
+                        label: "Solicitar Avaliação",
+                        config: {
+                          message:
+                            "Como foi seu atendimento?\n⭐ 1 - Péssimo\n⭐⭐ 2 - Ruim\n⭐⭐⭐ 3 - Regular\n⭐⭐⭐⭐ 4 - Bom\n⭐⭐⭐⭐⭐ 5 - Excelente",
+                        },
+                      },
+                    },
+                    {
+                      id: "wait-1",
+                      type: "default",
+                      position: { x: 700, y: 150 },
+                      data: {
+                        label: "Aguardar Resposta",
+                        config: { timeout: 600 },
+                      },
+                    },
+                    {
+                      id: "condition-1",
+                      type: "default",
+                      position: { x: 900, y: 100 },
+                      data: {
+                        label: "Nota >= 4?",
+                        config: { condition: "rating >= 4" },
+                      },
+                    },
+                    {
+                      id: "message-2",
+                      type: "default",
+                      position: { x: 1100, y: 50 },
+                      data: {
+                        label: "Agradecer",
+                        config: {
+                          message: "🙏 Obrigado pelo feedback positivo!",
+                        },
+                      },
+                    },
+                    {
+                      id: "message-3",
+                      type: "default",
+                      position: { x: 1100, y: 150 },
+                      data: {
+                        label: "Pedir Detalhes",
+                        config: {
+                          message:
+                            "Sentimos muito. Pode nos contar o que aconteceu?",
+                        },
+                      },
+                    },
+                    {
+                      id: "database-1",
+                      type: "default",
+                      position: { x: 1300, y: 100 },
+                      data: {
+                        label: "Salvar Feedback",
+                        config: {
+                          action: "save_to_database",
+                          table: "feedback",
+                        },
+                      },
+                    },
                   ],
                   edges: [
-                    { id: 'e1-2', source: 'trigger-1', target: 'delay-1' },
-                    { id: 'e2-3', source: 'delay-1', target: 'message-1' },
-                    { id: 'e3-4', source: 'message-1', target: 'wait-1' },
-                    { id: 'e4-5', source: 'wait-1', target: 'condition-1' },
-                    { id: 'e5-6', source: 'condition-1', target: 'message-2', label: 'Sim' },
-                    { id: 'e5-7', source: 'condition-1', target: 'message-3', label: 'Não' },
-                    { id: 'e6-8', source: 'message-2', target: 'database-1' },
-                    { id: 'e7-8', source: 'message-3', target: 'database-1' },
+                    { id: "e1-2", source: "trigger-1", target: "delay-1" },
+                    { id: "e2-3", source: "delay-1", target: "message-1" },
+                    { id: "e3-4", source: "message-1", target: "wait-1" },
+                    { id: "e4-5", source: "wait-1", target: "condition-1" },
+                    {
+                      id: "e5-6",
+                      source: "condition-1",
+                      target: "message-2",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e5-7",
+                      source: "condition-1",
+                      target: "message-3",
+                      label: "Não",
+                    },
+                    { id: "e6-8", source: "message-2", target: "database-1" },
+                    { id: "e7-8", source: "message-3", target: "database-1" },
                   ],
                 },
-              ].map((template) => {
+                {
+                  id: "chatbot-atendimento",
+                  name: "Chatbot de Atendimento",
+                  description:
+                    "Fluxo completo com regras de horário, saudações, ligações WhatsApp e finalização",
+                  icon: MessageSquare,
+                  color: "bg-indigo-600",
+                  nodes: [
+                    // Trigger inicial
+                    {
+                      id: "trigger-1",
+                      type: "default",
+                      position: { x: 50, y: 300 },
+                      data: {
+                        label: "Nova Mensagem",
+                        config: { event: "message_received" },
+                      },
+                    },
+
+                    // Verificar se é ligação WhatsApp
+                    {
+                      id: "condition-ligacao",
+                      type: "default",
+                      position: { x: 250, y: 300 },
+                      data: {
+                        label: "É Ligação?",
+                        config: {
+                          condition:
+                            'message_type == "call" || message_type == "video"',
+                        },
+                      },
+                    },
+                    {
+                      id: "message-ligacao",
+                      type: "default",
+                      position: { x: 450, y: 200 },
+                      data: {
+                        label: "Recusar Ligação",
+                        config: {
+                          message:
+                            "Não atendemos ligações de áudio ou vídeo pelo WhatsApp, por favor envie *UMA MENSAGEM* ou ligue pelo no número de telefone 3180-0030 e 3180-0033.",
+                        },
+                      },
+                    },
+
+                    // Verificar tipo de finalização
+                    {
+                      id: "condition-venda",
+                      type: "default",
+                      position: { x: 450, y: 350 },
+                      data: {
+                        label: "Fechou Venda?",
+                        config: { condition: 'close_reason == "venda"' },
+                      },
+                    },
+                    {
+                      id: "message-venda",
+                      type: "default",
+                      position: { x: 650, y: 300 },
+                      data: {
+                        label: "Pesquisa Venda",
+                        config: {
+                          message:
+                            "Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\nDigite 5️⃣ Muito satisfeito 😍\nDigite 4️⃣ Satisfeito 😀\nDigite 3️⃣ Indiferente 😐\nDigite 2️⃣ Insatisfeito ☹️\nDigite 1️⃣ Muito insatisfeito 😞",
+                        },
+                      },
+                    },
+
+                    {
+                      id: "condition-orcamento",
+                      type: "default",
+                      position: { x: 650, y: 450 },
+                      data: {
+                        label: "Foi Orçamento?",
+                        config: { condition: 'close_reason == "orcamento"' },
+                      },
+                    },
+                    {
+                      id: "message-orcamento",
+                      type: "default",
+                      position: { x: 850, y: 400 },
+                      data: {
+                        label: "Agradecer Orçamento",
+                        config: {
+                          message:
+                            "Agradecemos seu contato, e estaremos sempre à disposição.😉",
+                        },
+                      },
+                    },
+
+                    // Verificar silêncio (conversa anterior ou engano)
+                    {
+                      id: "condition-silencio",
+                      type: "default",
+                      position: { x: 450, y: 500 },
+                      data: {
+                        label: "Silêncio?",
+                        config: {
+                          condition:
+                            'close_reason == "conversa_anterior" || close_reason == "engano"',
+                        },
+                      },
+                    },
+                    {
+                      id: "action-silencio",
+                      type: "default",
+                      position: { x: 650, y: 550 },
+                      data: {
+                        label: "Não Responder",
+                        config: { action: "no_response" },
+                      },
+                    },
+
+                    // Verificar horário de funcionamento
+                    {
+                      id: "condition-horario",
+                      type: "default",
+                      position: { x: 450, y: 650 },
+                      data: {
+                        label: "Horário Comercial?",
+                        config: {
+                          condition: "working_hours",
+                          schedule: {
+                            mon_sat: { start: "08:00", end: "19:40" },
+                            sun_holiday: { start: "08:00", end: "11:40" },
+                          },
+                        },
+                      },
+                    },
+                    {
+                      id: "message-fora-horario",
+                      type: "default",
+                      position: { x: 650, y: 650 },
+                      data: {
+                        label: "Fora de Horário",
+                        config: {
+                          message:
+                            "Nosso horário de atendimento é de 08h as 20h de Segunda a Sábado\nAos Domingos e Feriados de 8h ás 12h\nRetornaremos no próximo horário disponível.",
+                        },
+                      },
+                    },
+
+                    // Verificar se usuário está logado
+                    {
+                      id: "condition-logado",
+                      type: "default",
+                      position: { x: 650, y: 750 },
+                      data: {
+                        label: "Agente Logado?",
+                        config: { condition: "agent_logged_in" },
+                      },
+                    },
+
+                    // Usuário logado - saudação personalizada
+                    {
+                      id: "function-saudacao",
+                      type: "default",
+                      position: { x: 850, y: 700 },
+                      data: {
+                        label: "Gerar Saudação",
+                        config: {
+                          function: "get_greeting",
+                          variables: {
+                            saudacao: "{{greeting}}",
+                            nome: "{{agent_name}}",
+                          },
+                        },
+                      },
+                    },
+                    {
+                      id: "message-logado",
+                      type: "default",
+                      position: { x: 1050, y: 700 },
+                      data: {
+                        label: "Saudação Personalizada",
+                        config: {
+                          message:
+                            "{{greeting}} eu sou {{agent_name}}, como posso te ajudar?",
+                        },
+                      },
+                    },
+
+                    // Usuário não logado - saudação genérica
+                    {
+                      id: "message-nao-logado",
+                      type: "default",
+                      position: { x: 850, y: 800 },
+                      data: {
+                        label: "Saudação Genérica",
+                        config: {
+                          message:
+                            "{{greeting}} um momento que já já vamos te atender!",
+                        },
+                      },
+                    },
+                  ],
+                  edges: [
+                    {
+                      id: "e1-2",
+                      source: "trigger-1",
+                      target: "condition-ligacao",
+                    },
+                    {
+                      id: "e2-lig",
+                      source: "condition-ligacao",
+                      target: "message-ligacao",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e2-venda",
+                      source: "condition-ligacao",
+                      target: "condition-venda",
+                      label: "Não",
+                    },
+                    {
+                      id: "e-venda-sim",
+                      source: "condition-venda",
+                      target: "message-venda",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e-venda-nao",
+                      source: "condition-venda",
+                      target: "condition-orcamento",
+                      label: "Não",
+                    },
+                    {
+                      id: "e-orc-sim",
+                      source: "condition-orcamento",
+                      target: "message-orcamento",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e-orc-nao",
+                      source: "condition-orcamento",
+                      target: "condition-silencio",
+                      label: "Não",
+                    },
+                    {
+                      id: "e-sil-sim",
+                      source: "condition-silencio",
+                      target: "action-silencio",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e-sil-nao",
+                      source: "condition-silencio",
+                      target: "condition-horario",
+                      label: "Não",
+                    },
+                    {
+                      id: "e-hora-nao",
+                      source: "condition-horario",
+                      target: "message-fora-horario",
+                      label: "Não",
+                    },
+                    {
+                      id: "e-hora-sim",
+                      source: "condition-horario",
+                      target: "condition-logado",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e-log-sim",
+                      source: "condition-logado",
+                      target: "function-saudacao",
+                      label: "Sim",
+                    },
+                    {
+                      id: "e-func-msg",
+                      source: "function-saudacao",
+                      target: "message-logado",
+                    },
+                    {
+                      id: "e-log-nao",
+                      source: "condition-logado",
+                      target: "message-nao-logado",
+                      label: "Não",
+                    },
+                  ],
+                },
+              ].map(template => {
                 const Icon = template.icon;
                 return (
-                  <Card key={template.id} className="p-6 hover:shadow-lg transition-shadow">
+                  <Card
+                    key={template.id}
+                    className="p-6 hover:shadow-lg transition-shadow"
+                  >
                     <div className="flex items-start gap-4 mb-4">
                       <div className={`p-3 rounded-lg ${template.color}`}>
                         <Icon className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-lg">{template.name}</h3>
+                        <h3 className="font-semibold text-lg">
+                          {template.name}
+                        </h3>
                       </div>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
@@ -616,7 +1298,10 @@ export default function Automation() {
                         createFlow.mutate({
                           name: template.name,
                           description: template.description,
-                          flowData: JSON.stringify({ nodes: template.nodes, edges: template.edges }),
+                          flowData: JSON.stringify({
+                            nodes: template.nodes,
+                            edges: template.edges,
+                          }),
                         });
                       }}
                     >
@@ -630,18 +1315,18 @@ export default function Automation() {
 
           <TabsContent value="simple" className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {automationFlows?.map((flow) => (
+              {automationFlows?.map(flow => (
                 <Card key={flow.id} className="p-4">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold">{flow.name}</h3>
                     <div
                       className={`px-2 py-0.5 rounded text-xs ${
                         flow.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-700"
                       }`}
                     >
-                      {flow.isActive ? 'Ativo' : 'Inativo'}
+                      {flow.isActive ? "Ativo" : "Inativo"}
                     </div>
                   </div>
                   {flow.description && (
@@ -664,25 +1349,26 @@ export default function Automation() {
 
           <TabsContent value="ura" className="p-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {uraMenus?.map((menu) => (
+              {uraMenus?.map(menu => (
                 <Card key={menu.id} className="p-4">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold">{menu.name}</h3>
                     <div
                       className={`px-2 py-0.5 rounded text-xs ${
                         menu.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-700"
                       }`}
                     >
-                      {menu.isActive ? 'Ativo' : 'Inativo'}
+                      {menu.isActive ? "Ativo" : "Inativo"}
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground mb-3">
                     {menu.welcomeMessage}
                   </p>
                   <div className="text-xs text-muted-foreground">
-                    Última atualização: {new Date(menu.updatedAt).toLocaleDateString('pt-BR')}
+                    Última atualização:{" "}
+                    {new Date(menu.updatedAt).toLocaleDateString("pt-BR")}
                   </div>
                 </Card>
               ))}
@@ -690,7 +1376,7 @@ export default function Automation() {
           </TabsContent>
         </Tabs>
       </div>
-      
+
       <N8NNodeConfig
         node={selectedNode}
         open={isConfigOpen}

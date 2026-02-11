@@ -4,7 +4,11 @@
  */
 
 import { getDb } from "./db";
-import { visualFlows, workflowExecutions, executionData } from "../drizzle/schema";
+import {
+  visualFlows,
+  workflowExecutions,
+  executionData,
+} from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
 
@@ -53,7 +57,12 @@ export interface NodeExecutionResult {
 export class WorkflowExecutor {
   private context: ExecutionContext;
 
-  constructor(workflowId: number, nodes: WorkflowNode[], edges: WorkflowEdge[], triggerData?: any) {
+  constructor(
+    workflowId: number,
+    nodes: WorkflowNode[],
+    edges: WorkflowEdge[],
+    triggerData?: any
+  ) {
     this.context = {
       workflow: { id: workflowId, name: "" },
       execution: { id: 0, mode: "manual" },
@@ -72,13 +81,15 @@ export class WorkflowExecutor {
   /**
    * Execute entire workflow
    */
-  async execute(triggeredBy?: number): Promise<{ success: boolean; executionId: number; error?: string }> {
+  async execute(
+    triggeredBy?: number
+  ): Promise<{ success: boolean; executionId: number; error?: string }> {
     const startTime = Date.now();
 
     // Create execution record
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    
+
     const [execution] = await db.insert(workflowExecutions).values({
       workflowId: this.context.workflow.id,
       status: "running",
@@ -91,8 +102,8 @@ export class WorkflowExecutor {
 
     try {
       // Find start node (trigger)
-      const startNode = Array.from(this.context.nodes.values()).find(n => 
-        n.type === "trigger" || n.data.config.trigger
+      const startNode = Array.from(this.context.nodes.values()).find(
+        n => n.type === "trigger" || n.data.config.trigger
       );
 
       if (!startNode) {
@@ -106,45 +117,55 @@ export class WorkflowExecutor {
       const executionTime = Date.now() - startTime;
       const dbUpdate = await getDb();
       if (!dbUpdate) throw new Error("Database not available");
-      
-      await dbUpdate.update(workflowExecutions)
-        .set({ 
-          status: "success", 
+
+      await dbUpdate
+        .update(workflowExecutions)
+        .set({
+          status: "success",
           finishedAt: new Date(),
           executionTime,
         })
         .where(eq(workflowExecutions.id, this.context.execution.id));
 
       return { success: true, executionId: this.context.execution.id };
-
     } catch (error: any) {
       // Update execution as error
       const executionTime = Date.now() - startTime;
       const dbError = await getDb();
       if (!dbError) throw new Error("Database not available");
-      
-      await dbError.update(workflowExecutions)
-        .set({ 
-          status: "error", 
+
+      await dbError
+        .update(workflowExecutions)
+        .set({
+          status: "error",
           finishedAt: new Date(),
           executionTime,
           error: error.message,
         })
         .where(eq(workflowExecutions.id, this.context.execution.id));
 
-      return { success: false, executionId: this.context.execution.id, error: error.message };
+      return {
+        success: false,
+        executionId: this.context.execution.id,
+        error: error.message,
+      };
     }
   }
 
   /**
    * Execute single node with retry logic
    */
-  private async executeNode(nodeId: string, retryCount: number = 0): Promise<void> {
+  private async executeNode(
+    nodeId: string,
+    retryCount: number = 0
+  ): Promise<void> {
     const node = this.context.nodes.get(nodeId);
     if (!node) return;
 
     const startTime = Date.now();
-    const maxRetries = node.data.config.retryOnFail ? (node.data.config.maxRetries || 3) : 0;
+    const maxRetries = node.data.config.retryOnFail
+      ? node.data.config.maxRetries || 3
+      : 0;
 
     try {
       // Get input data from previous nodes
@@ -164,7 +185,7 @@ export class WorkflowExecutor {
       const executionTime = Date.now() - startTime;
       const dbLog = await getDb();
       if (!dbLog) throw new Error("Database not available");
-      
+
       await dbLog.insert(executionData).values({
         executionId: this.context.execution.id,
         nodeId: node.id,
@@ -181,12 +202,15 @@ export class WorkflowExecutor {
 
       // Execute next nodes
       await this.executeNextNodes(nodeId, result.data);
-
     } catch (error: any) {
       // Retry logic
       if (retryCount < maxRetries) {
-        console.log(`[Workflow Executor] Retrying node ${node.data.label} (attempt ${retryCount + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1))); // Exponential backoff
+        console.log(
+          `[Workflow Executor] Retrying node ${node.data.label} (attempt ${retryCount + 1}/${maxRetries})`
+        );
+        await new Promise(resolve =>
+          setTimeout(resolve, 1000 * (retryCount + 1))
+        ); // Exponential backoff
         return this.executeNode(nodeId, retryCount + 1);
       }
 
@@ -194,7 +218,7 @@ export class WorkflowExecutor {
       const executionTime = Date.now() - startTime;
       const dbFail = await getDb();
       if (!dbFail) throw new Error("Database not available");
-      
+
       await dbFail.insert(executionData).values({
         executionId: this.context.execution.id,
         nodeId: node.id,
@@ -214,29 +238,43 @@ export class WorkflowExecutor {
         throw error;
       }
 
-      console.log(`[Workflow Executor] Node ${node.data.label} failed but continuing: ${error.message}`);
+      console.log(
+        `[Workflow Executor] Node ${node.data.label} failed but continuing: ${error.message}`
+      );
     }
   }
 
   /**
    * Execute node based on its type
    */
-  private async executeNodeByType(node: WorkflowNode, inputData: any): Promise<NodeExecutionResult> {
+  private async executeNodeByType(
+    node: WorkflowNode,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     const config = node.data.config;
 
     switch (node.type) {
       case "trigger":
-        return { success: true, data: this.context.variables.get("trigger") || {} };
+        return {
+          success: true,
+          data: this.context.variables.get("trigger") || {},
+        };
 
       case "message":
         // Send message node
-        return { success: true, data: { message: this.resolveExpression(config.message, inputData) } };
+        return {
+          success: true,
+          data: { message: this.resolveExpression(config.message, inputData) },
+        };
 
       case "condition":
       case "if":
         // Condition node - evaluate expression
         const condition = this.evaluateCondition(config, inputData);
-        return { success: true, data: { result: condition, path: condition ? "true" : "false" } };
+        return {
+          success: true,
+          data: { result: condition, path: condition ? "true" : "false" },
+        };
 
       case "ai":
       case "aiAssistant":
@@ -256,6 +294,9 @@ export class WorkflowExecutor {
       case "function":
       case "code":
         // Function/Code node - execute JavaScript
+        if (config.function === "get_greeting") {
+          return this.executeGreetingFunction(config, inputData);
+        }
         return await this.executeFunctionNode(config, inputData);
 
       case "set":
@@ -288,7 +329,10 @@ export class WorkflowExecutor {
       case "transfer":
       case "transferHuman":
         // Transfer to human
-        return { success: true, data: { transferred: true, department: config.department } };
+        return {
+          success: true,
+          data: { transferred: true, department: config.department },
+        };
 
       default:
         console.log(`[Workflow Executor] Unknown node type: ${node.type}`);
@@ -299,10 +343,19 @@ export class WorkflowExecutor {
   /**
    * Execute AI Assistant node
    */
-  private async executeAINode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private async executeAINode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
-      const prompt = this.resolveExpression(config.prompt || config.systemPrompt, inputData);
-      const userMessage = this.resolveExpression(config.userMessage || inputData.message || "", inputData);
+      const prompt = this.resolveExpression(
+        config.prompt || config.systemPrompt,
+        inputData
+      );
+      const userMessage = this.resolveExpression(
+        config.userMessage || inputData.message || "",
+        inputData
+      );
 
       const response = await invokeLLM({
         messages: [
@@ -313,7 +366,6 @@ export class WorkflowExecutor {
 
       const aiResponse = response.choices[0]?.message?.content || "";
       return { success: true, data: { response: aiResponse, raw: response } };
-
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -322,12 +374,17 @@ export class WorkflowExecutor {
   /**
    * Execute HTTP Request node
    */
-  private async executeHTTPNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private async executeHTTPNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
       const url = this.resolveExpression(config.url, inputData);
       const method = config.method || "GET";
       const headers = config.headers || {};
-      const body = config.body ? this.resolveExpression(config.body, inputData) : undefined;
+      const body = config.body
+        ? this.resolveExpression(config.body, inputData)
+        : undefined;
 
       const options: RequestInit = {
         method,
@@ -341,16 +398,17 @@ export class WorkflowExecutor {
       const response = await fetch(url, options);
       const data = await response.json();
 
-      return { 
-        success: response.ok, 
-        data: { 
-          statusCode: response.status, 
+      return {
+        success: response.ok,
+        data: {
+          statusCode: response.status,
           body: data,
           headers: Object.fromEntries(response.headers.entries()),
         },
-        error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`,
+        error: response.ok
+          ? undefined
+          : `HTTP ${response.status}: ${response.statusText}`,
       };
-
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -359,18 +417,53 @@ export class WorkflowExecutor {
   /**
    * Execute Database Query node
    */
-  private async executeDatabaseNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private async executeDatabaseNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
       const query = this.resolveExpression(config.query, inputData);
-      
+
       // Execute query (simplified - in production use proper query builder)
       const dbQuery = await getDb();
       if (!dbQuery) throw new Error("Database not available");
-      
+
       const result = await dbQuery.execute(query as any);
 
       return { success: true, data: { rows: result, count: result.length } };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }
 
+  /**
+   * Execute greeting function - returns appropriate greeting based on time
+   */
+  private executeGreetingFunction(
+    config: any,
+    inputData: any
+  ): NodeExecutionResult {
+    try {
+      const hour = new Date().getHours();
+      let greeting = "Bom dia";
+
+      if (hour >= 12 && hour < 18) {
+        greeting = "Boa tarde";
+      } else if (hour >= 18) {
+        greeting = "Boa noite";
+      }
+
+      const agentName =
+        inputData.agent_name || inputData.assignedToName || "Atendente";
+
+      return {
+        success: true,
+        data: {
+          greeting,
+          agent_name: agentName,
+          hour,
+        },
+      };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -379,22 +472,26 @@ export class WorkflowExecutor {
   /**
    * Execute Function/Code node - runs JavaScript
    */
-  private async executeFunctionNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private async executeFunctionNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
       const code = config.code || config.functionCode || "";
-      
+
       // Create safe execution context
       const $input = inputData;
       const $json = inputData;
       const $vars = Object.fromEntries(this.context.variables);
 
       // Execute code
-      const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+      const AsyncFunction = Object.getPrototypeOf(async function () {
+        return undefined;
+      }).constructor;
       const fn = new AsyncFunction("$input", "$json", "$vars", code);
       const result = await fn($input, $json, $vars);
 
       return { success: true, data: result };
-
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -403,7 +500,10 @@ export class WorkflowExecutor {
   /**
    * Execute Set node - manipulate data
    */
-  private executeSetNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private executeSetNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
       const output = { ...inputData };
 
@@ -424,7 +524,6 @@ export class WorkflowExecutor {
       }
 
       return Promise.resolve({ success: true, data: output });
-
     } catch (error: any) {
       return Promise.resolve({ success: false, error: error.message });
     }
@@ -433,9 +532,14 @@ export class WorkflowExecutor {
   /**
    * Execute Split node - split array into batches
    */
-  private executeSplitNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private executeSplitNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
-      const array = Array.isArray(inputData) ? inputData : inputData.items || [];
+      const array = Array.isArray(inputData)
+        ? inputData
+        : inputData.items || [];
       const batchSize = config.batchSize || 10;
 
       const batches = [];
@@ -443,8 +547,10 @@ export class WorkflowExecutor {
         batches.push(array.slice(i, i + batchSize));
       }
 
-      return Promise.resolve({ success: true, data: { batches, count: batches.length } });
-
+      return Promise.resolve({
+        success: true,
+        data: { batches, count: batches.length },
+      });
     } catch (error: any) {
       return Promise.resolve({ success: false, error: error.message });
     }
@@ -453,11 +559,14 @@ export class WorkflowExecutor {
   /**
    * Execute Merge node - combine multiple inputs
    */
-  private executeMergeNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private executeMergeNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
       // Get outputs from all previous nodes
       const inputs = Array.from(this.context.nodeOutputs.values());
-      
+
       const mode = config.mode || "append";
       let result: any;
 
@@ -470,7 +579,6 @@ export class WorkflowExecutor {
       }
 
       return Promise.resolve({ success: true, data: result });
-
     } catch (error: any) {
       return Promise.resolve({ success: false, error: error.message });
     }
@@ -479,16 +587,26 @@ export class WorkflowExecutor {
   /**
    * Execute Loop node - iterate over items
    */
-  private async executeLoopNode(node: WorkflowNode, config: any, inputData: any): Promise<NodeExecutionResult> {
+  private async executeLoopNode(
+    node: WorkflowNode,
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
-      const items = Array.isArray(inputData) ? inputData : inputData.items || [];
+      const items = Array.isArray(inputData)
+        ? inputData
+        : inputData.items || [];
       const results = [];
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
-        
+
         // Set loop variables
-        this.context.variables.set("loop", { index: i, item, total: items.length });
+        this.context.variables.set("loop", {
+          index: i,
+          item,
+          total: items.length,
+        });
 
         // Execute loop body (next nodes)
         const loopOutput = await this.processLoopIteration(node.id, item);
@@ -496,7 +614,6 @@ export class WorkflowExecutor {
       }
 
       return { success: true, data: results };
-
     } catch (error: any) {
       return { success: false, error: error.message };
     }
@@ -505,20 +622,28 @@ export class WorkflowExecutor {
   /**
    * Execute Switch node - multiple conditional paths
    */
-  private executeSwitchNode(config: any, inputData: any): Promise<NodeExecutionResult> {
+  private executeSwitchNode(
+    config: any,
+    inputData: any
+  ): Promise<NodeExecutionResult> {
     try {
       const value = this.resolveExpression(config.value, inputData);
       const cases = config.cases || [];
 
       for (const caseItem of cases) {
         if (caseItem.value === value || caseItem.condition === value) {
-          return Promise.resolve({ success: true, data: { matched: caseItem.value, path: caseItem.output } });
+          return Promise.resolve({
+            success: true,
+            data: { matched: caseItem.value, path: caseItem.output },
+          });
         }
       }
 
       // Default case
-      return Promise.resolve({ success: true, data: { matched: "default", path: "default" } });
-
+      return Promise.resolve({
+        success: true,
+        data: { matched: "default", path: "default" },
+      });
     } catch (error: any) {
       return Promise.resolve({ success: false, error: error.message });
     }
@@ -538,7 +663,7 @@ export class WorkflowExecutor {
    */
   private getNodeInputData(nodeId: string): any {
     const incomingEdges = this.context.edges.filter(e => e.target === nodeId);
-    
+
     if (incomingEdges.length === 0) {
       return this.context.variables.get("trigger") || {};
     }
@@ -549,21 +674,29 @@ export class WorkflowExecutor {
     }
 
     // Multiple inputs - merge them
-    const inputs = incomingEdges.map(e => this.context.nodeOutputs.get(e.source) || {});
+    const inputs = incomingEdges.map(
+      e => this.context.nodeOutputs.get(e.source) || {}
+    );
     return Object.assign({}, ...inputs);
   }
 
   /**
    * Execute next nodes after current node
    */
-  private async executeNextNodes(currentNodeId: string, outputData: any): Promise<void> {
-    const outgoingEdges = this.context.edges.filter(e => e.source === currentNodeId);
+  private async executeNextNodes(
+    currentNodeId: string,
+    outputData: any
+  ): Promise<void> {
+    const outgoingEdges = this.context.edges.filter(
+      e => e.source === currentNodeId
+    );
 
     for (const edge of outgoingEdges) {
       // Check if edge has condition (for if/condition nodes)
       if (edge.sourceHandle) {
-        const shouldExecute = edge.sourceHandle === outputData.path || 
-                              edge.sourceHandle === (outputData.result ? "true" : "false");
+        const shouldExecute =
+          edge.sourceHandle === outputData.path ||
+          edge.sourceHandle === (outputData.result ? "true" : "false");
         if (!shouldExecute) continue;
       }
 
@@ -574,18 +707,21 @@ export class WorkflowExecutor {
   /**
    * Process single loop iteration
    */
-  private async processLoopIteration(loopNodeId: string, item: any): Promise<any> {
+  private async processLoopIteration(
+    loopNodeId: string,
+    item: any
+  ): Promise<any> {
     // Find nodes inside loop (connected to loop node)
     const loopEdges = this.context.edges.filter(e => e.source === loopNodeId);
-    
+
     if (loopEdges.length === 0) return item;
 
     // Execute first node in loop with item as input
     const firstNodeId = loopEdges[0].target;
     this.context.nodeOutputs.set(loopNodeId, item); // Set loop item as output
-    
+
     await this.executeNode(firstNodeId);
-    
+
     return this.context.nodeOutputs.get(firstNodeId) || item;
   }
 
@@ -594,9 +730,33 @@ export class WorkflowExecutor {
    */
   private evaluateCondition(config: any, inputData: any): boolean {
     try {
-      const left = this.resolveExpression(config.value1 || config.left, inputData);
+      // Check for special condition types used by chatbot
+      if (config.condition === "working_hours") {
+        return this.checkWorkingHours(config.schedule);
+      }
+
+      if (config.condition === "agent_logged_in") {
+        return this.checkAgentLoggedIn(inputData);
+      }
+
+      if (config.condition?.includes("close_reason")) {
+        const closeReason = inputData.close_reason || inputData.closeReason;
+        const expectedReason = config.condition
+          .split("==")[1]
+          ?.trim()
+          .replace(/"/g, "");
+        return closeReason === expectedReason;
+      }
+
+      const left = this.resolveExpression(
+        config.value1 || config.left,
+        inputData
+      );
       const operator = config.operator || config.comparison || "equals";
-      const right = this.resolveExpression(config.value2 || config.right, inputData);
+      const right = this.resolveExpression(
+        config.value2 || config.right,
+        inputData
+      );
 
       switch (operator) {
         case "equals":
@@ -628,9 +788,13 @@ export class WorkflowExecutor {
         case "regex":
           return new RegExp(String(right)).test(String(left));
         case "isEmpty":
-          return !left || left === "" || (Array.isArray(left) && left.length === 0);
+          return (
+            !left || left === "" || (Array.isArray(left) && left.length === 0)
+          );
         case "isNotEmpty":
-          return !!left && left !== "" && (!Array.isArray(left) || left.length > 0);
+          return (
+            !!left && left !== "" && (!Array.isArray(left) || left.length > 0)
+          );
         default:
           return false;
       }
@@ -638,6 +802,56 @@ export class WorkflowExecutor {
       console.error("[Workflow Executor] Condition evaluation error:", error);
       return false;
     }
+  }
+
+  /**
+   * Check if current time is within working hours
+   * Mon-Sat: 08:00-19:40
+   * Sun/Holidays: 08:00-11:40
+   */
+  private checkWorkingHours(schedule?: any): boolean {
+    const now = new Date();
+    const day = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const hour = now.getHours();
+    const minute = now.getMinutes();
+    const currentTime = hour * 60 + minute; // Convert to minutes
+
+    // Use provided schedule or defaults
+    const monSatStart = schedule?.mon_sat?.start || "08:00";
+    const monSatEnd = schedule?.mon_sat?.end || "19:40";
+    const sunHolidayStart = schedule?.sun_holiday?.start || "08:00";
+    const sunHolidayEnd = schedule?.sun_holiday?.end || "11:40";
+
+    const parseTime = (timeStr: string) => {
+      const [h, m] = timeStr.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    // Check if it's Sunday (0) or holiday (simplified - in production use holiday API)
+    const isSundayOrHoliday = day === 0; // Simplified - just checking Sunday
+
+    if (isSundayOrHoliday) {
+      const start = parseTime(sunHolidayStart);
+      const end = parseTime(sunHolidayEnd);
+      return currentTime >= start && currentTime <= end;
+    } else {
+      // Monday (1) to Saturday (6)
+      const start = parseTime(monSatStart);
+      const end = parseTime(monSatEnd);
+      return currentTime >= start && currentTime <= end;
+    }
+  }
+
+  /**
+   * Check if agent is logged in
+   */
+  private checkAgentLoggedIn(inputData: any): boolean {
+    // Check if assignedTo or agent_id exists in input data
+    return !!(
+      inputData.assignedTo ||
+      inputData.agent_id ||
+      inputData.agent_name
+    );
   }
 
   /**
@@ -664,13 +878,15 @@ export class WorkflowExecutor {
 
       // $node["NodeName"].json refers to specific node output
       if (path.startsWith("$node")) {
-        const nodeMatch = path.match(/\$node\["([^"]+)"\]\.json\.?(.*)/)
+        const nodeMatch = path.match(/\$node\["([^"]+)"\]\.json\.?(.*)/);
         if (nodeMatch) {
           const nodeName = nodeMatch[1];
           const field = nodeMatch[2];
-          
+
           // Find node by name
-          const node = Array.from(this.context.nodes.values()).find(n => n.data.label === nodeName);
+          const node = Array.from(this.context.nodes.values()).find(
+            n => n.data.label === nodeName
+          );
           if (node) {
             const nodeOutput = this.context.nodeOutputs.get(node.id);
             return field ? this.getNestedValue(nodeOutput, field) : nodeOutput;
@@ -693,9 +909,12 @@ export class WorkflowExecutor {
   /**
    * Resolve object with expressions
    */
-  private resolveObject(obj: Record<string, any>, inputData: any): Record<string, any> {
+  private resolveObject(
+    obj: Record<string, any>,
+    inputData: any
+  ): Record<string, any> {
     const resolved: Record<string, any> = {};
-    
+
     for (const [key, value] of Object.entries(obj)) {
       resolved[key] = this.resolveExpression(value, inputData);
     }
@@ -708,7 +927,7 @@ export class WorkflowExecutor {
    */
   private getNestedValue(obj: any, path: string): any {
     if (!path || path === ".") return obj;
-    
+
     const keys = path.split(".").filter(k => k);
     let value = obj;
 
@@ -727,13 +946,20 @@ export class WorkflowExecutor {
 /**
  * Execute workflow by ID
  */
-export async function executeWorkflow(workflowId: number, triggerData?: any, triggeredBy?: number) {
+export async function executeWorkflow(
+  workflowId: number,
+  triggerData?: any,
+  triggeredBy?: number
+) {
   // Load workflow from database
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
-  const [workflow] = await db.select().from(visualFlows).where(eq(visualFlows.id, workflowId));
-  
+
+  const [workflow] = await db
+    .select()
+    .from(visualFlows)
+    .where(eq(visualFlows.id, workflowId));
+
   if (!workflow) {
     throw new Error(`Workflow ${workflowId} not found`);
   }
