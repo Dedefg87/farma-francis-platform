@@ -1,24 +1,24 @@
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
-  InsertUser,
-  users,
-  employees,
-  customers,
-  leads,
+  InsertUser, 
+  users, 
+  employees, 
+  customers, 
+  leads, 
   InsertCustomer,
-  tickets,
-  notifications,
+  tickets, 
+  notifications, 
   InsertAttachment,
-  auditLogs,
-  automationFlows,
-  visualFlows,
-  uraMenus,
+  auditLogs, 
+  automationFlows, 
+  visualFlows, 
+  uraMenus, 
   apiConfigurations,
   InsertApiConfiguration,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
-import {
+import { 
   InsertEmployee,
   InsertUser,
   InsertCustomer,
@@ -26,22 +26,6 @@ import {
   InsertLead,
   InsertTicket,
   InsertNotification,
-  InsertAttachment,
-  InsertAuditLog,
-  InsertAutomationFlow,
-  InsertVisualFlow,
-  InsertUraMenu,
-  InsertApiConfiguration,
-} from "../drizzle/schema";
-import {
-  InsertUser,
-  users,
-  employees,
-  customers,
-  leads,
-  InsertCustomer,
-  tickets,
-  notifications,
   InsertAttachment,
   InsertAuditLog,
   InsertAutomationFlow,
@@ -61,6 +45,27 @@ export async function getDb() {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
     }
+  }
+  return _db;
+}
+
+export type DbType = ReturnType<typeof drizzle>;
+
+export async function getDbRaw() {
+  const db = await getDb();
+  if (!db) {
+    console.error("[Database] Database not available");
+    return null;
+  }
+  
+  // Agora temos acesso direto ao MySQL Pool para queries brutas
+  const mysql = (db as any).getClient().getClient();
+  
+  return {
+    raw: (sql: string, values?: any[]) => mysql.execute(sql, values),
+    ...db
+  };
+}
   }
   return _db;
 }
