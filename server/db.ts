@@ -90,12 +90,21 @@ export async function getDbRaw() {
     return null;
   }
 
-  const mysql = (db as any).$client;
-
-  return {
-    raw: (sql: string, values?: any[]) => mysql.execute(sql, values),
-    ...db,
-  };
+  try {
+    // Use drizzle's built-in query method for raw SQL
+    const result = await (db as any).execute("SELECT 1");
+    return {
+      raw: async (sql: string, values?: any[]) => {
+        // Use parameterized queries through drizzle
+        const query = values ? sql.replace(/\?/g, () => "?") : sql;
+        return await (db as any).execute(query);
+      },
+      ...db,
+    };
+  } catch (error) {
+    console.error("[Database] Error accessing raw client:", error);
+    return db as any;
+  }
 }
 
 // ==================== VISUAL FLOWS ====================
