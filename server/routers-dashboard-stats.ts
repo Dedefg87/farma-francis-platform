@@ -115,49 +115,47 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Converter datas para formato MySQL
-      const startStr = start.toISOString().slice(0, 19).replace("T", " ");
-      const endStr = end.toISOString().slice(0, 19).replace("T", " ");
+      // Primeiro, verificar se há dados na tabela
+      const [totalCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversations);
 
-      console.log("[Dashboard] getContactsByHour:", {
-        startStr,
-        endStr,
-        period,
-      });
+      console.log(
+        "[Dashboard] Total conversations in DB:",
+        totalCount?.count || 0
+      );
 
-      // Usar query raw para evitar problemas com HOUR() no Drizzle
+      // Query simplificada - apenas contar todas as conversas por hora
       const result = await db.execute(sql`
-      SELECT 
-        HOUR(opened_at) as hour,
-        COUNT(DISTINCT CASE WHEN status IN ('assigned', 'closed') THEN id END) as chats,
-        0 as calls,
-        COUNT(DISTINCT CASE WHEN status = 'abandoned' THEN id END) as abandoned
-      FROM conversations
-      WHERE opened_at >= ${startStr}
-        AND opened_at <= ${endStr}
-        AND opened_at IS NOT NULL
-      GROUP BY HOUR(opened_at)
-      ORDER BY HOUR(opened_at)
-    `);
+        SELECT 
+          HOUR(opened_at) as hour,
+          COUNT(*) as chats
+        FROM conversations
+        WHERE opened_at IS NOT NULL
+        GROUP BY HOUR(opened_at)
+        ORDER BY HOUR(opened_at)
+      `);
 
       const hourlyData = result as any[];
-      console.log("[Dashboard] hourlyData:", hourlyData);
+      console.log("[Dashboard] Raw hourly data:", hourlyData);
 
       // Criar array com todas as 24 horas (00h-23h)
       const allHours = Array.from({ length: 24 }, (_, i) => {
         const hourStr = i.toString().padStart(2, "0");
-        const existingData = hourlyData.find(
-          (d: any) => d.hour === i || d.hour === `${i}`
-        );
+        const existingData = hourlyData.find((d: any) => Number(d.hour) === i);
 
         return {
           hour: `${hourStr}h`,
-          chats: existingData?.chats || 0,
-          calls: existingData?.calls || 0,
-          abandoned: existingData?.abandoned || 0,
+          chats: Number(existingData?.chats) || 0,
+          calls: 0,
+          abandoned: 0,
         };
       });
 
+      console.log(
+        "[Dashboard] Returning hours data:",
+        allHours.filter(h => h.chats > 0)
+      );
       return allHours;
     }),
 
@@ -268,27 +266,36 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const queueData = await db
+      // Buscar todas as filas
+      const allQueues = await db
         .select({
-          queueName: queues.name,
-          queueColor: queues.color,
-          count: sql<number>`count(${conversations.id})`,
+          id: queues.id,
+          name: queues.name,
+          color: queues.color,
         })
-        .from(conversations)
-        .innerJoin(queues, eq(conversations.queueId, queues.id))
-        .groupBy(queues.id, queues.name, queues.color)
-        .orderBy(sql`count(${conversations.id}) DESC`);
+        .from(queues);
 
-      return queueData.map(q => ({
-        name: q.queueName,
-        value: q.count,
-        color: q.queueColor,
-      }));
+      // Para cada fila, contar conversas
+      const queueData = await Promise.all(
+        allQueues.map(async queue => {
+          const [result] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(conversations)
+            .where(eq(conversations.queueId, queue.id));
+
+          return {
+            name: queue.name,
+            value: result?.count || 0,
+            color: queue.color || "#3b82f6",
+          };
+        })
+      );
+
+      // Retornar apenas filas com conversas ou todas se quiser mostrar vazias
+      return queueData.filter(q => q.value > 0);
     }),
 
   // Estatísticas de variação (comparação com período anterior)
