@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sseManager } from "./sse";
 import { logger } from "./logger";
+import { runCRMMigration } from "../crm-migration";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -81,7 +82,9 @@ async function startServer() {
     let decoded: { userId: number } | null = null;
 
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: number };
+      decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
+        userId: number;
+      };
     } catch {
       return res.status(401).json({ error: "Invalid token" });
     }
@@ -115,7 +118,7 @@ async function startServer() {
   app.get("/api/test/messages", testFlowsRouter.listRecentMessages);
   app.get("/api/test/health", testFlowsRouter.healthCheck);
   app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
-  
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -138,23 +141,31 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
-    
+
+    // Run CRM migration on startup
+    console.log("[Server] Running CRM migration...");
+    await runCRMMigration();
+
     // Start flow engine after server is running
-    import("../flow-engine").then((module) => {
-      module.startFlowEngine();
-    }).catch((err) => {
-      console.error("Failed to start flow engine:", err);
-    });
+    import("../flow-engine")
+      .then(module => {
+        module.startFlowEngine();
+      })
+      .catch(err => {
+        console.error("Failed to start flow engine:", err);
+      });
 
     // Start pause auto-finisher worker
-    import("../workers/pause-auto-finisher").then((module) => {
-      module.startPauseAutoFinisher(1); // Check every 1 minute
-      console.log("Pause auto-finisher worker started");
-    }).catch((error) => {
-      console.error("Failed to start flow engine:", error);
-    });
+    import("../workers/pause-auto-finisher")
+      .then(module => {
+        module.startPauseAutoFinisher(1); // Check every 1 minute
+        console.log("Pause auto-finisher worker started");
+      })
+      .catch(error => {
+        console.error("Failed to start flow engine:", error);
+      });
   });
 }
 
