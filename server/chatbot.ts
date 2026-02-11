@@ -350,8 +350,22 @@ export async function handleSurveyResponse(message: any, customer: any) {
 
     console.log("[CHATBOT] Thank you message sent!");
 
-    // Mark as processed
-    await markMessageAsProcessed(message.id, { customerId: customer.id });
+    // Mark as processed and as survey response (so it doesn't appear in UI)
+    await markMessageAsProcessed(message.id, {
+      customerId: customer.id,
+      isSurveyResponse: 1,
+    });
+
+    // Also update the receivedMessages table directly to ensure it's marked
+    await db
+      .update(receivedMessages)
+      .set({
+        isSurveyResponse: 1,
+        messageText: `[Pesquisa: ${rating} estrelas]`, // Optional: replace actual number with label
+      })
+      .where(eq(receivedMessages.id, message.id));
+
+    console.log("[CHATBOT] Survey response marked and hidden from UI");
   } catch (error) {
     console.error("[CHATBOT] Error handling survey response:", error);
   }

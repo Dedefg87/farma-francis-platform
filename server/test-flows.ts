@@ -1,6 +1,11 @@
 import { Request, Response } from "express";
 import { getDb } from "./db";
-import { receivedMessages, customers, automationFlows, visualFlows } from "../drizzle/schema";
+import {
+  receivedMessages,
+  customers,
+  automationFlows,
+  visualFlows,
+} from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 
 // @ts-ignore - Ignorando erros de tipos Drizzle ORM temporariamente
@@ -16,7 +21,9 @@ export async function getSystemStatus(req: Request, res: Response) {
   try {
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
     // Contar fluxos
@@ -53,20 +60,20 @@ export async function getSystemStatus(req: Request, res: Response) {
           automation: {
             total: allAutomationFlows.length,
             active: activeAutomationFlows.length,
-            inactive: allAutomationFlows.length - activeAutomationFlows.length
+            inactive: allAutomationFlows.length - activeAutomationFlows.length,
           },
           visual: {
             total: allVisualFlows.length,
             active: activeVisualFlows.length,
-            inactive: allVisualFlows.length - activeVisualFlows.length
-          }
+            inactive: allVisualFlows.length - activeVisualFlows.length,
+          },
         },
         messages: {
           total: recentMessages.length,
           pending: pendingMessages.length,
-          lastReceived: recentMessages[0]?.createdAt || null
-        }
-      }
+          lastReceived: recentMessages[0]?.createdAt || null,
+        },
+      },
     });
   } catch (error) {
     console.error("[Test] Error getting system status:", error);
@@ -81,12 +88,17 @@ export async function listAllFlows(req: Request, res: Response) {
   try {
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
     const [automationFlows, visualFlows] = await Promise.all([
-      db.select().from(automationFlows).orderBy(desc(automationFlows.createdAt)),
-      db.select().from(visualFlows).orderBy(desc(visualFlows.createdAt))
+      db
+        .select()
+        .from(automationFlows)
+        .orderBy(desc(automationFlows.createdAt)),
+      db.select().from(visualFlows).orderBy(desc(visualFlows.createdAt)),
     ]);
 
     return res.json({
@@ -100,18 +112,22 @@ export async function listAllFlows(req: Request, res: Response) {
           response: f.response,
           isActive: f.isActive === 1,
           channel: f.channel,
-          createdAt: f.createdAt
+          createdAt: f.createdAt,
         })),
         visual: visualFlows.map(f => ({
           id: f.id,
           name: f.name,
           description: f.description,
           isActive: f.isActive === 1,
-          nodesCount: f.flowData ? JSON.parse(f.flowData).nodes?.length || 0 : 0,
-          edgesCount: f.flowData ? JSON.parse(f.flowData).edges?.length || 0 : 0,
-          createdAt: f.createdAt
-        }))
-      }
+          nodesCount: f.flowData
+            ? JSON.parse(f.flowData).nodes?.length || 0
+            : 0,
+          edgesCount: f.flowData
+            ? JSON.parse(f.flowData).edges?.length || 0
+            : 0,
+          createdAt: f.createdAt,
+        })),
+      },
     });
   } catch (error) {
     console.error("[Test] Error listing flows:", error);
@@ -133,7 +149,9 @@ export async function activateFlow(req: Request, res: Response) {
 
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
     // Tentar ativar em automationFlows
@@ -145,7 +163,8 @@ export async function activateFlow(req: Request, res: Response) {
       .limit(1);
 
     if (automationFlow && automationFlow.length > 0) {
-      await db.update(automationFlows)
+      await db
+        .update(automationFlows)
         .set({ isActive: 1, updatedAt: new Date() })
         .where(eq(automationFlows.id, flowId));
       automationUpdated = true;
@@ -160,7 +179,8 @@ export async function activateFlow(req: Request, res: Response) {
       .limit(1);
 
     if (visualFlow && visualFlow.length > 0) {
-      await db.update(visualFlows)
+      await db
+        .update(visualFlows)
         .set({ isActive: 1, updatedAt: new Date() })
         .where(eq(visualFlows.id, flowId));
       visualUpdated = true;
@@ -174,7 +194,7 @@ export async function activateFlow(req: Request, res: Response) {
       success: true,
       message: "Flow activated successfully",
       flowId,
-      type: automationUpdated ? "automation" : "visual"
+      type: automationUpdated ? "automation" : "visual",
     });
   } catch (error) {
     console.error("[Test] Error activating flow:", error);
@@ -190,12 +210,19 @@ export async function simulateMessage(req: Request, res: Response) {
     const { phoneNumber, message, provider = "whatsapp" } = req.body;
 
     if (!phoneNumber || !message) {
-      return res.status(400).json({ success: false, error: "phoneNumber and message are required" });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          error: "phoneNumber and message are required",
+        });
     }
 
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
     // Criar mensagem simulada no banco
@@ -215,10 +242,14 @@ export async function simulateMessage(req: Request, res: Response) {
       timestamp,
       rawPayload: JSON.stringify({ test: true, simulatedAt: new Date() }),
       processed: 0,
-      createdAt: new Date()
+      createdAt: new Date(),
     });
 
-    const insertedId = insertResult[0]?.insertId || insertResult.insertId || insertResult[0]?.id || Date.now();
+    const insertedId =
+      insertResult[0]?.insertId ||
+      insertResult.insertId ||
+      insertResult[0]?.id ||
+      Date.now();
     console.log(`[Test] Simulated message created: ID ${insertedId}`);
 
     // Processar mensagem imediatamente
@@ -240,7 +271,7 @@ export async function simulateMessage(req: Request, res: Response) {
       messageId: insertedId,
       processed: processedMessage?.processed === 1,
       automationFlowId: processedMessage?.automationFlowId || null,
-      result: processedMessage ? "Message processed" : "Message pending"
+      result: processedMessage ? "Message processed" : "Message pending",
     });
   } catch (error) {
     console.error("[Test] Error simulating message:", error);
@@ -253,15 +284,24 @@ export async function simulateMessage(req: Request, res: Response) {
  */
 export async function triggerFlowManually(req: Request, res: Response) {
   try {
-    const { flowId, phoneNumber = "5511999999999", message, provider = "whatsapp" } = req.body;
+    const {
+      flowId,
+      phoneNumber = "5511999999999",
+      message,
+      provider = "whatsapp",
+    } = req.body;
 
     if (!flowId) {
-      return res.status(400).json({ success: false, error: "flowId is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "flowId is required" });
     }
 
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
     // Verificar se fluxo existe e está ativo
@@ -276,7 +316,10 @@ export async function triggerFlowManually(req: Request, res: Response) {
     }
 
     if (visualFlow[0].isActive !== 1) {
-      return res.json({ success: false, error: "Flow is not active. Please activate it first." });
+      return res.json({
+        success: false,
+        error: "Flow is not active. Please activate it first.",
+      });
     }
 
     // Criar ou buscar cliente
@@ -287,7 +330,12 @@ export async function triggerFlowManually(req: Request, res: Response) {
       .limit(1);
 
     if (!customer || customer.length === 0) {
-      return res.status(404).json({ success: false, error: "Customer not found. Please create a customer first." });
+      return res
+        .status(404)
+        .json({
+          success: false,
+          error: "Customer not found. Please create a customer first.",
+        });
     }
 
     // Criar mensagem simulada
@@ -308,10 +356,14 @@ export async function triggerFlowManually(req: Request, res: Response) {
       rawPayload: JSON.stringify({ manualTrigger: true, flowId }),
       processed: 0,
       customerId: customer[0].id,
-      createdAt: new Date()
+      createdAt: new Date(),
     });
 
-    const insertedId = insertResult[0]?.insertId || insertResult.insertId || insertResult[0]?.id || Date.now();
+    const insertedId =
+      insertResult[0]?.insertId ||
+      insertResult.insertId ||
+      insertResult[0]?.id ||
+      Date.now();
     console.log(`[Test] Manual trigger message created: ID ${insertedId}`);
 
     // Processar mensagem
@@ -338,8 +390,8 @@ export async function triggerFlowManually(req: Request, res: Response) {
       customer: {
         id: customer[0].id,
         name: customer[0].name,
-        phone: customer[0].phone
-      }
+        phone: customer[0].phone,
+      },
     });
   } catch (error) {
     console.error("[Test] Error triggering flow:", error);
@@ -356,14 +408,21 @@ export async function listRecentMessages(req: Request, res: Response) {
 
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
     let query = db.select().from(receivedMessages);
 
+    // Always exclude survey responses
+    const conditions = [eq(receivedMessages.isSurveyResponse, 0)];
+
     if (unprocessedOnly === "true") {
-      query = query.where(eq(receivedMessages.processed, 0));
+      conditions.push(eq(receivedMessages.processed, 0));
     }
+
+    query = query.where(and(...conditions));
 
     const messages = await query
       .orderBy(desc(receivedMessages.createdAt))
@@ -381,8 +440,8 @@ export async function listRecentMessages(req: Request, res: Response) {
         processed: m.processed === 1,
         automationFlowId: m.automationFlowId,
         createdAt: m.createdAt,
-        processedAt: m.processedAt
-      }))
+        processedAt: m.processedAt,
+      })),
     });
   } catch (error) {
     console.error("[Test] Error listing messages:", error);
@@ -403,7 +462,7 @@ export async function healthCheck(req: Request, res: Response) {
       health: {
         status: "healthy",
         database: isDbConnected ? "connected" : "disconnected",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       endpoints: {
         status: "GET /api/test/status",
@@ -412,8 +471,8 @@ export async function healthCheck(req: Request, res: Response) {
         simulate: "POST /api/test/simulate-message",
         trigger: "POST /api/test/trigger-flow",
         messages: "GET /api/test/messages",
-        health: "GET /api/test/health"
-      }
+        health: "GET /api/test/health",
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, error: String(error) });
@@ -427,19 +486,24 @@ export async function clearTestMessages(req: Request, res: Response) {
   try {
     const db = await getDb();
     if (!db) {
-      return res.status(500).json({ success: false, error: "Database not available" });
+      return res
+        .status(500)
+        .json({ success: false, error: "Database not available" });
     }
 
-    const result = await db.delete(receivedMessages)
-      .where(and(
-        eq(receivedMessages.provider, "whatsapp"),
-        eq(receivedMessages.fromNumber, "5511999999999")
-      ));
+    const result = await db
+      .delete(receivedMessages)
+      .where(
+        and(
+          eq(receivedMessages.provider, "whatsapp"),
+          eq(receivedMessages.fromNumber, "5511999999999")
+        )
+      );
 
     return res.json({
       success: true,
       deleted: result.rowCount || 0,
-      message: "Test messages cleared"
+      message: "Test messages cleared",
     });
   } catch (error) {
     console.error("[Test] Error clearing messages:", error);
@@ -459,7 +523,7 @@ export async function getDebugLogs(req: Request, res: Response) {
       return res.json({
         success: true,
         logs: [],
-        message: "Debug module not available"
+        message: "Debug module not available",
       });
     }
 
@@ -472,14 +536,14 @@ export async function getDebugLogs(req: Request, res: Response) {
       return res.json({
         success: true,
         logs: [],
-        message: "Logs cleared"
+        message: "Logs cleared",
       });
     }
 
     return res.json({
       success: true,
       logs: logs.slice(-50),
-      count: logs.length
+      count: logs.length,
     });
   } catch (error) {
     console.error("[Test] Error getting logs:", error);
@@ -496,5 +560,5 @@ export default {
   listRecentMessages,
   healthCheck,
   clearTestMessages,
-  getDebugLogs
+  getDebugLogs,
 };

@@ -424,6 +424,7 @@ export const receivedMessages = mysqlTable("received_messages", {
   rawPayload: text("raw_payload"), // Full JSON payload for debugging
   processed: int("processed").default(0).notNull(), // 0 = pending, 1 = processed
   processedAt: timestamp("processed_at"),
+  isSurveyResponse: int("is_survey_response").default(0).notNull(), // 0 = normal, 1 = survey response (don't show in UI)
   customerId: int("customer_id").references(() => customers.id), // Link to customer if identified
   ticketId: int("ticket_id").references(() => tickets.id), // Link to ticket if created
   automationFlowId: int("automation_flow_id").references(

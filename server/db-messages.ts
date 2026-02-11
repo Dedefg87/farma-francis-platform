@@ -1,5 +1,13 @@
 import { getDb } from "./db";
-import { receivedMessages, customers, conversations, conversationMessages, agentStatus, queues, users } from "../drizzle/schema";
+import {
+  receivedMessages,
+  customers,
+  conversations,
+  conversationMessages,
+  agentStatus,
+  queues,
+  users,
+} from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 
@@ -17,7 +25,9 @@ export async function getReceivedMessages(filters?: {
 
   let query = db.select().from(receivedMessages);
 
-  const conditions = [];
+  const conditions = [
+    eq(receivedMessages.isSurveyResponse, 0), // Never show survey responses in message lists
+  ];
   if (filters?.provider) {
     conditions.push(eq(receivedMessages.provider, filters.provider));
   }
@@ -28,9 +38,7 @@ export async function getReceivedMessages(filters?: {
     conditions.push(eq(receivedMessages.customerId, filters.customerId));
   }
 
-  if (conditions.length > 0) {
-    query = query.where(and(...conditions)) as any;
-  }
+  query = query.where(and(...conditions)) as any;
 
   query = query.orderBy(desc(receivedMessages.createdAt)) as any;
 
@@ -60,7 +68,10 @@ export async function getReceivedMessageById(id: number) {
 /**
  * Get a received message by external ID (from provider)
  */
-export async function getReceivedMessageByExternalId(externalId: string, provider: "whatsapp" | "instagram") {
+export async function getReceivedMessageByExternalId(
+  externalId: string,
+  provider: "whatsapp" | "instagram"
+) {
   const db = await getDb();
   if (!db) return null;
 
@@ -81,11 +92,15 @@ export async function getReceivedMessageByExternalId(externalId: string, provide
 /**
  * Mark a message as processed
  */
-export async function markMessageAsProcessed(id: number, updates?: {
-  customerId?: number;
-  ticketId?: number;
-  automationFlowId?: number;
-}) {
+export async function markMessageAsProcessed(
+  id: number,
+  updates?: {
+    customerId?: number;
+    ticketId?: number;
+    automationFlowId?: number;
+    isSurveyResponse?: number;
+  }
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -230,7 +245,10 @@ export async function ingestInboundConversationMessage(message: {
   const db = await getDb();
   if (!db) return null;
 
-  const customer = await findOrCreateCustomerByPhone(message.fromNumber, message.fromName || undefined);
+  const customer = await findOrCreateCustomerByPhone(
+    message.fromNumber,
+    message.fromName || undefined
+  );
   const now = message.createdAt ?? new Date();
 
   const [onlineAgent] = await db
@@ -289,7 +307,7 @@ export async function ingestInboundConversationMessage(message: {
         channel: message.provider,
         status: assignedUserId ? "assigned" : "open",
         assignedTo: assignedUserId,
-        queueId: assignedUserId ? null : defaultQueue?.id ?? null,
+        queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
         openedAt: now,
         lastMessageAt: now,
         unreadCount: 1,
@@ -358,23 +376,24 @@ export async function getMessageStatistics(filters?: {
   endDate?: Date;
 }) {
   const db = await getDb();
-  if (!db) return {
-    total: 0,
-    processed: 0,
-    pending: 0,
-    byType: {},
-    byProvider: {},
-  };
+  if (!db)
+    return {
+      total: 0,
+      processed: 0,
+      pending: 0,
+      byType: {},
+      byProvider: {},
+    };
 
-  const conditions = [];
+  const conditions = [
+    eq(receivedMessages.isSurveyResponse, 0), // Exclude survey responses from stats
+  ];
   if (filters?.provider) {
     conditions.push(eq(receivedMessages.provider, filters.provider));
   }
 
   let query = db.select().from(receivedMessages);
-  if (conditions.length > 0) {
-    query = query.where(and(...conditions)) as any;
-  }
+  query = query.where(and(...conditions)) as any;
 
   const messages = await query;
 
