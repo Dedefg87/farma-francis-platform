@@ -152,13 +152,13 @@ async function startServer() {
     console.log("[Server] Running CRM migration...");
     await runCRMMigration();
 
-    // Start flow engine after server is running
-    import("../flow-engine")
+    // Start simple chatbot after server is running
+    import("../chatbot")
       .then(module => {
-        module.startFlowEngine();
+        module.startChatbot();
       })
       .catch(err => {
-        console.error("Failed to start flow engine:", err);
+        console.error("Failed to start chatbot:", err);
       });
 
     // Start pause auto-finisher worker
