@@ -33,6 +33,10 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+
+  // Trust proxy headers (required for Railway and other proxies)
+  app.set("trust proxy", 1);
+
   const server = createServer(app);
 
   const apiLimiter = rateLimit({
