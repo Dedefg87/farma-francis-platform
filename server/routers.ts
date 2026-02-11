@@ -735,6 +735,9 @@ export const appRouter = router({
   // Agent Area (Atendimento)
   agent: agentRouter,
 
+  // Agents Performance Management
+  agents: agentsRouter,
+
   // Conversations management
   conversations: conversationsRouter,
 
