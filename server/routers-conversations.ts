@@ -1,38 +1,51 @@
-import { z } from 'zod';
-import { router, protectedProcedure } from './_core/trpc';
-import { getDb } from './db';
-import { conversations, conversationMessages, customers, users, agentStatus, integrationSettings } from '../drizzle/schema';
-import { eq, and, desc, sql, or } from 'drizzle-orm';
-import { storagePut } from './storage';
-import { sendWhatsAppImage, sendWhatsAppMessage, sendInstagramImage, sendInstagramMessage, fetchEvolutionProfile } from './messaging';
-import { sseManager, EVENTS } from './_core/sse';
+import { z } from "zod";
+import { router, protectedProcedure } from "./_core/trpc";
+import { getDb } from "./db";
+import {
+  conversations,
+  conversationMessages,
+  customers,
+  users,
+  agentStatus,
+  integrationSettings,
+} from "../drizzle/schema";
+import { eq, and, desc, sql, or } from "drizzle-orm";
+import { storagePut } from "./storage";
+import {
+  sendWhatsAppImage,
+  sendWhatsAppMessage,
+  sendInstagramImage,
+  sendInstagramMessage,
+  fetchEvolutionProfile,
+} from "./messaging";
+import { sseManager, EVENTS } from "./_core/sse";
 
 /**
  * Normalizar número de telefone brasileiro
  * Remove o 9 do celular se presente (padroniza para DDD + número fixo)
  * Adiciona o + no início para consistência
- * 
+ *
  * Exemplo:
  * +5531986337081 → +5531986337081 (mantém)
  * +5531986337081 com 9 → +5531986337081 (remove o 9)
  */
 function normalizeBrazilianNumber(value: string): string {
   const cleaned = value.replace(/\D/g, "");
-  
+
   let normalized = cleaned;
-  
+
   // Adicionar 55 se não tiver
   if (!normalized.startsWith("55")) {
     normalized = "55" + normalized;
   }
-  
+
   // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), remover o 9
   // 55 31 9 86337081 → 55 31 86337081
   if (normalized.length === 13 && normalized.startsWith("55")) {
     // Manter 55 + DDD (2 dígitos) + remover o 9 + resto
     normalized = normalized.substring(0, 4) + normalized.substring(5);
   }
-  
+
   // Sempre adicionar o + no início
   return "+" + normalized;
 }
@@ -54,24 +67,27 @@ export const conversationsRouter = router({
       z.object({
         customerId: z.number().optional(),
         phoneOrEmail: z.string().optional(),
-        channel: z.enum(['whatsapp', 'instagram']).default('whatsapp'),
+        channel: z.enum(["whatsapp", "instagram"]).default("whatsapp"),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
 
       let customerId = input.customerId;
       let fetchedName: string | null = null;
 
       // Se forneceu phoneOrEmail, criar ou encontrar customer
       if (input.phoneOrEmail && !customerId) {
-        const isEmail = input.phoneOrEmail.includes('@');
-        
+        const isEmail = input.phoneOrEmail.includes("@");
+
         if (!isEmail) {
           // É telefone - normalizar número brasileiro
           const normalizedPhone = normalizeBrazilianNumber(input.phoneOrEmail);
-          console.log('[Conversations] Número normalizado:', { original: input.phoneOrEmail, normalized: normalizedPhone });
+          console.log("[Conversations] Número normalizado:", {
+            original: input.phoneOrEmail,
+            normalized: normalizedPhone,
+          });
 
           // Buscar customer existente por número normalizado (com ou sem 9)
           const [existingCustomer] = await db
@@ -81,17 +97,25 @@ export const conversationsRouter = router({
             .limit(1);
 
           if (existingCustomer) {
-            console.log('[Conversations] Customer encontrado pelo número normalizado:', existingCustomer.name);
+            console.log(
+              "[Conversations] Customer encontrado pelo número normalizado:",
+              existingCustomer.name
+            );
             customerId = existingCustomer.id;
           } else {
             // Tentar buscar por outros formatos possíveis
             const possibleFormats = [
               normalizedPhone,
-              normalizedPhone.startsWith('55') ? normalizedPhone.substring(0, 2) + normalizedPhone.substring(4) : normalizedPhone, // sem 9
+              normalizedPhone.startsWith("55")
+                ? normalizedPhone.substring(0, 2) + normalizedPhone.substring(4)
+                : normalizedPhone, // sem 9
             ];
-            
-            console.log('[Conversations] Procurando formatos alternativos:', possibleFormats);
-            
+
+            console.log(
+              "[Conversations] Procurando formatos alternativos:",
+              possibleFormats
+            );
+
             // Tentar cada formato
             for (const format of possibleFormats) {
               const [altCustomer] = await db
@@ -99,9 +123,12 @@ export const conversationsRouter = router({
                 .from(customers)
                 .where(eq(customers.phone, format))
                 .limit(1);
-              
+
               if (altCustomer) {
-                console.log('[Conversations] Customer encontrado por formato alternativo:', altCustomer.name);
+                console.log(
+                  "[Conversations] Customer encontrado por formato alternativo:",
+                  altCustomer.name
+                );
                 customerId = altCustomer.id;
                 break;
               }
@@ -123,16 +150,22 @@ export const conversationsRouter = router({
         // Se ainda não encontrou, criar novo customer
         if (!customerId) {
           // Novo customer - tentar buscar nome do WhatsApp
-          if (input.channel === 'whatsapp' && !isEmail) {
-            console.log('[Conversations] Buscando nome do WhatsApp para:', input.phoneOrEmail);
+          if (input.channel === "whatsapp" && !isEmail) {
+            console.log(
+              "[Conversations] Buscando nome do WhatsApp para:",
+              input.phoneOrEmail
+            );
             try {
               const profile = await fetchEvolutionProfile(input.phoneOrEmail);
               if (profile?.name) {
                 fetchedName = profile.name;
-                console.log('[Conversations] Nome encontrado:', fetchedName);
+                console.log("[Conversations] Nome encontrado:", fetchedName);
               }
             } catch (err) {
-              console.log('[Conversations] Erro ao buscar nome (continuando):', err);
+              console.log(
+                "[Conversations] Erro ao buscar nome (continuando):",
+                err
+              );
             }
           }
 
@@ -143,14 +176,15 @@ export const conversationsRouter = router({
               name: customerName,
               phone: normalizeBrazilianNumber(input.phoneOrEmail),
               email: isEmail ? input.phoneOrEmail : null,
-            }).$returningId();
+            })
+            .$returningId();
           customerId = newCustomer[0].id;
-          console.log('[Conversations] Novo customer criado:', customerName);
+          console.log("[Conversations] Novo customer criado:", customerName);
         }
       }
 
       if (!customerId) {
-        throw new Error('Customer ID is required');
+        throw new Error("Customer ID is required");
       }
 
       // Buscar dados do customer
@@ -161,25 +195,36 @@ export const conversationsRouter = router({
         .limit(1);
 
       if (!customer) {
-        throw new Error('Customer not found');
+        throw new Error("Customer not found");
       }
 
       // Se o customer tem apenas telefone e não nome, tentar buscar nome do WhatsApp
-      if (!fetchedName && input.channel === 'whatsapp' && customer.phone && customer.name === customer.phone) {
-        console.log('[Conversations] Atualizando nome do WhatsApp para customer existente:', customer.phone);
+      if (
+        !fetchedName &&
+        input.channel === "whatsapp" &&
+        customer.phone &&
+        customer.name === customer.phone
+      ) {
+        console.log(
+          "[Conversations] Atualizando nome do WhatsApp para customer existente:",
+          customer.phone
+        );
         try {
           const profile = await fetchEvolutionProfile(customer.phone);
           if (profile?.name) {
             // Atualizar o nome do customer
             await db
               .update(customers)
-              .set({ name: profile.name, photoUrl: profile.profilePicture || customers.photoUrl })
+              .set({
+                name: profile.name,
+                photoUrl: profile.profilePicture || customers.photoUrl,
+              })
               .where(eq(customers.id, customer.id));
             customer.name = profile.name;
-            console.log('[Conversations] Nome atualizado:', profile.name);
+            console.log("[Conversations] Nome atualizado:", profile.name);
           }
         } catch (err) {
-          console.log('[Conversations] Erro ao atualizar nome:', err);
+          console.log("[Conversations] Erro ao atualizar nome:", err);
         }
       }
 
@@ -191,11 +236,12 @@ export const conversationsRouter = router({
           customerName: customer.name,
           customerPhone: customer.phone,
           channel: input.channel,
-          status: 'assigned',
+          status: "assigned",
           assignedTo: ctx.user.id,
           openedAt: new Date(),
           lastMessageAt: new Date(),
-        }).$returningId();
+        })
+        .$returningId();
 
       // Buscar conversa criada
       const [created] = await db
@@ -210,7 +256,7 @@ export const conversationsRouter = router({
   // Listar conversas ativas do agente
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new Error('Database not available');
+    if (!db) throw new Error("Database not available");
     const agentConversations = await db
       .select({
         id: conversations.id,
@@ -241,18 +287,21 @@ export const conversationsRouter = router({
       .where(
         and(
           eq(conversations.assignedTo, ctx.user.id),
-          eq(conversations.status, 'assigned')
+          eq(conversations.status, "assigned")
         )
       )
       .orderBy(desc(conversations.lastMessageAt));
 
     const normalizePhone = (value?: string | null) => {
-      if (!value) return '';
-      const digits = value.replace(/\D/g, '');
+      if (!value) return "";
+      const digits = value.replace(/\D/g, "");
       return digits || value;
     };
 
-    const mergedByPhone = new Map<string, typeof agentConversations[number]>();
+    const mergedByPhone = new Map<
+      string,
+      (typeof agentConversations)[number]
+    >();
 
     for (const conv of agentConversations) {
       const key = normalizePhone(conv.customerPhone || conv.customerName);
@@ -263,10 +312,12 @@ export const conversationsRouter = router({
         continue;
       }
 
-      const existingName = existing.customerName || '';
-      const incomingName = conv.customerName || '';
-      const existingLooksLikePhone = existingName.replace(/\D/g, '').length >= 8;
-      const incomingLooksLikePhone = incomingName.replace(/\D/g, '').length >= 8;
+      const existingName = existing.customerName || "";
+      const incomingName = conv.customerName || "";
+      const existingLooksLikePhone =
+        existingName.replace(/\D/g, "").length >= 8;
+      const incomingLooksLikePhone =
+        incomingName.replace(/\D/g, "").length >= 8;
 
       if (existingLooksLikePhone && !incomingLooksLikePhone) {
         mergedByPhone.set(key, conv);
@@ -277,7 +328,10 @@ export const conversationsRouter = router({
         continue;
       }
 
-      if (new Date(conv.lastMessageAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+      if (
+        new Date(conv.lastMessageAt).getTime() >
+        new Date(existing.lastMessageAt).getTime()
+      ) {
         mergedByPhone.set(key, conv);
       }
     }
@@ -287,7 +341,7 @@ export const conversationsRouter = router({
 
   loggedAgents: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new Error('Database not available');
+    if (!db) throw new Error("Database not available");
 
     const agents = await db
       .select({
@@ -297,7 +351,7 @@ export const conversationsRouter = router({
       })
       .from(agentStatus)
       .innerJoin(users, eq(agentStatus.userId, users.id))
-      .where(eq(agentStatus.status, 'online'))
+      .where(eq(agentStatus.status, "online"))
       .orderBy(desc(agentStatus.lastActivity));
 
     return agents.filter(agent => agent.id !== ctx.user.id);
@@ -307,7 +361,7 @@ export const conversationsRouter = router({
     .input(z.object({ conversationId: z.number(), agentId: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
 
       const [conversation] = await db
         .select()
@@ -321,14 +375,14 @@ export const conversationsRouter = router({
         .limit(1);
 
       if (!conversation) {
-        throw new Error('Conversa não encontrada ou sem permissão');
+        throw new Error("Conversa não encontrada ou sem permissão");
       }
 
       await db
         .update(conversations)
         .set({
           assignedTo: input.agentId,
-          status: 'assigned',
+          status: "assigned",
         })
         .where(eq(conversations.id, input.conversationId));
 
@@ -339,12 +393,14 @@ export const conversationsRouter = router({
     .input(
       z.object({
         conversationId: z.number(),
-        reason: z.enum(['venda', 'orcamento', 'conversa_anterior', 'engano']).optional(),
+        reason: z
+          .enum(["venda", "orcamento", "conversa_anterior", "engano"])
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
 
       const [conversation] = await db
         .select()
@@ -358,17 +414,24 @@ export const conversationsRouter = router({
         .limit(1);
 
       if (!conversation) {
-        throw new Error('Conversa não encontrada ou sem permissão');
+        throw new Error("Conversa não encontrada ou sem permissão");
       }
 
       await db
         .update(conversations)
         .set({
-          status: 'closed',
+          status: "closed",
           closedAt: new Date(),
-          closeReason: input.reason || 'conversa_anterior',
+          closeReason: input.reason || "conversa_anterior",
         })
         .where(eq(conversations.id, input.conversationId));
+
+      // Send closing message
+      const { closeConversation } = await import("./chatbot");
+      await closeConversation(
+        input.conversationId,
+        input.reason || "conversa_anterior"
+      );
 
       return { success: true };
     }),
@@ -378,7 +441,7 @@ export const conversationsRouter = router({
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
       const [conversation] = await db
         .select()
         .from(conversations)
@@ -400,7 +463,7 @@ export const messagesRouter = router({
     .input(z.object({ conversation_id: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
       // Verificar se o agente tem acesso a esta conversa
       const [conversation] = await db
         .select()
@@ -414,7 +477,7 @@ export const messagesRouter = router({
         .limit(1);
 
       if (!conversation) {
-        throw new Error('Conversa não encontrada ou sem permissão');
+        throw new Error("Conversa não encontrada ou sem permissão");
       }
 
       const messagesList = await db
@@ -439,7 +502,7 @@ export const messagesRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
 
       // Verificar se o agente tem acesso a esta conversa
       const [conversation] = await db
@@ -454,25 +517,29 @@ export const messagesRouter = router({
         .limit(1);
 
       if (!conversation) {
-        throw new Error('Conversa não encontrada ou sem permissão');
+        throw new Error("Conversa não encontrada ou sem permissão");
       }
 
       // Validar tamanho do arquivo (máximo 16MB)
       if (input.fileSize > 16 * 1024 * 1024) {
-        throw new Error('Arquivo muito grande. Tamanho máximo: 16MB');
+        throw new Error("Arquivo muito grande. Tamanho máximo: 16MB");
       }
 
       // Decodificar base64 para Buffer
-      const fileBuffer = Buffer.from(input.fileData, 'base64');
+      const fileBuffer = Buffer.from(input.fileData, "base64");
 
       // Gerar chave única para o arquivo
       const timestamp = Date.now();
       const randomSuffix = Math.random().toString(36).substring(2, 8);
-      const fileExtension = input.fileName.split('.').pop();
+      const fileExtension = input.fileName.split(".").pop();
       const fileKey = `chat-files/${ctx.user.id}/${timestamp}-${randomSuffix}.${fileExtension}`;
 
       // Upload para S3
-      const { url: fileUrl } = await storagePut(fileKey, fileBuffer, input.fileType);
+      const { url: fileUrl } = await storagePut(
+        fileKey,
+        fileBuffer,
+        input.fileType
+      );
 
       return {
         success: true,
@@ -497,7 +564,7 @@ export const messagesRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error("Database not available");
       // Verificar se o agente tem acesso a esta conversa
       const [conversation] = await db
         .select()
@@ -511,18 +578,20 @@ export const messagesRouter = router({
         .limit(1);
 
       if (!conversation) {
-        throw new Error('Conversa não encontrada ou sem permissão');
+        throw new Error("Conversa não encontrada ou sem permissão");
       }
 
       const destination = conversation.customerPhone;
       if (!destination) {
-        throw new Error('Destino não encontrado para esta conversa');
+        throw new Error("Destino não encontrado para esta conversa");
       }
 
-      const isImage = Boolean(input.fileUrl && input.fileType?.startsWith('image/'));
+      const isImage = Boolean(
+        input.fileUrl && input.fileType?.startsWith("image/")
+      );
 
       try {
-        if (conversation.channel === 'whatsapp') {
+        if (conversation.channel === "whatsapp") {
           if (isImage && input.fileUrl) {
             await sendWhatsAppImage({
               to: destination,
@@ -535,7 +604,7 @@ export const messagesRouter = router({
               message: input.content,
             });
           }
-        } else if (conversation.channel === 'instagram') {
+        } else if (conversation.channel === "instagram") {
           if (isImage && input.fileUrl) {
             await sendInstagramImage({
               to: destination,
@@ -549,8 +618,8 @@ export const messagesRouter = router({
           }
         }
       } catch (error) {
-        console.error('[Messages] Failed to send outbound message', error);
-        throw new Error((error as Error).message || 'Falha ao enviar mensagem');
+        console.error("[Messages] Failed to send outbound message", error);
+        throw new Error((error as Error).message || "Falha ao enviar mensagem");
       }
 
       // Criar mensagem
@@ -559,7 +628,7 @@ export const messagesRouter = router({
         .values({
           conversationId: input.conversation_id,
           senderId: ctx.user.id,
-          senderType: 'agent',
+          senderType: "agent",
           content: input.content,
           fileUrl: input.fileUrl,
           fileName: input.fileName,
@@ -582,7 +651,7 @@ export const messagesRouter = router({
         data: {
           messageId: message.id,
           conversationId: input.conversation_id,
-          status: 'sent',
+          status: "sent",
         },
         timestamp: Date.now(),
       });

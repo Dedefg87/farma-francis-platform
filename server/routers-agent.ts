@@ -7,10 +7,10 @@ export const agentRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
-        if (!db) throw new Error("Database not available");
+      if (!db) throw new Error("Database not available");
       const { conversations } = await import("../drizzle/schema");
       const { eq, desc } = await import("drizzle-orm");
-      
+
       const convs = await db
         .select()
         .from(conversations)
@@ -27,7 +27,7 @@ export const agentRouter = router({
         if (!db) throw new Error("Database not available");
         const { conversations } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
-        
+
         const [conv] = await db
           .select()
           .from(conversations)
@@ -36,14 +36,16 @@ export const agentRouter = router({
       }),
 
     assign: protectedProcedure
-      .input((raw: unknown) => z.object({ conversationId: z.number() }).parse(raw))
+      .input((raw: unknown) =>
+        z.object({ conversationId: z.number() }).parse(raw)
+      )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const { conversations } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
-        
+
         await db
           .update(conversations)
           .set({ assignedTo: ctx.user.id, status: "assigned" })
@@ -53,10 +55,17 @@ export const agentRouter = router({
 
     close: protectedProcedure
       .input((raw: unknown) =>
-        z.object({
-          conversationId: z.number(),
-          reason: z.enum(["venda", "orcamento", "conversa_anterior", "engano"]),
-        }).parse(raw)
+        z
+          .object({
+            conversationId: z.number(),
+            reason: z.enum([
+              "venda",
+              "orcamento",
+              "conversa_anterior",
+              "engano",
+            ]),
+          })
+          .parse(raw)
       )
       .mutation(async ({ input }) => {
         const { getDb } = await import("./db");
@@ -64,7 +73,12 @@ export const agentRouter = router({
         if (!db) throw new Error("Database not available");
         const { conversations } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
-        
+
+        // First, call closeConversation to send the closing message
+        const { closeConversation } = await import("./chatbot");
+        await closeConversation(input.conversationId, input.reason);
+
+        // Then update the database
         await db
           .update(conversations)
           .set({
@@ -80,14 +94,16 @@ export const agentRouter = router({
   // Messages
   messages: router({
     list: protectedProcedure
-      .input((raw: unknown) => z.object({ conversationId: z.number() }).parse(raw))
+      .input((raw: unknown) =>
+        z.object({ conversationId: z.number() }).parse(raw)
+      )
       .query(async ({ input }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const { messages } = await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
-        
+
         const msgs = await db
           .select()
           .from(messages)
@@ -98,18 +114,20 @@ export const agentRouter = router({
 
     send: protectedProcedure
       .input((raw: unknown) =>
-        z.object({
-          conversationId: z.number(),
-          content: z.string(),
-          mediaUrl: z.string().optional(),
-        }).parse(raw)
+        z
+          .object({
+            conversationId: z.number(),
+            content: z.string(),
+            mediaUrl: z.string().optional(),
+          })
+          .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const { messages } = await import("../drizzle/schema");
-        
+
         const [msg] = await db.insert(messages).values({
           ticketId: input.conversationId,
           customerId: ctx.user.id,
@@ -128,27 +146,32 @@ export const agentRouter = router({
     list: protectedProcedure.query(async () => {
       const { getDb } = await import("./db");
       const db = await getDb();
-        if (!db) throw new Error("Database not available");
+      if (!db) throw new Error("Database not available");
       const { quickReplies } = await import("../drizzle/schema");
-      
-      const replies = await db.select().from(quickReplies).orderBy(quickReplies.category);
+
+      const replies = await db
+        .select()
+        .from(quickReplies)
+        .orderBy(quickReplies.category);
       return replies;
     }),
 
     create: adminProcedure
       .input((raw: unknown) =>
-        z.object({
-          title: z.string(),
-          content: z.string(),
-          category: z.string().optional(),
-        }).parse(raw)
+        z
+          .object({
+            title: z.string(),
+            content: z.string(),
+            category: z.string().optional(),
+          })
+          .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
         const { quickReplies } = await import("../drizzle/schema");
-        
+
         await db.insert(quickReplies).values({
           title: input.title,
           content: input.content,
@@ -166,10 +189,10 @@ export const agentRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
-        if (!db) throw new Error("Database not available");
+      if (!db) throw new Error("Database not available");
       const { agentStatus } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
-      
+
       const statuses = await db
         .select()
         .from(agentStatus)
@@ -179,10 +202,12 @@ export const agentRouter = router({
 
     update: protectedProcedure
       .input((raw: unknown) =>
-        z.object({
-          channel: z.enum(["whatsapp", "instagram"]),
-          status: z.enum(["online", "paused", "offline"]),
-        }).parse(raw)
+        z
+          .object({
+            channel: z.enum(["whatsapp", "instagram"]),
+            status: z.enum(["online", "paused", "offline"]),
+          })
+          .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
@@ -190,7 +215,7 @@ export const agentRouter = router({
         if (!db) throw new Error("Database not available");
         const { agentStatus } = await import("../drizzle/schema");
         const { eq, and } = await import("drizzle-orm");
-        
+
         // Verificar se já existe
         const [existing] = await db
           .select()
@@ -224,10 +249,10 @@ export const agentRouter = router({
     list: protectedProcedure.query(async () => {
       const { getDb } = await import("./db");
       const db = await getDb();
-        if (!db) throw new Error("Database not available");
+      if (!db) throw new Error("Database not available");
       const { queueSettings } = await import("../drizzle/schema");
       const { eq } = await import("drizzle-orm");
-      
+
       const queues = await db
         .select()
         .from(queueSettings)
@@ -241,10 +266,10 @@ export const agentRouter = router({
     realtime: protectedProcedure.query(async ({ ctx }) => {
       const { getDb } = await import("./db");
       const db = await getDb();
-        if (!db) throw new Error("Database not available");
+      if (!db) throw new Error("Database not available");
       const { conversations } = await import("../drizzle/schema");
       const { eq, and, sql } = await import("drizzle-orm");
-      
+
       // Contar atendimentos ativos do agente
       const activeConversations = await db
         .select({ count: sql<number>`count(*)` })
