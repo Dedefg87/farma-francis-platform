@@ -184,7 +184,7 @@ async function sendCustomMessage(
   );
 }
 
-async function saveMessageAndNotify(
+export async function saveMessageAndNotify(
   db: any,
   conversationId: number | undefined,
   customerId: number,
