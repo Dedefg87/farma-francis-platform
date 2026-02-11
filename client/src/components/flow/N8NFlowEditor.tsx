@@ -15,6 +15,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import N8NNode from "./N8NNode";
 import CustomEdge from "./CustomEdge";
+import EdgeLabelEditor from "./EdgeLabelEditor";
 import { Button } from "@/components/ui/button";
 import {
   Save,
@@ -25,6 +26,7 @@ import {
   Maximize2,
   Plus,
   Trash2,
+  Edit,
 } from "lucide-react";
 import { toast } from "sonner";
 import { convertToReactFlow } from "@/lib/flowConverters";
@@ -55,6 +57,7 @@ interface N8NFlowEditorProps {
   initialEdges?: Edge[];
   onSave?: (nodes: Node[], edges: Edge[]) => void;
   onNodeDoubleClick?: (node: Node) => void;
+  onEdgeLabelChange?: (edges: Edge[]) => void;
 }
 
 export default function N8NFlowEditor({
@@ -63,10 +66,13 @@ export default function N8NFlowEditor({
   initialEdges = [],
   onSave,
   onNodeDoubleClick,
+  onEdgeLabelChange,
 }: N8NFlowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+  const [isEdgeLabelEditorOpen, setIsEdgeLabelEditorOpen] = useState(false);
+  const [edgeToEdit, setEdgeToEdit] = useState<Edge | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
@@ -188,6 +194,9 @@ export default function N8NFlowEditor({
   const handleEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
     setSelectedEdge(edge);
+    // Abrir editor de rótulo para conexões
+    setIsEdgeLabelEditorOpen(true);
+    setEdgeToEdit(edge);
   }, []);
 
   const handleDeleteSelectedEdge = () => {
@@ -195,6 +204,21 @@ export default function N8NFlowEditor({
       setEdges(eds => eds.filter(e => e.id !== selectedEdge.id));
       setSelectedEdge(null);
       toast.success("Conexão removida");
+    }
+  };
+
+  const handleEdgeLabelSave = (edgeId: string, label: string) => {
+    setEdges(eds => eds.map(e => (e.id === edgeId ? { ...e, label } : e)));
+    toast.success("Rótulo da conexão atualizado!");
+    setIsEdgeLabelEditorOpen(false);
+    setEdgeToEdit(null);
+
+    // Notify parent about edge changes
+    if (onEdgeLabelChange) {
+      const updatedEdges = edges.map(e =>
+        e.id === edgeId ? { ...e, label } : e
+      );
+      onEdgeLabelChange(updatedEdges);
     }
   };
 
@@ -293,6 +317,18 @@ export default function N8NFlowEditor({
             <>
               <div className="w-px bg-gray-300" />
               <Button
+                onClick={() => {
+                  setIsEdgeLabelEditorOpen(true);
+                  setEdgeToEdit(selectedEdge);
+                }}
+                size="sm"
+                variant="outline"
+                className="animate-in fade-in slide-in-from-right-2"
+              >
+                <Edit className="w-4 h-4 mr-1" />
+                Editar Rótulo
+              </Button>
+              <Button
                 onClick={handleDeleteSelectedEdge}
                 size="sm"
                 variant="destructive"
@@ -305,6 +341,16 @@ export default function N8NFlowEditor({
           )}
         </Panel>
       </ReactFlow>
+
+      <EdgeLabelEditor
+        edge={edgeToEdit}
+        open={isEdgeLabelEditorOpen}
+        onClose={() => {
+          setIsEdgeLabelEditorOpen(false);
+          setEdgeToEdit(null);
+        }}
+        onSave={handleEdgeLabelSave}
+      />
     </div>
   );
 }
