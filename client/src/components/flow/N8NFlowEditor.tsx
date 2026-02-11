@@ -70,6 +70,16 @@ export default function N8NFlowEditor({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
+  // Sync with initialNodes/initialEdges when they change (e.g., when flow data is refreshed)
+  useEffect(() => {
+    if (initialNodes.length > 0) {
+      setNodes(initialNodes);
+    }
+    if (initialEdges.length > 0) {
+      setEdges(initialEdges);
+    }
+  }, [initialNodes, initialEdges, setNodes, setEdges]);
+
   const onConnect = useCallback(
     (params: Connection) => setEdges(eds => addEdge(params, eds)),
     [setEdges]
