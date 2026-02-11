@@ -11,13 +11,12 @@ export async function runCRMMigration() {
     console.log("[CRM Migration] Starting...");
 
     // Verificar se a tabela tags existe
-    const checkQuery = `
+    const tableExistsResult = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables 
       WHERE table_schema = DATABASE() AND table_name = 'tags'
-    `;
+    `);
 
-    const [result] = await db.execute(checkQuery);
-    const tableExists = result && result[0] && result[0].count > 0;
+    const tableExists = tableExistsResult && tableExistsResult.length > 0;
 
     console.log("[CRM Migration] Tags table exists:", tableExists);
 
@@ -26,7 +25,7 @@ export async function runCRMMigration() {
       console.log(
         "[CRM Migration] Creating tags table with description column"
       );
-      await db.execute(`
+      await db.raw(`
         CREATE TABLE tags (
           id INT AUTO_INCREMENT PRIMARY KEY,
           name VARCHAR(50) NOT NULL UNIQUE,
@@ -38,27 +37,25 @@ export async function runCRMMigration() {
       `);
     } else {
       // Se tabela existe, verificar se tem a coluna description
-      const checkColumnQuery = `
+      const columnExistsResult = await db.raw(`
         SELECT COUNT(*) as count FROM information_schema.columns 
         WHERE table_schema = DATABASE() AND table_name = 'tags' AND column_name = 'description'
-      `;
+      `);
 
-      const [columnResult] = await db.execute(checkColumnQuery);
-      const columnExists =
-        columnResult && columnResult[0] && columnResult[0].count > 0;
+      const columnExists = columnExistsResult && columnExistsResult.length > 0;
 
       if (!columnExists) {
         console.log(
           "[CRM Migration] Adding description column to existing tags table"
         );
-        await db.execute(`
+        await db.raw(`
           ALTER TABLE tags ADD COLUMN description TEXT
         `);
       }
     }
 
     // Criar outras tabelas se não existirem
-    await db.execute(`
+    await db.raw(`
       CREATE TABLE IF NOT EXISTS customer_treatments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
@@ -75,7 +72,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.execute(`
+    await db.raw(`
       CREATE TABLE IF NOT EXISTS customer_tags (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
@@ -102,7 +99,7 @@ export async function runCRMMigration() {
         description: "Paciente com hipertensão arterial",
       },
       {
-        name: "Dermo",
+        name: " Dermo",
         color: "#8b5cf6",
         description: "Produtos dermatológicos",
       },
@@ -118,7 +115,7 @@ export async function runCRMMigration() {
     ];
 
     for (const tag of initialTags) {
-      await db.execute(
+      await db.raw(
         `
         INSERT IGNORE INTO tags (name, color, description) VALUES (?, ?, ?)
       `,
