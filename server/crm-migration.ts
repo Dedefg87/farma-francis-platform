@@ -1,8 +1,8 @@
-import { getDb } from "./db";
+import { getDbRaw } from "./db";
 
 export async function runCRMMigration() {
-  const db = await getDb();
-  if (!db) {
+  const db = await getDbRaw();
+  if (!db || !db.raw) {
     console.error("[CRM Migration] Database not available");
     return false;
   }
