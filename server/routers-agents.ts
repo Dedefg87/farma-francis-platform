@@ -56,7 +56,15 @@ export const agentsRouter = router({
         .from(users)
         .orderBy(desc(users.createdAt));
 
+      console.log(
+        `[agents.list] Total de usuários encontrados: ${allAgents.length}`
+      );
+      console.log(
+        `[agents.list] IDs: ${allAgents.map(a => `${a.id}(${a.name})`).join(", ")}`
+      );
+
       if (allAgents.length === 0) {
+        console.log("[agents.list] Nenhum usuário encontrado no banco");
         return {
           agents: [],
           pagination: { page, pageSize, total: 0, totalPages: 0 },
@@ -297,6 +305,17 @@ export const agentsRouter = router({
       // Paginate
       const paginatedAgents = sortedAgents.slice(offset, offset + pageSize);
       const total = sortedAgents.length;
+
+      console.log(`[agents.list] Total de agentes com métricas: ${total}`);
+      console.log(
+        `[agents.list] Retornando ${paginatedAgents.length} agentes na página ${page}`
+      );
+      console.log(
+        `[agents.list] Primeiros agentes: ${paginatedAgents
+          .slice(0, 3)
+          .map(a => `${a.name}(${a.totalTickets} tickets)`)
+          .join(", ")}`
+      );
 
       return {
         agents: paginatedAgents,
