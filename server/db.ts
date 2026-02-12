@@ -374,7 +374,7 @@ export async function getAllEmployees() {
   return allUsers.map(user => {
     const employeeData = allEmployees.find(e => e.userId === user.id);
     return {
-      ...user,
+      user: user,
       employee: employeeData || null,
     };
   });
