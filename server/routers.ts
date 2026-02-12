@@ -239,18 +239,93 @@ export const appRouter = router({
       })
       .mutation(async ({ input }) => {
         const { getDb } = await import("./db");
-        const { users, employees } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
+        const {
+          users,
+          employees,
+          conversations,
+          surveyResponses,
+          tickets,
+          leads,
+          ticketComments,
+          interactions,
+          flowExecutions,
+          messageTemplates,
+          uraMenus,
+        } = await import("../drizzle/schema");
+        const { eq, sql } = await import("drizzle-orm");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        // Deletar employee primeiro (devido a foreign key)
-        await db.delete(employees).where(eq(employees.userId, input.userId));
+        const userId = input.userId;
 
-        // Deletar usuário
-        await db.delete(users).where(eq(users.id, input.userId));
+        try {
+          // 1. Desassociar usuário de conversas (setar assignedTo para NULL)
+          await db
+            .update(conversations)
+            .set({ assignedTo: null })
+            .where(eq(conversations.assignedTo, userId));
 
-        return { success: true };
+          // 2. Desassociar usuário de tickets
+          await db
+            .update(tickets)
+            .set({ assignedTo: null })
+            .where(eq(tickets.assignedTo, userId));
+
+          // 3. Desassociar usuário de leads
+          await db
+            .update(leads)
+            .set({ assignedTo: null })
+            .where(eq(leads.assignedTo, userId));
+
+          // 4. Desassociar usuário de survey responses
+          await db
+            .update(surveyResponses)
+            .set({ agentId: null })
+            .where(eq(surveyResponses.agentId, userId));
+
+          // 5. Desassociar de ticket comments
+          await db
+            .update(ticketComments)
+            .set({ userId: null })
+            .where(eq(ticketComments.userId, userId));
+
+          // 6. Desassociar de interactions
+          await db
+            .update(interactions)
+            .set({ userId: null })
+            .where(eq(interactions.userId, userId));
+
+          // 7. Desassociar de flow executions
+          await db
+            .update(flowExecutions)
+            .set({ triggeredBy: null })
+            .where(eq(flowExecutions.triggeredBy, userId));
+
+          // 8. Desassociar de message templates
+          await db
+            .update(messageTemplates)
+            .set({ createdBy: null })
+            .where(eq(messageTemplates.createdBy, userId));
+
+          // 9. Desassociar de URA menus
+          await db
+            .update(uraMenus)
+            .set({ createdBy: null })
+            .where(eq(uraMenus.createdBy, userId));
+
+          // 10. Deletar employee primeiro (devido a foreign key)
+          await db.delete(employees).where(eq(employees.userId, userId));
+
+          // 11. Finalmente, deletar o usuário
+          await db.delete(users).where(eq(users.id, userId));
+
+          return { success: true };
+        } catch (error) {
+          console.error("[deleteEmployee] Error:", error);
+          throw new Error(
+            `Falha ao excluir funcionário: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+          );
+        }
       }),
     update: adminProcedure
       .input((raw: unknown) => {
@@ -517,13 +592,46 @@ export const appRouter = router({
       .input((raw: unknown) => {
         return z
           .object({
-            id: z.number(),
+            userId: z.number(),
           })
           .parse(raw);
       })
       .mutation(async ({ input }) => {
-        const { deleteAutomationFlow } = await import("./db");
-        return await deleteAutomationFlow(input.id);
+        const { getDb } = await import("./db");
+        const { users, employees, conversations, surveyResponses } =
+          await import("../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const userId = input.userId;
+
+        try {
+          // Desassociar usuário de conversas (setar assignedTo para NULL)
+          await db
+            .update(conversations)
+            .set({ assignedTo: null })
+            .where(eq(conversations.assignedTo, userId));
+
+          // Desassociar usuário de survey responses
+          await db
+            .update(surveyResponses)
+            .set({ agentId: null })
+            .where(eq(surveyResponses.agentId, userId));
+
+          // Deletar employee primeiro (devido a foreign key)
+          await db.delete(employees).where(eq(employees.userId, userId));
+
+          // Finalmente, deletar o usuário
+          await db.delete(users).where(eq(users.id, userId));
+
+          return { success: true };
+        } catch (error) {
+          console.error("[deleteEmployee] Error:", error);
+          throw new Error(
+            `Falha ao excluir funcionário: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+          );
+        }
       }),
     toggle: adminProcedure
       .input((raw: unknown) => {
