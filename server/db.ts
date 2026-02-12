@@ -354,3 +354,28 @@ export async function toggleUraMenu(id: number, isActive: boolean) {
     })
     .where(eq(uraMenus.id, id));
 }
+
+// ==================== EMPLOYEES/USERS ====================
+
+export async function getAllEmployees() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Import employees schema
+  const { employees } = await import("../drizzle/schema");
+
+  // Get all users with their employee data
+  const allUsers = await db.select().from(users).orderBy(desc(users.createdAt));
+
+  // Get all employees
+  const allEmployees = await db.select().from(employees);
+
+  // Merge user and employee data
+  return allUsers.map(user => {
+    const employeeData = allEmployees.find(e => e.userId === user.id);
+    return {
+      ...user,
+      employee: employeeData || null,
+    };
+  });
+}

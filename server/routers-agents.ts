@@ -13,7 +13,7 @@ import {
   conversationMessages,
   surveyResponses,
 } from "../drizzle/schema";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and, gte, sql, desc } from "drizzle-orm";
 
 export const agentsRouter = router({
   /**
@@ -50,16 +50,11 @@ export const agentsRouter = router({
         startDate.setDate(startDate.getDate() - days);
       }
 
-      // Get all users with role 'user' (agents) OR all users (fallback)
-      let allAgents = await db
+      // Get ALL users (todos os usuários são agentes potenciais)
+      const allAgents = await db
         .select()
         .from(users)
-        .where(eq(users.role, "user"));
-
-      // Fallback: if no agents with role='user', get all users except admin
-      if (allAgents.length === 0) {
-        allAgents = await db.select().from(users);
-      }
+        .orderBy(desc(users.createdAt));
 
       if (allAgents.length === 0) {
         return {
@@ -473,7 +468,7 @@ export const agentsRouter = router({
       const allAgents = await db
         .select()
         .from(users)
-        .where(eq(users.role, "user"));
+        .orderBy(desc(users.createdAt));
 
       if (allAgents.length === 0) {
         return [];
@@ -619,7 +614,7 @@ export const agentsRouter = router({
       const allAgents = await db
         .select()
         .from(users)
-        .where(eq(users.role, "user"));
+        .orderBy(desc(users.createdAt));
 
       if (allAgents.length === 0) {
         return ["Nenhum agente cadastrado no sistema."];
