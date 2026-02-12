@@ -17,6 +17,7 @@ import Automation from "./pages/Automation";
 import APISettings from "./pages/APISettings";
 import Executions from "./pages/Executions";
 import AgentPerformance from "./pages/AgentPerformance";
+import DebugData from "./pages/DebugData";
 import Login from "./pages/Login";
 import Unauthorized from "./pages/Unauthorized";
 import QueueManagement from "./pages/QueueManagement";
@@ -106,6 +107,11 @@ function Router() {
       <Route path={"/agent-performance"}>
         <AdminRoute>
           <AgentPerformance />
+        </AdminRoute>
+      </Route>
+      <Route path={"/debug-data"}>
+        <AdminRoute>
+          <DebugData />
         </AdminRoute>
       </Route>
       <Route path={"/settings/api"}>

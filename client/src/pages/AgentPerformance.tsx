@@ -66,29 +66,32 @@ function AgentPerformanceContent() {
   const pageSize = 10;
 
   // Buscar dados reais via tRPC
-  // @ts-ignore - bypassing type check for runtime testing
-  const agentsQuery = (trpc as any).agents?.list;
+  const { data, isLoading, error } = trpc.agents.list.useQuery(
+    {
+      page: currentPage,
+      pageSize,
+      timeRange,
+      sortBy,
+    },
+    {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    }
+  );
 
-  const query =
-    agentsQuery?.useQuery?.(
-      {
-        page: currentPage,
-        pageSize,
-        timeRange,
-        sortBy,
-      },
-      {
-        retry: 1,
-        refetchOnWindowFocus: false,
-      }
-    ) || {};
+  // Buscar dados do gráfico
+  const { data: chartData, isLoading: isChartLoading } =
+    trpc.agents.getChartData.useQuery(
+      { timeRange },
+      { retry: 1, refetchOnWindowFocus: false }
+    );
 
-  const { data, isLoading, error } = query;
-
-  console.log("[AgentPerformance] Query result:", query);
-  console.log("[AgentPerformance] Data:", data);
-  console.log("[AgentPerformance] Error:", error);
-  console.log("[AgentPerformance] IsLoading:", isLoading);
+  // Buscar insights reais
+  const { data: insights, isLoading: isInsightsLoading } =
+    trpc.agents.getInsights.useQuery(
+      { timeRange },
+      { retry: 1, refetchOnWindowFocus: false }
+    );
 
   // Handle both array and object data formats
   let agentsList: any[] = [];
@@ -106,6 +109,26 @@ function AgentPerformanceContent() {
     totalPages: 0,
   };
   const { toast } = useToast();
+
+  // Calcular métricas gerais com proteção contra divisão por zero
+  const totalTickets = agents.reduce(
+    (sum, a) => sum + (a.totalTickets || 0),
+    0
+  );
+  const totalResolved = agents.reduce(
+    (sum, a) => sum + (a.resolvedTickets || 0),
+    0
+  );
+  const avgResponseTime =
+    agents.length > 0
+      ? agents.reduce((sum, a) => sum + (a.avgResponseTime || 0), 0) /
+        agents.length
+      : 0;
+  const avgSatisfaction =
+    agents.length > 0
+      ? agents.reduce((sum, a) => sum + (a.satisfactionRate || 0), 0) /
+        agents.length
+      : 0;
 
   // Função de exportação
   const handleExport = async (format: "csv" | "pdf") => {
@@ -178,9 +201,6 @@ function AgentPerformanceContent() {
     }
   };
 
-  // Data is now fetched from real backend API (trpc.agents.list)
-  // No mock data - uses real data from conversations and surveyResponses tables
-
   const getTrendIcon = (trend: string) => {
     if (trend === "up")
       return <TrendingUp className="h-4 w-4 text-green-500" />;
@@ -196,6 +216,25 @@ function AgentPerformanceContent() {
     return "text-red-600 bg-red-50";
   };
 
+  // Dados para o gráfico - usa dados reais ou array vazio
+  const chartSeries =
+    chartData && chartData.length > 0
+      ? [
+          {
+            dataKey: "satisfacao",
+            name: "Satisfação (%)",
+            color: "#10b981",
+            type: "line" as const,
+          },
+          {
+            dataKey: "tickets",
+            name: "Tickets",
+            color: "#3b82f6",
+            type: "line" as const,
+          },
+        ]
+      : [];
+
   return (
     <div className="container py-8 space-y-6 mt-16">
       {/* Header */}
@@ -205,7 +244,7 @@ function AgentPerformanceContent() {
             Performance de Agentes
           </h1>
           <p className="text-muted-foreground mt-1">
-            Acompanhe métricas e rankings da equipe
+            Acompanhe métricas e rankings da equipe em tempo real
           </p>
         </div>
 
@@ -244,30 +283,16 @@ function AgentPerformanceContent() {
           Evolução de Performance
         </h2>
         <TimeSeriesChart
-          data={[
-            { date: "01/01", satisfacao: 95, tickets: 45, tempoResposta: 3.2 },
-            { date: "08/01", satisfacao: 96, tickets: 52, tempoResposta: 3.0 },
-            { date: "15/01", satisfacao: 94, tickets: 48, tempoResposta: 3.5 },
-            { date: "22/01", satisfacao: 97, tickets: 58, tempoResposta: 2.8 },
-            { date: "29/01", satisfacao: 98, tickets: 62, tempoResposta: 2.5 },
-          ]}
-          series={[
-            {
-              dataKey: "satisfacao",
-              name: "Satisfação (%)",
-              color: "#10b981",
-              type: "line",
-            },
-            {
-              dataKey: "tickets",
-              name: "Tickets Resolvidos",
-              color: "#3b82f6",
-              type: "line",
-            },
-          ]}
+          data={chartData || []}
+          series={chartSeries}
           height={300}
-          isLoading={isLoading}
+          isLoading={isChartLoading}
         />
+        {(!chartData || chartData.length === 0) && !isChartLoading && (
+          <div className="text-center text-muted-foreground py-8">
+            Sem dados suficientes para exibir o gráfico no período selecionado.
+          </div>
+        )}
       </Card>
 
       {/* Métricas Gerais */}
@@ -277,7 +302,7 @@ function AgentPerformanceContent() {
             <div>
               <p className="text-sm text-muted-foreground">Total de Tickets</p>
               <p className="text-2xl font-bold text-foreground mt-1">
-                {agents.reduce((sum, a) => sum + a.totalTickets, 0)}
+                {totalTickets}
               </p>
             </div>
             <MessageSquare className="h-8 w-8 text-blue-500" />
@@ -289,11 +314,9 @@ function AgentPerformanceContent() {
             <div>
               <p className="text-sm text-muted-foreground">Taxa de Resolução</p>
               <p className="text-2xl font-bold text-foreground mt-1">
-                {(
-                  (agents.reduce((sum, a) => sum + a.resolvedTickets, 0) /
-                    agents.reduce((sum, a) => sum + a.totalTickets, 0)) *
-                  100
-                ).toFixed(1)}
+                {totalTickets > 0
+                  ? ((totalResolved / totalTickets) * 100).toFixed(1)
+                  : "0.0"}
                 %
               </p>
             </div>
@@ -308,10 +331,7 @@ function AgentPerformanceContent() {
                 Tempo Médio de Resposta
               </p>
               <p className="text-2xl font-bold text-foreground mt-1">
-                {(
-                  agents.reduce((sum, a) => sum + a.avgResponseTime, 0) /
-                  agents.length
-                ).toFixed(1)}
+                {avgResponseTime.toFixed(1)}
                 min
               </p>
             </div>
@@ -324,11 +344,7 @@ function AgentPerformanceContent() {
             <div>
               <p className="text-sm text-muted-foreground">Satisfação Média</p>
               <p className="text-2xl font-bold text-foreground mt-1">
-                {(
-                  agents.reduce((sum, a) => sum + a.satisfactionRate, 0) /
-                  agents.length
-                ).toFixed(1)}
-                %
+                {avgSatisfaction.toFixed(1)}%
               </p>
             </div>
             <ThumbsUp className="h-8 w-8 text-purple-500" />
@@ -345,9 +361,9 @@ function AgentPerformanceContent() {
           <div className="flex gap-2">
             {[
               { value: "satisfaction", label: "Satisfação" },
-              { value: "tickets", label: "Tickets Resolvidos" },
-              { value: "response", label: "Tempo de Resposta" },
-              { value: "resolution", label: "Tempo de Resolução" },
+              { value: "resolved", label: "Tickets Resolvidos" },
+              { value: "response_time", label: "Tempo de Resposta" },
+              { value: "active", label: "Tickets Ativos" },
             ].map(option => (
               <Button
                 key={option.value}
@@ -369,142 +385,155 @@ function AgentPerformanceContent() {
         </div>
       )}
 
+      {/* Empty state */}
+      {!isLoading && agents.length === 0 && (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed">
+          <Award className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Nenhum agente encontrado
+          </h3>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Não há agentes cadastrados ou nenhum ticket foi atribuído ainda.
+            Verifique se os usuários têm a role 'user' e se os tickets estão
+            sendo atribuídos corretamente.
+          </p>
+        </div>
+      )}
+
       {/* Ranking de Agentes */}
-      {!isLoading && (
+      {!isLoading && agents.length > 0 && (
         <div className="space-y-3">
-          {(agents.length > 0 ? agents : []).map(
-            (agent: any, index: number) => (
-              <Card
-                key={agent.id}
-                className="p-6 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start gap-6">
-                  {/* Posição */}
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${
-                        index === 0
-                          ? "bg-yellow-100 text-yellow-700"
-                          : index === 1
-                            ? "bg-gray-100 text-gray-700"
-                            : index === 2
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-blue-50 text-blue-600"
-                      }`}
-                    >
-                      {index === 0
-                        ? "🥇"
+          {agents.map((agent: any, index: number) => (
+            <Card
+              key={agent.id}
+              className="p-6 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start gap-6">
+                {/* Posição */}
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold ${
+                      index === 0
+                        ? "bg-yellow-100 text-yellow-700"
                         : index === 1
-                          ? "🥈"
+                          ? "bg-gray-100 text-gray-700"
                           : index === 2
-                            ? "🥉"
-                            : `#${index + 1}`}
-                    </div>
-                  </div>
-
-                  {/* Avatar e Nome */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
-                        {agent.avatar}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg text-foreground">
-                          {agent.name}
-                        </h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          {getTrendIcon(agent.trend)}
-                          {agent.trend !== "stable" && (
-                            <span
-                              className={`text-sm ${
-                                agent.trend === "up"
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              {agent.trend === "up" ? "+" : ""}
-                              {agent.trendValue}% este mês
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Badges */}
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {agent.badges?.map((badge: string, i: number) => (
-                        <Badge key={i} variant="secondary" className="text-xs">
-                          {badge}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    {/* Métricas */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Tickets Resolvidos
-                        </p>
-                        <p className="text-lg font-semibold text-foreground">
-                          {agent.resolvedTickets}/{agent.totalTickets}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Tempo de Resposta
-                        </p>
-                        <p className="text-lg font-semibold text-foreground">
-                          {agent.avgResponseTime.toFixed(1)}min
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Tempo de Resolução
-                        </p>
-                        <p className="text-lg font-semibold text-foreground">
-                          {agent.avgResolutionTime.toFixed(1)}h
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Satisfação
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <p
-                            className={`text-lg font-semibold ${getPerformanceColor(agent.satisfactionRate)}`}
-                          >
-                            {agent.satisfactionRate}%
-                          </p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs text-muted-foreground">
-                          Tickets Ativos
-                        </p>
-                        <p className="text-lg font-semibold text-foreground">
-                          {agent.activeTickets}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Ações */}
-                  <div className="flex flex-col gap-2">
-                    <Button variant="outline" size="sm">
-                      Ver Detalhes
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      Feedback
-                    </Button>
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-blue-50 text-blue-600"
+                    }`}
+                  >
+                    {index === 0
+                      ? "🥇"
+                      : index === 1
+                        ? "🥈"
+                        : index === 2
+                          ? "🥉"
+                          : `#${index + 1}`}
                   </div>
                 </div>
-              </Card>
-            )
-          )}
+
+                {/* Avatar e Nome */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold">
+                      {agent.avatar}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg text-foreground">
+                        {agent.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        {getTrendIcon(agent.trend)}
+                        {agent.trend !== "stable" && (
+                          <span
+                            className={`text-sm ${
+                              agent.trend === "up"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {agent.trend === "up" ? "+" : ""}
+                            {agent.trendValue}% este mês
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Badges */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {agent.badges?.map((badge: string, i: number) => (
+                      <Badge key={i} variant="secondary" className="text-xs">
+                        {badge}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  {/* Métricas */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Tickets Resolvidos
+                      </p>
+                      <p className="text-lg font-semibold text-foreground">
+                        {agent.resolvedTickets || 0}/{agent.totalTickets || 0}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Tempo de Resposta
+                      </p>
+                      <p className="text-lg font-semibold text-foreground">
+                        {(agent.avgResponseTime || 0).toFixed(1)}min
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Tempo de Resolução
+                      </p>
+                      <p className="text-lg font-semibold text-foreground">
+                        {(agent.avgResolutionTime || 0).toFixed(1)}h
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Satisfação
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <p
+                          className={`text-lg font-semibold ${getPerformanceColor(agent.satisfactionRate || 0)}`}
+                        >
+                          {agent.satisfactionRate || 0}%
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-xs text-muted-foreground">
+                        Tickets Ativos
+                      </p>
+                      <p className="text-lg font-semibold text-foreground">
+                        {agent.activeTickets || 0}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ações */}
+                <div className="flex flex-col gap-2">
+                  <Button variant="outline" size="sm">
+                    Ver Detalhes
+                  </Button>
+                  <Button variant="ghost" size="sm">
+                    Feedback
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -536,7 +565,7 @@ function AgentPerformanceContent() {
         </div>
       )}
 
-      {/* Insights e Recomendações */}
+      {/* Insights e Recomendações - DADOS REAIS */}
       <Card className="p-6 bg-blue-50 border-blue-200">
         <div className="flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
@@ -544,23 +573,19 @@ function AgentPerformanceContent() {
             <h4 className="font-semibold text-blue-900 mb-2">
               Insights e Recomendações
             </h4>
-            <ul className="space-y-2 text-sm text-blue-800">
-              <li>
-                • Maria Santos mantém excelente performance - considere
-                promovê-la a líder de equipe
-              </li>
-              <li>
-                • Carlos Oliveira está com tempo de resposta acima da média -
-                agende treinamento de eficiência
-              </li>
-              <li>
-                • João Silva mostra crescimento consistente - continue
-                monitorando progresso
-              </li>
-              <li>
-                • Equipe geral está 8% acima da meta de satisfação do cliente 🎉
-              </li>
-            </ul>
+            {isInsightsLoading ? (
+              <p className="text-sm text-blue-800">Carregando insights...</p>
+            ) : insights && insights.length > 0 ? (
+              <ul className="space-y-2 text-sm text-blue-800">
+                {insights.map((insight: string, index: number) => (
+                  <li key={index}>{insight}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-blue-800">
+                Dados insuficientes para gerar insights no período selecionado.
+              </p>
+            )}
           </div>
         </div>
       </Card>

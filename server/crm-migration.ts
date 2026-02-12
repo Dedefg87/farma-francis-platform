@@ -63,7 +63,7 @@ export async function runCRMMigration() {
         posologia_diaria INT NOT NULL COMMENT 'Qtd comprimidos/dia',
         qtd_caixa INT NOT NULL COMMENT 'Qtd total na caixa',
         data_ultima_compra DATETIME,
-        data_fim_previsto DATETIME COMMENT 'Campo calculado para query performática',
+        data_fim_previsto DATETIME COMMENT 'Campo calculado para query performático',
         observacoes TEXT,
         is_active INT DEFAULT 1 NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -114,11 +114,43 @@ export async function runCRMMigration() {
       },
     ];
 
+    // Seed initial tags using individual inserts with existence check
     for (const tag of initialTags) {
-      await db.raw(
-        `INSERT IGNORE INTO tags (name, color, description) VALUES (?, ?, ?)`,
-        [tag.name, tag.color, tag.description]
-      );
+      try {
+        // Check if tag already exists
+        const existingResult = await db.raw(
+          `SELECT id FROM tags WHERE name = ? LIMIT 1`
+        );
+
+        // Parse existing result safely
+        let tagExists = false;
+        if (
+          existingResult &&
+          Array.isArray(existingResult) &&
+          existingResult.length > 0
+        ) {
+          tagExists = true;
+        }
+
+        if (!tagExists) {
+          // Insert only if doesn't exist
+          await db.raw(
+            `INSERT INTO tags (name, color, description) VALUES (?, ?, ?)`,
+            [tag.name, tag.color, tag.description]
+          );
+          console.log(`[CRM Migration] Tag "${tag.name}" created`);
+        } else {
+          console.log(
+            `[CRM Migration] Tag "${tag.name}" already exists, skipping`
+          );
+        }
+      } catch (tagError) {
+        console.error(
+          `[CRM Migration] Error creating tag "${tag.name}":`,
+          tagError
+        );
+        // Continue with other tags even if one fails
+      }
     }
 
     console.log("[CRM Migration] Tags seeded successfully");
