@@ -238,28 +238,33 @@ export const appRouter = router({
           .parse(raw);
       })
       .mutation(async ({ input }) => {
-        const { getDb } = await import("./db");
-        const { users, employees, conversations } = await import(
-          "../drizzle/schema"
-        );
-        const { eq } = await import("drizzle-orm");
-        const db = await getDb();
-        if (!db) throw new Error("Database not available");
+        const { getDbRaw } = await import("./db");
+        const rawDb = await getDbRaw();
+        if (!rawDb) throw new Error("Database not available");
 
         const userId = input.userId;
 
         try {
-          // 1. Desassociar usuário de conversas (setar assignedTo para NULL)
-          await db
-            .update(conversations)
-            .set({ assignedTo: null })
-            .where(eq(conversations.assignedTo, userId));
+          // 1. Deletar pausas do agente primeiro (foreign key constraint)
+          await rawDb.raw("DELETE FROM agent_pauses WHERE agent_id = ?", [
+            userId,
+          ]);
+          console.log("[deleteEmployee] Pausas deletadas");
 
-          // 2. Deletar employee primeiro (devido a foreign key)
-          await db.delete(employees).where(eq(employees.userId, userId));
+          // 2. Desassociar usuário de conversas
+          await rawDb.raw(
+            "UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ?",
+            [userId]
+          );
+          console.log("[deleteEmployee] Conversas desassociadas");
 
-          // 3. Finalmente, deletar o usuário
-          await db.delete(users).where(eq(users.id, userId));
+          // 3. Deletar employee
+          await rawDb.raw("DELETE FROM employees WHERE user_id = ?", [userId]);
+          console.log("[deleteEmployee] Employee deletado");
+
+          // 4. Deletar usuário
+          await rawDb.raw("DELETE FROM users WHERE id = ?", [userId]);
+          console.log("[deleteEmployee] Usuário deletado");
 
           return { success: true };
         } catch (error) {
