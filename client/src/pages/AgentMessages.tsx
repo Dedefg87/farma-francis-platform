@@ -55,8 +55,11 @@ import PullConversationModal from "@/components/PullConversationModal";
 import CRMPanel from "@/components/CRMPanel";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
 
 export default function AgentMessages() {
+  const { user } = useAuth();
   const [selectedConversationId, setSelectedConversationId] = useState<
     number | null
   >(null);
@@ -333,7 +336,7 @@ export default function AgentMessages() {
   };
 
   const handleQuickReplySelect = (content: string) => {
-    setMessage(content);
+    setMessage(applyQuickReplyVariables(content, { agentName: user?.name }));
     setShowQuickReplies(false);
   };
 

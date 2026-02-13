@@ -1,18 +1,19 @@
-import { useState, useEffect, useRef } from 'react';
-import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
-import QuickRepliesModal from '@/components/QuickRepliesModal';
-import { trpc } from '@/lib/trpc';
-import { useAuth } from '@/_core/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useToast } from '@/hooks/use-toast';
-import { 
-  Send, 
-  Paperclip, 
-  Smile, 
+import { useState, useEffect, useRef } from "react";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
+import QuickRepliesModal from "@/components/QuickRepliesModal";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Send,
+  Paperclip,
+  Smile,
   MoreVertical,
   Search,
   Phone,
@@ -20,14 +21,14 @@ import {
   Info,
   X,
   FileText,
-  Image as ImageIcon
-} from 'lucide-react';
+  Image as ImageIcon,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 
 // Mensagens prontas/respostas rápidas
 const quickReplies = [
@@ -41,9 +42,11 @@ const quickReplies = [
 export default function AgentChat() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
-  const [messageText, setMessageText] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedConversation, setSelectedConversation] = useState<
+    number | null
+  >(null);
+  const [messageText, setMessageText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -54,35 +57,37 @@ export default function AgentChat() {
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   // Queries
-  const { data: conversations, isLoading: conversationsLoading } = trpc.conversations.listActive.useQuery(undefined, {
-    refetchInterval: 5000, // Atualizar a cada 5 segundos
-  });
+  const { data: conversations, isLoading: conversationsLoading } =
+    trpc.conversations.listActive.useQuery(undefined, {
+      refetchInterval: 5000, // Atualizar a cada 5 segundos
+    });
 
-  const { data: messages, isLoading: messagesLoading } = trpc.messages.list.useQuery(
-    { conversation_id: selectedConversation! },
-    { 
-      enabled: !!selectedConversation,
-      refetchInterval: 3000, // Atualizar mensagens a cada 3 segundos
-    }
-  );
+  const { data: messages, isLoading: messagesLoading } =
+    trpc.messages.list.useQuery(
+      { conversation_id: selectedConversation! },
+      {
+        enabled: !!selectedConversation,
+        refetchInterval: 3000, // Atualizar mensagens a cada 3 segundos
+      }
+    );
 
   // Mutations
   const utils = trpc.useUtils();
-  
+
   const uploadFile = trpc.messages.uploadFile.useMutation({
-    onError: (error) => {
+    onError: error => {
       toast({
         title: "Erro",
         description: `Erro ao fazer upload: ${error.message}`,
         variant: "destructive",
       });
       setIsUploading(false);
-    }
+    },
   });
 
   const sendMessage = trpc.messages.send.useMutation({
     onSuccess: async () => {
-      setMessageText('');
+      setMessageText("");
       // Invalidar queries para atualizar lista de mensagens e conversas
       await utils.messages.list.invalidate();
       await utils.conversations.listActive.invalidate();
@@ -92,17 +97,17 @@ export default function AgentChat() {
         description: "Mensagem enviada com sucesso!",
       });
     },
-    onError: (error) => {
+    onError: error => {
       toast({
         title: "Erro",
         description: `Erro ao enviar mensagem: ${error.message}`,
         variant: "destructive",
       });
-    }
+    },
   });
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -125,14 +130,19 @@ export default function AgentChat() {
 
     // Validar tipo
     const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Erro",
-        description: "Tipo de arquivo não suportado. Use imagens ou documentos PDF/DOCX.",
+        description:
+          "Tipo de arquivo não suportado. Use imagens ou documentos PDF/DOCX.",
         variant: "destructive",
       });
       return;
@@ -141,7 +151,7 @@ export default function AgentChat() {
     setSelectedFile(file);
 
     // Criar preview para imagens
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result as string);
@@ -162,23 +172,28 @@ export default function AgentChat() {
   };
 
   const handleQuickReplySelect = (content: string) => {
-    setMessageText(content);
+    setMessageText(
+      applyQuickReplyVariables(content, { agentName: user?.name })
+    );
   };
 
   // Fechar emoji picker ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
         setShowEmojiPicker(false);
       }
     };
 
     if (showEmojiPicker) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showEmojiPicker]);
 
@@ -194,9 +209,9 @@ export default function AgentChat() {
       if (selectedFile) {
         // Converter arquivo para base64
         const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve) => {
+        const base64Promise = new Promise<string>(resolve => {
           reader.onloadend = () => {
-            const base64 = (reader.result as string).split(',')[1];
+            const base64 = (reader.result as string).split(",")[1];
             resolve(base64);
           };
           reader.readAsDataURL(selectedFile);
@@ -224,7 +239,7 @@ export default function AgentChat() {
       // Enviar mensagem
       sendMessage.mutate({
         conversation_id: selectedConversation,
-        content: messageText.trim() || '(arquivo anexado)',
+        content: messageText.trim() || "(arquivo anexado)",
         ...fileData,
       });
 
@@ -232,22 +247,23 @@ export default function AgentChat() {
       setSelectedFile(null);
       setFilePreview(null);
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
+      console.error("Erro ao enviar mensagem:", error);
     } finally {
       setIsUploading(false);
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
   };
 
-  const filteredConversations = conversations?.filter(conv =>
-    conv.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.customerPhone?.includes(searchQuery)
+  const filteredConversations = conversations?.filter(
+    conv =>
+      conv.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.customerPhone?.includes(searchQuery)
   );
 
   const selectedConv = conversations?.find(c => c.id === selectedConversation);
@@ -258,13 +274,15 @@ export default function AgentChat() {
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
         {/* Header da Lista */}
         <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Conversas Ativas</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">
+            Conversas Ativas
+          </h2>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
               placeholder="Buscar conversas..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               className="pl-10"
             />
           </div>
@@ -276,34 +294,40 @@ export default function AgentChat() {
             <div className="p-4 text-center text-gray-500">Carregando...</div>
           ) : filteredConversations && filteredConversations.length > 0 ? (
             <div className="divide-y divide-gray-100">
-              {filteredConversations.map((conversation) => (
+              {filteredConversations.map(conversation => (
                 <div
                   key={conversation.id}
                   onClick={() => setSelectedConversation(conversation.id)}
                   className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                    selectedConversation === conversation.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                    selectedConversation === conversation.id
+                      ? "bg-blue-50 border-l-4 border-blue-500"
+                      : ""
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="bg-blue-500 text-white">
-                        {conversation.customerName?.charAt(0).toUpperCase() || 'C'}
+                        {conversation.customerName?.charAt(0).toUpperCase() ||
+                          "C"}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-medium text-gray-900 truncate">
-                          {conversation.customerName || conversation.customerPhone}
+                          {conversation.customerName ||
+                            conversation.customerPhone}
                         </h3>
                         <span className="text-xs text-gray-500">
-                          {new Date(conversation.lastMessageAt || conversation.openedAt).toLocaleTimeString('pt-BR', {
-                            hour: '2-digit',
-                            minute: '2-digit'
+                          {new Date(
+                            conversation.lastMessageAt || conversation.openedAt
+                          ).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
                           })}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 truncate">
-                        {conversation.lastMessage || 'Sem mensagens'}
+                        {conversation.lastMessage || "Sem mensagens"}
                       </p>
                       {conversation.unreadCount > 0 && (
                         <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-blue-500 text-white rounded-full">
@@ -332,7 +356,7 @@ export default function AgentChat() {
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
                   <AvatarFallback className="bg-blue-500 text-white">
-                    {selectedConv.customerName?.charAt(0).toUpperCase() || 'C'}
+                    {selectedConv.customerName?.charAt(0).toUpperCase() || "C"}
                   </AvatarFallback>
                 </Avatar>
                 <div>
@@ -340,7 +364,10 @@ export default function AgentChat() {
                     {selectedConv.customerName || selectedConv.customerPhone}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {selectedConv.channel === 'whatsapp' ? 'WhatsApp' : 'Instagram'} • {selectedConv.status}
+                    {selectedConv.channel === "whatsapp"
+                      ? "WhatsApp"
+                      : "Instagram"}{" "}
+                    • {selectedConv.status}
                   </p>
                 </div>
               </div>
@@ -363,7 +390,9 @@ export default function AgentChat() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem>Transferir conversa</DropdownMenuItem>
                     <DropdownMenuItem>Encerrar atendimento</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-600">Bloquear usuário</DropdownMenuItem>
+                    <DropdownMenuItem className="text-red-600">
+                      Bloquear usuário
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -377,51 +406,66 @@ export default function AgentChat() {
                 </div>
               ) : messages && messages.length > 0 ? (
                 <div className="space-y-4">
-                  {messages.map((message) => {
-                    const isAgent = message.senderType === 'agent';
+                  {messages.map(message => {
+                    const isAgent = message.senderType === "agent";
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}
+                        className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
                       >
                         <div
                           className={`max-w-[70%] rounded-lg p-3 ${
                             isAgent
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-white text-gray-900 border border-gray-200'
+                              ? "bg-blue-500 text-white"
+                              : "bg-white text-gray-900 border border-gray-200"
                           }`}
                         >
                           {/* Arquivo anexado */}
                           {message.fileUrl && (
                             <div className="mb-2">
-                              {message.fileType?.startsWith('image/') ? (
-                                <a href={message.fileUrl} target="_blank" rel="noopener noreferrer">
-                                  <img 
-                                    src={message.fileUrl} 
-                                    alt={message.fileName || 'Imagem'}
+                              {message.fileType?.startsWith("image/") ? (
+                                <a
+                                  href={message.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <img
+                                    src={message.fileUrl}
+                                    alt={message.fileName || "Imagem"}
                                     className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
-                                    style={{ maxHeight: '300px' }}
+                                    style={{ maxHeight: "300px" }}
                                   />
                                 </a>
                               ) : (
-                                <a 
-                                  href={message.fileUrl} 
-                                  target="_blank" 
+                                <a
+                                  href={message.fileUrl}
+                                  target="_blank"
                                   rel="noopener noreferrer"
                                   className={`flex items-center gap-2 p-2 rounded border ${
-                                    isAgent 
-                                      ? 'bg-blue-600 border-blue-400' 
-                                      : 'bg-gray-50 border-gray-300'
+                                    isAgent
+                                      ? "bg-blue-600 border-blue-400"
+                                      : "bg-gray-50 border-gray-300"
                                   } hover:opacity-90 transition-opacity`}
                                 >
                                   <FileText className="w-5 h-5" />
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{message.fileName}</p>
+                                    <p className="text-sm font-medium truncate">
+                                      {message.fileName}
+                                    </p>
                                     {message.fileSize && (
-                                      <p className={`text-xs ${
-                                        isAgent ? 'text-blue-100' : 'text-gray-500'
-                                      }`}>
-                                        {(message.fileSize / 1024 / 1024).toFixed(2)} MB
+                                      <p
+                                        className={`text-xs ${
+                                          isAgent
+                                            ? "text-blue-100"
+                                            : "text-gray-500"
+                                        }`}
+                                      >
+                                        {(
+                                          message.fileSize /
+                                          1024 /
+                                          1024
+                                        ).toFixed(2)}{" "}
+                                        MB
                                       </p>
                                     )}
                                   </div>
@@ -429,17 +473,24 @@ export default function AgentChat() {
                               )}
                             </div>
                           )}
-                          
+
                           {/* Texto da mensagem */}
                           {message.content && (
-                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                            <p className="text-sm whitespace-pre-wrap">
+                              {message.content}
+                            </p>
                           )}
-                          
-                          <span className={`text-xs mt-1 block ${isAgent ? 'text-blue-100' : 'text-gray-500'}`}>
-                            {new Date(message.createdAt).toLocaleTimeString('pt-BR', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+
+                          <span
+                            className={`text-xs mt-1 block ${isAgent ? "text-blue-100" : "text-gray-500"}`}
+                          >
+                            {new Date(message.createdAt).toLocaleTimeString(
+                              "pt-BR",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
                           </span>
                         </div>
                       </div>
@@ -457,7 +508,9 @@ export default function AgentChat() {
             {/* Respostas Rápidas */}
             {showQuickReplies && (
               <div className="bg-white border-t border-gray-200 p-3">
-                <p className="text-xs font-medium text-gray-700 mb-2">Respostas Rápidas:</p>
+                <p className="text-xs font-medium text-gray-700 mb-2">
+                  Respostas Rápidas:
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {quickReplies.map((reply, index) => (
                     <Button
@@ -484,14 +537,20 @@ export default function AgentChat() {
                 <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="flex items-center gap-3">
                     {filePreview ? (
-                      <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded" />
+                      <img
+                        src={filePreview}
+                        alt="Preview"
+                        className="w-16 h-16 object-cover rounded"
+                      />
                     ) : (
                       <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
                         <FileText className="w-8 h-8 text-gray-500" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                      <p className="text-sm font-medium truncate">
+                        {selectedFile.name}
+                      </p>
                       <p className="text-xs text-gray-500">
                         {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                       </p>
@@ -526,11 +585,13 @@ export default function AgentChat() {
                 >
                   <MoreVertical className="h-5 w-5" />
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
+                <Button
+                  variant="ghost"
+                  size="icon"
                   className="mb-1"
-                  onClick={() => document.getElementById('file-upload-agent')?.click()}
+                  onClick={() =>
+                    document.getElementById("file-upload-agent")?.click()
+                  }
                   disabled={isUploading}
                 >
                   <Paperclip className="h-5 w-5" />
@@ -539,17 +600,17 @@ export default function AgentChat() {
                   <Input
                     placeholder="Digite sua mensagem..."
                     value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
+                    onChange={e => setMessageText(e.target.value)}
                     onKeyPress={handleKeyPress}
                     className="resize-none"
                     disabled={sendMessage.isPending || isUploading}
                   />
                 </div>
                 <div className="relative" ref={emojiPickerRef}>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="mb-1" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mb-1"
                     disabled={isUploading}
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                   >
@@ -557,7 +618,7 @@ export default function AgentChat() {
                   </Button>
                   {showEmojiPicker && (
                     <div className="absolute bottom-12 right-0 z-50">
-                      <EmojiPicker 
+                      <EmojiPicker
                         onEmojiClick={handleEmojiClick}
                         width={350}
                         height={400}
@@ -567,7 +628,11 @@ export default function AgentChat() {
                 </div>
                 <Button
                   onClick={handleSendMessage}
-                  disabled={(!messageText.trim() && !selectedFile) || sendMessage.isPending || isUploading}
+                  disabled={
+                    (!messageText.trim() && !selectedFile) ||
+                    sendMessage.isPending ||
+                    isUploading
+                  }
                   className="bg-blue-500 hover:bg-blue-600 mb-1"
                 >
                   <Send className="h-5 w-5" />
