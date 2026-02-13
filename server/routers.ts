@@ -238,32 +238,34 @@ export const appRouter = router({
           .parse(raw);
       })
       .mutation(async ({ input }) => {
-        const { getDbRaw } = await import("./db");
-        const rawDb = await getDbRaw();
-        if (!rawDb) throw new Error("Database not available");
+        const { getDb } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
 
+        const { sql } = await import("drizzle-orm");
         const userId = input.userId;
 
         try {
           // 1. Deletar pausas do agente primeiro (foreign key constraint)
-          await rawDb.raw("DELETE FROM agent_pauses WHERE agent_id = ?", [
-            userId,
-          ]);
+          await db.execute(
+            sql`DELETE FROM agent_pauses WHERE agent_id = ${userId}`
+          );
           console.log("[deleteEmployee] Pausas deletadas");
 
           // 2. Desassociar usuário de conversas
-          await rawDb.raw(
-            "UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ?",
-            [userId]
+          await db.execute(
+            sql`UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ${userId}`
           );
           console.log("[deleteEmployee] Conversas desassociadas");
 
           // 3. Deletar employee
-          await rawDb.raw("DELETE FROM employees WHERE user_id = ?", [userId]);
+          await db.execute(
+            sql`DELETE FROM employees WHERE user_id = ${userId}`
+          );
           console.log("[deleteEmployee] Employee deletado");
 
           // 4. Deletar usuário
-          await rawDb.raw("DELETE FROM users WHERE id = ?", [userId]);
+          await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
           console.log("[deleteEmployee] Usuário deletado");
 
           return { success: true };
