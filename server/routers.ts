@@ -237,36 +237,120 @@ export const appRouter = router({
           })
           .parse(raw);
       })
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
         const { sql } = await import("drizzle-orm");
         const userId = input.userId;
+        const replacementUserId = ctx.user.id;
+
+        if (userId === replacementUserId) {
+          throw new Error("Não é possível excluir o próprio usuário logado.");
+        }
+
+        const safeExec = async (label: string, fn: () => Promise<unknown>) => {
+          try {
+            await fn();
+          } catch (e: any) {
+            const code = e?.cause?.code || e?.code;
+            const msg = String(e?.cause?.sqlMessage || e?.message || e);
+
+            // Ignore missing tables/columns across different environments
+            if (
+              code === "ER_NO_SUCH_TABLE" ||
+              code === "ER_BAD_FIELD_ERROR" ||
+              msg.includes("doesn't exist")
+            ) {
+              console.log(`[deleteEmployee] Ignorando ${label}: ${msg}`);
+              return;
+            }
+
+            // Re-throw anything else (FK constraints, etc.)
+            throw e;
+          }
+        };
 
         try {
-          // 1. Deletar pausas do agente primeiro (foreign key constraint)
-          await db.execute(
-            sql`DELETE FROM agent_pauses WHERE agent_id = ${userId}`
-          );
-          console.log("[deleteEmployee] Pausas deletadas");
+          // 1. Delete hard references that block user deletion
+          await safeExec("agent_pauses", async () => {
+            await db.execute(
+              sql`DELETE FROM agent_pauses WHERE agent_id = ${userId}`
+            );
+          });
 
-          // 2. Desassociar usuário de conversas
-          await db.execute(
-            sql`UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ${userId}`
-          );
-          console.log("[deleteEmployee] Conversas desassociadas");
+          await safeExec("queue_agents", async () => {
+            await db.execute(
+              sql`DELETE FROM queue_agents WHERE agent_id = ${userId}`
+            );
+          });
 
-          // 3. Deletar employee
-          await db.execute(
-            sql`DELETE FROM employees WHERE user_id = ${userId}`
-          );
-          console.log("[deleteEmployee] Employee deletado");
+          // 2. Null out optional references
+          await safeExec("conversation_messages.sender_id", async () => {
+            await db.execute(
+              sql`UPDATE conversation_messages SET sender_id = NULL WHERE sender_id = ${userId}`
+            );
+          });
 
-          // 4. Deletar usuário
+          await safeExec("conversations.assigned_to", async () => {
+            await db.execute(
+              sql`UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ${userId}`
+            );
+          });
+
+          await safeExec("tickets.assigned_to", async () => {
+            await db.execute(
+              sql`UPDATE tickets SET assigned_to = NULL WHERE assigned_to = ${userId}`
+            );
+          });
+
+          await safeExec("leads.assigned_to", async () => {
+            await db.execute(
+              sql`UPDATE leads SET assigned_to = NULL WHERE assigned_to = ${userId}`
+            );
+          });
+
+          // survey_responses may not exist in some DBs; if it exists and agent_id is NOT NULL, delete rows
+          await safeExec("survey_responses.agent_id NULL", async () => {
+            await db.execute(
+              sql`UPDATE survey_responses SET agent_id = NULL WHERE agent_id = ${userId}`
+            );
+          });
+          await safeExec("survey_responses delete", async () => {
+            await db.execute(
+              sql`DELETE FROM survey_responses WHERE agent_id = ${userId}`
+            );
+          });
+
+          await safeExec("ticket_comments.user_id", async () => {
+            await db.execute(
+              sql`UPDATE ticket_comments SET user_id = NULL WHERE user_id = ${userId}`
+            );
+          });
+
+          await safeExec("interactions.user_id", async () => {
+            await db.execute(
+              sql`UPDATE interactions SET user_id = NULL WHERE user_id = ${userId}`
+            );
+          });
+
+          // 3. Transfer ownership for NOT NULL created_by fields
+          await safeExec("integration_settings.created_by", async () => {
+            await db.execute(
+              sql`UPDATE integration_settings SET created_by = ${replacementUserId} WHERE created_by = ${userId}`
+            );
+          });
+
+          // 4. Delete employee record
+          await safeExec("employees", async () => {
+            await db.execute(
+              sql`DELETE FROM employees WHERE user_id = ${userId}`
+            );
+          });
+
+          // 5. Finally delete user
           await db.execute(sql`DELETE FROM users WHERE id = ${userId}`);
-          console.log("[deleteEmployee] Usuário deletado");
 
           return { success: true };
         } catch (error) {
