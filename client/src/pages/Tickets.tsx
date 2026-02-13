@@ -1,5 +1,11 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export default function Tickets() {
+  const utils = trpc.useUtils();
   const { data: tickets = [], isLoading } = trpc.tickets.list.useQuery();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -49,6 +56,7 @@ export default function Tickets() {
 
   const createTicket = trpc.tickets.create.useMutation({
     onSuccess: () => {
+      utils.tickets.list.invalidate().catch(() => {});
       toast.success("Atendimento criado com sucesso!");
       setIsDialogOpen(false);
       setNewTicket({
@@ -58,7 +66,7 @@ export default function Tickets() {
         channel: "web",
       });
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Erro ao criar atendimento: ${error.message}`);
     },
   });
@@ -75,16 +83,23 @@ export default function Tickets() {
       description: newTicket.description,
       status: "open",
       priority: newTicket.priority as "low" | "medium" | "high" | "critical",
-      channel: newTicket.channel as "whatsapp" | "instagram" | "email" | "phone" | "web",
+      channel: newTicket.channel as
+        | "whatsapp"
+        | "instagram"
+        | "email"
+        | "phone"
+        | "web",
     });
   };
 
-  const filteredTickets = tickets.filter((ticket) => {
+  const filteredTickets = tickets.filter(ticket => {
     const matchesSearch =
       ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.ticketNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
-    const matchesPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
+    const matchesStatus =
+      statusFilter === "all" || ticket.status === statusFilter;
+    const matchesPriority =
+      priorityFilter === "all" || ticket.priority === priorityFilter;
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
@@ -128,7 +143,9 @@ export default function Tickets() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Atendimentos</h1>
-            <p className="text-gray-500 mt-1">Gerenciamento de tickets e chamados</p>
+            <p className="text-gray-500 mt-1">
+              Gerenciamento de tickets e chamados
+            </p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -150,7 +167,9 @@ export default function Tickets() {
                   <Input
                     placeholder="Ex: Problema com pedido #12345"
                     value={newTicket.subject}
-                    onChange={(e) => setNewTicket({ ...newTicket, subject: e.target.value })}
+                    onChange={e =>
+                      setNewTicket({ ...newTicket, subject: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -158,14 +177,24 @@ export default function Tickets() {
                   <Textarea
                     placeholder="Descreva o problema ou solicitação em detalhes..."
                     value={newTicket.description}
-                    onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
+                    onChange={e =>
+                      setNewTicket({
+                        ...newTicket,
+                        description: e.target.value,
+                      })
+                    }
                     rows={5}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Prioridade</Label>
-                    <Select value={newTicket.priority} onValueChange={(value) => setNewTicket({ ...newTicket, priority: value })}>
+                    <Select
+                      value={newTicket.priority}
+                      onValueChange={value =>
+                        setNewTicket({ ...newTicket, priority: value })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -179,7 +208,12 @@ export default function Tickets() {
                   </div>
                   <div className="space-y-2">
                     <Label>Canal</Label>
-                    <Select value={newTicket.channel} onValueChange={(value) => setNewTicket({ ...newTicket, channel: value })}>
+                    <Select
+                      value={newTicket.channel}
+                      onValueChange={value =>
+                        setNewTicket({ ...newTicket, channel: value })
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -195,10 +229,16 @@ export default function Tickets() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                >
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateTicket} disabled={createTicket.isPending}>
+                <Button
+                  onClick={handleCreateTicket}
+                  disabled={createTicket.isPending}
+                >
                   {createTicket.isPending ? "Criando..." : "Criar Atendimento"}
                 </Button>
               </DialogFooter>
@@ -215,7 +255,7 @@ export default function Tickets() {
                 <Input
                   placeholder="Buscar por número ou assunto..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={e => setSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -252,7 +292,9 @@ export default function Tickets() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Total
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{tickets.length}</div>
@@ -260,31 +302,45 @@ export default function Tickets() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Abertos</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Abertos
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
-                {tickets.filter((t) => t.status === "open" || t.status === "in_progress").length}
+                {
+                  tickets.filter(
+                    t => t.status === "open" || t.status === "in_progress"
+                  ).length
+                }
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Pendentes</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Pendentes
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {tickets.filter((t) => t.status === "pending").length}
+                {tickets.filter(t => t.status === "pending").length}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Resolvidos</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Resolvidos
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {tickets.filter((t) => t.status === "resolved" || t.status === "closed").length}
+                {
+                  tickets.filter(
+                    t => t.status === "resolved" || t.status === "closed"
+                  ).length
+                }
               </div>
             </CardContent>
           </Card>
@@ -322,7 +378,7 @@ export default function Tickets() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTickets.map((ticket) => (
+                  {filteredTickets.map(ticket => (
                     <TableRow key={ticket.id}>
                       <TableCell className="font-mono text-sm">
                         {ticket.ticketNumber}
@@ -331,7 +387,9 @@ export default function Tickets() {
                         {ticket.subject}
                       </TableCell>
                       <TableCell>
-                        <span className="text-lg">{getChannelIcon(ticket.channel)}</span>
+                        <span className="text-lg">
+                          {getChannelIcon(ticket.channel)}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <Badge className={getStatusColor(ticket.status)}>
@@ -353,12 +411,15 @@ export default function Tickets() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm text-gray-600">
-                        {new Date(ticket.createdAt).toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {new Date(ticket.createdAt).toLocaleDateString(
+                          "pt-BR",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm">

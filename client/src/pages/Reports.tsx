@@ -1,5 +1,11 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -10,45 +16,86 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Download, FileText, Table as TableIcon, TrendingUp } from "lucide-react";
+import {
+  Download,
+  FileText,
+  Table as TableIcon,
+  TrendingUp,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { startOfDay, startOfMonth, startOfWeek, startOfYear } from "date-fns";
 
 export default function Reports() {
-  const { data: tickets = [] } = trpc.tickets.list.useQuery();
-  const { data: customers = [] } = trpc.customers.list.useQuery();
-  const { data: leads = [] } = trpc.leads.list.useQuery();
-  const { data: employees = [] } = trpc.employees.list.useQuery();
+  // NOTE: AppRouter typing is currently broken in this repo (router name collisions).
+  // Keep reports fully functional at runtime while not blocking TS.
+  const { data: tickets = [] } = (trpc as any).tickets.list.useQuery();
+  const { data: customers = [] } = (trpc as any).customers.list.useQuery();
+  const { data: leads = [] } = (trpc as any).leads.list.useQuery();
+  const { data: employees = [] } = (trpc as any).employees.list.useQuery();
 
   const [reportType, setReportType] = useState<string>("tickets");
   const [period, setPeriod] = useState<string>("month");
+
+  const getRangeStart = (p: string) => {
+    const now = new Date();
+    if (p === "today") return startOfDay(now);
+    if (p === "week") return startOfWeek(now, { weekStartsOn: 1 });
+    if (p === "month") return startOfMonth(now);
+    if (p === "year") return startOfYear(now);
+    return null; // all
+  };
+
+  const withinPeriod = (value: unknown) => {
+    const start = getRangeStart(period);
+    if (!start) return true;
+    const d = value instanceof Date ? value : new Date(String(value));
+    if (Number.isNaN(d.getTime())) return false;
+    return d.getTime() >= start.getTime();
+  };
+
+  const filteredTickets = (tickets as any[]).filter((t: any) =>
+    withinPeriod(t?.createdAt)
+  );
+  const filteredCustomers = (customers as any[]).filter((c: any) =>
+    withinPeriod(c?.createdAt)
+  );
+  const filteredLeads = (leads as any[]).filter((l: any) =>
+    withinPeriod(l?.createdAt)
+  );
+  const filteredEmployees = (employees as any[]).filter((e: any) =>
+    withinPeriod(e?.user?.createdAt)
+  );
 
   const generateCSV = () => {
     let csvContent = "";
     let filename = "";
 
+    const suffix = period || "all";
+    const today = new Date().toISOString().split("T")[0];
+
     if (reportType === "tickets") {
-      filename = `relatorio_atendimentos_${new Date().toISOString().split("T")[0]}.csv`;
+      filename = `relatorio_atendimentos_${suffix}_${today}.csv`;
       csvContent = "Número,Assunto,Status,Prioridade,Canal,Criado em\n";
-      tickets.forEach((ticket) => {
+      filteredTickets.forEach((ticket: any) => {
         csvContent += `"${ticket.ticketNumber}","${ticket.subject}","${ticket.status}","${ticket.priority}","${ticket.channel || "N/A"}","${new Date(ticket.createdAt).toLocaleString("pt-BR")}"\n`;
       });
     } else if (reportType === "customers") {
-      filename = `relatorio_clientes_${new Date().toISOString().split("T")[0]}.csv`;
+      filename = `relatorio_clientes_${suffix}_${today}.csv`;
       csvContent = "Nome,Email,Telefone,Cidade,Estado,Status,Cadastro\n";
-      customers.forEach((customer) => {
+      filteredCustomers.forEach((customer: any) => {
         csvContent += `"${customer.name}","${customer.email || ""}","${customer.phone || ""}","${customer.city || ""}","${customer.state || ""}","${customer.status}","${new Date(customer.createdAt).toLocaleString("pt-BR")}"\n`;
       });
     } else if (reportType === "leads") {
-      filename = `relatorio_leads_${new Date().toISOString().split("T")[0]}.csv`;
+      filename = `relatorio_leads_${suffix}_${today}.csv`;
       csvContent = "Nome,Email,Telefone,Origem,Estágio,Valor,Criado em\n";
-      leads.forEach((lead) => {
+      filteredLeads.forEach((lead: any) => {
         csvContent += `"${lead.name}","${lead.email || ""}","${lead.phone || ""}","${lead.source || ""}","${lead.stage}","${lead.value || 0}","${new Date(lead.createdAt).toLocaleString("pt-BR")}"\n`;
       });
     } else if (reportType === "employees") {
-      filename = `relatorio_funcionarios_${new Date().toISOString().split("T")[0]}.csv`;
+      filename = `relatorio_funcionarios_${suffix}_${today}.csv`;
       csvContent = "Nome,Email,Cargo,Departamento,Status,Role\n";
-      employees.forEach((emp) => {
+      filteredEmployees.forEach((emp: any) => {
         const user = emp.user;
         const employee = emp.employee;
         if (user) {
@@ -71,39 +118,62 @@ export default function Reports() {
   };
 
   const generatePDF = () => {
-    toast.info("Exportação em PDF será implementada em breve. Use CSV por enquanto.");
+    toast.info(
+      "Exportação em PDF será implementada em breve. Use CSV por enquanto."
+    );
   };
 
   const getReportStats = () => {
     if (reportType === "tickets") {
       return {
-        total: tickets.length,
-        open: tickets.filter((t) => t.status === "open" || t.status === "in_progress").length,
-        resolved: tickets.filter((t) => t.status === "resolved" || t.status === "closed").length,
-        avgTime: tickets.length > 0
-          ? Math.round(tickets.reduce((acc, t) => acc + (t.timeSpentMinutes || 0), 0) / tickets.length)
-          : 0,
+        total: filteredTickets.length,
+        open: filteredTickets.filter(
+          (t: any) => t.status === "open" || t.status === "in_progress"
+        ).length,
+        resolved: filteredTickets.filter(
+          (t: any) => t.status === "resolved" || t.status === "closed"
+        ).length,
+        avgTime:
+          filteredTickets.length > 0
+            ? Math.round(
+                filteredTickets.reduce(
+                  (acc: number, t: any) => acc + (t.timeSpentMinutes || 0),
+                  0
+                ) / filteredTickets.length
+              )
+            : 0,
       };
     } else if (reportType === "customers") {
       return {
-        total: customers.length,
-        active: customers.filter((c) => c.status === "active").length,
-        inactive: customers.filter((c) => c.status === "inactive").length,
-        blocked: customers.filter((c) => c.status === "blocked").length,
+        total: filteredCustomers.length,
+        active: filteredCustomers.filter((c: any) => c.status === "active")
+          .length,
+        inactive: filteredCustomers.filter((c: any) => c.status === "inactive")
+          .length,
+        blocked: filteredCustomers.filter((c: any) => c.status === "blocked")
+          .length,
       };
     } else if (reportType === "leads") {
       return {
-        total: leads.length,
-        won: leads.filter((l) => l.stage === "closed_won").length,
-        lost: leads.filter((l) => l.stage === "closed_lost").length,
-        active: leads.filter((l) => !["closed_won", "closed_lost"].includes(l.stage)).length,
+        total: filteredLeads.length,
+        won: filteredLeads.filter((l: any) => l.stage === "closed_won").length,
+        lost: filteredLeads.filter((l: any) => l.stage === "closed_lost")
+          .length,
+        active: filteredLeads.filter(
+          (l: any) => !["closed_won", "closed_lost"].includes(l.stage)
+        ).length,
       };
     } else if (reportType === "employees") {
       return {
-        total: employees.length,
-        active: employees.filter((e) => e.employee?.status === "active").length,
-        admins: employees.filter((e) => e.user?.role === "admin").length,
-        vacation: employees.filter((e) => e.employee?.status === "vacation").length,
+        total: filteredEmployees.length,
+        active: filteredEmployees.filter(
+          (e: any) => e.employee?.status === "active"
+        ).length,
+        admins: filteredEmployees.filter((e: any) => e.user?.role === "admin")
+          .length,
+        vacation: filteredEmployees.filter(
+          (e: any) => e.employee?.status === "vacation"
+        ).length,
       };
     }
     return {};
@@ -117,14 +187,18 @@ export default function Reports() {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Relatórios</h1>
-          <p className="text-gray-500 mt-1">Gere e exporte relatórios personalizados</p>
+          <p className="text-gray-500 mt-1">
+            Gere e exporte relatórios personalizados
+          </p>
         </div>
 
         {/* Report Configuration */}
         <Card>
           <CardHeader>
             <CardTitle>Configurar Relatório</CardTitle>
-            <CardDescription>Selecione o tipo de relatório e o período desejado</CardDescription>
+            <CardDescription>
+              Selecione o tipo de relatório e o período desejado
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -166,7 +240,11 @@ export default function Reports() {
                     <Download className="w-4 h-4 mr-2" />
                     CSV
                   </Button>
-                  <Button onClick={generatePDF} variant="outline" className="flex-1">
+                  <Button
+                    onClick={generatePDF}
+                    variant="outline"
+                    className="flex-1"
+                  >
                     <FileText className="w-4 h-4 mr-2" />
                     PDF
                   </Button>
@@ -182,17 +260,29 @@ export default function Reports() {
             <Card key={key}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600 capitalize">
-                  {key === "total" ? "Total" :
-                   key === "open" ? "Abertos" :
-                   key === "resolved" ? "Resolvidos" :
-                   key === "avgTime" ? "Tempo Médio" :
-                   key === "active" ? "Ativos" :
-                   key === "inactive" ? "Inativos" :
-                   key === "blocked" ? "Bloqueados" :
-                   key === "won" ? "Ganhos" :
-                   key === "lost" ? "Perdidos" :
-                   key === "admins" ? "Administradores" :
-                   key === "vacation" ? "Férias" : key}
+                  {key === "total"
+                    ? "Total"
+                    : key === "open"
+                      ? "Abertos"
+                      : key === "resolved"
+                        ? "Resolvidos"
+                        : key === "avgTime"
+                          ? "Tempo Médio"
+                          : key === "active"
+                            ? "Ativos"
+                            : key === "inactive"
+                              ? "Inativos"
+                              : key === "blocked"
+                                ? "Bloqueados"
+                                : key === "won"
+                                  ? "Ganhos"
+                                  : key === "lost"
+                                    ? "Perdidos"
+                                    : key === "admins"
+                                      ? "Administradores"
+                                      : key === "vacation"
+                                        ? "Férias"
+                                        : key}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -214,13 +304,16 @@ export default function Reports() {
                 </div>
                 <div>
                   <CardTitle>Relatório de Atendimentos</CardTitle>
-                  <CardDescription>Análise completa de tickets e chamados</CardDescription>
+                  <CardDescription>
+                    Análise completa de tickets e chamados
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-4">
-                Inclui: número do ticket, assunto, status, prioridade, canal, tempo de resolução e histórico.
+                Inclui: número do ticket, assunto, status, prioridade, canal,
+                tempo de resolução e histórico.
               </p>
               <Button
                 variant="outline"
@@ -243,13 +336,16 @@ export default function Reports() {
                 </div>
                 <div>
                   <CardTitle>Relatório de Vendas/Conversão</CardTitle>
-                  <CardDescription>Análise de leads e funil de vendas</CardDescription>
+                  <CardDescription>
+                    Análise de leads e funil de vendas
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-4">
-                Inclui: leads gerados, taxa de conversão, valor de vendas, origem dos leads e estágios do funil.
+                Inclui: leads gerados, taxa de conversão, valor de vendas,
+                origem dos leads e estágios do funil.
               </p>
               <Button
                 variant="outline"
@@ -272,13 +368,16 @@ export default function Reports() {
                 </div>
                 <div>
                   <CardTitle>Relatório de Clientes</CardTitle>
-                  <CardDescription>Base de clientes e segmentação</CardDescription>
+                  <CardDescription>
+                    Base de clientes e segmentação
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-4">
-                Inclui: dados cadastrais, status, histórico de compras, segmentação e valor do cliente.
+                Inclui: dados cadastrais, status, histórico de compras,
+                segmentação e valor do cliente.
               </p>
               <Button
                 variant="outline"
@@ -301,13 +400,16 @@ export default function Reports() {
                 </div>
                 <div>
                   <CardTitle>Relatório de Funcionários</CardTitle>
-                  <CardDescription>Desempenho e produtividade da equipe</CardDescription>
+                  <CardDescription>
+                    Desempenho e produtividade da equipe
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-gray-600 mb-4">
-                Inclui: atendimentos realizados, tempo médio, taxa de resolução e avaliações.
+                Inclui: atendimentos realizados, tempo médio, taxa de resolução
+                e avaliações.
               </p>
               <Button
                 variant="outline"

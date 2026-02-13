@@ -3,6 +3,10 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { ENV } from "./_core/env";
 import {
   users,
+  customers,
+  leads,
+  tickets,
+  notifications,
   visualFlows,
   automationFlows,
   uraMenus,
@@ -113,6 +117,186 @@ export async function getDbRaw() {
     console.error("[Database] Error accessing raw client:", error);
     return db as any;
   }
+}
+
+// ==================== CUSTOMERS ====================
+
+export async function getAllCustomers() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.select().from(customers).orderBy(desc(customers.createdAt));
+}
+
+export async function getCustomerById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.id, id))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createCustomer(data: {
+  name: string;
+  email?: string;
+  phone?: string;
+  cpfCnpj?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  tags?: string;
+  notes?: string;
+  status?: "active" | "inactive" | "blocked";
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result: any = await db.insert(customers).values({
+    name: data.name,
+    email: data.email || null,
+    phone: data.phone || null,
+    cpfCnpj: data.cpfCnpj || null,
+    address: data.address || null,
+    city: data.city || null,
+    state: data.state || null,
+    zipCode: data.zipCode || null,
+    tags: data.tags || null,
+    notes: data.notes || null,
+    status: data.status || "active",
+    createdBy: data.createdBy,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const insertId = Number((result as any)?.insertId);
+  if (!Number.isFinite(insertId) || insertId <= 0) {
+    return { success: true };
+  }
+  return await getCustomerById(insertId);
+}
+
+// ==================== LEADS ====================
+
+export async function getAllLeads() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.select().from(leads).orderBy(desc(leads.updatedAt));
+}
+
+export async function createLead(data: {
+  customerId?: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  source?: string;
+  stage?:
+    | "prospect"
+    | "qualified"
+    | "proposal"
+    | "negotiation"
+    | "closed_won"
+    | "closed_lost";
+  value?: number;
+  assignedTo?: number;
+  followUpDate?: Date;
+  notes?: string;
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result: any = await db.insert(leads).values({
+    customerId: data.customerId ?? null,
+    name: data.name,
+    email: data.email || null,
+    phone: data.phone || null,
+    source: data.source || null,
+    stage: data.stage || "prospect",
+    value: data.value ?? null,
+    assignedTo: data.assignedTo ?? null,
+    followUpDate: data.followUpDate ?? null,
+    notes: data.notes || null,
+    createdBy: data.createdBy,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const insertId = Number((result as any)?.insertId);
+  return {
+    id: Number.isFinite(insertId) && insertId > 0 ? insertId : null,
+  };
+}
+
+// ==================== TICKETS ====================
+
+export async function getAllTickets() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.select().from(tickets).orderBy(desc(tickets.createdAt));
+}
+
+export async function getTicketById(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db
+    .select()
+    .from(tickets)
+    .where(eq(tickets.id, id))
+    .limit(1);
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function createTicket(data: {
+  ticketNumber: string;
+  customerId?: number;
+  subject: string;
+  description?: string;
+  status?: "open" | "in_progress" | "pending" | "resolved" | "closed";
+  priority?: "low" | "medium" | "high" | "critical";
+  category?: string;
+  channel?: "whatsapp" | "instagram" | "email" | "phone" | "web";
+  assignedTo?: number;
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result: any = await db.insert(tickets).values({
+    ticketNumber: data.ticketNumber,
+    customerId: data.customerId ?? null,
+    subject: data.subject,
+    description: data.description || null,
+    status: data.status || "open",
+    priority: data.priority || "medium",
+    category: data.category || null,
+    channel: data.channel || null,
+    assignedTo: data.assignedTo ?? null,
+    createdBy: data.createdBy,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  const insertId = Number((result as any)?.insertId);
+  if (!Number.isFinite(insertId) || insertId <= 0) {
+    return { success: true };
+  }
+  return await getTicketById(insertId);
+}
+
+// ==================== NOTIFICATIONS ====================
+
+export async function getUserNotifications(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(desc(notifications.createdAt));
 }
 
 // ==================== VISUAL FLOWS ====================

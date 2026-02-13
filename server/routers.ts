@@ -38,6 +38,7 @@ export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   apiConfig: apiConfigRouter,
+  quickReplies: quickRepliesRouter,
 
   // Test Routes - Sistema de Teste de Fluxos
   test: router({
@@ -457,7 +458,34 @@ export const appRouter = router({
       })
       .mutation(async ({ input, ctx }) => {
         const { createCustomer } = await import("./db");
-        return await createCustomer({ ...input, createdBy: ctx.user.id });
+        const created = await createCustomer({
+          ...input,
+          createdBy: ctx.user.id,
+        });
+
+        // Best-effort CRM outbox event (never blocks UI)
+        try {
+          const { fireAndForget, enqueueCrmOutboxEvent } = await import(
+            "./crm-core"
+          );
+          fireAndForget(async () => {
+            await enqueueCrmOutboxEvent({
+              eventName: "CustomerCreated",
+              entityType: "customer",
+              entityId: (created as any)?.id ?? null,
+              actorUserId: ctx.user.id,
+              payload: {
+                name: input.name,
+                email: input.email ?? null,
+                phone: input.phone ?? null,
+              },
+            });
+          });
+        } catch {
+          // ignore
+        }
+
+        return created;
       }),
     search: protectedProcedure
       .input(
@@ -530,7 +558,35 @@ export const appRouter = router({
       })
       .mutation(async ({ input, ctx }) => {
         const { createLead } = await import("./db");
-        return await createLead({ ...input, createdBy: ctx.user.id });
+        const created = await createLead({ ...input, createdBy: ctx.user.id });
+
+        // Best-effort CRM outbox event (never blocks UI)
+        try {
+          const { fireAndForget, enqueueCrmOutboxEvent } = await import(
+            "./crm-core"
+          );
+          fireAndForget(async () => {
+            await enqueueCrmOutboxEvent({
+              eventName: "LeadCreated",
+              entityType: "lead",
+              entityId: (created as any)?.id ?? null,
+              actorUserId: ctx.user.id,
+              payload: {
+                customerId: input.customerId ?? null,
+                name: input.name,
+                email: input.email ?? null,
+                phone: input.phone ?? null,
+                source: input.source ?? null,
+                stage: input.stage ?? null,
+                value: input.value ?? null,
+              },
+            });
+          });
+        } catch {
+          // ignore
+        }
+
+        return created;
       }),
   }),
 
@@ -570,7 +626,38 @@ export const appRouter = router({
       })
       .mutation(async ({ input, ctx }) => {
         const { createTicket } = await import("./db");
-        return await createTicket({ ...input, createdBy: ctx.user.id });
+        const created = await createTicket({
+          ...input,
+          createdBy: ctx.user.id,
+        });
+
+        // Best-effort CRM outbox event (never blocks UI)
+        try {
+          const { fireAndForget, enqueueCrmOutboxEvent } = await import(
+            "./crm-core"
+          );
+          fireAndForget(async () => {
+            await enqueueCrmOutboxEvent({
+              eventName: "TicketCreated",
+              entityType: "ticket",
+              entityId: (created as any)?.id ?? null,
+              actorUserId: ctx.user.id,
+              payload: {
+                ticketNumber: input.ticketNumber,
+                customerId: input.customerId ?? null,
+                subject: input.subject,
+                status: input.status ?? null,
+                priority: input.priority ?? null,
+                channel: input.channel ?? null,
+                assignedTo: input.assignedTo ?? null,
+              },
+            });
+          });
+        } catch {
+          // ignore
+        }
+
+        return created;
       }),
   }),
 

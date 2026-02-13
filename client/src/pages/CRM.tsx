@@ -1,5 +1,11 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -35,8 +41,11 @@ import {
 import { toast } from "sonner";
 
 export default function CRM() {
-  const { data: customers = [], isLoading: customersLoading } = trpc.customers.list.useQuery();
-  const { data: leads = [], isLoading: leadsLoading } = trpc.leads.list.useQuery();
+  const utils = trpc.useUtils();
+  const { data: customers = [], isLoading: customersLoading } =
+    trpc.customers.list.useQuery();
+  const { data: leads = [], isLoading: leadsLoading } =
+    trpc.leads.list.useQuery();
   const [searchTerm, setSearchTerm] = useState("");
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [isLeadDialogOpen, setIsLeadDialogOpen] = useState(false);
@@ -55,12 +64,19 @@ export default function CRM() {
     email: "",
     phone: "",
     source: "",
-    stage: "prospect" as "prospect" | "qualified" | "proposal" | "negotiation" | "closed_won" | "closed_lost",
+    stage: "prospect" as
+      | "prospect"
+      | "qualified"
+      | "proposal"
+      | "negotiation"
+      | "closed_won"
+      | "closed_lost",
     value: 0,
   });
 
   const createCustomer = trpc.customers.create.useMutation({
     onSuccess: () => {
+      utils.customers.list.invalidate().catch(() => {});
       toast.success("Cliente criado com sucesso!");
       setIsCustomerDialogOpen(false);
       setNewCustomer({
@@ -74,13 +90,14 @@ export default function CRM() {
         status: "active" as "active" | "inactive" | "blocked",
       });
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Erro ao criar cliente: ${error.message}`);
     },
   });
 
   const createLead = trpc.leads.create.useMutation({
     onSuccess: () => {
+      utils.leads.list.invalidate().catch(() => {});
       toast.success("Lead criado com sucesso!");
       setIsLeadDialogOpen(false);
       setNewLead({
@@ -88,11 +105,17 @@ export default function CRM() {
         email: "",
         phone: "",
         source: "",
-        stage: "prospect" as "prospect" | "qualified" | "proposal" | "negotiation" | "closed_won" | "closed_lost",
+        stage: "prospect" as
+          | "prospect"
+          | "qualified"
+          | "proposal"
+          | "negotiation"
+          | "closed_won"
+          | "closed_lost",
         value: 0,
       });
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Erro ao criar lead: ${error.message}`);
     },
   });
@@ -113,14 +136,16 @@ export default function CRM() {
     createLead.mutate(newLead);
   };
 
-  const filteredCustomers = customers.filter((c) =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCustomers = customers.filter(
+    c =>
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredLeads = leads.filter((l) =>
-    l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    l.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredLeads = leads.filter(
+    l =>
+      l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      l.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getStageColor = (stage: string) => {
@@ -153,9 +178,14 @@ export default function CRM() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">CRM</h1>
-            <p className="text-gray-500 mt-1">Gerenciamento de clientes e leads</p>
+            <p className="text-gray-500 mt-1">
+              Gerenciamento de clientes e leads
+            </p>
           </div>
-          <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
+          <Dialog
+            open={isCustomerDialogOpen}
+            onOpenChange={setIsCustomerDialogOpen}
+          >
             <DialogTrigger asChild>
               <Button className="bg-indigo-600 hover:bg-indigo-700">
                 <Plus className="w-4 h-4 mr-2" />
@@ -175,7 +205,9 @@ export default function CRM() {
                   <Input
                     placeholder="Ex: Maria Silva"
                     value={newCustomer.name}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                    onChange={e =>
+                      setNewCustomer({ ...newCustomer, name: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -184,7 +216,9 @@ export default function CRM() {
                     type="email"
                     placeholder="maria@exemplo.com"
                     value={newCustomer.email}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                    onChange={e =>
+                      setNewCustomer({ ...newCustomer, email: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -192,12 +226,22 @@ export default function CRM() {
                   <Input
                     placeholder="(00) 00000-0000"
                     value={newCustomer.phone}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                    onChange={e =>
+                      setNewCustomer({ ...newCustomer, phone: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select value={newCustomer.status} onValueChange={(value) => setNewCustomer({ ...newCustomer, status: value as "active" | "inactive" | "blocked" })}>
+                  <Select
+                    value={newCustomer.status}
+                    onValueChange={value =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        status: value as "active" | "inactive" | "blocked",
+                      })
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -213,7 +257,12 @@ export default function CRM() {
                   <Input
                     placeholder="Rua, número, complemento"
                     value={newCustomer.address}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                    onChange={e =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        address: e.target.value,
+                      })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -221,7 +270,9 @@ export default function CRM() {
                   <Input
                     placeholder="Ex: São Paulo"
                     value={newCustomer.city}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
+                    onChange={e =>
+                      setNewCustomer({ ...newCustomer, city: e.target.value })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -230,7 +281,12 @@ export default function CRM() {
                     placeholder="Ex: SP"
                     maxLength={2}
                     value={newCustomer.state}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, state: e.target.value.toUpperCase() })}
+                    onChange={e =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        state: e.target.value.toUpperCase(),
+                      })
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -238,15 +294,26 @@ export default function CRM() {
                   <Input
                     placeholder="00000-000"
                     value={newCustomer.zipCode}
-                    onChange={(e) => setNewCustomer({ ...newCustomer, zipCode: e.target.value })}
+                    onChange={e =>
+                      setNewCustomer({
+                        ...newCustomer,
+                        zipCode: e.target.value,
+                      })
+                    }
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCustomerDialogOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsCustomerDialogOpen(false)}
+                >
                   Cancelar
                 </Button>
-                <Button onClick={handleCreateCustomer} disabled={createCustomer.isPending}>
+                <Button
+                  onClick={handleCreateCustomer}
+                  disabled={createCustomer.isPending}
+                >
                   {createCustomer.isPending ? "Criando..." : "Criar Cliente"}
                 </Button>
               </DialogFooter>
@@ -260,7 +327,7 @@ export default function CRM() {
           <Input
             placeholder="Buscar por nome ou email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={e => setSearchTerm(e.target.value)}
             className="pl-10"
           />
         </div>
@@ -271,9 +338,7 @@ export default function CRM() {
             <TabsTrigger value="customers">
               Clientes ({customers.length})
             </TabsTrigger>
-            <TabsTrigger value="leads">
-              Leads ({leads.length})
-            </TabsTrigger>
+            <TabsTrigger value="leads">Leads ({leads.length})</TabsTrigger>
           </TabsList>
 
           {/* Customers Tab */}
@@ -307,9 +372,11 @@ export default function CRM() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredCustomers.map((customer) => (
+                      {filteredCustomers.map(customer => (
                         <TableRow key={customer.id}>
-                          <TableCell className="font-medium">{customer.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {customer.name}
+                          </TableCell>
                           <TableCell>
                             <div className="space-y-1">
                               {customer.email && (
@@ -340,7 +407,9 @@ export default function CRM() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">
-                            {new Date(customer.createdAt).toLocaleDateString("pt-BR")}
+                            {new Date(customer.createdAt).toLocaleDateString(
+                              "pt-BR"
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm">
@@ -359,7 +428,10 @@ export default function CRM() {
           {/* Leads Tab */}
           <TabsContent value="leads" className="space-y-4">
             <div className="flex justify-end mb-4">
-              <Dialog open={isLeadDialogOpen} onOpenChange={setIsLeadDialogOpen}>
+              <Dialog
+                open={isLeadDialogOpen}
+                onOpenChange={setIsLeadDialogOpen}
+              >
                 <DialogTrigger asChild>
                   <Button className="bg-purple-600 hover:bg-purple-700">
                     <Plus className="w-4 h-4 mr-2" />
@@ -379,7 +451,9 @@ export default function CRM() {
                       <Input
                         placeholder="Ex: Carlos Oliveira"
                         value={newLead.name}
-                        onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
+                        onChange={e =>
+                          setNewLead({ ...newLead, name: e.target.value })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -388,7 +462,9 @@ export default function CRM() {
                         type="email"
                         placeholder="carlos@exemplo.com"
                         value={newLead.email}
-                        onChange={(e) => setNewLead({ ...newLead, email: e.target.value })}
+                        onChange={e =>
+                          setNewLead({ ...newLead, email: e.target.value })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -396,12 +472,19 @@ export default function CRM() {
                       <Input
                         placeholder="(00) 00000-0000"
                         value={newLead.phone}
-                        onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
+                        onChange={e =>
+                          setNewLead({ ...newLead, phone: e.target.value })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
                       <Label>Origem</Label>
-                      <Select value={newLead.source} onValueChange={(value) => setNewLead({ ...newLead, source: value })}>
+                      <Select
+                        value={newLead.source}
+                        onValueChange={value =>
+                          setNewLead({ ...newLead, source: value })
+                        }
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
@@ -417,7 +500,21 @@ export default function CRM() {
                     </div>
                     <div className="space-y-2">
                       <Label>Estágio</Label>
-                      <Select value={newLead.stage} onValueChange={(value) => setNewLead({ ...newLead, stage: value as "prospect" | "qualified" | "proposal" | "negotiation" | "closed_won" | "closed_lost" })}>
+                      <Select
+                        value={newLead.stage}
+                        onValueChange={value =>
+                          setNewLead({
+                            ...newLead,
+                            stage: value as
+                              | "prospect"
+                              | "qualified"
+                              | "proposal"
+                              | "negotiation"
+                              | "closed_won"
+                              | "closed_lost",
+                          })
+                        }
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -425,7 +522,9 @@ export default function CRM() {
                           <SelectItem value="prospect">Prospect</SelectItem>
                           <SelectItem value="qualified">Qualificado</SelectItem>
                           <SelectItem value="proposal">Proposta</SelectItem>
-                          <SelectItem value="negotiation">Negociação</SelectItem>
+                          <SelectItem value="negotiation">
+                            Negociação
+                          </SelectItem>
                           <SelectItem value="closed_won">Ganho</SelectItem>
                           <SelectItem value="closed_lost">Perdido</SelectItem>
                         </SelectContent>
@@ -437,15 +536,26 @@ export default function CRM() {
                         type="number"
                         placeholder="0.00"
                         value={newLead.value}
-                        onChange={(e) => setNewLead({ ...newLead, value: parseFloat(e.target.value) || 0 })}
+                        onChange={e =>
+                          setNewLead({
+                            ...newLead,
+                            value: parseFloat(e.target.value) || 0,
+                          })
+                        }
                       />
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsLeadDialogOpen(false)}>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsLeadDialogOpen(false)}
+                    >
                       Cancelar
                     </Button>
-                    <Button onClick={handleCreateLead} disabled={createLead.isPending}>
+                    <Button
+                      onClick={handleCreateLead}
+                      disabled={createLead.isPending}
+                    >
                       {createLead.isPending ? "Criando..." : "Criar Lead"}
                     </Button>
                   </DialogFooter>
@@ -482,9 +592,11 @@ export default function CRM() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredLeads.map((lead) => (
+                      {filteredLeads.map(lead => (
                         <TableRow key={lead.id}>
-                          <TableCell className="font-medium">{lead.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {lead.name}
+                          </TableCell>
                           <TableCell>
                             <div className="space-y-1">
                               {lead.email && (
@@ -502,7 +614,9 @@ export default function CRM() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{lead.source || "N/A"}</Badge>
+                            <Badge variant="outline">
+                              {lead.source || "N/A"}
+                            </Badge>
                           </TableCell>
                           <TableCell>
                             <Badge className={getStageColor(lead.stage)}>
@@ -510,11 +624,15 @@ export default function CRM() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {lead.value ? `R$ ${lead.value.toLocaleString("pt-BR")}` : "-"}
+                            {lead.value
+                              ? `R$ ${lead.value.toLocaleString("pt-BR")}`
+                              : "-"}
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">
                             {lead.followUpDate
-                              ? new Date(lead.followUpDate).toLocaleDateString("pt-BR")
+                              ? new Date(lead.followUpDate).toLocaleDateString(
+                                  "pt-BR"
+                                )
                               : "-"}
                           </TableCell>
                           <TableCell className="text-right">

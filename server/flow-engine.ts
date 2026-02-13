@@ -694,7 +694,36 @@ async function executeTransferHumanNode(
     channel: message.provider as any,
   };
 
-  await db.insert(tickets).values(ticketData);
+  const inserted = await db.insert(tickets).values(ticketData).$returningId();
+  const ticketId = inserted?.[0]?.id;
+
+  // Expose ticket in context for later nodes
+  context.ticket = {
+    id: ticketId ?? null,
+    ...ticketData,
+  };
+
+  // Best-effort CRM outbox event
+  try {
+    const { fireAndForget, enqueueCrmOutboxEvent } = await import("./crm-core");
+    fireAndForget(async () => {
+      await enqueueCrmOutboxEvent({
+        eventName: "TicketCreated",
+        entityType: "ticket",
+        entityId: ticketId ?? null,
+        actorUserId: null,
+        payload: {
+          source: "flow-engine",
+          department,
+          channel: message.provider,
+          customerId: context.customer?.id ?? null,
+          fromNumber: message.fromNumber,
+        },
+      });
+    });
+  } catch {
+    // ignore
+  }
 
   const confirmMessage = replaceVariables(
     config.message || "Você será atendido por um de nossos agentes em breve.",
@@ -745,8 +774,34 @@ async function executeCreateTicketNode(
     channel: message.provider as any,
   };
 
-  const result = await db.insert(tickets).values(ticketData);
-  context.ticket = result;
+  const inserted = await db.insert(tickets).values(ticketData).$returningId();
+  const ticketId = inserted?.[0]?.id;
+  context.ticket = {
+    id: ticketId ?? null,
+    ...ticketData,
+  };
+
+  // Best-effort CRM outbox event
+  try {
+    const { fireAndForget, enqueueCrmOutboxEvent } = await import("./crm-core");
+    fireAndForget(async () => {
+      await enqueueCrmOutboxEvent({
+        eventName: "TicketCreated",
+        entityType: "ticket",
+        entityId: ticketId ?? null,
+        actorUserId: null,
+        payload: {
+          source: "flow-engine",
+          channel: message.provider,
+          customerId: context.customer?.id ?? null,
+          fromNumber: message.fromNumber,
+          subject,
+        },
+      });
+    });
+  } catch {
+    // ignore
+  }
 
   console.log(`[Flow Engine] Created ticket: ${subject}`);
 }
