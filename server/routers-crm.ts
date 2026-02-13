@@ -8,6 +8,9 @@ import {
   customerTags,
   conversations,
   conversationMessages,
+  pharmaProducts,
+  pharmaPurchases,
+  pharmaPurchaseItems,
   accounts,
   accountContacts,
   dealPipelines,
@@ -470,7 +473,7 @@ export const crmRouter = router({
 
   getCustomerFullData: protectedProcedure
     .input(z.object({ customerId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -500,12 +503,221 @@ export const crmRouter = router({
         .innerJoin(tags, eq(customerTags.tagId, tags.id))
         .where(eq(customerTags.customerId, input.customerId));
 
+      const baseCustomer: any = { ...customer[0] };
+      if (ctx.user.role !== "admin") {
+        baseCustomer.healthTagsJson = null;
+      }
+
       return {
-        ...customer[0],
+        ...baseCustomer,
         treatments,
         tags: customerTagsList.map(t => t.tag),
       };
     }),
+
+  // ========================================
+  // PHARMACORE: PURCHASE HISTORY + SUGGESTIONS
+  // ========================================
+
+  pharma: router({
+    ingestPurchase: protectedProcedure
+      .input(
+        z.object({
+          customerId: z.number(),
+          externalId: z.string().optional(),
+          purchaseDate: z.string().optional(),
+          totalValue: z.number().optional(),
+          channel: z
+            .enum(["loja", "delivery", "whatsapp", "outros"])
+            .optional(),
+          items: z
+            .array(
+              z.object({
+                ean: z.string().optional(),
+                name: z.string().min(1),
+                quantity: z.number().min(1),
+                price: z.number().optional(),
+                category: z
+                  .enum(["medicamento", "perfumaria", "outros"])
+                  .optional(),
+                substance: z.string().optional(),
+                daysDuration: z.number().optional(),
+              })
+            )
+            .min(1),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const purchaseDate = input.purchaseDate
+          ? new Date(input.purchaseDate)
+          : new Date();
+        const channel = input.channel ?? "outros";
+        const total = Number.isFinite(input.totalValue as any)
+          ? Number(input.totalValue)
+          : input.items.reduce(
+              (acc, it) => acc + (Number(it.price || 0) * it.quantity || 0),
+              0
+            );
+
+        // Upsert products (best-effort)
+        for (const it of input.items) {
+          if (!it.ean) continue;
+          try {
+            const ex = await db
+              .select({ ean: pharmaProducts.ean })
+              .from(pharmaProducts)
+              .where(eq(pharmaProducts.ean, it.ean))
+              .limit(1);
+            if (!ex?.[0]) {
+              await db.insert(pharmaProducts).values({
+                ean: it.ean,
+                name: it.name,
+                category: (it.category as any) || "outros",
+                substance: it.substance || null,
+                daysDuration: it.daysDuration ?? null,
+              });
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        const inserted = await db
+          .insert(pharmaPurchases)
+          .values({
+            customerId: input.customerId,
+            externalId: input.externalId || null,
+            purchaseDate,
+            totalValue: String(total) as any,
+            channel,
+            createdAt: new Date(),
+          })
+          .$returningId();
+
+        const purchaseId = inserted?.[0]?.id;
+
+        if (purchaseId) {
+          await db.insert(pharmaPurchaseItems).values(
+            input.items.map(it => ({
+              purchaseId,
+              productEan: it.ean || null,
+              productName: it.name,
+              quantity: it.quantity,
+              price: String(it.price || 0) as any,
+            }))
+          );
+        }
+
+        // Update customer last purchase + LTV
+        await db
+          .update(customers)
+          .set({
+            lastPurchaseAt: purchaseDate,
+            ltvValue: sql`${customers.ltvValue} + ${total}` as any,
+            updatedAt: new Date(),
+          })
+          .where(eq(customers.id, input.customerId));
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "PurchaseIngested",
+            entityType: "customer",
+            entityId: input.customerId,
+            actorUserId: ctx.user.id,
+            payload: {
+              purchaseId: purchaseId ?? null,
+              externalId: input.externalId ?? null,
+              purchaseDate: purchaseDate.toISOString(),
+              total,
+              channel,
+              itemsCount: input.items.length,
+            },
+          });
+        });
+
+        return { id: purchaseId ?? null };
+      }),
+
+    listPurchasesByCustomer: protectedProcedure
+      .input(
+        z.object({
+          customerId: z.number(),
+          limit: z.number().min(1).max(200).default(50),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        return await db
+          .select()
+          .from(pharmaPurchases)
+          .where(eq(pharmaPurchases.customerId, input.customerId))
+          .orderBy(desc(pharmaPurchases.purchaseDate))
+          .limit(input.limit);
+      }),
+
+    listPurchaseItems: protectedProcedure
+      .input(z.object({ purchaseId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        return await db
+          .select()
+          .from(pharmaPurchaseItems)
+          .where(eq(pharmaPurchaseItems.purchaseId, input.purchaseId))
+          .orderBy(desc(pharmaPurchaseItems.id));
+      }),
+
+    getSmartSuggestions: protectedProcedure
+      .input(
+        z.object({
+          items: z.array(
+            z.object({
+              name: z.string(),
+            })
+          ),
+        })
+      )
+      .query(async ({ input }) => {
+        const names = input.items.map(i => i.name.toLowerCase());
+        const suggestions: { title: string; reason: string }[] = [];
+
+        const has = (re: RegExp) => names.some(n => re.test(n));
+
+        if (has(/antibiot/)) {
+          suggestions.push({
+            title: "Probiótico",
+            reason:
+              "Antibiótico infantil costuma precisar de suporte intestinal",
+          });
+          suggestions.push({
+            title: "Termômetro",
+            reason: "Complemento útil em quadros infecciosos",
+          });
+        }
+
+        if (has(/fralda/)) {
+          suggestions.push({
+            title: "Pomada de assadura",
+            reason: "Cross-sell natural para fraldas",
+          });
+        }
+
+        if (has(/protetor\s+solar|fps|sunscreen/)) {
+          suggestions.push({
+            title: "Pós-sol / hidratante",
+            reason: "Aumenta a adesão ao cuidado pós-exposição",
+          });
+        }
+
+        return suggestions;
+      }),
+  }),
 
   // ========================================
   // ENTERPRISE: ACCOUNTS (B2B)

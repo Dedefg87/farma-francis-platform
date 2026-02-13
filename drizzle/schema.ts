@@ -1,5 +1,6 @@
 import {
   bigint,
+  date,
   decimal,
   int,
   mysqlEnum,
@@ -51,6 +52,10 @@ export const customers = mysqlTable("customers", {
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
+  birthDate: date("birth_date"),
+  healthTagsJson: text("health_tags_json"), // JSON array of sensitive health tags (admin-only)
+  whatsappOptIn: int("whatsapp_opt_in").default(0).notNull(),
+  whatsappOptInAt: timestamp("whatsapp_opt_in_at"),
   photoUrl: varchar("photo_url", { length: 500 }),
   cpfCnpj: varchar("cpf_cnpj", { length: 18 }),
   address: text("address"),
@@ -59,6 +64,8 @@ export const customers = mysqlTable("customers", {
   zipCode: varchar("zip_code", { length: 10 }),
   tags: text("tags"), // JSON array of tags
   notes: text("notes"),
+  ltvValue: decimal("ltv_value", { precision: 12, scale: 2 }).default("0"),
+  lastPurchaseAt: timestamp("last_purchase_at"),
   status: mysqlEnum("status", ["active", "inactive", "blocked"])
     .default("active")
     .notNull(),
@@ -1051,6 +1058,66 @@ export const customerTreatments = mysqlTable("customer_treatments", {
 
 export type CustomerTreatment = typeof customerTreatments.$inferSelect;
 export type InsertCustomerTreatment = typeof customerTreatments.$inferInsert;
+
+/**
+ * PharmaCore - Products catalog (optional enrichment)
+ */
+export const pharmaProducts = mysqlTable("pharma_products", {
+  ean: varchar("ean", { length: 32 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  category: mysqlEnum("category", [
+    "medicamento",
+    "perfumaria",
+    "outros",
+  ]).default("outros"),
+  substance: varchar("substance", { length: 255 }),
+  daysDuration: int("days_duration"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PharmaProduct = typeof pharmaProducts.$inferSelect;
+export type InsertPharmaProduct = typeof pharmaProducts.$inferInsert;
+
+/**
+ * PharmaCore - Purchase history (ingested from PDV/ERP or manual)
+ */
+export const pharmaPurchases = mysqlTable("pharma_purchases", {
+  id: int("id").autoincrement().primaryKey(),
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  externalId: varchar("external_id", { length: 80 }), // id from ERP/PDV
+  purchaseDate: timestamp("purchase_date").defaultNow().notNull(),
+  totalValue: decimal("total_value", { precision: 12, scale: 2 }).default("0"),
+  channel: mysqlEnum("channel", [
+    "loja",
+    "delivery",
+    "whatsapp",
+    "outros",
+  ]).default("outros"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type PharmaPurchase = typeof pharmaPurchases.$inferSelect;
+export type InsertPharmaPurchase = typeof pharmaPurchases.$inferInsert;
+
+export const pharmaPurchaseItems = mysqlTable("pharma_purchase_items", {
+  id: int("id").autoincrement().primaryKey(),
+  purchaseId: int("purchase_id")
+    .references(() => pharmaPurchases.id, { onDelete: "cascade" })
+    .notNull(),
+  productEan: varchar("product_ean", { length: 32 }).references(
+    () => pharmaProducts.ean,
+    { onDelete: "set null" }
+  ),
+  productName: varchar("product_name", { length: 255 }).notNull(),
+  quantity: int("quantity").notNull(),
+  price: decimal("price", { precision: 12, scale: 2 }).default("0"),
+});
+
+export type PharmaPurchaseItem = typeof pharmaPurchaseItems.$inferSelect;
+export type InsertPharmaPurchaseItem = typeof pharmaPurchaseItems.$inferInsert;
 
 /**
  * CRM - Tags para Segmentação de Clientes

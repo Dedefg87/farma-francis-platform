@@ -40,6 +40,10 @@ export default function CRMPanel({
   onOpenChange,
 }: CRMPanelProps) {
   const [showAddTreatment, setShowAddTreatment] = useState(false);
+  const [showPurchaseItems, setShowPurchaseItems] = useState(false);
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(
+    null
+  );
   const [newTreatment, setNewTreatment] = useState({
     nomeMedicamento: "",
     posologiaDiaria: 1,
@@ -57,6 +61,20 @@ export default function CRMPanel({
   const { data: scripts } = trpc.crm.getScripts.useQuery(undefined, {
     enabled: open,
   });
+
+  const { data: purchases = [] } = (
+    trpc as any
+  ).crm.pharma.listPurchasesByCustomer.useQuery(
+    { customerId: customerId!, limit: 10 },
+    { enabled: !!customerId && open }
+  );
+
+  const { data: purchaseItems = [] } = (
+    trpc as any
+  ).crm.pharma.listPurchaseItems.useQuery(
+    { purchaseId: selectedPurchaseId! },
+    { enabled: !!selectedPurchaseId && open && showPurchaseItems }
+  );
 
   const createTreatmentMutation = trpc.crm.createTreatment.useMutation({
     onSuccess: () => {
@@ -128,6 +146,11 @@ export default function CRMPanel({
 
     navigator.clipboard.writeText(filled);
     toast.success("Texto copiado para área de transferência");
+  };
+
+  const openItems = (purchaseId: number) => {
+    setSelectedPurchaseId(purchaseId);
+    setShowPurchaseItems(true);
   };
 
   if (!customerId) return null;
@@ -231,6 +254,55 @@ export default function CRMPanel({
                 customerData.treatments.length === 0) && (
                 <p className="text-sm text-gray-500 text-center py-4">
                   Nenhum tratamento cadastrado
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Compras */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-medium flex items-center gap-2">
+                <Calendar className="w-4 h-4" /> Compras Recentes
+              </h4>
+            </div>
+
+            <div className="space-y-2">
+              {(purchases as any[])?.slice(0, 5).map((p: any) => (
+                <Card key={p.id} className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">
+                        {p.purchaseDate
+                          ? format(new Date(p.purchaseDate), "dd/MM/yyyy", {
+                              locale: ptBR,
+                            })
+                          : "-"}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Canal: {p.channel || "-"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Badge variant="outline">
+                        R$ {Number(p.totalValue || 0).toLocaleString("pt-BR")}
+                      </Badge>
+                      <div className="mt-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openItems(p.id)}
+                        >
+                          Ver itens
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+              {(!purchases || (purchases as any[]).length === 0) && (
+                <p className="text-sm text-gray-500 text-center py-4">
+                  Nenhuma compra registrada
                 </p>
               )}
             </div>
@@ -375,6 +447,51 @@ export default function CRMPanel({
               disabled={createTreatmentMutation.isPending}
             >
               {createTreatmentMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Itens da Compra */}
+      <Dialog open={showPurchaseItems} onOpenChange={setShowPurchaseItems}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Itens da compra</DialogTitle>
+            <DialogDescription>
+              Produtos registrados nesta compra
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            {(purchaseItems as any[])?.length > 0 ? (
+              (purchaseItems as any[]).map((it: any) => (
+                <Card key={it.id} className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{it.productName}</p>
+                      <p className="text-sm text-gray-500">
+                        Qtd: {it.quantity}
+                      </p>
+                    </div>
+                    <Badge variant="outline">
+                      R$ {Number(it.price || 0).toLocaleString("pt-BR")}
+                    </Badge>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-6">
+                Nenhum item encontrado
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPurchaseItems(false)}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

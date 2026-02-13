@@ -60,6 +60,50 @@ export async function runCRMMigration() {
       }
     }
 
+    // ==============================
+    // PharmaCore - extend customers table (idempotent)
+    // ==============================
+
+    const ensureCustomerColumn = async (columnName: string, ddl: string) => {
+      const r = await db.raw(
+        `
+        SELECT COUNT(*) as count FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = ?
+      `,
+        [columnName]
+      );
+      const exists =
+        Array.isArray(r) &&
+        r.length > 0 &&
+        Number((r[0] as any)?.count || 0) > 0;
+      if (!exists) {
+        console.log(`[CRM Migration] Adding customers.${columnName}`);
+        await db.raw(`ALTER TABLE customers ADD COLUMN ${ddl}`);
+      }
+    };
+
+    await ensureCustomerColumn("birth_date", "birth_date DATE NULL");
+    await ensureCustomerColumn(
+      "health_tags_json",
+      "health_tags_json TEXT NULL"
+    );
+    await ensureCustomerColumn(
+      "whatsapp_opt_in",
+      "whatsapp_opt_in INT NOT NULL DEFAULT 0"
+    );
+    await ensureCustomerColumn(
+      "whatsapp_opt_in_at",
+      "whatsapp_opt_in_at DATETIME NULL"
+    );
+    await ensureCustomerColumn(
+      "ltv_value",
+      "ltv_value DECIMAL(12,2) NOT NULL DEFAULT 0"
+    );
+    await ensureCustomerColumn(
+      "last_purchase_at",
+      "last_purchase_at DATETIME NULL"
+    );
+
     // Criar outras tabelas se não existirem
     await db.raw(`
       CREATE TABLE IF NOT EXISTS customer_treatments (
@@ -75,6 +119,51 @@ export async function runCRMMigration() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
         FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      )
+    `);
+
+    // ==============================
+    // PharmaCore - purchase history + products (idempotent)
+    // ==============================
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS pharma_products (
+        ean VARCHAR(32) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category ENUM('medicamento','perfumaria','outros') NOT NULL DEFAULT 'outros',
+        substance VARCHAR(255) NULL,
+        days_duration INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS pharma_purchases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_id INT NOT NULL,
+        external_id VARCHAR(80) NULL,
+        purchase_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        total_value DECIMAL(12,2) NOT NULL DEFAULT 0,
+        channel ENUM('loja','delivery','whatsapp','outros') NOT NULL DEFAULT 'outros',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_pharma_purchases_customer_date (customer_id, purchase_date),
+        UNIQUE KEY uq_pharma_purchases_external (external_id),
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS pharma_purchase_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        purchase_id INT NOT NULL,
+        product_ean VARCHAR(32) NULL,
+        product_name VARCHAR(255) NOT NULL,
+        quantity INT NOT NULL,
+        price DECIMAL(12,2) NOT NULL DEFAULT 0,
+        INDEX idx_pharma_items_purchase (purchase_id),
+        INDEX idx_pharma_items_ean (product_ean),
+        FOREIGN KEY (purchase_id) REFERENCES pharma_purchases(id) ON DELETE CASCADE
       )
     `);
 

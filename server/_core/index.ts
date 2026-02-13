@@ -179,6 +179,15 @@ async function startServer() {
         console.error("Failed to start CRM outbox worker:", err);
       });
 
+    // Start PharmaCore refill worker (creates tasks for upcoming refills)
+    import("../pharma-refill-worker")
+      .then(module => {
+        module.startPharmaRefillWorker(10, 7, 3);
+      })
+      .catch(err => {
+        console.error("Failed to start Pharma refill worker:", err);
+      });
+
     // Start pause auto-finisher worker
     import("../workers/pause-auto-finisher")
       .then(module => {
