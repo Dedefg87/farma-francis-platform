@@ -163,14 +163,39 @@ export default function CRMPanel({
   const treatments =
     treatmentsShadow ?? (customerData as any)?.treatments ?? ([] as any[]);
 
-  const selectedTags = ((customerData as any)?.tags ?? []) as any[];
+  const selectedTagsRaw = ((customerData as any)?.tags ?? []) as any[];
+  const selectedTags = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const t of selectedTagsRaw) {
+      const key = String(t?.name || "")
+        .trim()
+        .toLowerCase();
+      if (!key) continue;
+      if (!m.has(key)) m.set(key, t);
+    }
+    return Array.from(m.values());
+  }, [selectedTagsRaw]);
 
   const filteredTags = useMemo(() => {
     const q = tagSearch.trim().toLowerCase();
     const list = ((allTags as any[]) ?? []) as any[];
-    if (!q) return list;
-    return list.filter((t: any) =>
-      `${t.name || ""} ${t.description || ""}`.toLowerCase().includes(q)
+    const base = q
+      ? list.filter((t: any) =>
+          `${t.name || ""} ${t.description || ""}`.toLowerCase().includes(q)
+        )
+      : list;
+
+    // Dedupe by name to avoid legacy duplicates
+    const m = new Map<string, any>();
+    for (const t of base) {
+      const key = String(t?.name || "")
+        .trim()
+        .toLowerCase();
+      if (!key) continue;
+      if (!m.has(key)) m.set(key, t);
+    }
+    return Array.from(m.values()).sort((a: any, b: any) =>
+      String(a?.name || "").localeCompare(String(b?.name || ""), "pt-BR")
     );
   }, [allTags, tagSearch]);
 
@@ -343,16 +368,28 @@ export default function CRMPanel({
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 {selectedTags.length > 0 ? (
-                  selectedTags.map((tag: any) => (
-                    <Badge
-                      key={tag.id}
-                      style={
-                        tag.color ? { backgroundColor: tag.color } : undefined
-                      }
-                    >
-                      {tag.icon ? `${tag.name} ${tag.icon}` : tag.name}
-                    </Badge>
-                  ))
+                  <>
+                    {selectedTags.slice(0, 6).map((tag: any) => (
+                      <Badge
+                        key={tag.id}
+                        className="gap-2"
+                        style={
+                          tag.color ? { backgroundColor: tag.color } : undefined
+                        }
+                      >
+                        <span className="inline-block w-2 h-2 rounded-full bg-white/80" />
+                        <span>
+                          {tag.name}
+                          {tag.icon ? ` ${tag.icon}` : ""}
+                        </span>
+                      </Badge>
+                    ))}
+                    {selectedTags.length > 6 && (
+                      <Badge variant="secondary">
+                        +{selectedTags.length - 6}
+                      </Badge>
+                    )}
+                  </>
                 ) : (
                   <span className="text-sm text-gray-500">
                     Nenhuma tag adicionada
@@ -708,59 +745,102 @@ export default function CRMPanel({
           <DialogHeader>
             <DialogTitle>Tags do Cliente</DialogTitle>
             <DialogDescription>
-              Clique para adicionar/remover tags
+              Selecione as tags para segmentar o cliente
             </DialogDescription>
           </DialogHeader>
 
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              value={tagSearch}
-              onChange={e => setTagSearch(e.target.value)}
-              placeholder="Pesquisar tags..."
-              className="pl-10"
-            />
-          </div>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                value={tagSearch}
+                onChange={e => setTagSearch(e.target.value)}
+                placeholder="Pesquisar tags..."
+                className="pl-10"
+              />
+            </div>
 
-          <div className="max-h-[50vh] overflow-y-auto border rounded-md">
-            {filteredTags.length > 0 ? (
-              filteredTags.map((tag: any) => {
-                const selected = selectedTags.some((t: any) => t.id === tag.id);
-                return (
+            {selectedTags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {selectedTags.map((t: any) => (
                   <button
-                    key={tag.id}
+                    key={t.id}
                     type="button"
-                    className={
-                      "w-full text-left px-4 py-3 flex items-center justify-between border-b last:border-b-0 " +
-                      (selected ? "bg-gray-50" : "bg-white")
+                    onClick={() =>
+                      removeTagMutation.mutate({
+                        customerId: customerId!,
+                        tagId: t.id,
+                      })
                     }
-                    onClick={() => {
-                      if (!customerId) return;
-                      if (selected) {
-                        removeTagMutation.mutate({ customerId, tagId: tag.id });
-                      } else {
-                        addTagMutation.mutate({ customerId, tagId: tag.id });
-                      }
-                    }}
-                    disabled={
-                      addTagMutation.isPending || removeTagMutation.isPending
-                    }
+                    className="inline-flex"
+                    title="Remover"
+                    disabled={removeTagMutation.isPending}
                   >
-                    <span className="font-medium">
-                      {tag.name}
-                      {tag.icon ? ` ${tag.icon}` : ""}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {selected ? "Selecionada" : ""}
-                    </span>
+                    <Badge
+                      className="gap-2"
+                      style={t.color ? { backgroundColor: t.color } : undefined}
+                    >
+                      {t.name}
+                      {t.icon ? ` ${t.icon}` : ""}
+                      <span className="opacity-80">x</span>
+                    </Badge>
                   </button>
-                );
-              })
-            ) : (
-              <div className="p-6 text-sm text-gray-500 text-center">
-                Nenhuma tag encontrada
+                ))}
               </div>
             )}
+
+            <div className="max-h-[50vh] overflow-y-auto border rounded-md">
+              {filteredTags.length > 0 ? (
+                filteredTags.map((tag: any, idx: number) => {
+                  const selected = selectedTags.some(
+                    (t: any) => t.id === tag.id
+                  );
+                  const bg = idx % 2 === 0 ? "bg-white" : "bg-gray-50/60";
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      className={
+                        "w-full text-left px-4 py-2.5 flex items-center justify-between border-b last:border-b-0 " +
+                        bg
+                      }
+                      onClick={() => {
+                        if (!customerId) return;
+                        if (selected) {
+                          removeTagMutation.mutate({
+                            customerId,
+                            tagId: tag.id,
+                          });
+                        } else {
+                          addTagMutation.mutate({ customerId, tagId: tag.id });
+                        }
+                      }}
+                      disabled={
+                        addTagMutation.isPending || removeTagMutation.isPending
+                      }
+                    >
+                      <span className="flex items-center gap-3">
+                        <span
+                          className="w-2.5 h-2.5 rounded-full"
+                          style={{ backgroundColor: tag.color || "#cbd5e1" }}
+                        />
+                        <span className="font-medium">
+                          {tag.name}
+                          {tag.icon ? ` ${tag.icon}` : ""}
+                        </span>
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {selected ? "Selecionada" : ""}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="p-6 text-sm text-gray-500 text-center">
+                  Nenhuma tag encontrada
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>

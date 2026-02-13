@@ -149,6 +149,96 @@ export async function runCRMMigration() {
       "createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
     );
 
+    // Deduplicate tags by name (older installs may have duplicates)
+    try {
+      // Ensure unique index exists (after cleanup)
+      const dupRows = await db.raw(
+        `
+        SELECT name, MIN(id) AS keep_id, GROUP_CONCAT(id) AS ids, COUNT(*) AS cnt
+        FROM tags
+        GROUP BY name
+        HAVING cnt > 1
+      `
+      );
+
+      if (Array.isArray(dupRows) && dupRows.length > 0) {
+        console.log(`[CRM Migration] Deduplicating tags: ${dupRows.length}`);
+
+        const safeExec = async (sqlText: string, params: any[]) => {
+          try {
+            await db.raw(sqlText, params);
+          } catch (e) {
+            // ignore missing tables/columns
+          }
+        };
+
+        for (const r of dupRows as any[]) {
+          const keepId = Number(r.keep_id);
+          const ids = String(r.ids || "")
+            .split(",")
+            .map((x: string) => Number(x))
+            .filter((n: number) => Number.isFinite(n) && n > 0);
+
+          const toDelete = ids.filter((id: number) => id !== keepId);
+          if (!keepId || toDelete.length === 0) continue;
+
+          // Merge references
+          await safeExec(
+            `UPDATE customer_tags SET tag_id = ? WHERE tag_id IN (${toDelete
+              .map(() => "?")
+              .join(",")})`,
+            [keepId, ...toDelete]
+          );
+
+          // Optional other tag relations (best-effort)
+          await safeExec(
+            `UPDATE conversation_tags SET tagId = ? WHERE tagId IN (${toDelete
+              .map(() => "?")
+              .join(",")})`,
+            [keepId, ...toDelete]
+          );
+          await safeExec(
+            `UPDATE ticket_tags SET tagId = ? WHERE tagId IN (${toDelete
+              .map(() => "?")
+              .join(",")})`,
+            [keepId, ...toDelete]
+          );
+
+          // Delete duplicates
+          await db.raw(
+            `DELETE FROM tags WHERE id IN (${toDelete
+              .map(() => "?")
+              .join(",")})`,
+            toDelete
+          );
+        }
+      }
+
+      const uniqIdx = await db.raw(
+        `
+        SELECT COUNT(*) AS count
+        FROM information_schema.statistics
+        WHERE table_schema = DATABASE() AND table_name = 'tags' AND index_name = 'uq_tags_name'
+      `
+      );
+      const hasIdx =
+        Array.isArray(uniqIdx) &&
+        uniqIdx.length > 0 &&
+        Number((uniqIdx[0] as any)?.count || 0) > 0;
+      if (!hasIdx) {
+        try {
+          await db.raw(`ALTER TABLE tags ADD UNIQUE KEY uq_tags_name (name)`);
+        } catch {
+          // ignore
+        }
+      }
+    } catch (e) {
+      console.log(
+        "[CRM Migration] Tag dedupe skipped:",
+        (e as any)?.message || e
+      );
+    }
+
     await db.raw(`
       CREATE TABLE IF NOT EXISTS customer_treatments (
         id INT AUTO_INCREMENT PRIMARY KEY,
