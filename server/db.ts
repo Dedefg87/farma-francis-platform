@@ -91,13 +91,21 @@ export async function getDbRaw() {
   }
 
   try {
-    // Use drizzle's built-in query method for raw SQL
-    const result = await (db as any).execute("SELECT 1");
+    // Access the underlying mysql2 connection through drizzle's session
+    const session = (db as any).session;
+    if (!session || !session.client) {
+      throw new Error("Could not access underlying database connection");
+    }
+    const client = session.client;
+
+    // Test the connection
+    await client.execute("SELECT 1");
+
     return {
       raw: async (sql: string, values?: any[]) => {
-        // Use parameterized queries through drizzle
-        const query = values ? sql.replace(/\?/g, () => "?") : sql;
-        return await (db as any).execute(query);
+        // Use mysql2's execute method for prepared statements with parameters
+        const [rows] = await client.execute(sql, values);
+        return rows;
       },
       ...db,
     };
