@@ -63,6 +63,7 @@ export default function AgentMessages() {
   const [selectedConversationId, setSelectedConversationId] = useState<
     number | null
   >(null);
+  const [crmCustomerId, setCrmCustomerId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
@@ -344,6 +345,48 @@ export default function AgentMessages() {
     c => c.id === selectedConversationId
   );
 
+  // Ensure we don't leak customerId across conversations
+  useEffect(() => {
+    setCrmCustomerId(null);
+  }, [selectedConversationId]);
+
+  const ensureCustomerMutation = (
+    trpc as any
+  ).crm.createIfNotExists.useMutation();
+
+  const handleOpenCRM = async () => {
+    if (!selectedConversation) return;
+
+    if (selectedConversation.customerId) {
+      setCrmCustomerId(Number(selectedConversation.customerId));
+      setShowCRMPanel(true);
+      return;
+    }
+
+    if (!selectedConversation.customerPhone) {
+      toast.error("Telefone do cliente nao encontrado");
+      return;
+    }
+
+    try {
+      const result = await ensureCustomerMutation.mutateAsync({
+        phone: selectedConversation.customerPhone,
+        name: selectedConversation.customerName || undefined,
+      });
+
+      const id = Number((result as any)?.id ?? (result as any)?.customer?.id);
+      if (!Number.isFinite(id) || id <= 0) {
+        toast.error("Nao foi possivel vincular o cliente ao CRM");
+        return;
+      }
+
+      setCrmCustomerId(id);
+      setShowCRMPanel(true);
+    } catch (e: any) {
+      toast.error(e?.message || "Nao foi possivel abrir o CRM");
+    }
+  };
+
   return (
     <>
       <AgentTopBar />
@@ -604,7 +647,8 @@ export default function AgentMessages() {
                       variant="ghost"
                       size="icon"
                       title="CRM"
-                      onClick={() => setShowCRMPanel(true)}
+                      onClick={handleOpenCRM}
+                      disabled={ensureCustomerMutation.isPending}
                     >
                       <Tag className="w-4 h-4 text-purple-600" />
                     </Button>
@@ -938,7 +982,7 @@ export default function AgentMessages() {
         <CRMPanel
           open={showCRMPanel}
           onOpenChange={setShowCRMPanel}
-          customerId={selectedConversation.customerId || 0}
+          customerId={crmCustomerId || selectedConversation.customerId || null}
           customerName={selectedConversation.customerName || ""}
           customerPhone={selectedConversation.customerPhone || ""}
         />
