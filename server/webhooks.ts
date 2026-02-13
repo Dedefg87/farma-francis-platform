@@ -81,6 +81,56 @@ function normalizeInboundNumber(value: string | undefined | null) {
 }
 
 /**
+ * Evolution API payloads vary a lot. Try to extract the contact JID/phone
+ * from multiple possible shapes.
+ */
+function extractEvolutionRemoteJid(body: any): string | null {
+  if (!body) return null;
+
+  const data = body?.data || body?.payload || body;
+  const msg0 =
+    data?.messages?.[0] ||
+    data?.message ||
+    body?.message ||
+    body?.messages?.[0] ||
+    body?.data?.messages?.[0];
+
+  const key =
+    data?.key ||
+    data?.data?.key ||
+    data?.message?.key ||
+    msg0?.key ||
+    msg0?.message?.key;
+
+  const sender = data?.sender || body?.sender;
+  const destination = data?.destination || body?.destination;
+
+  const candidates = [
+    body?.remoteJid,
+    body?.data?.remoteJid,
+    data?.remoteJid,
+    key?.remoteJid,
+    msg0?.key?.remoteJid,
+    msg0?.remoteJid,
+    data?.from,
+    data?.chatId,
+    sender?.remoteJid,
+    sender?.jid,
+    sender?.id,
+    sender?.phone,
+    sender?.number,
+    destination?.remoteJid,
+    destination?.jid,
+    destination?.id,
+    destination?.phone,
+    destination?.number,
+  ].filter(Boolean);
+
+  const first = candidates[0];
+  return typeof first === "string" ? first : null;
+}
+
+/**
  * Normalizar número para busca no banco (sem +)
  */
 function normalizeForDb(value: string): string {
@@ -896,7 +946,10 @@ async function processEvolutionWebhook(body: any) {
       console.log("[Evolution Webhook] Handling contacts event");
 
       // Tentar extrair remoteJid de várias estruturas possíveis
-      let remoteJid = body?.data?.remoteJid || body?.remoteJid;
+      let remoteJid =
+        body?.data?.remoteJid ||
+        body?.remoteJid ||
+        extractEvolutionRemoteJid(body);
 
       // Se o body for um array, pegar o primeiro elemento
       if (!remoteJid && Array.isArray(body)) {
@@ -908,6 +961,8 @@ async function processEvolutionWebhook(body: any) {
       if (!fromNumber) {
         console.warn("[Evolution Webhook] No phone number found for contact", {
           remoteJid,
+          sender: body?.sender,
+          destination: body?.destination,
           bodyKeys: Object.keys(body || {}),
           bodyIsArray: Array.isArray(body),
           sample: Array.isArray(body)
@@ -931,7 +986,7 @@ async function processEvolutionWebhook(body: any) {
       const customer = await findOrCreateCustomerByPhone(fromNumber, pushName);
       console.log(
         "[Evolution Webhook] Customer processed:",
-        customer?.insertId || "existing"
+        (customer as any)?.insertId || (customer as any)?.id || "existing"
       );
       return;
     }
@@ -959,12 +1014,16 @@ async function processEvolutionWebhook(body: any) {
         key?.remoteJid ||
         data?.remoteJid ||
         messageData?.remoteJid ||
-        body?.remoteJid;
+        body?.remoteJid ||
+        extractEvolutionRemoteJid(body);
       const pushName =
         data?.pushName ||
         data?.senderName ||
         messageData?.pushName ||
-        body?.pushName;
+        body?.pushName ||
+        body?.sender?.name ||
+        body?.sender?.pushName ||
+        body?.data?.sender?.name;
       const fromMe =
         key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
 
