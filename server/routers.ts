@@ -277,10 +277,21 @@ export const appRouter = router({
             .set({ assignedTo: null })
             .where(eq(leads.assignedTo, userId));
 
-          // 4. Deletar survey responses associadas ao usuário usando SQL raw
-          await db.execute(
-            sql`DELETE FROM survey_responses WHERE agent_id = ${userId}`
-          );
+          // 4. Tentar deletar survey responses (tabela pode não existir)
+          try {
+            await db.execute(
+              sql`DELETE FROM survey_responses WHERE agent_id = ${userId}`
+            );
+          } catch (e: any) {
+            // Ignorar erro se tabela não existir
+            if (e.message?.includes("doesn't exist")) {
+              console.log(
+                "[deleteEmployee] Tabela survey_responses não existe, ignorando"
+              );
+            } else {
+              throw e;
+            }
+          }
 
           // 5. Desassociar de ticket comments
           await db
