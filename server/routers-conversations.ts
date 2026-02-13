@@ -282,14 +282,15 @@ export const conversationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      const update: any = {
+        customerId: input.customerId,
+      };
+      if (input.customerName) update.customerName = input.customerName;
+      if (input.customerPhone) update.customerPhone = input.customerPhone;
+
       await db
         .update(conversations)
-        .set({
-          customerId: input.customerId,
-          customerName: input.customerName || conversations.customerName,
-          customerPhone: input.customerPhone || conversations.customerPhone,
-          updatedAt: new Date(),
-        } as any)
+        .set(update)
         .where(eq(conversations.id, input.conversationId));
 
       fireAndForget(async () => {

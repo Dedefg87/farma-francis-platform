@@ -298,6 +298,13 @@ export const crmRouter = router({
     return db.select().from(tags).orderBy(tags.name);
   }),
 
+  // Alias (used by some frontend screens)
+  listTags: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return db.select().from(tags).orderBy(tags.name);
+  }),
+
   // Criar nova tag
   createTag: protectedProcedure
     .input(

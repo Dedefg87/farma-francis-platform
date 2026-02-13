@@ -402,6 +402,7 @@ export default function AgentMessages() {
           customerName: selectedConversation.customerName || undefined,
           customerPhone: selectedConversation.customerPhone || undefined,
         });
+        refetchConversations();
       } catch {
         // ignore
       }

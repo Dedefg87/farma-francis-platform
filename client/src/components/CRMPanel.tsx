@@ -57,19 +57,24 @@ export default function CRMPanel({
     trpc as any
   ).crm.getCustomerFullData.useQuery(
     { customerId: customerId! },
-    { enabled: !!customerId && open }
+    {
+      enabled: !!customerId && open,
+      onError: (error: any) => {
+        toast.error(`Erro ao carregar CRM: ${error.message}`);
+      },
+    }
   );
 
   const { data: scripts } = (trpc as any).crm.getScripts.useQuery(undefined, {
     enabled: open,
   });
 
-  const { data: allTags = [] } = (trpc as any).crm.listTags.useQuery(
-    undefined,
-    {
-      enabled: open,
-    }
-  );
+  const { data: allTags = [] } = (trpc as any).crm.getTags.useQuery(undefined, {
+    enabled: open,
+    onError: (error: any) => {
+      toast.error(`Erro ao carregar tags: ${error.message}`);
+    },
+  });
 
   const updateCustomerMutation = (trpc as any).crm.updateCustomer.useMutation({
     onSuccess: () => {
