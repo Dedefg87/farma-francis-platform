@@ -665,7 +665,74 @@ export async function runCRMMigration() {
       {
         name: "Farmacia",
         color: "#0ea5e9",
+        icon: "\u2695\ufe0f",
         description: "Segmento geral de farmacia",
+      },
+      {
+        name: "Homem",
+        color: "#3b82f6",
+        icon: "\u2642\ufe0f",
+        description: "Publico masculino",
+      },
+      {
+        name: "Mulher",
+        color: "#ec4899",
+        icon: "\u2640\ufe0f",
+        description: "Publico feminino",
+      },
+      {
+        name: "Uso continuo",
+        color: "#f97316",
+        icon: "\ud83d\udc8a",
+        description: "Medicamentos de uso continuo",
+      },
+      {
+        name: "Tireoide",
+        color: "#f97316",
+        icon: "\ud83d\udc8a",
+        description: "Tratamentos de tireoide",
+      },
+      {
+        name: "Vacinacao",
+        color: "#0ea5e9",
+        icon: "\ud83d\udc89",
+        description: "Vacinas",
+      },
+      {
+        name: "Insonia",
+        color: "#8b5cf6",
+        icon: "\ud83d\udc8a",
+        description: "Sono / insonia",
+      },
+      {
+        name: "Possui convenio",
+        color: "#64748b",
+        icon: "\ud83d\udc8a",
+        description: "Cliente com convenio",
+      },
+      {
+        name: "Sistema cardiovascular",
+        color: "#ef4444",
+        icon: "\ud83d\udc8a",
+        description: "Cardiovascular",
+      },
+      {
+        name: "Vitaminas e minerais",
+        color: "#22c55e",
+        icon: "\ud83d\udc8a",
+        description: "Suplementos",
+      },
+      {
+        name: "Pos cirurgico",
+        color: "#64748b",
+        icon: "\ud83d\udc8a",
+        description: "Pos operatorio",
+      },
+      {
+        name: "Em tratamento",
+        color: "#06b6d4",
+        icon: "\ud83d\udc8a",
+        description: "Em tratamento",
       },
     ];
 
@@ -697,8 +764,13 @@ export async function runCRMMigration() {
         if (!tagExists) {
           // Insert only if doesn't exist
           await db.raw(
-            `INSERT INTO tags (name, color, description) VALUES (?, ?, ?)`,
-            [tagName, tag.color, tag.description]
+            `INSERT INTO tags (name, color, icon, description) VALUES (?, ?, ?, ?)`,
+            [
+              tagName,
+              (tag as any).color,
+              (tag as any).icon || null,
+              (tag as any).description,
+            ]
           );
           console.log(`[CRM Migration] Tag "${tagName}" created`);
         } else {

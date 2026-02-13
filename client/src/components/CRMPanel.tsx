@@ -19,7 +19,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Pill, Calendar, Plus, AlertCircle, Tag } from "lucide-react";
+import {
+  Pill,
+  Calendar,
+  Plus,
+  AlertCircle,
+  Tag,
+  Pencil,
+  Trash2,
+  Search,
+} from "lucide-react";
 import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -41,6 +50,8 @@ export default function CRMPanel({
 }: CRMPanelProps) {
   const utils = (trpc as any).useUtils?.() as any;
   const [treatmentsShadow, setTreatmentsShadow] = useState<any[] | null>(null);
+  const [showTagsDialog, setShowTagsDialog] = useState(false);
+  const [tagSearch, setTagSearch] = useState("");
   const [showAddTreatment, setShowAddTreatment] = useState(false);
   const [showPurchaseItems, setShowPurchaseItems] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(
@@ -152,6 +163,17 @@ export default function CRMPanel({
   const treatments =
     treatmentsShadow ?? (customerData as any)?.treatments ?? ([] as any[]);
 
+  const selectedTags = ((customerData as any)?.tags ?? []) as any[];
+
+  const filteredTags = useMemo(() => {
+    const q = tagSearch.trim().toLowerCase();
+    const list = ((allTags as any[]) ?? []) as any[];
+    if (!q) return list;
+    return list.filter((t: any) =>
+      `${t.name || ""} ${t.description || ""}`.toLowerCase().includes(q)
+    );
+  }, [allTags, tagSearch]);
+
   React.useEffect(() => {
     // If server data already has treatments, drop shadow
     const serverTreatments = (customerData as any)?.treatments;
@@ -190,6 +212,19 @@ export default function CRMPanel({
   const removeTagMutation = (trpc as any).crm.removeTagFromCustomer.useMutation(
     {
       onSuccess: () => {
+        utils?.crm?.getCustomerFullData
+          ?.invalidate?.({ customerId })
+          .catch?.(() => {});
+        refetchCustomer();
+      },
+      onError: (error: any) => toast.error(error.message),
+    }
+  );
+
+  const deleteTreatmentMutation = (trpc as any).crm.deleteTreatment.useMutation(
+    {
+      onSuccess: () => {
+        toast.success("Tratamento removido");
         utils?.crm?.getCustomerFullData
           ?.invalidate?.({ customerId })
           .catch?.(() => {});
@@ -305,52 +340,33 @@ export default function CRMPanel({
             <h4 className="font-medium mb-2 flex items-center gap-2">
               <Tag className="w-4 h-4" /> Tags
             </h4>
-            <div className="flex flex-wrap gap-2">
-              {(allTags as any[])?.map((tag: any) => {
-                const selected =
-                  (customerData as any)?.tags?.some(
-                    (t: any) => t.id === tag.id
-                  ) || false;
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className="inline-flex"
-                    onClick={() => {
-                      if (!customerId) return;
-                      if (selected) {
-                        removeTagMutation.mutate({
-                          customerId,
-                          tagId: tag.id,
-                        });
-                      } else {
-                        addTagMutation.mutate({
-                          customerId,
-                          tagId: tag.id,
-                        });
-                      }
-                    }}
-                    title={selected ? "Remover" : "Adicionar"}
-                    disabled={
-                      addTagMutation.isPending || removeTagMutation.isPending
-                    }
-                  >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {selectedTags.length > 0 ? (
+                  selectedTags.map((tag: any) => (
                     <Badge
-                      variant={selected ? "default" : "outline"}
+                      key={tag.id}
                       style={
-                        selected ? { backgroundColor: tag.color } : undefined
+                        tag.color ? { backgroundColor: tag.color } : undefined
                       }
                     >
-                      {tag.name}
+                      {tag.icon ? `${tag.name} ${tag.icon}` : tag.name}
                     </Badge>
-                  </button>
-                );
-              })}
-              {(!allTags || (allTags as any[]).length === 0) && (
-                <span className="text-sm text-gray-500">
-                  Nenhuma tag cadastrada
-                </span>
-              )}
+                  ))
+                ) : (
+                  <span className="text-sm text-gray-500">
+                    Nenhuma tag adicionada
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowTagsDialog(true)}
+              >
+                <Pencil className="w-4 h-4" /> Editar
+              </Button>
             </div>
           </div>
 
@@ -411,6 +427,30 @@ export default function CRMPanel({
                             )}
                           </p>
                         )}
+
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-500 hover:text-red-600"
+                            title="Apagar"
+                            onClick={() => {
+                              if (!confirm("Apagar este tratamento?")) return;
+                              setTreatmentsShadow(prev => {
+                                const base = prev ?? treatments;
+                                return (base as any[]).filter(
+                                  (t: any) => t.id !== treatment.id
+                                );
+                              });
+                              deleteTreatmentMutation.mutate({
+                                id: treatment.id,
+                              });
+                            }}
+                            disabled={deleteTreatmentMutation.isPending}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </Card>
@@ -656,6 +696,75 @@ export default function CRMPanel({
               variant="outline"
               onClick={() => setShowPurchaseItems(false)}
             >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Tags */}
+      <Dialog open={showTagsDialog} onOpenChange={setShowTagsDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Tags do Cliente</DialogTitle>
+            <DialogDescription>
+              Clique para adicionar/remover tags
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              value={tagSearch}
+              onChange={e => setTagSearch(e.target.value)}
+              placeholder="Pesquisar tags..."
+              className="pl-10"
+            />
+          </div>
+
+          <div className="max-h-[50vh] overflow-y-auto border rounded-md">
+            {filteredTags.length > 0 ? (
+              filteredTags.map((tag: any) => {
+                const selected = selectedTags.some((t: any) => t.id === tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className={
+                      "w-full text-left px-4 py-3 flex items-center justify-between border-b last:border-b-0 " +
+                      (selected ? "bg-gray-50" : "bg-white")
+                    }
+                    onClick={() => {
+                      if (!customerId) return;
+                      if (selected) {
+                        removeTagMutation.mutate({ customerId, tagId: tag.id });
+                      } else {
+                        addTagMutation.mutate({ customerId, tagId: tag.id });
+                      }
+                    }}
+                    disabled={
+                      addTagMutation.isPending || removeTagMutation.isPending
+                    }
+                  >
+                    <span className="font-medium">
+                      {tag.name}
+                      {tag.icon ? ` ${tag.icon}` : ""}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {selected ? "Selecionada" : ""}
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="p-6 text-sm text-gray-500 text-center">
+                Nenhuma tag encontrada
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTagsDialog(false)}>
               Fechar
             </Button>
           </DialogFooter>

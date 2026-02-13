@@ -301,6 +301,41 @@ export const crmRouter = router({
       return { success: true };
     }),
 
+  // Apagar (desativar) tratamento
+  deleteTreatment: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const existing = await db
+        .select()
+        .from(customerTreatments)
+        .where(eq(customerTreatments.id, input.id))
+        .limit(1);
+
+      if (!existing?.[0]) {
+        return { success: true };
+      }
+
+      await db
+        .update(customerTreatments)
+        .set({ isActive: 0, updatedAt: new Date() } as any)
+        .where(eq(customerTreatments.id, input.id));
+
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "CustomerTreatmentDeleted",
+          entityType: "treatment",
+          entityId: input.id,
+          actorUserId: ctx.user.id,
+          payload: { customerId: existing[0].customerId },
+        });
+      });
+
+      return { success: true };
+    }),
+
   // ========================================
   // TAGS
   // ========================================
