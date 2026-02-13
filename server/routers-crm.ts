@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import { adminProcedure } from "./_core/trpc.js";
 import { getDb } from "./db.js";
 import {
   customers,
@@ -8,6 +9,7 @@ import {
   customerTags,
   conversations,
   conversationMessages,
+  crmScripts,
   pharmaProducts,
   pharmaPurchases,
   pharmaPurchaseItems,
@@ -429,42 +431,135 @@ export const crmRouter = router({
   // ========================================
 
   getScripts: protectedProcedure.query(async () => {
-    return [
-      {
-        id: "alerta_fim",
-        name: "Alerta de Fim de Medicamento",
-        template:
-          "Olá {nome}! Notamos que seu {remedio} deve acabar dia {data}. Quer que eu separe a reposição?",
-        variables: ["nome", "remedio", "data"],
-      },
-      {
-        id: "aniversario",
-        name: "Parabéns de Aniversário",
-        template:
-          "Parabéns {nome}! Hoje tem presente especial na Farma Francis.",
-        variables: ["nome"],
-      },
-      {
-        id: "reativacao",
-        name: "Reativação",
-        template: "Oi {nome}, tudo bem? Faz tempo que não nos falamos.",
-        variables: ["nome"],
-      },
-      {
-        id: "lembrete_recarga",
-        name: "Lembrete de Recarga",
-        template:
-          "Olá {nome}! É hora de renovar sua receita de {remedio}. Passa aqui na gente!",
-        variables: ["nome", "remedio"],
-      },
-      {
-        id: "bem_vindo",
-        name: "Bem-vindo",
-        template:
-          "Olá {nome}! Seja bem-vindo à Farma Francis. Como podemos ajudar?",
-        variables: ["nome"],
-      },
-    ];
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const rows = await db
+      .select()
+      .from(crmScripts)
+      .where(eq(crmScripts.isActive, 1))
+      .orderBy(desc(crmScripts.updatedAt));
+
+    return rows.map(r => {
+      let vars: string[] = [];
+      try {
+        vars = r.variablesJson ? JSON.parse(r.variablesJson) : [];
+      } catch {
+        vars = [];
+      }
+      return {
+        id: r.code,
+        name: r.name,
+        template: r.template,
+        variables: Array.isArray(vars) ? vars : [],
+      };
+    });
+  }),
+
+  scripts: router({
+    list: protectedProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rows = await db
+        .select()
+        .from(crmScripts)
+        .orderBy(desc(crmScripts.updatedAt));
+
+      return rows.map(r => {
+        let vars: string[] = [];
+        try {
+          vars = r.variablesJson ? JSON.parse(r.variablesJson) : [];
+        } catch {
+          vars = [];
+        }
+        return {
+          code: r.code,
+          name: r.name,
+          template: r.template,
+          variables: Array.isArray(vars) ? vars : [],
+          isActive: r.isActive,
+        };
+      });
+    }),
+
+    upsert: adminProcedure
+      .input(
+        z.object({
+          code: z.string().min(2).max(50),
+          name: z.string().min(2).max(120),
+          template: z.string().min(1),
+          variables: z.array(z.string()).default([]),
+          isActive: z.number().int().min(0).max(1).default(1),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const existing = await db
+          .select({ code: crmScripts.code })
+          .from(crmScripts)
+          .where(eq(crmScripts.code, input.code))
+          .limit(1);
+
+        if (existing?.[0]) {
+          await db
+            .update(crmScripts)
+            .set({
+              name: input.name,
+              template: input.template,
+              variablesJson: JSON.stringify(input.variables),
+              isActive: input.isActive,
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(crmScripts.code, input.code));
+        } else {
+          await db.insert(crmScripts).values({
+            code: input.code,
+            name: input.name,
+            template: input.template,
+            variablesJson: JSON.stringify(input.variables),
+            isActive: input.isActive,
+            createdBy: ctx.user.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as any);
+        }
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "CrmScriptUpserted",
+            entityType: "crm_script",
+            entityId: null,
+            actorUserId: ctx.user.id,
+            payload: { code: input.code },
+          });
+        });
+
+        return { success: true };
+      }),
+
+    delete: adminProcedure
+      .input(z.object({ code: z.string().min(2).max(50) }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        await db.delete(crmScripts).where(eq(crmScripts.code, input.code));
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "CrmScriptDeleted",
+            entityType: "crm_script",
+            entityId: null,
+            actorUserId: ctx.user.id,
+            payload: { code: input.code },
+          });
+        });
+
+        return { success: true };
+      }),
   }),
 
   // ========================================

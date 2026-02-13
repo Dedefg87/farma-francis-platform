@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { Plus, Search, Mail, Phone, MapPin, Pill, Copy } from "lucide-react";
 import { useState } from "react";
+import CrmScriptsTab from "@/components/CrmScriptsTab";
 import {
   Dialog,
   DialogContent,
@@ -367,6 +368,7 @@ export default function CRM() {
             </TabsTrigger>
             <TabsTrigger value="leads">Leads ({leads.length})</TabsTrigger>
             <TabsTrigger value="treatments">Adesao (Refill)</TabsTrigger>
+            <TabsTrigger value="scripts">Scripts</TabsTrigger>
           </TabsList>
 
           {/* Customers Tab */}
@@ -451,6 +453,10 @@ export default function CRM() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="scripts" className="space-y-4">
+            <CrmScriptsTab />
           </TabsContent>
 
           {/* Leads Tab */}

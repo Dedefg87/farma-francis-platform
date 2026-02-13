@@ -1172,5 +1172,23 @@ export const surveyResponses = mysqlTable("survey_responses", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/**
+ * CRM - Scripts/Templates (mensagens prontas)
+ * Stored as company-wide templates; returned by crm.getScripts.
+ */
+export const crmScripts = mysqlTable("crm_scripts", {
+  code: varchar("code", { length: 50 }).primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  template: text("template").notNull(),
+  variablesJson: text("variables_json"),
+  isActive: int("is_active").default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CrmScript = typeof crmScripts.$inferSelect;
+export type InsertCrmScript = typeof crmScripts.$inferInsert;
+
 export type SurveyResponse = typeof surveyResponses.$inferSelect;
 export type InsertSurveyResponse = typeof surveyResponses.$inferInsert;

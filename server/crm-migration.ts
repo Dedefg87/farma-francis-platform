@@ -180,6 +180,86 @@ export async function runCRMMigration() {
     `);
 
     // ==============================
+    // CRM Scripts (mensagens prontas)
+    // ==============================
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS crm_scripts (
+        code VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(120) NOT NULL,
+        template TEXT NOT NULL,
+        variables_json TEXT NULL,
+        is_active INT NOT NULL DEFAULT 1,
+        created_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_crm_scripts_active (is_active)
+      )
+    `);
+
+    // Seed default scripts (idempotent)
+    try {
+      const existing = await db.raw(
+        `SELECT COUNT(*) as count FROM crm_scripts`,
+        []
+      );
+      const count =
+        Array.isArray(existing) && existing.length > 0
+          ? Number((existing[0] as any)?.count || 0)
+          : 0;
+      if (count <= 0) {
+        const defaults = [
+          {
+            code: "alerta_fim",
+            name: "Alerta de Fim de Medicamento",
+            template:
+              "Olá {nome}! Notamos que seu {remedio} deve acabar dia {data}. Quer que eu separe a reposição?",
+            variables: ["nome", "remedio", "data"],
+          },
+          {
+            code: "aniversario",
+            name: "Parabéns de Aniversário",
+            template:
+              "Parabéns {nome}! Hoje tem presente especial na Farma Francis.",
+            variables: ["nome"],
+          },
+          {
+            code: "reativacao",
+            name: "Reativação",
+            template: "Oi {nome}, tudo bem? Faz tempo que não nos falamos.",
+            variables: ["nome"],
+          },
+          {
+            code: "lembrete_recarga",
+            name: "Lembrete de Recarga",
+            template:
+              "Olá {nome}! É hora de renovar sua receita de {remedio}. Passa aqui na gente!",
+            variables: ["nome", "remedio"],
+          },
+          {
+            code: "bem_vindo",
+            name: "Bem-vindo",
+            template:
+              "Olá {nome}! Seja bem-vindo à Farma Francis. Como podemos ajudar?",
+            variables: ["nome"],
+          },
+        ];
+
+        for (const s of defaults) {
+          await db.raw(
+            `INSERT INTO crm_scripts (code, name, template, variables_json, is_active) VALUES (?, ?, ?, ?, 1)`,
+            [s.code, s.name, s.template, JSON.stringify(s.variables)]
+          );
+        }
+      }
+    } catch (e) {
+      console.log(
+        "[CRM Migration] Script seed skipped:",
+        (e as any)?.message || e
+      );
+    }
+
+    // ==============================
     // Enterprise CRM foundation
     // ==============================
 
