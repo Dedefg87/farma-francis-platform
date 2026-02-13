@@ -5,11 +5,52 @@ import {
   conversations,
   conversationMessages,
   agentStatus,
+  agentPauses,
   queues,
   users,
 } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
+
+async function pickLeastLoadedOnlineAgent(params: {
+  provider: "whatsapp" | "instagram";
+}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const rows = (await db.execute(sql`
+    SELECT 
+      a.user_id AS userId,
+      COUNT(c.id) AS loadCount,
+      MAX(a.last_activity) AS lastActivity
+    FROM agent_status a
+    INNER JOIN users u ON u.id = a.user_id
+    LEFT JOIN agent_pauses p
+      ON p.agent_id = a.user_id AND p.status = 'active'
+    LEFT JOIN conversations c
+      ON c.assigned_to = a.user_id
+     AND c.status IN ('open','assigned')
+     AND c.channel = a.channel
+    WHERE a.channel = ${params.provider}
+      AND a.status = 'online'
+      AND u.role = 'user'
+      AND p.id IS NULL
+    GROUP BY a.user_id
+    ORDER BY loadCount ASC, lastActivity DESC
+  `)) as any[];
+
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  // Enforce equal distribution: pick among the minimum load.
+  const minLoad = Number(rows[0]?.loadCount ?? 0);
+  const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
+  // If multiple, pick the most recently active among them (already sorted).
+  return {
+    userId: Number(minRows[0]?.userId),
+    candidates: rows.length,
+    minLoad,
+  };
+}
 
 /**
  * Get all received messages with optional filters
@@ -250,26 +291,11 @@ export async function ingestInboundConversationMessage(message: {
   );
   const now = message.createdAt ?? new Date();
 
-  const [onlineAgent] = await db
-    .select()
-    .from(agentStatus)
-    .where(
-      and(
-        eq(agentStatus.channel, message.provider),
-        eq(agentStatus.status, "online")
-      )
-    )
-    .orderBy(desc(agentStatus.lastActivity))
-    .limit(1);
-
-  const [fallbackAgent] = await db
-    .select()
-    .from(users)
-    .where(eq(users.role, "user"))
-    .orderBy(desc(users.lastSignedIn))
-    .limit(1);
-
-  const assignedUserId = onlineAgent?.userId ?? fallbackAgent?.id ?? null;
+  // Equal-load distribution: pick the least loaded online agent (not paused)
+  const picked = await pickLeastLoadedOnlineAgent({
+    provider: message.provider,
+  });
+  const assignedUserId = picked?.userId ?? null;
 
   const [defaultQueue] = await db
     .select()
