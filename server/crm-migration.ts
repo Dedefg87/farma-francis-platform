@@ -10,56 +10,6 @@ export async function runCRMMigration() {
   try {
     console.log("[CRM Migration] Starting...");
 
-    // Verificar se a tabela tags existe
-    const tableExistsResult = await db.raw(`
-      SELECT COUNT(*) as count FROM information_schema.tables 
-      WHERE table_schema = DATABASE() AND table_name = 'tags'
-    `);
-
-    const tableExists =
-      Array.isArray(tableExistsResult) &&
-      tableExistsResult.length > 0 &&
-      Number((tableExistsResult[0] as any)?.count || 0) > 0;
-
-    console.log("[CRM Migration] Tags table exists:", tableExists);
-
-    // Se não existir, criar tabela com a coluna description
-    if (!tableExists) {
-      console.log(
-        "[CRM Migration] Creating tags table with description column"
-      );
-      await db.raw(`
-        CREATE TABLE tags (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          name VARCHAR(50) NOT NULL UNIQUE,
-          color VARCHAR(7) DEFAULT '#6366f1' NOT NULL,
-          description TEXT,
-          created_by INT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
-        )
-      `);
-    } else {
-      // Se tabela existe, verificar se tem a coluna description
-      const columnExistsResult = await db.raw(`
-        SELECT COUNT(*) as count FROM information_schema.columns 
-        WHERE table_schema = DATABASE() AND table_name = 'tags' AND column_name = 'description'
-      `);
-
-      const columnExists =
-        Array.isArray(columnExistsResult) &&
-        columnExistsResult.length > 0 &&
-        Number((columnExistsResult[0] as any)?.count || 0) > 0;
-
-      if (!columnExists) {
-        console.log(
-          "[CRM Migration] Adding description column to existing tags table"
-        );
-        await db.raw(`
-          ALTER TABLE tags ADD COLUMN description TEXT
-        `);
-      }
-    }
-
     // ==============================
     // PharmaCore - extend customers table (idempotent)
     // ==============================
@@ -119,6 +69,30 @@ export async function runCRMMigration() {
         created_by INT NULL,
         createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_tags_name (name)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS conversation_tags (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conversationId VARCHAR(200) NOT NULL,
+        tagId INT NOT NULL,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_conv_tags_conv (conversationId),
+        INDEX idx_conv_tags_tag (tagId),
+        FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS ticket_tags (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ticketId INT NOT NULL,
+        tagId INT NOT NULL,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ticket_tags_ticket (ticketId),
+        INDEX idx_ticket_tags_tag (tagId),
+        FOREIGN KEY (tagId) REFERENCES tags(id) ON DELETE CASCADE
       )
     `);
 

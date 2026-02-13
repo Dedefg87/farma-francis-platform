@@ -15,8 +15,7 @@ import {
 // Export execution and analytics tables (SQLite-based)
 export * from "./schema_executions";
 
-// Export tags tables (SQLite-based)
-export * from "./schema_tags";
+// Tags tables consolidated in this file.
 
 /**
  * Core user table backing auth flow.
@@ -1126,11 +1125,28 @@ export type InsertPharmaPurchaseItem = typeof pharmaPurchaseItems.$inferInsert;
 export const tags = mysqlTable("tags", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 100 }).notNull().unique(),
-  color: varchar("color", { length: 7 }).default("#6366f1"),
+  color: varchar("color", { length: 7 }).notNull().default("#6366f1"),
   icon: varchar("icon", { length: 50 }),
   description: text("description"),
   createdBy: int("created_by").references(() => users.id),
-  // Keep legacy column name used by existing tags schema
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const conversationTags = mysqlTable("conversation_tags", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: varchar("conversationId", { length: 200 }).notNull(),
+  tagId: int("tagId")
+    .notNull()
+    .references(() => tags.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const ticketTags = mysqlTable("ticket_tags", {
+  id: int("id").autoincrement().primaryKey(),
+  ticketId: int("ticketId").notNull(),
+  tagId: int("tagId")
+    .notNull()
+    .references(() => tags.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
