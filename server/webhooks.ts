@@ -1014,10 +1014,13 @@ async function processEvolutionWebhook(body: any) {
     }
 
     // Verificar se é evento de mensagens
+    // IMPORTANTE: o Evolution pode enviar "chats_update" e outros eventos sem mensagem.
+    // Aqui processamos apenas eventos de mensagem.
     if (
-      normalizedEvent.includes("message") ||
+      normalizedEvent.includes("messages") ||
       normalizedEvent === "messages_update" ||
-      normalizedEvent === "chats_update"
+      normalizedEvent === "messages_upsert" ||
+      normalizedEvent === "messages_upsert".replace(/[-.]/g, "_")
     ) {
       console.log("[Evolution Webhook] Handling messages event");
 
@@ -1057,8 +1060,31 @@ async function processEvolutionWebhook(body: any) {
         hasContent: !!messageContent,
       });
 
+      // Ignore send/ack events (outbound)
+      if (
+        normalizedEvent.startsWith("send") ||
+        normalizedEvent.includes("send_message")
+      ) {
+        console.log(
+          "[Evolution Webhook] Ignoring send event:",
+          normalizedEvent
+        );
+        return;
+      }
+
       if (!remoteJid) {
         console.warn("[Evolution Webhook] No remoteJid found");
+        return;
+      }
+
+      const fromNumber = normalizeInboundNumber(remoteJid);
+      if (!fromNumber) {
+        console.warn(
+          "[Evolution Webhook] Could not normalize phone from remoteJid",
+          {
+            remoteJid,
+          }
+        );
         return;
       }
 
@@ -1082,57 +1108,24 @@ async function processEvolutionWebhook(body: any) {
         return;
       }
 
-      // Determinar tipo e conteúdo da mensagem
-      let messageType = "unknown";
-      let messageText = null;
-      let caption = null;
-      let mediaUrl = null;
-      let mimeType = null;
+      // Determinar tipo e conteúdo da mensagem (robusto)
+      const parsed = parseEvolutionMessageContent(messageContent);
+      const messageType = parsed.type;
+      const messageText = parsed.text;
+      const caption = parsed.caption;
+      const mediaUrl = parsed.mediaUrl;
+      const mimeType = parsed.mimeType;
 
-      if (messageContent?.conversation || messageContent?.text) {
-        messageType = "text";
-        messageText = messageContent.conversation || messageContent.text;
-      } else if (messageContent?.extendedTextMessage?.text) {
-        messageType = "text";
-        messageText = messageContent.extendedTextMessage.text;
-      } else if (messageContent?.imageMessage) {
-        messageType = "image";
-        caption = messageContent.imageMessage.caption || null;
-        mediaUrl =
-          messageContent.imageMessage.url ||
-          messageContent.imageMessage.mediaUrl ||
-          null;
-        mimeType = messageContent.imageMessage.mimetype || null;
-      } else if (messageContent?.videoMessage) {
-        messageType = "video";
-        caption = messageContent.videoMessage.caption || null;
-        mediaUrl =
-          messageContent.videoMessage.url ||
-          messageContent.videoMessage.mediaUrl ||
-          null;
-        mimeType = messageContent.videoMessage.mimetype || null;
-      } else if (messageContent?.audioMessage) {
-        messageType = "audio";
-        mediaUrl =
-          messageContent.audioMessage.url ||
-          messageContent.audioMessage.mediaUrl ||
-          null;
-        mimeType = messageContent.audioMessage.mimetype || null;
-      } else if (messageContent?.documentMessage) {
-        messageType = "document";
-        caption = messageContent.documentMessage.caption || null;
-        mediaUrl =
-          messageContent.documentMessage.url ||
-          messageContent.documentMessage.mediaUrl ||
-          null;
-        mimeType = messageContent.documentMessage.mimetype || null;
-      } else if (messageContent?.locationMessage) {
-        messageType = "location";
-      } else if (messageContent?.stickerMessage) {
-        messageType = "sticker";
-      } else if (messageContent?.reactionMessage) {
-        messageType = "reaction";
-        messageText = messageContent.reactionMessage?.text || null;
+      // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
+      const hasRealContent =
+        Boolean(messageText && String(messageText).trim()) ||
+        Boolean(caption && String(caption).trim()) ||
+        Boolean(mediaUrl && String(mediaUrl).trim());
+      if (!hasRealContent && messageType === "unknown") {
+        console.log(
+          "[Evolution Webhook] Ignoring payload without message content"
+        );
+        return;
       }
 
       console.log("[Evolution Webhook] Parsed message:", {
@@ -1151,7 +1144,7 @@ async function processEvolutionWebhook(body: any) {
       await db.insert(receivedMessages).values({
         provider: "whatsapp",
         externalId: messageId,
-        fromNumber: remoteJid,
+        fromNumber,
         fromName: pushName || null,
         messageType: messageType as
           | "text"
@@ -1185,7 +1178,7 @@ async function processEvolutionWebhook(body: any) {
         // Ingerir na conversa apenas se não for resposta de pesquisa
         await ingestInboundConversationMessage({
           provider: "whatsapp",
-          fromNumber: remoteJid,
+          fromNumber,
           fromName: pushName || null,
           messageType,
           messageText,
