@@ -163,6 +163,29 @@ export async function runCRMMigration() {
     `);
 
     // ==============================
+    // Survey responses (satisfaction)
+    // ==============================
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS survey_responses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conversation_id INT NULL,
+        customer_id INT NOT NULL,
+        rating INT NOT NULL,
+        feedback TEXT NULL,
+        close_reason VARCHAR(50) NOT NULL,
+        agent_id INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_survey_customer_time (customer_id, created_at),
+        INDEX idx_survey_agent_time (agent_id, created_at),
+        INDEX idx_survey_conversation (conversation_id),
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+        FOREIGN KEY (agent_id) REFERENCES users(id) ON DELETE SET NULL
+      )
+    `);
+
+    // ==============================
     // Accounts / Deals / Tasks / Custom Fields
     // ==============================
 

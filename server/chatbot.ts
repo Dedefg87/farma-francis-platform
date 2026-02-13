@@ -210,16 +210,27 @@ export async function handleSurveyResponse(message: any, customer: any) {
       .orderBy(desc(conversations.closedAt))
       .limit(1);
 
-    // Save survey response to database
-    await db.insert(surveyResponses).values({
-      conversationId: recentConv?.id || null,
-      customerId: customer.id,
-      rating: rating,
-      closeReason: recentConv?.closeReason || "venda",
-      agentId: recentConv?.assignedTo || null,
-    });
-
-    console.log("[CHATBOT] Survey response saved to database!");
+    // Save survey response to database (best-effort; table might not exist yet)
+    try {
+      await db.insert(surveyResponses).values({
+        conversationId: recentConv?.id || null,
+        customerId: customer.id,
+        rating: rating,
+        closeReason: recentConv?.closeReason || "venda",
+        agentId: recentConv?.assignedTo || null,
+      });
+      console.log("[CHATBOT] Survey response saved to database!");
+    } catch (e: any) {
+      const code = e?.cause?.code || e?.code;
+      const msg = String(e?.cause?.sqlMessage || e?.message || "");
+      if (code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist")) {
+        console.log(
+          "[CHATBOT] survey_responses table missing; skipping DB insert"
+        );
+      } else {
+        console.error("[CHATBOT] Error saving survey response:", e);
+      }
+    }
 
     // Send thank you message
     let thankYouMessage = "";
@@ -264,6 +275,11 @@ export async function handleSurveyResponse(message: any, customer: any) {
       "[CHATBOT] Survey response processed, original message deleted from UI"
     );
   } catch (error) {
+    // IMPORTANT: if we fail here, message may be re-processed forever.
+    // Best-effort: mark processed to prevent loops.
+    try {
+      await markMessageAsProcessed(message.id, { customerId: customer.id });
+    } catch {}
     console.error("[CHATBOT] Error handling survey response:", error);
   }
 }
