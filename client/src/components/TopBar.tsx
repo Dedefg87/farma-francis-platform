@@ -9,7 +9,6 @@ import {
   Zap,
   Settings,
   LogOut,
-  Activity,
   Award,
 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -31,7 +30,6 @@ const navigationItems = [
   { icon: FileText, label: "Relatórios", path: "/reports" },
   { icon: Mail, label: "Mensagens", path: "/messages" },
   { icon: Zap, label: "Automação", path: "/automation" },
-  { icon: Activity, label: "Execuções", path: "/executions" },
   { icon: Award, label: "Performance", path: "/agent-performance" },
   { icon: Settings, label: "Configurações API", path: "/settings/api" },
 ];
@@ -49,7 +47,7 @@ export function TopBar() {
   const getInitials = (name: string) => {
     return name
       .split(" ")
-      .map((n) => n[0])
+      .map(n => n[0])
       .join("")
       .toUpperCase()
       .slice(0, 2);
@@ -58,13 +56,13 @@ export function TopBar() {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       {/* Single Row: Logo + Navigation + User Menu */}
-      <div className="flex items-center justify-between px-6 py-3">        
+      <div className="flex items-center justify-between px-6 py-3">
         {/* Logo */}
         <img src="/logo.png" alt="Farma Francis" className="h-8" />
-        
+
         {/* Navigation Icons */}
         <div className="flex items-center gap-2">
-          {navigationItems.map((item) => {
+          {navigationItems.map(item => {
             const Icon = item.icon;
             const isActive = location === item.path;
 
