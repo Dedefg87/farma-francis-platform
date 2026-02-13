@@ -105,6 +105,9 @@ function extractEvolutionRemoteJid(body: any): string | null {
   const sender = data?.sender || body?.sender;
   const destination = data?.destination || body?.destination;
 
+  const senderStr = typeof sender === "string" ? sender : null;
+  const destinationStr = typeof destination === "string" ? destination : null;
+
   const candidates = [
     body?.remoteJid,
     body?.data?.remoteJid,
@@ -114,11 +117,13 @@ function extractEvolutionRemoteJid(body: any): string | null {
     msg0?.remoteJid,
     data?.from,
     data?.chatId,
+    senderStr,
     sender?.remoteJid,
     sender?.jid,
     sender?.id,
     sender?.phone,
     sender?.number,
+    destinationStr,
     destination?.remoteJid,
     destination?.jid,
     destination?.id,
@@ -126,8 +131,14 @@ function extractEvolutionRemoteJid(body: any): string | null {
     destination?.number,
   ].filter(Boolean);
 
-  const first = candidates[0];
-  return typeof first === "string" ? first : null;
+  for (const c of candidates) {
+    if (typeof c !== "string") continue;
+    // Ignore destination URLs that are not JIDs
+    if (c.startsWith("http://") || c.startsWith("https://")) continue;
+    return c;
+  }
+
+  return null;
 }
 
 /**
