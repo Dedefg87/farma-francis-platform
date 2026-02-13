@@ -714,8 +714,65 @@ export const appRouter = router({
         return z.object({ id: z.number() }).parse(raw);
       })
       .mutation(async ({ input }) => {
-        const { deleteUraMenu } = await import("./db");
-        return await deleteUraMenu(input.id);
+        const { getDbRaw } = await import("./db");
+        const rawDb = await getDbRaw();
+        if (!rawDb) throw new Error("Database not available");
+
+        const userId = input.userId;
+
+        try {
+          // 1. Deletar pausas do agente (agent_pauses)
+          try {
+            await rawDb.raw("DELETE FROM agent_pauses WHERE agent_id = ?", [
+              userId,
+            ]);
+            console.log("[deleteEmployee] Pausas do agente deletadas");
+          } catch (e: any) {
+            if (e.message?.includes("doesn't exist")) {
+              console.log("[deleteEmployee] Tabela agent_pauses não existe");
+            } else {
+              console.log(
+                "[deleteEmployee] Erro ao deletar pausas:",
+                e.message
+              );
+            }
+          }
+
+          // 2. Desassociar usuário de conversas
+          try {
+            await rawDb.raw(
+              "UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ?",
+              [userId]
+            );
+            console.log("[deleteEmployee] Conversas desassociadas");
+          } catch (e: any) {
+            console.log(
+              "[deleteEmployee] Conversas não atualizadas:",
+              e.message
+            );
+          }
+
+          // 3. Deletar employee
+          try {
+            await rawDb.raw("DELETE FROM employees WHERE user_id = ?", [
+              userId,
+            ]);
+            console.log("[deleteEmployee] Employee deletado");
+          } catch (e: any) {
+            console.log("[deleteEmployee] Employee não deletado:", e.message);
+          }
+
+          // 4. Deletar usuário
+          await rawDb.raw("DELETE FROM users WHERE id = ?", [userId]);
+          console.log("[deleteEmployee] Usuário deletado com sucesso");
+
+          return { success: true };
+        } catch (error) {
+          console.error("[deleteEmployee] Error:", error);
+          throw new Error(
+            `Falha ao excluir funcionário: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+          );
+        }
       }),
     toggle: adminProcedure
       .input((raw: unknown) => {
