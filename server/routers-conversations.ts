@@ -268,6 +268,45 @@ export const conversationsRouter = router({
       return created;
     }),
 
+  // Vincular/atualizar customer na conversa (usado pelo painel do agente)
+  linkCustomer: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.number(),
+        customerId: z.number(),
+        customerName: z.string().optional(),
+        customerPhone: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      await db
+        .update(conversations)
+        .set({
+          customerId: input.customerId,
+          customerName: input.customerName || conversations.customerName,
+          customerPhone: input.customerPhone || conversations.customerPhone,
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(conversations.id, input.conversationId));
+
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "ConversationCustomerLinked",
+          entityType: "conversation",
+          entityId: input.conversationId,
+          actorUserId: ctx.user.id,
+          payload: {
+            customerId: input.customerId,
+          },
+        });
+      });
+
+      return { success: true };
+    }),
+
   // Listar conversas ativas do agente
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();

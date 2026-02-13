@@ -110,19 +110,24 @@ export const crmRouter = router({
       z.object({
         id: z.number(),
         name: z.string().optional(),
+        birthDate: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      await db
-        .update(customers)
-        .set({
-          name: input.name,
-          updatedAt: new Date(),
-        })
-        .where(eq(customers.id, input.id));
+      const update: any = {
+        updatedAt: new Date(),
+      };
+
+      if (input.name !== undefined) update.name = input.name;
+      if (input.birthDate !== undefined) {
+        const d = input.birthDate ? new Date(input.birthDate) : null;
+        update.birthDate = d && !Number.isNaN(d.getTime()) ? d : null;
+      }
+
+      await db.update(customers).set(update).where(eq(customers.id, input.id));
 
       fireAndForget(async () => {
         await appendCrmAuditLog({
@@ -181,6 +186,7 @@ export const crmRouter = router({
           dataUltimaCompra: purchaseDate,
           dataFimPrevisto: dataFimPrevisto,
           observacoes: input.observacoes,
+          isActive: 1,
         })
         .$returningId();
 
@@ -588,7 +594,8 @@ export const crmRouter = router({
             eq(customerTreatments.customerId, input.customerId),
             eq(customerTreatments.isActive, 1)
           )
-        );
+        )
+        .orderBy(desc(customerTreatments.dataFimPrevisto));
 
       const customerTagsList = await db
         .select({

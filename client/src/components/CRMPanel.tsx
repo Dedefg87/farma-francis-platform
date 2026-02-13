@@ -62,6 +62,33 @@ export default function CRMPanel({
     enabled: open,
   });
 
+  const updateCustomerMutation = (trpc as any).crm.updateCustomer.useMutation({
+    onSuccess: () => {
+      toast.success("Dados do cliente atualizados");
+      refetchCustomer();
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao atualizar cliente: ${error.message}`);
+    },
+  });
+
+  const [birthDate, setBirthDate] = useState<string>("");
+
+  // Sync birthday field
+  React.useEffect(() => {
+    const bd = (customerData as any)?.birthDate;
+    if (!bd) {
+      setBirthDate("");
+      return;
+    }
+    const d = new Date(bd);
+    if (Number.isNaN(d.getTime())) {
+      setBirthDate("");
+      return;
+    }
+    setBirthDate(d.toISOString().split("T")[0]);
+  }, [customerData]);
+
   const { data: purchases = [] } = (
     trpc as any
   ).crm.pharma.listPurchasesByCustomer.useQuery(
@@ -169,6 +196,42 @@ export default function CRMPanel({
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Dados do Cliente */}
+          <div>
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Calendar className="w-4 h-4" /> Dados do Cliente
+            </h4>
+            <Card className="p-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <div>
+                  <label className="text-sm font-medium">Aniversario</label>
+                  <Input
+                    type="date"
+                    value={birthDate}
+                    onChange={e => setBirthDate(e.target.value)}
+                  />
+                </div>
+                <div className="md:col-span-2 flex md:justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!customerId) return;
+                      updateCustomerMutation.mutate({
+                        id: customerId,
+                        birthDate: birthDate || "",
+                      });
+                    }}
+                    disabled={updateCustomerMutation.isPending}
+                  >
+                    {updateCustomerMutation.isPending
+                      ? "Salvando..."
+                      : "Salvar"}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+
           {/* Tags */}
           <div>
             <h4 className="font-medium mb-2 flex items-center gap-2">

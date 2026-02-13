@@ -354,6 +354,10 @@ export default function AgentMessages() {
     trpc as any
   ).crm.createIfNotExists.useMutation();
 
+  const linkCustomerMutation = (
+    trpc as any
+  ).conversations.linkCustomer.useMutation();
+
   const handleOpenCRM = async () => {
     if (!selectedConversation) return;
 
@@ -381,6 +385,19 @@ export default function AgentMessages() {
       }
 
       setCrmCustomerId(id);
+
+      // Persist link on conversation so it stays after refresh
+      try {
+        await linkCustomerMutation.mutateAsync({
+          conversationId: selectedConversation.id,
+          customerId: id,
+          customerName: selectedConversation.customerName || undefined,
+          customerPhone: selectedConversation.customerPhone || undefined,
+        });
+      } catch {
+        // ignore
+      }
+
       setShowCRMPanel(true);
     } catch (e: any) {
       toast.error(e?.message || "Nao foi possivel abrir o CRM");
