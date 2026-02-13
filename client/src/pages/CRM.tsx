@@ -22,6 +22,7 @@ import { trpc } from "@/lib/trpc";
 import { Plus, Search, Mail, Phone, MapPin, Pill, Copy } from "lucide-react";
 import { useState } from "react";
 import CrmScriptsTab from "@/components/CrmScriptsTab";
+import CRMPanel from "@/components/CRMPanel";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,10 @@ export default function CRM() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [isLeadDialogOpen, setIsLeadDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [showCustomerDetails, setShowCustomerDetails] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
+  const [showLeadDetails, setShowLeadDetails] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     email: "",
@@ -162,6 +167,16 @@ export default function CRM() {
       .replace("{data}", dataFmt);
     navigator.clipboard.writeText(filled).catch(() => {});
     toast.success("Mensagem copiada");
+  };
+
+  const openCustomerDetails = (customer: any) => {
+    setSelectedCustomer(customer);
+    setShowCustomerDetails(true);
+  };
+
+  const openLeadDetails = (lead: any) => {
+    setSelectedLead(lead);
+    setShowLeadDetails(true);
   };
 
   const filteredCustomers = customers.filter(
@@ -442,7 +457,11 @@ export default function CRM() {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openCustomerDetails(customer)}
+                            >
                               Ver Detalhes
                             </Button>
                           </TableCell>
@@ -670,7 +689,11 @@ export default function CRM() {
                               : "-"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openLeadDetails(lead)}
+                            >
                               Ver Detalhes
                             </Button>
                           </TableCell>
@@ -780,6 +803,95 @@ export default function CRM() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Customer Details (reuse CRM panel) */}
+        {selectedCustomer ? (
+          <CRMPanel
+            open={showCustomerDetails}
+            onOpenChange={setShowCustomerDetails}
+            customerId={selectedCustomer.id}
+            customerName={selectedCustomer.name || ""}
+            customerPhone={selectedCustomer.phone || ""}
+          />
+        ) : null}
+
+        {/* Lead Details */}
+        <Dialog open={showLeadDetails} onOpenChange={setShowLeadDetails}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Detalhes do Lead</DialogTitle>
+              <DialogDescription>
+                Informacoes completas do lead selecionado
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedLead ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome</Label>
+                  <div className="mt-1 text-sm">{selectedLead.name}</div>
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <div className="mt-1 text-sm">
+                    {selectedLead.email || "-"}
+                  </div>
+                </div>
+                <div>
+                  <Label>Telefone</Label>
+                  <div className="mt-1 text-sm">
+                    {selectedLead.phone || "-"}
+                  </div>
+                </div>
+                <div>
+                  <Label>Origem</Label>
+                  <div className="mt-1 text-sm">
+                    {selectedLead.source || "-"}
+                  </div>
+                </div>
+                <div>
+                  <Label>Estagio</Label>
+                  <div className="mt-1 text-sm">{selectedLead.stage}</div>
+                </div>
+                <div>
+                  <Label>Valor</Label>
+                  <div className="mt-1 text-sm">
+                    {selectedLead.value
+                      ? `R$ ${Number(selectedLead.value).toLocaleString("pt-BR")}`
+                      : "-"}
+                  </div>
+                </div>
+                <div>
+                  <Label>Follow-up</Label>
+                  <div className="mt-1 text-sm">
+                    {selectedLead.followUpDate
+                      ? new Date(selectedLead.followUpDate).toLocaleDateString(
+                          "pt-BR"
+                        )
+                      : "-"}
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Observacoes</Label>
+                  <div className="mt-1 text-sm whitespace-pre-wrap">
+                    {selectedLead.notes || "-"}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">Nenhum lead</div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowLeadDetails(false)}
+              >
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </FarmaDashboardLayout>
   );
