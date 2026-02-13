@@ -727,8 +727,52 @@ export const appRouter = router({
           .parse(raw);
       })
       .mutation(async ({ input }) => {
-        const { toggleUraMenu } = await import("./db");
-        return await toggleUraMenu(input.id, input.isActive);
+        const { getDb } = await import("./db");
+        const { getDbRaw } = await import("./db");
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const userId = input.userId;
+
+        try {
+          // Tentar deletar usando SQL raw para ter mais controle
+          const rawDb = await getDbRaw();
+
+          // 1. Desassociar usuário de conversas
+          try {
+            await rawDb?.raw(
+              "UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ?",
+              [userId]
+            );
+          } catch (e) {
+            console.log(
+              "[deleteEmployee] Conversas não atualizadas (tabela pode não existir):",
+              e
+            );
+          }
+
+          // 2. Deletar employee
+          try {
+            await rawDb?.raw("DELETE FROM employees WHERE user_id = ?", [
+              userId,
+            ]);
+          } catch (e) {
+            console.log(
+              "[deleteEmployee] Employee não deletado (pode não existir):",
+              e
+            );
+          }
+
+          // 3. Deletar usuário
+          await rawDb?.raw("DELETE FROM users WHERE id = ?", [userId]);
+
+          return { success: true };
+        } catch (error) {
+          console.error("[deleteEmployee] Error:", error);
+          throw new Error(
+            `Falha ao excluir funcionário: ${error instanceof Error ? error.message : "Erro desconhecido"}`
+          );
+        }
       }),
   }),
 
