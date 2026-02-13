@@ -8,7 +8,7 @@ import {
   users,
   conversations,
 } from "../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   sendWhatsAppMessage,
   sendInstagramMessage,
@@ -33,7 +33,16 @@ export async function processPendingMessages() {
   const pending = await db
     .select()
     .from(receivedMessages)
-    .where(eq(receivedMessages.processed, 0))
+    .where(
+      and(
+        eq(receivedMessages.processed, 0),
+        // Skip survey ratings (1-5) so chatbot can process them
+        sql`NOT (
+          ${receivedMessages.messageType} = 'text'
+          AND TRIM(COALESCE(${receivedMessages.messageText}, '')) IN ('1','2','3','4','5')
+        )`
+      )
+    )
     .limit(10);
 
   console.log(`[Flow Engine] Found ${pending.length} pending messages`);
@@ -71,7 +80,8 @@ async function processMessage(message: any) {
   const visualFlowsList = await db
     .select()
     .from(visualFlows)
-    .where(and(eq(visualFlows.isActive, 1)));
+    .where(and(eq(visualFlows.isActive, 1)))
+    .orderBy(desc(visualFlows.updatedAt));
 
   // Check if any visual flow matches
   let matchedVisualFlow = null;

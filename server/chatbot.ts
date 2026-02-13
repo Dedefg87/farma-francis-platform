@@ -58,28 +58,10 @@ export async function processIncomingMessage(message: any) {
 
     console.log("[CHATBOT] Customer:", customer.name, "ID:", customer.id);
 
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-    const [recentMessages] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(receivedMessages)
-      .where(
-        and(
-          eq(receivedMessages.fromNumber, message.fromNumber),
-          gte(receivedMessages.createdAt, fiveMinutesAgo)
-        )
-      );
-
-    const recentMessageCount = Number(recentMessages?.count) || 0;
-    console.log("[CHATBOT] Recent messages count:", recentMessageCount);
-
-    const isFirstMessage = recentMessageCount === 0;
-    console.log("[CHATBOT] Is first message:", isFirstMessage);
-
-    // Check if this is a survey response (1-5)
+    // Survey response detection (1-5)
     const ratingText = message.messageText?.trim();
     const rating = parseInt(ratingText?.replace(/[^0-9]/g, "") || "0");
-    const isSurveyResponse =
-      rating >= 1 && rating <= 5 && recentMessageCount > 0;
+    const isSurveyResponse = rating >= 1 && rating <= 5;
 
     console.log(
       "[CHATBOT] Is survey response:",
@@ -88,97 +70,14 @@ export async function processIncomingMessage(message: any) {
       rating
     );
 
-    // Handle survey response
     if (isSurveyResponse) {
       console.log("[CHATBOT] Handling survey response...");
       await handleSurveyResponse(message, customer);
       return;
     }
 
-    const [activeConv] = await db
-      .select()
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.customerId, customer.id),
-          eq(conversations.status, "assigned")
-        )
-      )
-      .orderBy(desc(conversations.lastMessageAt))
-      .limit(1);
-
-    let agentName: string | null = null;
-    let isAgentAvailable = false;
-
-    if (activeConv?.assignedTo) {
-      const [agent] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, activeConv.assignedTo))
-        .limit(1);
-      if (agent) {
-        agentName = agent.name;
-        isAgentAvailable = true;
-      }
-    }
-
-    const now = new Date();
-    const hour = now.getHours();
-    let greeting = "Bom dia";
-    if (hour >= 12 && hour < 18) greeting = "Boa tarde";
-    else if (hour >= 18) greeting = "Boa noite";
-
-    const day = now.getDay();
-    const minute = now.getMinutes();
-    const currentTime = hour * 60 + minute;
-
-    const monSatStart = 8 * 60;
-    const monSatEnd = 19 * 60 + 40;
-    const sunStart = 8 * 60;
-    const sunEnd = 11 * 60 + 40;
-
-    const isBusinessHours =
-      day === 0
-        ? currentTime >= sunStart && currentTime <= sunEnd
-        : currentTime >= monSatStart && currentTime <= monSatEnd;
-
-    console.log("[CHATBOT] Business hours:", isBusinessHours);
-    console.log("[CHATBOT] Agent available:", isAgentAvailable);
-
-    if (isFirstMessage) {
-      let welcomeMessage = "";
-
-      if (!isBusinessHours) {
-        welcomeMessage =
-          `${greeting}!\n\n` +
-          `Nosso horário de atendimento é de 08h às 20h de Segunda a Sábado.\n` +
-          `Aos Domingos e Feriados de 8h às 12h.\n\n` +
-          `Retornaremos no próximo horário disponível. 😊`;
-      } else if (isAgentAvailable && agentName) {
-        welcomeMessage = `${greeting} eu sou ${agentName}, como posso te ajudar?`;
-      } else {
-        welcomeMessage = `${greeting}! Um momento que já já vamos te atender! 🙏`;
-      }
-
-      console.log("[CHATBOT] Sending welcome message...");
-
-      if (message.provider === "whatsapp") {
-        await sendWhatsAppMessage({
-          to: message.fromNumber,
-          message: welcomeMessage,
-        });
-      } else if (message.provider === "instagram") {
-        await sendInstagramMessage({
-          to: message.fromNumber,
-          message: welcomeMessage,
-        });
-      }
-
-      console.log("[CHATBOT] Welcome message sent!");
-    }
-
-    await markMessageAsProcessed(message.id, { customerId: customer.id });
-    console.log("[CHATBOT] Message marked as processed");
+    // Non-survey messages are handled by Flow Engine (selected automation flow)
+    console.log("[CHATBOT] Non-survey message - leaving for Flow Engine");
   } catch (error) {
     console.error("[CHATBOT] Error:", error);
   }
@@ -380,7 +279,15 @@ export async function processPendingMessages() {
     const pending = await db
       .select()
       .from(receivedMessages)
-      .where(eq(receivedMessages.processed, 0))
+      .where(
+        and(
+          eq(receivedMessages.processed, 0),
+          sql`(
+            ${receivedMessages.messageType} = 'text'
+            AND TRIM(COALESCE(${receivedMessages.messageText}, '')) IN ('1','2','3','4','5')
+          )`
+        )
+      )
       .limit(5);
 
     console.log("[CHATBOT] Found", pending.length, "pending messages");

@@ -45,7 +45,7 @@ export async function upsertUser(userData: {
         ...(userData.loginMethod !== undefined && {
           loginMethod: userData.loginMethod,
         }),
-        ...(userData.lastSignedIn !== undefined && {
+        ...(userData.lastSignedIn != null && {
           lastSignedIn: userData.lastSignedIn,
         }),
         updatedAt: new Date(),
@@ -186,6 +186,12 @@ export async function deleteVisualFlow(id: number) {
 export async function toggleVisualFlow(id: number, isActive: boolean) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // Only one visual flow active at a time (selected flow behavior)
+  if (isActive) {
+    await db.update(visualFlows).set({ isActive: 0, updatedAt: new Date() });
+  }
+
   return await db
     .update(visualFlows)
     .set({

@@ -161,6 +161,15 @@ async function startServer() {
         console.error("Failed to start chatbot:", err);
       });
 
+    // Start flow engine for selected Automation flows
+    import("../flow-engine")
+      .then(module => {
+        module.startFlowEngine();
+      })
+      .catch(err => {
+        console.error("Failed to start flow engine:", err);
+      });
+
     // Start pause auto-finisher worker
     import("../workers/pause-auto-finisher")
       .then(module => {
