@@ -162,6 +162,223 @@ export async function runCRMMigration() {
       )
     `);
 
+    // ==============================
+    // Accounts / Deals / Tasks / Custom Fields
+    // ==============================
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        legal_name VARCHAR(255) NULL,
+        cnpj VARCHAR(18) NULL,
+        industry VARCHAR(120) NULL,
+        website VARCHAR(255) NULL,
+        phone VARCHAR(20) NULL,
+        address TEXT NULL,
+        city VARCHAR(100) NULL,
+        state VARCHAR(2) NULL,
+        zip_code VARCHAR(10) NULL,
+        status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+        owner_user_id INT NULL,
+        created_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_accounts_name (name),
+        INDEX idx_accounts_cnpj (cnpj),
+        INDEX idx_accounts_owner (owner_user_id)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS account_contacts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        account_id INT NOT NULL,
+        customer_id INT NOT NULL,
+        role VARCHAR(120) NULL,
+        is_primary INT NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_account_customer (account_id, customer_id),
+        INDEX idx_account_contacts_account (account_id),
+        INDEX idx_account_contacts_customer (customer_id),
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS deal_pipelines (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL,
+        is_active INT NOT NULL DEFAULT 1,
+        created_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_pipeline_active (is_active)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS deal_stages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        pipeline_id INT NOT NULL,
+        name VARCHAR(120) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        probability INT NOT NULL DEFAULT 0,
+        is_won INT NOT NULL DEFAULT 0,
+        is_lost INT NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_stage_pipeline_order (pipeline_id, sort_order),
+        FOREIGN KEY (pipeline_id) REFERENCES deal_pipelines(id) ON DELETE CASCADE
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS deals (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        account_id INT NULL,
+        customer_id INT NULL,
+        pipeline_id INT NOT NULL,
+        stage_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        amount_cents INT NULL,
+        currency VARCHAR(3) NULL DEFAULT 'BRL',
+        close_date DATETIME NULL,
+        status ENUM('open','won','lost') NOT NULL DEFAULT 'open',
+        owner_user_id INT NULL,
+        created_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_deals_pipeline_stage (pipeline_id, stage_id),
+        INDEX idx_deals_owner_status (owner_user_id, status),
+        INDEX idx_deals_account (account_id),
+        FOREIGN KEY (account_id) REFERENCES accounts(id),
+        FOREIGN KEY (customer_id) REFERENCES customers(id),
+        FOREIGN KEY (pipeline_id) REFERENCES deal_pipelines(id),
+        FOREIGN KEY (stage_id) REFERENCES deal_stages(id)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS crm_tasks (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        description TEXT NULL,
+        due_at DATETIME NULL,
+        status ENUM('open','done','cancelled') NOT NULL DEFAULT 'open',
+        priority ENUM('low','medium','high') NOT NULL DEFAULT 'medium',
+        related_entity_type VARCHAR(40) NULL,
+        related_entity_id INT NULL,
+        assigned_to INT NULL,
+        created_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        completed_at DATETIME NULL,
+        INDEX idx_tasks_assigned_status_due (assigned_to, status, due_at),
+        INDEX idx_tasks_related (related_entity_type, related_entity_id)
+      )
+    `);
+
+    await db.raw(
+      `
+      CREATE TABLE IF NOT EXISTS custom_field_definitions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entity_type VARCHAR(40) NOT NULL,
+        ` +
+        "`key`" +
+        ` VARCHAR(80) NOT NULL,
+        label VARCHAR(120) NOT NULL,
+        field_type ENUM('text','number','date','boolean','select') NOT NULL,
+        options_json TEXT NULL,
+        is_required INT NOT NULL DEFAULT 0,
+        is_active INT NOT NULL DEFAULT 1,
+        created_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_field_def (entity_type, ` +
+        "`key`" +
+        `),
+        INDEX idx_field_def_entity (entity_type, is_active)
+      )
+    `
+    );
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS custom_field_values (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entity_type VARCHAR(40) NOT NULL,
+        entity_id INT NOT NULL,
+        field_definition_id INT NOT NULL,
+        value_text TEXT NULL,
+        updated_by INT NULL,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_field_value (entity_type, entity_id, field_definition_id),
+        INDEX idx_field_value_entity (entity_type, entity_id),
+        FOREIGN KEY (field_definition_id) REFERENCES custom_field_definitions(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Seed a default pipeline + stages (idempotent)
+    try {
+      const existingP = await db.raw(
+        `SELECT id FROM deal_pipelines WHERE name = ? LIMIT 1`,
+        ["Vendas"]
+      );
+      let pipelineId: number | null = null;
+      if (Array.isArray(existingP) && existingP[0]?.id) {
+        pipelineId = Number((existingP[0] as any).id);
+      }
+      if (!pipelineId) {
+        await db.raw(
+          `INSERT INTO deal_pipelines (name, is_active) VALUES (?, 1)`,
+          ["Vendas"]
+        );
+        const p2 = await db.raw(
+          `SELECT id FROM deal_pipelines WHERE name = ? LIMIT 1`,
+          ["Vendas"]
+        );
+        pipelineId =
+          Array.isArray(p2) && p2[0]?.id ? Number((p2[0] as any).id) : null;
+      }
+
+      if (pipelineId) {
+        const stages = [
+          { name: "Prospeccao", sort: 10, prob: 10 },
+          { name: "Qualificacao", sort: 20, prob: 30 },
+          { name: "Proposta", sort: 30, prob: 60 },
+          { name: "Negociacao", sort: 40, prob: 80 },
+          { name: "Ganho", sort: 90, prob: 100, won: 1 },
+          { name: "Perdido", sort: 99, prob: 0, lost: 1 },
+        ];
+
+        for (const s of stages) {
+          const ex = await db.raw(
+            `SELECT id FROM deal_stages WHERE pipeline_id = ? AND name = ? LIMIT 1`,
+            [pipelineId, s.name]
+          );
+          const exists = Array.isArray(ex) && ex.length > 0;
+          if (!exists) {
+            await db.raw(
+              `INSERT INTO deal_stages (pipeline_id, name, sort_order, probability, is_won, is_lost) VALUES (?, ?, ?, ?, ?, ?)`,
+              [
+                pipelineId,
+                s.name,
+                s.sort,
+                s.prob,
+                (s as any).won || 0,
+                (s as any).lost || 0,
+              ]
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.log(
+        "[CRM Migration] Pipeline seed skipped:",
+        (e as any)?.message || e
+      );
+    }
+
     console.log("[CRM Migration] Tables created successfully");
 
     // Inserir tags iniciais

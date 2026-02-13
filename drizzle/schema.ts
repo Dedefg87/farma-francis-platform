@@ -141,6 +141,149 @@ export const tickets = mysqlTable("tickets", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
+/**
+ * Accounts (B2B companies) and relations
+ */
+export const accounts = mysqlTable("accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  legalName: varchar("legal_name", { length: 255 }),
+  cnpj: varchar("cnpj", { length: 18 }),
+  industry: varchar("industry", { length: 120 }),
+  website: varchar("website", { length: 255 }),
+  phone: varchar("phone", { length: 20 }),
+  address: text("address"),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 2 }),
+  zipCode: varchar("zip_code", { length: 10 }),
+  status: mysqlEnum("status", ["active", "inactive"])
+    .default("active")
+    .notNull(),
+  ownerUserId: int("owner_user_id").references(() => users.id),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export const accountContacts = mysqlTable("account_contacts", {
+  id: int("id").autoincrement().primaryKey(),
+  accountId: int("account_id")
+    .references(() => accounts.id, { onDelete: "cascade" })
+    .notNull(),
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(),
+  role: varchar("role", { length: 120 }),
+  isPrimary: int("is_primary").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+/**
+ * Deals (Opportunities) with pipeline/stages
+ */
+export const dealPipelines = mysqlTable("deal_pipelines", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  isActive: int("is_active").default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export const dealStages = mysqlTable("deal_stages", {
+  id: int("id").autoincrement().primaryKey(),
+  pipelineId: int("pipeline_id")
+    .references(() => dealPipelines.id, { onDelete: "cascade" })
+    .notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  sortOrder: int("sort_order").default(0).notNull(),
+  probability: int("probability").default(0).notNull(), // 0-100
+  isWon: int("is_won").default(0).notNull(),
+  isLost: int("is_lost").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const deals = mysqlTable("deals", {
+  id: int("id").autoincrement().primaryKey(),
+  accountId: int("account_id").references(() => accounts.id),
+  customerId: int("customer_id").references(() => customers.id),
+  pipelineId: int("pipeline_id")
+    .references(() => dealPipelines.id)
+    .notNull(),
+  stageId: int("stage_id")
+    .references(() => dealStages.id)
+    .notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  amountCents: int("amount_cents"),
+  currency: varchar("currency", { length: 3 }).default("BRL"),
+  closeDate: timestamp("close_date"),
+  status: mysqlEnum("status", ["open", "won", "lost"])
+    .default("open")
+    .notNull(),
+  ownerUserId: int("owner_user_id").references(() => users.id),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+/**
+ * Tasks / reminders
+ */
+export const crmTasks = mysqlTable("crm_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  dueAt: timestamp("due_at"),
+  status: mysqlEnum("status", ["open", "done", "cancelled"])
+    .default("open")
+    .notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high"])
+    .default("medium")
+    .notNull(),
+  relatedEntityType: varchar("related_entity_type", { length: 40 }),
+  relatedEntityId: int("related_entity_id"),
+  assignedTo: int("assigned_to").references(() => users.id),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  completedAt: timestamp("completed_at"),
+});
+
+/**
+ * Custom fields (definitions + values)
+ */
+export const customFieldDefinitions = mysqlTable("custom_field_definitions", {
+  id: int("id").autoincrement().primaryKey(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(), // customer/account/lead/deal/ticket
+  key: varchar("key", { length: 80 }).notNull(),
+  label: varchar("label", { length: 120 }).notNull(),
+  fieldType: mysqlEnum("field_type", [
+    "text",
+    "number",
+    "date",
+    "boolean",
+    "select",
+  ]).notNull(),
+  optionsJson: text("options_json"),
+  isRequired: int("is_required").default(0).notNull(),
+  isActive: int("is_active").default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export const customFieldValues = mysqlTable("custom_field_values", {
+  id: int("id").autoincrement().primaryKey(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  entityId: int("entity_id").notNull(),
+  fieldDefinitionId: int("field_definition_id")
+    .references(() => customFieldDefinitions.id, { onDelete: "cascade" })
+    .notNull(),
+  valueText: text("value_text"),
+  updatedBy: int("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
 export type Ticket = typeof tickets.$inferSelect;
 export type InsertTicket = typeof tickets.$inferInsert;
 

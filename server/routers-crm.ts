@@ -8,6 +8,15 @@ import {
   customerTags,
   conversations,
   conversationMessages,
+  accounts,
+  accountContacts,
+  dealPipelines,
+  dealStages,
+  deals,
+  crmTasks,
+  crmActivities,
+  customFieldDefinitions,
+  customFieldValues,
 } from "../drizzle/schema.js";
 import { like, eq, and, desc, gte, lte, sql, or } from "drizzle-orm";
 import {
@@ -497,4 +506,471 @@ export const crmRouter = router({
         tags: customerTagsList.map(t => t.tag),
       };
     }),
+
+  // ========================================
+  // ENTERPRISE: ACCOUNTS (B2B)
+  // ========================================
+
+  accounts: router({
+    list: protectedProcedure
+      .input(
+        z
+          .object({
+            query: z.string().optional(),
+            limit: z.number().min(1).max(100).default(25),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const q = input?.query?.trim();
+        const limit = input?.limit ?? 25;
+
+        const where = q
+          ? or(
+              like(accounts.name, `%${q}%`),
+              like(accounts.legalName, `%${q}%`),
+              like(accounts.cnpj, `%${q}%`)
+            )
+          : undefined;
+
+        return await db
+          .select()
+          .from(accounts)
+          .where(where)
+          .orderBy(desc(accounts.updatedAt))
+          .limit(limit);
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(2),
+          legalName: z.string().optional(),
+          cnpj: z.string().optional(),
+          industry: z.string().optional(),
+          website: z.string().optional(),
+          phone: z.string().optional(),
+          address: z.string().optional(),
+          city: z.string().optional(),
+          state: z.string().optional(),
+          zipCode: z.string().optional(),
+          ownerUserId: z.number().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const result = await db
+          .insert(accounts)
+          .values({
+            name: input.name,
+            legalName: input.legalName || null,
+            cnpj: input.cnpj || null,
+            industry: input.industry || null,
+            website: input.website || null,
+            phone: input.phone || null,
+            address: input.address || null,
+            city: input.city || null,
+            state: input.state || null,
+            zipCode: input.zipCode || null,
+            ownerUserId: input.ownerUserId ?? ctx.user.id,
+            createdBy: ctx.user.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .$returningId();
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "AccountCreated",
+            entityType: "account",
+            entityId: result[0].id,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { id: result[0].id };
+      }),
+
+    linkContact: protectedProcedure
+      .input(
+        z.object({
+          accountId: z.number(),
+          customerId: z.number(),
+          role: z.string().optional(),
+          isPrimary: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        await db
+          .insert(accountContacts)
+          .values({
+            accountId: input.accountId,
+            customerId: input.customerId,
+            role: input.role || null,
+            isPrimary: input.isPrimary ? 1 : 0,
+            createdAt: new Date(),
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              role: input.role || null,
+              isPrimary: input.isPrimary ? 1 : 0,
+            },
+          } as any);
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "AccountContactLinked",
+            entityType: "account",
+            entityId: input.accountId,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { success: true };
+      }),
+  }),
+
+  // ========================================
+  // ENTERPRISE: DEALS
+  // ========================================
+
+  deals: router({
+    pipelines: protectedProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db
+        .select()
+        .from(dealPipelines)
+        .where(eq(dealPipelines.isActive, 1));
+    }),
+
+    stages: protectedProcedure
+      .input(z.object({ pipelineId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        return await db
+          .select()
+          .from(dealStages)
+          .where(eq(dealStages.pipelineId, input.pipelineId))
+          .orderBy(dealStages.sortOrder);
+      }),
+
+    list: protectedProcedure
+      .input(
+        z
+          .object({
+            pipelineId: z.number().optional(),
+            stageId: z.number().optional(),
+            ownerUserId: z.number().optional(),
+            limit: z.number().min(1).max(100).default(25),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const limit = input?.limit ?? 25;
+
+        const conditions = [] as any[];
+        if (input?.pipelineId)
+          conditions.push(eq(deals.pipelineId, input.pipelineId));
+        if (input?.stageId) conditions.push(eq(deals.stageId, input.stageId));
+        if (input?.ownerUserId)
+          conditions.push(eq(deals.ownerUserId, input.ownerUserId));
+
+        return await db
+          .select()
+          .from(deals)
+          .where(conditions.length ? and(...conditions) : undefined)
+          .orderBy(desc(deals.updatedAt))
+          .limit(limit);
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          title: z.string().min(2),
+          pipelineId: z.number(),
+          stageId: z.number(),
+          accountId: z.number().optional(),
+          customerId: z.number().optional(),
+          amountCents: z.number().int().optional(),
+          closeDate: z.string().optional(),
+          ownerUserId: z.number().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const result = await db
+          .insert(deals)
+          .values({
+            title: input.title,
+            pipelineId: input.pipelineId,
+            stageId: input.stageId,
+            accountId: input.accountId ?? null,
+            customerId: input.customerId ?? null,
+            amountCents: input.amountCents ?? null,
+            closeDate: input.closeDate ? new Date(input.closeDate) : null,
+            ownerUserId: input.ownerUserId ?? ctx.user.id,
+            createdBy: ctx.user.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            status: "open",
+          })
+          .$returningId();
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "DealCreated",
+            entityType: "deal",
+            entityId: result[0].id,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { id: result[0].id };
+      }),
+
+    moveStage: protectedProcedure
+      .input(z.object({ dealId: z.number(), stageId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        await db
+          .update(deals)
+          .set({ stageId: input.stageId, updatedAt: new Date() })
+          .where(eq(deals.id, input.dealId));
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "DealStageChanged",
+            entityType: "deal",
+            entityId: input.dealId,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { success: true };
+      }),
+  }),
+
+  // ========================================
+  // ENTERPRISE: TASKS
+  // ========================================
+
+  tasks: router({
+    list: protectedProcedure
+      .input(
+        z
+          .object({
+            assignedTo: z.number().optional(),
+            status: z.enum(["open", "done", "cancelled"]).optional(),
+            limit: z.number().min(1).max(100).default(50),
+          })
+          .optional()
+      )
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const conditions = [] as any[];
+        conditions.push(
+          eq(crmTasks.assignedTo, input?.assignedTo ?? ctx.user.id)
+        );
+        if (input?.status) conditions.push(eq(crmTasks.status, input.status));
+
+        return await db
+          .select()
+          .from(crmTasks)
+          .where(and(...conditions))
+          .orderBy(desc(crmTasks.updatedAt))
+          .limit(input?.limit ?? 50);
+      }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          title: z.string().min(2),
+          description: z.string().optional(),
+          dueAt: z.string().optional(),
+          priority: z.enum(["low", "medium", "high"]).optional(),
+          relatedEntityType: z.string().optional(),
+          relatedEntityId: z.number().optional(),
+          assignedTo: z.number().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        const result = await db
+          .insert(crmTasks)
+          .values({
+            title: input.title,
+            description: input.description || null,
+            dueAt: input.dueAt ? new Date(input.dueAt) : null,
+            priority: input.priority || "medium",
+            relatedEntityType: input.relatedEntityType || null,
+            relatedEntityId: input.relatedEntityId ?? null,
+            assignedTo: input.assignedTo ?? ctx.user.id,
+            createdBy: ctx.user.id,
+            status: "open",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            completedAt: null,
+          })
+          .$returningId();
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "TaskCreated",
+            entityType: "task",
+            entityId: result[0].id,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { id: result[0].id };
+      }),
+
+    complete: protectedProcedure
+      .input(z.object({ taskId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        await db
+          .update(crmTasks)
+          .set({
+            status: "done",
+            completedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(crmTasks.id, input.taskId));
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "TaskCompleted",
+            entityType: "task",
+            entityId: input.taskId,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { success: true };
+      }),
+  }),
+
+  // ========================================
+  // ENTERPRISE: ACTIVITIES (timeline)
+  // ========================================
+
+  activities: router({
+    listByEntity: protectedProcedure
+      .input(
+        z.object({
+          entityType: z.string().min(1).max(40),
+          entityId: z.number(),
+          limit: z.number().min(1).max(200).default(50),
+        })
+      )
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        return await db
+          .select()
+          .from(crmActivities)
+          .where(
+            and(
+              eq(crmActivities.entityType, input.entityType),
+              eq(crmActivities.entityId, input.entityId)
+            )
+          )
+          .orderBy(desc(crmActivities.occurredAt))
+          .limit(input.limit);
+      }),
+  }),
+
+  // ========================================
+  // ENTERPRISE: CUSTOM FIELDS
+  // ========================================
+
+  customFields: router({
+    listDefinitions: protectedProcedure
+      .input(z.object({ entityType: z.string().min(1).max(40) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        return await db
+          .select()
+          .from(customFieldDefinitions)
+          .where(
+            and(
+              eq(customFieldDefinitions.entityType, input.entityType),
+              eq(customFieldDefinitions.isActive, 1)
+            )
+          )
+          .orderBy(desc(customFieldDefinitions.updatedAt));
+      }),
+
+    upsertValue: protectedProcedure
+      .input(
+        z.object({
+          entityType: z.string().min(1).max(40),
+          entityId: z.number(),
+          fieldDefinitionId: z.number(),
+          valueText: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+
+        await db
+          .insert(customFieldValues)
+          .values({
+            entityType: input.entityType,
+            entityId: input.entityId,
+            fieldDefinitionId: input.fieldDefinitionId,
+            valueText: input.valueText ?? null,
+            updatedBy: ctx.user.id,
+            updatedAt: new Date(),
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              valueText: input.valueText ?? null,
+              updatedBy: ctx.user.id,
+              updatedAt: new Date(),
+            },
+          } as any);
+
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "CustomFieldValueUpserted",
+            entityType: input.entityType,
+            entityId: input.entityId,
+            actorUserId: ctx.user.id,
+            payload: input,
+          });
+        });
+
+        return { success: true };
+      }),
+  }),
 });
