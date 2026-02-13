@@ -277,10 +277,10 @@ export const appRouter = router({
             .set({ assignedTo: null })
             .where(eq(leads.assignedTo, userId));
 
-          // 4. Deletar survey responses associadas ao usuário (não pode setar NULL)
-          await db
-            .delete(surveyResponses)
-            .where(eq(surveyResponses.agentId, userId));
+          // 4. Deletar survey responses associadas ao usuário usando SQL raw
+          await db.execute(
+            sql`DELETE FROM survey_responses WHERE agent_id = ${userId}`
+          );
 
           // 5. Desassociar de ticket comments
           await db
