@@ -58,7 +58,9 @@ export const crmRouter = router({
       const customer = await db
         .select()
         .from(customers)
-        .where(eq(customers.phone, `%${phone}%`))
+        .where(
+          sql`REPLACE(REPLACE(${customers.phone}, '+', ''), ' ', '') LIKE ${"%" + phone + "%"}`
+        )
         .limit(1);
 
       return customer[0] || null;

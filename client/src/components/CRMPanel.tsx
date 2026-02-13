@@ -39,6 +39,7 @@ export default function CRMPanel({
   open,
   onOpenChange,
 }: CRMPanelProps) {
+  const utils = (trpc as any).useUtils?.() as any;
   const [showAddTreatment, setShowAddTreatment] = useState(false);
   const [showPurchaseItems, setShowPurchaseItems] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(
@@ -52,15 +53,23 @@ export default function CRMPanel({
     observacoes: "",
   });
 
-  const { data: customerData, refetch: refetchCustomer } =
-    trpc.crm.getCustomerFullData.useQuery(
-      { customerId: customerId! },
-      { enabled: !!customerId && open }
-    );
+  const { data: customerData, refetch: refetchCustomer } = (
+    trpc as any
+  ).crm.getCustomerFullData.useQuery(
+    { customerId: customerId! },
+    { enabled: !!customerId && open }
+  );
 
-  const { data: scripts } = trpc.crm.getScripts.useQuery(undefined, {
+  const { data: scripts } = (trpc as any).crm.getScripts.useQuery(undefined, {
     enabled: open,
   });
+
+  const { data: allTags = [] } = (trpc as any).crm.listTags.useQuery(
+    undefined,
+    {
+      enabled: open,
+    }
+  );
 
   const updateCustomerMutation = (trpc as any).crm.updateCustomer.useMutation({
     onSuccess: () => {
@@ -103,33 +112,69 @@ export default function CRMPanel({
     { enabled: !!selectedPurchaseId && open && showPurchaseItems }
   );
 
-  const createTreatmentMutation = trpc.crm.createTreatment.useMutation({
+  const createTreatmentMutation = (trpc as any).crm.createTreatment.useMutation(
+    {
+      onSuccess: () => {
+        toast.success("Tratamento adicionado com sucesso");
+        setShowAddTreatment(false);
+        setNewTreatment({
+          nomeMedicamento: "",
+          posologiaDiaria: 1,
+          qtdCaixa: 30,
+          dataUltimaCompra: new Date().toISOString().split("T")[0],
+          observacoes: "",
+        });
+        try {
+          utils?.crm?.getCustomerFullData?.invalidate?.({ customerId });
+        } catch {
+          // ignore
+        }
+        refetchCustomer();
+      },
+      onError: (error: any) => {
+        toast.error(`Erro ao adicionar tratamento: ${error.message}`);
+      },
+    }
+  );
+
+  const updateTreatmentMutation = (trpc as any).crm.updateTreatment.useMutation(
+    {
+      onSuccess: () => {
+        toast.success("Tratamento atualizado");
+        try {
+          utils?.crm?.getCustomerFullData?.invalidate?.({ customerId });
+        } catch {
+          // ignore
+        }
+        refetchCustomer();
+      },
+      onError: (error: any) => {
+        toast.error(`Erro ao atualizar: ${error.message}`);
+      },
+    }
+  );
+
+  const addTagMutation = (trpc as any).crm.addTagToCustomer.useMutation({
     onSuccess: () => {
-      toast.success("Tratamento adicionado com sucesso");
-      setShowAddTreatment(false);
-      setNewTreatment({
-        nomeMedicamento: "",
-        posologiaDiaria: 1,
-        qtdCaixa: 30,
-        dataUltimaCompra: new Date().toISOString().split("T")[0],
-        observacoes: "",
-      });
+      utils?.crm?.getCustomerFullData
+        ?.invalidate?.({ customerId })
+        .catch?.(() => {});
       refetchCustomer();
     },
-    onError: error => {
-      toast.error(`Erro ao adicionar tratamento: ${error.message}`);
-    },
+    onError: (error: any) => toast.error(error.message),
   });
 
-  const updateTreatmentMutation = trpc.crm.updateTreatment.useMutation({
-    onSuccess: () => {
-      toast.success("Tratamento atualizado");
-      refetchCustomer();
-    },
-    onError: error => {
-      toast.error(`Erro ao atualizar: ${error.message}`);
-    },
-  });
+  const removeTagMutation = (trpc as any).crm.removeTagFromCustomer.useMutation(
+    {
+      onSuccess: () => {
+        utils?.crm?.getCustomerFullData
+          ?.invalidate?.({ customerId })
+          .catch?.(() => {});
+        refetchCustomer();
+      },
+      onError: (error: any) => toast.error(error.message),
+    }
+  );
 
   const duration = useMemo(() => {
     if (!newTreatment.qtdCaixa || !newTreatment.posologiaDiaria) return 0;
@@ -238,14 +283,49 @@ export default function CRMPanel({
               <Tag className="w-4 h-4" /> Tags
             </h4>
             <div className="flex flex-wrap gap-2">
-              {customerData?.tags?.map((tag: any) => (
-                <Badge key={tag.id} style={{ backgroundColor: tag.color }}>
-                  {tag.name}
-                </Badge>
-              ))}
-              {(!customerData?.tags || customerData.tags.length === 0) && (
+              {(allTags as any[])?.map((tag: any) => {
+                const selected =
+                  (customerData as any)?.tags?.some(
+                    (t: any) => t.id === tag.id
+                  ) || false;
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className="inline-flex"
+                    onClick={() => {
+                      if (!customerId) return;
+                      if (selected) {
+                        removeTagMutation.mutate({
+                          customerId,
+                          tagId: tag.id,
+                        });
+                      } else {
+                        addTagMutation.mutate({
+                          customerId,
+                          tagId: tag.id,
+                        });
+                      }
+                    }}
+                    title={selected ? "Remover" : "Adicionar"}
+                    disabled={
+                      addTagMutation.isPending || removeTagMutation.isPending
+                    }
+                  >
+                    <Badge
+                      variant={selected ? "default" : "outline"}
+                      style={
+                        selected ? { backgroundColor: tag.color } : undefined
+                      }
+                    >
+                      {tag.name}
+                    </Badge>
+                  </button>
+                );
+              })}
+              {(!allTags || (allTags as any[]).length === 0) && (
                 <span className="text-sm text-gray-500">
-                  Nenhuma tag adicionada
+                  Nenhuma tag cadastrada
                 </span>
               )}
             </div>
