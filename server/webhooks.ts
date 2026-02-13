@@ -405,15 +405,26 @@ router.post("/evolution", async (req: Request, res: Response) => {
       );
     }
 
-    // Detectar evento pela URL quando o Evolution API envia no formato: /presence-update, /chats-update, etc
+    // Detectar evento (pode vir no body, na URL path, ou embutido na query `apikey` como: ?apikey=@KEY/messages-update)
     let eventName = body?.event || body?.data?.event;
+
+    // Extract event from query apikey suffix
+    const queryApikeyRaw = (req.query["apikey"] as string | undefined) || "";
+    const apikeyParts = queryApikeyRaw.split("/").filter(Boolean);
+    const eventFromQuery =
+      apikeyParts.length > 1 ? apikeyParts.slice(1).join("/") : "";
+    if (!eventName && eventFromQuery) {
+      eventName = eventFromQuery;
+      console.log(
+        "[Evolution Webhook] Event extracted from query apikey:",
+        eventName
+      );
+    }
     if (!eventName) {
       const urlParts = fullUrl.split("/evolution")[1] || "";
-      const eventMatch = urlParts.match(
-        /\/(presence-update|chats-update|contacts-update|messages-update)/i
-      );
-      if (eventMatch) {
-        eventName = eventMatch[1];
+      const m = urlParts.match(/\/([a-z0-9_-]+)$/i);
+      if (m?.[1]) {
+        eventName = m[1];
         console.log("[Evolution Webhook] Event extracted from URL:", eventName);
       }
     }
@@ -439,7 +450,7 @@ router.post("/evolution", async (req: Request, res: Response) => {
       const expectedApiKey = configData.apiKey || configData.accessToken;
 
       // Buscar apikey na query string - pode ter formato: ?apikey=@Afrancis87/presence-update
-      const queryApikey = (req.query["apikey"] as string | undefined) || "";
+      const queryApikey = queryApikeyRaw;
       const cleanApikey = queryApikey.split("/")[0].replace("@", "");
       const cleanExpected = expectedApiKey?.replace("@", "") || "";
 
