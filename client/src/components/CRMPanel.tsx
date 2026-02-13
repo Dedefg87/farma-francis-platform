@@ -40,6 +40,7 @@ export default function CRMPanel({
   onOpenChange,
 }: CRMPanelProps) {
   const utils = (trpc as any).useUtils?.() as any;
+  const [treatmentsShadow, setTreatmentsShadow] = useState<any[] | null>(null);
   const [showAddTreatment, setShowAddTreatment] = useState(false);
   const [showPurchaseItems, setShowPurchaseItems] = useState(false);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<number | null>(
@@ -119,7 +120,7 @@ export default function CRMPanel({
 
   const createTreatmentMutation = (trpc as any).crm.createTreatment.useMutation(
     {
-      onSuccess: () => {
+      onSuccess: (data: any) => {
         toast.success("Tratamento adicionado com sucesso");
         setShowAddTreatment(false);
         setNewTreatment({
@@ -129,18 +130,35 @@ export default function CRMPanel({
           dataUltimaCompra: new Date().toISOString().split("T")[0],
           observacoes: "",
         });
+        if (data?.treatment) {
+          const prev =
+            treatmentsShadow ?? (customerData as any)?.treatments ?? [];
+          setTreatmentsShadow([data.treatment, ...prev]);
+        }
+
         try {
           utils?.crm?.getCustomerFullData?.invalidate?.({ customerId });
         } catch {
           // ignore
         }
-        refetchCustomer();
+        refetchCustomer().catch?.(() => {});
       },
       onError: (error: any) => {
         toast.error(`Erro ao adicionar tratamento: ${error.message}`);
       },
     }
   );
+
+  const treatments =
+    treatmentsShadow ?? (customerData as any)?.treatments ?? ([] as any[]);
+
+  React.useEffect(() => {
+    // If server data already has treatments, drop shadow
+    const serverTreatments = (customerData as any)?.treatments;
+    if (Array.isArray(serverTreatments) && serverTreatments.length > 0) {
+      setTreatmentsShadow(null);
+    }
+  }, [customerData]);
 
   const updateTreatmentMutation = (trpc as any).crm.updateTreatment.useMutation(
     {
@@ -348,7 +366,7 @@ export default function CRMPanel({
             </div>
 
             <div className="space-y-2">
-              {customerData?.treatments?.map((treatment: any) => {
+              {treatments.map((treatment: any) => {
                 const daysLeft = treatment.dataFimPrevisto
                   ? Math.ceil(
                       (new Date(treatment.dataFimPrevisto).getTime() -
@@ -398,8 +416,7 @@ export default function CRMPanel({
                   </Card>
                 );
               })}
-              {(!customerData?.treatments ||
-                customerData.treatments.length === 0) && (
+              {(!treatments || treatments.length === 0) && (
                 <p className="text-sm text-gray-500 text-center py-4">
                   Nenhum tratamento cadastrado
                 </p>

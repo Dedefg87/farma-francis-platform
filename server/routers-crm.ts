@@ -192,17 +192,32 @@ export const crmRouter = router({
         })
         .$returningId();
 
+      const treatmentId = newTreatment?.[0]?.id;
+      if (!treatmentId) {
+        throw new Error("Failed to create treatment");
+      }
+
+      const created = await db
+        .select()
+        .from(customerTreatments)
+        .where(eq(customerTreatments.id, treatmentId))
+        .limit(1);
+
+      if (!created?.[0]) {
+        throw new Error("Treatment created but could not be loaded");
+      }
+
       fireAndForget(async () => {
         await enqueueCrmOutboxEvent({
           eventName: "CustomerTreatmentCreated",
           entityType: "customer",
           entityId: input.customerId,
           actorUserId: ctx.user.id,
-          payload: { treatmentId: newTreatment[0].id, ...input },
+          payload: { treatmentId, ...input },
         });
       });
 
-      return { id: newTreatment[0].id };
+      return { id: treatmentId, treatment: created[0] };
     }),
 
   // Listar tratamentos de um cliente

@@ -1125,11 +1125,13 @@ export type InsertPharmaPurchaseItem = typeof pharmaPurchaseItems.$inferInsert;
  */
 export const tags = mysqlTable("tags", {
   id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 50 }).notNull().unique(),
-  color: varchar("color", { length: 7 }).default("#6366f1"), // Cor em hex
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  color: varchar("color", { length: 7 }).default("#6366f1"),
+  icon: varchar("icon", { length: 50 }),
   description: text("description"),
   createdBy: int("created_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Keep legacy column name used by existing tags schema
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type Tag = typeof tags.$inferSelect;

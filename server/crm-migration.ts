@@ -105,6 +105,50 @@ export async function runCRMMigration() {
     );
 
     // Criar outras tabelas se não existirem
+    // ==============================
+    // Tags (shared across system)
+    // ==============================
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        color VARCHAR(7) NOT NULL DEFAULT '#6366f1',
+        icon VARCHAR(50) NULL,
+        description TEXT NULL,
+        created_by INT NULL,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_tags_name (name)
+      )
+    `);
+
+    // Ensure columns exist for older installations
+    const ensureTagsColumn = async (columnName: string, ddl: string) => {
+      const r = await db.raw(
+        `
+        SELECT COUNT(*) as count FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'tags' AND column_name = ?
+      `,
+        [columnName]
+      );
+      const exists =
+        Array.isArray(r) &&
+        r.length > 0 &&
+        Number((r[0] as any)?.count || 0) > 0;
+      if (!exists) {
+        console.log(`[CRM Migration] Adding tags.${columnName}`);
+        await db.raw(`ALTER TABLE tags ADD COLUMN ${ddl}`);
+      }
+    };
+
+    await ensureTagsColumn("description", "description TEXT NULL");
+    await ensureTagsColumn("icon", "icon VARCHAR(50) NULL");
+    await ensureTagsColumn("created_by", "created_by INT NULL");
+    await ensureTagsColumn(
+      "createdAt",
+      "createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
+    );
+
     await db.raw(`
       CREATE TABLE IF NOT EXISTS customer_treatments (
         id INT AUTO_INCREMENT PRIMARY KEY,
