@@ -197,6 +197,15 @@ async function startServer() {
         console.error("Failed to start Pharma birthday worker:", err);
       });
 
+    // Start idle conversation closer (30min without customer reply)
+    import("../conversation-idle-worker")
+      .then(module => {
+        module.startConversationIdleWorker(2, 30, 50);
+      })
+      .catch(err => {
+        console.error("Failed to start idle close worker:", err);
+      });
+
     // Start pause auto-finisher worker
     import("../workers/pause-auto-finisher")
       .then(module => {
