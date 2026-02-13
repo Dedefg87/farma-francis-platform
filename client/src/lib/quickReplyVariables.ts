@@ -1,8 +1,8 @@
 function getSaudacao(now: Date) {
   const h = now.getHours();
-  if (h >= 5 && h < 12) return "bom dia";
-  if (h >= 12 && h < 18) return "boa tarde";
-  return "boa noite";
+  if (h >= 5 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 18) return "Boa tarde";
+  return "Boa noite";
 }
 
 export function applyQuickReplyVariables(
