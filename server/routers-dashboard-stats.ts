@@ -125,13 +125,15 @@ export const dashboardStatsRouter = router({
         totalCount?.count || 0
       );
 
-      // Query simplificada - apenas contar todas as conversas por hora
+      // Contar conversas por hora dentro do periodo selecionado
       const result = await db.execute(sql`
         SELECT 
           HOUR(opened_at) as hour,
           COUNT(*) as chats
         FROM conversations
         WHERE opened_at IS NOT NULL
+          AND opened_at >= ${start}
+          AND opened_at <= ${end}
         GROUP BY HOUR(opened_at)
         ORDER BY HOUR(opened_at)
       `);
@@ -266,6 +268,8 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }) => {
+      const period = input?.period || "hoje";
+      const { start, end } = getDateRangeFromPeriod(period);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -278,13 +282,19 @@ export const dashboardStatsRouter = router({
         })
         .from(queues);
 
-      // Para cada fila, contar conversas
+      // Para cada fila, contar conversas no periodo
       const queueData = await Promise.all(
         allQueues.map(async queue => {
           const [result] = await db
             .select({ count: sql<number>`count(*)` })
             .from(conversations)
-            .where(eq(conversations.queueId, queue.id));
+            .where(
+              and(
+                eq(conversations.queueId, queue.id),
+                gte(conversations.openedAt, start),
+                lte(conversations.openedAt, end)
+              )
+            );
 
           return {
             name: queue.name,
@@ -294,8 +304,29 @@ export const dashboardStatsRouter = router({
         })
       );
 
-      // Retornar apenas filas com conversas ou todas se quiser mostrar vazias
-      return queueData.filter(q => q.value > 0);
+      // Bucket: conversas sem fila
+      const [noQueue] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversations)
+        .where(
+          and(
+            sql`${conversations.queueId} IS NULL`,
+            gte(conversations.openedAt, start),
+            lte(conversations.openedAt, end)
+          )
+        );
+
+      const data = [
+        ...queueData,
+        {
+          name: "Sem fila",
+          value: noQueue?.count || 0,
+          color: "#64748b",
+        },
+      ];
+
+      // Retornar inclusive vazias para nao sumir o grafico
+      return data;
     }),
 
   // Estatísticas de variação (comparação com período anterior)
