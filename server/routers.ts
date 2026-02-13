@@ -27,12 +27,10 @@ import { customers } from "../drizzle/schema";
 import { customersRouter } from "./routers-customers";
 import { contactFetchRouter } from "./routers-contact-fetch";
 import { apiConfigRouter } from "./routers-api-config";
-import { templatesRouter } from "./templates-router";
 import { crmRouter } from "./routers-crm";
 import { telemetryRouter } from "./routers-telemetry";
 import { automationRouter } from "./routers-automation";
 import { surveyRouter } from "./routers-survey";
-import * as testFlowsRouter from "./test-flows";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -40,18 +38,7 @@ export const appRouter = router({
   apiConfig: apiConfigRouter,
   quickReplies: quickRepliesRouter,
 
-  // Test Routes - Sistema de Teste de Fluxos
-  test: router({
-    status: testFlowsRouter.getSystemStatus,
-    flows: testFlowsRouter.listAllFlows,
-    activate: testFlowsRouter.activateFlow,
-    simulate: testFlowsRouter.simulateMessage,
-    trigger: testFlowsRouter.triggerFlowManually,
-    messages: testFlowsRouter.listRecentMessages,
-    health: testFlowsRouter.healthCheck,
-    clear: testFlowsRouter.clearTestMessages,
-    logs: testFlowsRouter.getDebugLogs,
-  }),
+  // Test flows are exposed via REST endpoints under /api/test/* in server/_core/index.ts
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     login: publicProcedure
@@ -897,7 +884,7 @@ export const appRouter = router({
         const rawDb = await getDbRaw();
         if (!rawDb) throw new Error("Database not available");
 
-        const userId = input.userId;
+        const userId = input.id;
 
         try {
           // 1. Deletar pausas do agente (agent_pauses)
@@ -968,7 +955,7 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        const userId = input.userId;
+        const userId = input.id;
 
         try {
           // Tentar deletar usando SQL raw para ter mais controle
@@ -1050,9 +1037,6 @@ export const appRouter = router({
 
   // AI Features (Whisper, Suggestions, Sentiment, OCR)
   ai: aiRouter,
-
-  // Templates Management
-  templates: templatesRouter,
 
   // Queues and Pauses management
   queues: queuesRouter,
