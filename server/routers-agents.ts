@@ -99,12 +99,15 @@ async function computeAgentsWithMetrics(
     "conversation_messages(firstCustomer)",
     async () => {
       if (conversationIds.length === 0) return [];
+      // Use the time range as anchor: response time should be computed from the
+      // first customer message inside the range.
       return (await db.execute(sql`
         SELECT conversation_id AS conversationId,
                MIN(created_at) AS firstCustomerAt
         FROM conversation_messages
         WHERE sender_type = 'customer'
           AND conversation_id IN (${sqlJoinNumbers(conversationIds)})
+          ${startDate ? sql`AND created_at >= ${startDate}` : sql``}
         GROUP BY conversation_id
       `)) as any;
     },
@@ -125,18 +128,29 @@ async function computeAgentsWithMetrics(
     "conversation_messages(perAgent)",
     async () => {
       if (conversationIds.length === 0 || agentIds.length === 0) return [];
+      // Compute agent stats starting from the first customer message in-range.
+      // This avoids negative/incorrect response times when the conversation started
+      // before the selected time range.
       return (await db.execute(sql`
-        SELECT conversation_id AS conversationId,
-               sender_id AS senderId,
-               MIN(created_at) AS firstAgentAt,
-               MAX(created_at) AS lastAgentAt,
+        SELECT m.conversation_id AS conversationId,
+               m.sender_id AS senderId,
+               MIN(m.created_at) AS firstAgentAt,
+               MAX(m.created_at) AS lastAgentAt,
                COUNT(*) AS agentMsgCount
-        FROM conversation_messages
-        WHERE sender_type = 'agent'
-          AND sender_id IS NOT NULL
-          AND conversation_id IN (${sqlJoinNumbers(conversationIds)})
-          ${startDate ? sql`AND created_at >= ${startDate}` : sql``}
-        GROUP BY conversation_id, sender_id
+        FROM conversation_messages m
+        INNER JOIN (
+          SELECT conversation_id, MIN(created_at) AS firstCustomerAt
+          FROM conversation_messages
+          WHERE sender_type = 'customer'
+            AND conversation_id IN (${sqlJoinNumbers(conversationIds)})
+            ${startDate ? sql`AND created_at >= ${startDate}` : sql``}
+          GROUP BY conversation_id
+        ) fc ON fc.conversation_id = m.conversation_id
+        WHERE m.sender_type = 'agent'
+          AND m.sender_id IS NOT NULL
+          AND m.conversation_id IN (${sqlJoinNumbers(conversationIds)})
+          AND m.created_at >= fc.firstCustomerAt
+        GROUP BY m.conversation_id, m.sender_id
       `)) as any;
     },
     []
