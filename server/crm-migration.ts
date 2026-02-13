@@ -16,7 +16,10 @@ export async function runCRMMigration() {
       WHERE table_schema = DATABASE() AND table_name = 'tags'
     `);
 
-    const tableExists = tableExistsResult && tableExistsResult.length > 0;
+    const tableExists =
+      Array.isArray(tableExistsResult) &&
+      tableExistsResult.length > 0 &&
+      Number((tableExistsResult[0] as any)?.count || 0) > 0;
 
     console.log("[CRM Migration] Tags table exists:", tableExists);
 
@@ -42,7 +45,10 @@ export async function runCRMMigration() {
         WHERE table_schema = DATABASE() AND table_name = 'tags' AND column_name = 'description'
       `);
 
-      const columnExists = columnExistsResult && columnExistsResult.length > 0;
+      const columnExists =
+        Array.isArray(columnExistsResult) &&
+        columnExistsResult.length > 0 &&
+        Number((columnExistsResult[0] as any)?.count || 0) > 0;
 
       if (!columnExists) {
         console.log(
@@ -99,7 +105,7 @@ export async function runCRMMigration() {
         description: "Paciente com hipertensão arterial",
       },
       {
-        name: " Dermo",
+        name: "Dermo",
         color: "#8b5cf6",
         description: "Produtos dermatológicos",
       },
@@ -117,9 +123,16 @@ export async function runCRMMigration() {
     // Seed initial tags using individual inserts with existence check
     for (const tag of initialTags) {
       try {
+        const tagName = (tag.name || "").trim();
+
+        if (!tagName) {
+          continue;
+        }
+
         // Check if tag already exists
         const existingResult = await db.raw(
-          `SELECT id FROM tags WHERE name = ? LIMIT 1`
+          `SELECT id FROM tags WHERE name = ? LIMIT 1`,
+          [tagName]
         );
 
         // Parse existing result safely
@@ -136,12 +149,12 @@ export async function runCRMMigration() {
           // Insert only if doesn't exist
           await db.raw(
             `INSERT INTO tags (name, color, description) VALUES (?, ?, ?)`,
-            [tag.name, tag.color, tag.description]
+            [tagName, tag.color, tag.description]
           );
-          console.log(`[CRM Migration] Tag "${tag.name}" created`);
+          console.log(`[CRM Migration] Tag "${tagName}" created`);
         } else {
           console.log(
-            `[CRM Migration] Tag "${tag.name}" already exists, skipping`
+            `[CRM Migration] Tag "${tagName}" already exists, skipping`
           );
         }
       } catch (tagError) {
