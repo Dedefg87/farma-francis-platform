@@ -1,7 +1,12 @@
 /**
- * tRPC Routers for Agent Performance Metrics
- * Provides API for agent rankings, statistics, and performance data
- * USING REAL DATA FROM DATABASE
+ * Agent performance router.
+ *
+ * Sources of truth:
+ * - conversations (assignment + status)
+ * - conversation_messages (agent activity + response time)
+ *
+ * Optional:
+ * - survey_responses (may not exist in some DBs)
  */
 
 import { router, protectedProcedure } from "./_core/trpc";
@@ -13,13 +18,307 @@ import {
   conversationMessages,
   surveyResponses,
 } from "../drizzle/schema";
-import { eq, and, gte, sql, desc } from "drizzle-orm";
+import { desc, eq, gte, sql } from "drizzle-orm";
+
+type TimeRange = "7d" | "30d" | "90d" | "all";
+
+function startDateFromRange(range: TimeRange) {
+  if (range === "all") return undefined;
+  const days = parseInt(range, 10);
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
+function dbErrCode(e: any) {
+  return e?.cause?.code || e?.code;
+}
+
+function isMissingTable(e: any) {
+  const code = dbErrCode(e);
+  const msg = String(e?.cause?.sqlMessage || e?.message || "");
+  return code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist");
+}
+
+async function safe<T>(
+  label: string,
+  fn: () => Promise<T>,
+  fallback: T
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (e: any) {
+    if (isMissingTable(e)) {
+      console.log(`[agents] Ignorando ${label}: tabela ausente`);
+      return fallback;
+    }
+    throw e;
+  }
+}
+
+function sqlJoinNumbers(ids: number[]) {
+  return sql.join(
+    ids.map(id => sql`${id}`),
+    sql`, `
+  );
+}
+
+function pickPrimaryAgentId(params: {
+  assignedTo: number | null;
+  lastAgentSenderId: number | null;
+}) {
+  return params.assignedTo ?? params.lastAgentSenderId;
+}
+
+async function computeAgentsWithMetrics(
+  db: any,
+  input: { timeRange: TimeRange }
+) {
+  const startDate = startDateFromRange(input.timeRange);
+
+  const allAgents = await db
+    .select()
+    .from(users)
+    .orderBy(desc(users.createdAt));
+  const agentIds = allAgents.map((a: any) => a.id).filter(Boolean);
+
+  // Pull conversations with activity in range
+  const convs = await db
+    .select()
+    .from(conversations)
+    .where(
+      startDate
+        ? sql`(${conversations.openedAt} >= ${startDate} OR ${conversations.lastMessageAt} >= ${startDate})`
+        : undefined
+    );
+
+  const conversationIds = convs.map((c: any) => c.id);
+
+  // Aggregate customer first message per conversation
+  const firstCustomerRows = await safe<any[]>(
+    "conversation_messages(firstCustomer)",
+    async () => {
+      if (conversationIds.length === 0) return [];
+      return (await db.execute(sql`
+        SELECT conversation_id AS conversationId,
+               MIN(created_at) AS firstCustomerAt
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND conversation_id IN (${sqlJoinNumbers(conversationIds)})
+        GROUP BY conversation_id
+      `)) as any;
+    },
+    []
+  );
+
+  const firstCustomerAtByConvId = new Map<number, number>();
+  for (const r of firstCustomerRows as any[]) {
+    const conversationId = Number((r as any).conversationId);
+    const ts = (r as any).firstCustomerAt
+      ? new Date((r as any).firstCustomerAt).getTime()
+      : NaN;
+    if (!Number.isNaN(ts)) firstCustomerAtByConvId.set(conversationId, ts);
+  }
+
+  // Aggregate per (conversation, agent) stats for agent messages
+  const agentStatsRows = await safe<any[]>(
+    "conversation_messages(perAgent)",
+    async () => {
+      if (conversationIds.length === 0 || agentIds.length === 0) return [];
+      return (await db.execute(sql`
+        SELECT conversation_id AS conversationId,
+               sender_id AS senderId,
+               MIN(created_at) AS firstAgentAt,
+               MAX(created_at) AS lastAgentAt,
+               COUNT(*) AS agentMsgCount
+        FROM conversation_messages
+        WHERE sender_type = 'agent'
+          AND sender_id IS NOT NULL
+          AND conversation_id IN (${sqlJoinNumbers(conversationIds)})
+          ${startDate ? sql`AND created_at >= ${startDate}` : sql``}
+        GROUP BY conversation_id, sender_id
+      `)) as any;
+    },
+    []
+  );
+
+  const statsByConvAgent = new Map<
+    string,
+    { firstAgentAt?: number; lastAgentAt?: number; agentMsgCount: number }
+  >();
+  const lastAgentSenderByConvId = new Map<number, number>();
+  const lastActiveAtByAgentId = new Map<number, number>();
+
+  // Decide last agent sender per conversation using MAX(lastAgentAt)
+  const bestByConv = new Map<number, { senderId: number; lastTs: number }>();
+
+  for (const row of agentStatsRows as any[]) {
+    const conversationId = Number((row as any).conversationId);
+    const senderId = Number((row as any).senderId);
+    const firstAgentAt = (row as any).firstAgentAt
+      ? new Date((row as any).firstAgentAt).getTime()
+      : undefined;
+    const lastAgentAt = (row as any).lastAgentAt
+      ? new Date((row as any).lastAgentAt).getTime()
+      : undefined;
+    const agentMsgCount = Number((row as any).agentMsgCount || 0);
+
+    statsByConvAgent.set(`${conversationId}:${senderId}`, {
+      firstAgentAt,
+      lastAgentAt,
+      agentMsgCount,
+    });
+
+    if (lastAgentAt !== undefined) {
+      const prevAgentLast = lastActiveAtByAgentId.get(senderId);
+      if (prevAgentLast === undefined || lastAgentAt > prevAgentLast) {
+        lastActiveAtByAgentId.set(senderId, lastAgentAt);
+      }
+
+      const prevConv = bestByConv.get(conversationId);
+      if (!prevConv || lastAgentAt > prevConv.lastTs) {
+        bestByConv.set(conversationId, { senderId, lastTs: lastAgentAt });
+      }
+    }
+  }
+
+  bestByConv.forEach((v, conversationId) => {
+    lastAgentSenderByConvId.set(conversationId, v.senderId);
+  });
+
+  // Optional surveys
+  const surveys = await safe<any[]>(
+    "survey_responses",
+    async () => {
+      const q = startDate
+        ? db
+            .select()
+            .from(surveyResponses)
+            .where(gte(surveyResponses.createdAt, startDate))
+        : db.select().from(surveyResponses);
+      return (await q) as any;
+    },
+    []
+  );
+
+  const surveyAggByAgentId = new Map<
+    number,
+    { total: number; count: number }
+  >();
+  for (const s of surveys as any[]) {
+    const agentId = Number((s as any).agentId);
+    if (!agentId) continue;
+    const prev = surveyAggByAgentId.get(agentId) || { total: 0, count: 0 };
+    surveyAggByAgentId.set(agentId, {
+      total: prev.total + Number((s as any).rating || 0),
+      count: prev.count + 1,
+    });
+  }
+
+  // Group conversations by primary agent
+  const convsByPrimaryAgentId = new Map<number, any[]>();
+  for (const c of convs as any[]) {
+    const lastAgentSenderId = lastAgentSenderByConvId.get(c.id) ?? null;
+    const primaryId = pickPrimaryAgentId({
+      assignedTo: c.assignedTo ?? null,
+      lastAgentSenderId,
+    });
+    if (!primaryId) continue;
+    const list = convsByPrimaryAgentId.get(primaryId) || [];
+    list.push(c);
+    convsByPrimaryAgentId.set(primaryId, list);
+  }
+
+  const agentsWithMetrics = allAgents.map((a: any) => {
+    const agentConvs = convsByPrimaryAgentId.get(a.id) || [];
+    const totalTickets = agentConvs.length;
+    const resolvedTickets = agentConvs.filter(
+      (c: any) => c.status === "closed"
+    ).length;
+    const activeTickets = agentConvs.filter(
+      (c: any) => c.status === "open" || c.status === "assigned"
+    ).length;
+
+    // Avg response time (min)
+    let sumRespMin = 0;
+    let nResp = 0;
+
+    // Message count
+    let msgCount = 0;
+
+    for (const c of agentConvs) {
+      const firstCustomerAt = firstCustomerAtByConvId.get(c.id);
+      const st = statsByConvAgent.get(`${c.id}:${a.id}`);
+      if (st?.agentMsgCount) msgCount += st.agentMsgCount;
+      if (!firstCustomerAt || !st?.firstAgentAt) continue;
+      const diffMin = (st.firstAgentAt - firstCustomerAt) / (1000 * 60);
+      if (diffMin > 0 && diffMin < 1440) {
+        sumRespMin += diffMin;
+        nResp += 1;
+      }
+    }
+
+    const avgResponseTime = nResp > 0 ? sumRespMin / nResp : 0;
+
+    // Avg resolution time (h)
+    const resolvedConvs = agentConvs.filter(
+      (c: any) => c.status === "closed" && c.openedAt && c.closedAt
+    );
+    let avgResolutionTime = 0;
+    if (resolvedConvs.length > 0) {
+      const totalMs = resolvedConvs.reduce((sum: number, c: any) => {
+        return (
+          sum +
+          (new Date(c.closedAt).getTime() - new Date(c.openedAt).getTime())
+        );
+      }, 0);
+      avgResolutionTime = totalMs / resolvedConvs.length / (1000 * 60 * 60);
+    }
+
+    const surveyAgg = surveyAggByAgentId.get(a.id);
+    const satisfactionRate =
+      surveyAgg && surveyAgg.count > 0
+        ? (surveyAgg.total / (surveyAgg.count * 5)) * 100
+        : 0;
+
+    const lastActiveAtTs = lastActiveAtByAgentId.get(a.id);
+
+    const badges: string[] = [];
+    if (satisfactionRate >= 90) badges.push("🏆 Top Performer");
+    if (avgResponseTime > 0 && avgResponseTime < 5)
+      badges.push("⚡ Resposta Rápida");
+    if (resolvedTickets >= 50) badges.push("💪 Produtivo");
+    if (activeTickets >= 10) badges.push("📌 Muito Ativo");
+
+    return {
+      id: a.id,
+      name: a.name || a.email || `Agente ${a.id}`,
+      email: a.email,
+      avatar: (a.name || a.email || "AG")
+        .trim()
+        .split(/\s+/)
+        .map((p: string) => p[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2),
+      totalTickets,
+      resolvedTickets,
+      avgResponseTime: Math.round(avgResponseTime * 10) / 10,
+      avgResolutionTime: Math.round(avgResolutionTime * 10) / 10,
+      satisfactionRate: Math.round(satisfactionRate),
+      activeTickets,
+      agentMsgCount: msgCount,
+      lastActiveAt: lastActiveAtTs ? new Date(lastActiveAtTs) : null,
+      badges,
+      trend: "stable" as const,
+      trendValue: 0,
+    };
+  });
+
+  return { agentsWithMetrics, hasSurveyData: surveys.length > 0 };
+}
 
 export const agentsRouter = router({
-  /**
-   * Get agent performance metrics with filters and pagination
-   * USING REAL DATA FROM DATABASE - OPTIMIZED VERSION
-   */
   list: protectedProcedure
     .input(
       z.object({
@@ -39,255 +338,12 @@ export const agentsRouter = router({
           pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
         };
 
-      const { page, pageSize, timeRange, sortBy } = input;
-      const offset = (page - 1) * pageSize;
-
-      // Calculate date range
-      let startDate: Date | undefined;
-      if (timeRange !== "all") {
-        const days = parseInt(timeRange);
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-      }
-
-      // Get ALL users (todos os usuários são agentes potenciais)
-      const allAgents = await db
-        .select()
-        .from(users)
-        .orderBy(desc(users.createdAt));
-
-      console.log(
-        `[agents.list] Total de usuários encontrados: ${allAgents.length}`
-      );
-      console.log(
-        `[agents.list] IDs: ${allAgents.map(a => `${a.id}(${a.name})`).join(", ")}`
-      );
-
-      if (allAgents.length === 0) {
-        console.log("[agents.list] Nenhum usuário encontrado no banco");
-        return {
-          agents: [],
-          pagination: { page, pageSize, total: 0, totalPages: 0 },
-        };
-      }
-
-      // Get all conversations with assignments for these agents
-      const agentIds = allAgents.map(a => a.id);
-
-      // Fetch conversations using raw SQL for better performance
-      const allConversations = startDate
-        ? await db
-            .select()
-            .from(conversations)
-            .where(
-              and(
-                sql`${conversations.assignedTo} IN (${agentIds.join(",")})`,
-                gte(conversations.openedAt, startDate)
-              )
-            )
-        : await db
-            .select()
-            .from(conversations)
-            .where(sql`${conversations.assignedTo} IN (${agentIds.join(",")})`);
-
-      // Group conversations by agent
-      const conversationsByAgent: Record<number, typeof allConversations> = {};
-      agentIds.forEach(id => {
-        conversationsByAgent[id] = allConversations.filter(
-          c => c.assignedTo === id
-        );
+      const { page, pageSize, sortBy } = input;
+      const { agentsWithMetrics } = await computeAgentsWithMetrics(db, {
+        timeRange: input.timeRange,
       });
 
-      // Get all survey responses for these agents
-      const allSurveys = startDate
-        ? await db
-            .select()
-            .from(surveyResponses)
-            .where(
-              and(
-                sql`${surveyResponses.agentId} IN (${agentIds.join(",")})`,
-                gte(surveyResponses.createdAt, startDate)
-              )
-            )
-        : await db
-            .select()
-            .from(surveyResponses)
-            .where(sql`${surveyResponses.agentId} IN (${agentIds.join(",")})`);
-
-      // Group surveys by agent
-      const surveysByAgent: Record<number, typeof allSurveys> = {};
-      agentIds.forEach(id => {
-        surveysByAgent[id] = allSurveys.filter(s => s.agentId === id);
-      });
-
-      // Get conversation IDs to fetch messages
-      const conversationIds = allConversations.map(c => c.id);
-
-      // Fetch all messages for these conversations in one query
-      let allMessages: (typeof conversationMessages.$inferSelect)[] = [];
-      if (conversationIds.length > 0) {
-        // Batch fetch messages
-        const batchSize = 100;
-        for (let i = 0; i < conversationIds.length; i += batchSize) {
-          const batch = conversationIds.slice(i, i + batchSize);
-          const batchMessages = await db
-            .select()
-            .from(conversationMessages)
-            .where(
-              sql`${conversationMessages.conversationId} IN (${batch.join(",")})`
-            )
-            .orderBy(conversationMessages.createdAt);
-          allMessages = [...allMessages, ...batchMessages];
-        }
-      }
-
-      // Group messages by conversation
-      const messagesByConversation: Record<number, typeof allMessages> = {};
-      conversationIds.forEach(id => {
-        messagesByConversation[id] = allMessages.filter(
-          m => m.conversationId === id
-        );
-      });
-
-      // Calculate metrics for each agent
-      const agentsWithMetrics = allAgents.map(agent => {
-        const agentConversations = conversationsByAgent[agent.id] || [];
-        const totalTickets = agentConversations.length;
-        const resolvedTickets = agentConversations.filter(
-          c => c.status === "closed"
-        ).length;
-        const activeTickets = agentConversations.filter(
-          c => c.status === "assigned" || c.status === "open"
-        ).length;
-
-        // Calculate average response time
-        let avgResponseTime = 0;
-        let totalResponseTime = 0;
-        let responseCount = 0;
-
-        for (const conv of agentConversations) {
-          const messages = messagesByConversation[conv.id] || [];
-
-          if (messages.length >= 2) {
-            const firstCustomerMsg = messages.find(
-              m => m.senderType === "customer"
-            );
-            const firstAgentMsg = messages.find(m => m.senderType === "agent");
-
-            if (firstCustomerMsg && firstAgentMsg) {
-              const customerTime = new Date(
-                firstCustomerMsg.createdAt
-              ).getTime();
-              const agentTime = new Date(firstAgentMsg.createdAt).getTime();
-              const responseTime = (agentTime - customerTime) / (1000 * 60);
-
-              if (responseTime > 0 && responseTime < 1440) {
-                totalResponseTime += responseTime;
-                responseCount++;
-              }
-            }
-          }
-        }
-
-        avgResponseTime =
-          responseCount > 0 ? totalResponseTime / responseCount : 0;
-
-        // Calculate average resolution time
-        let avgResolutionTime = 0;
-        const resolvedConversations = agentConversations.filter(
-          c => c.status === "closed" && c.closedAt && c.openedAt
-        );
-
-        if (resolvedConversations.length > 0) {
-          const totalResolutionTime = resolvedConversations.reduce((sum, c) => {
-            const opened = new Date(c.openedAt!).getTime();
-            const closed = new Date(c.closedAt!).getTime();
-            return sum + (closed - opened);
-          }, 0);
-          avgResolutionTime =
-            totalResolutionTime /
-            resolvedConversations.length /
-            (1000 * 60 * 60);
-        }
-
-        // Calculate satisfaction rate
-        const agentSurveys = surveysByAgent[agent.id] || [];
-        let satisfactionRate = 0;
-        if (agentSurveys.length > 0) {
-          const totalRating = agentSurveys.reduce(
-            (sum, s) => sum + s.rating,
-            0
-          );
-          satisfactionRate = (totalRating / (agentSurveys.length * 5)) * 100;
-        }
-
-        // Determine trend
-        let trend: "up" | "down" | "stable" = "stable";
-        let trendValue = 0;
-
-        if (agentSurveys.length >= 2) {
-          const recentSurveys = agentSurveys.slice(
-            -Math.ceil(agentSurveys.length / 2)
-          );
-          const olderSurveys = agentSurveys.slice(
-            0,
-            Math.floor(agentSurveys.length / 2)
-          );
-
-          const recentAvg =
-            recentSurveys.reduce((sum, s) => sum + s.rating, 0) /
-            recentSurveys.length;
-          const olderAvg =
-            olderSurveys.reduce((sum, s) => sum + s.rating, 0) /
-            olderSurveys.length;
-
-          if (recentAvg > olderAvg) {
-            trend = "up";
-            trendValue = Math.round(((recentAvg - olderAvg) / olderAvg) * 100);
-          } else if (recentAvg < olderAvg) {
-            trend = "down";
-            trendValue = Math.round(((olderAvg - recentAvg) / olderAvg) * 100);
-          }
-        }
-
-        // Assign badges
-        const badges: string[] = [];
-        if (satisfactionRate >= 90) badges.push("🏆 Top Performer");
-        if (avgResponseTime > 0 && avgResponseTime < 5)
-          badges.push("⚡ Resposta Rápida");
-        if (satisfactionRate >= 90) badges.push("😊 Melhor Avaliação");
-        if (resolvedTickets > 50) badges.push("💪 Produtivo");
-        if (agentSurveys.length > 0 && satisfactionRate >= 95)
-          badges.push("⭐ Excelência");
-
-        return {
-          id: agent.id,
-          name: agent.name || agent.email || `Agente ${agent.id}`,
-          email: agent.email,
-          avatar: agent.name
-            ? agent.name
-                .split(" ")
-                .map(n => n[0])
-                .join("")
-                .toUpperCase()
-                .slice(0, 2)
-            : agent.email
-              ? agent.email.substring(0, 2).toUpperCase()
-              : "AG",
-          totalTickets,
-          resolvedTickets,
-          avgResponseTime: Math.round(avgResponseTime * 10) / 10,
-          avgResolutionTime: Math.round(avgResolutionTime * 10) / 10,
-          satisfactionRate: Math.round(satisfactionRate),
-          activeTickets,
-          badges,
-          trend,
-          trendValue,
-        };
-      });
-
-      // Sort agents
-      const sortedAgents = agentsWithMetrics.sort((a, b) => {
+      const sorted = agentsWithMetrics.sort((a: any, b: any) => {
         switch (sortBy) {
           case "satisfaction":
             return b.satisfactionRate - a.satisfactionRate;
@@ -302,23 +358,10 @@ export const agentsRouter = router({
         }
       });
 
-      // Paginate
-      const paginatedAgents = sortedAgents.slice(offset, offset + pageSize);
-      const total = sortedAgents.length;
-
-      console.log(`[agents.list] Total de agentes com métricas: ${total}`);
-      console.log(
-        `[agents.list] Retornando ${paginatedAgents.length} agentes na página ${page}`
-      );
-      console.log(
-        `[agents.list] Primeiros agentes: ${paginatedAgents
-          .slice(0, 3)
-          .map(a => `${a.name}(${a.totalTickets} tickets)`)
-          .join(", ")}`
-      );
-
+      const total = sorted.length;
+      const offset = (page - 1) * pageSize;
       return {
-        agents: paginatedAgents,
+        agents: sorted.slice(offset, offset + pageSize),
         pagination: {
           page,
           pageSize,
@@ -328,145 +371,6 @@ export const agentsRouter = router({
       };
     }),
 
-  /**
-   * Get detailed metrics for a specific agent
-   */
-  getById: protectedProcedure
-    .input(
-      z.object({
-        id: z.number(),
-        timeRange: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
-      })
-    )
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) return null;
-
-      const agent = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, input.id))
-        .limit(1);
-
-      if (agent.length === 0) return null;
-
-      let startDate: Date | undefined;
-      if (input.timeRange !== "all") {
-        const days = parseInt(input.timeRange);
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-      }
-
-      const agentConversations = await db
-        .select()
-        .from(conversations)
-        .where(
-          startDate
-            ? and(
-                eq(conversations.assignedTo, input.id),
-                gte(conversations.openedAt, startDate)
-              )
-            : eq(conversations.assignedTo, input.id)
-        );
-
-      const ticketsByDay: Record<string, number> = {};
-      agentConversations.forEach(conv => {
-        if (conv.openedAt) {
-          const day = new Date(conv.openedAt).toISOString().split("T")[0];
-          ticketsByDay[day] = (ticketsByDay[day] || 0) + 1;
-        }
-      });
-
-      const agentSurveys = await db
-        .select()
-        .from(surveyResponses)
-        .where(eq(surveyResponses.agentId, input.id));
-
-      const avgRating =
-        agentSurveys.length > 0
-          ? (
-              agentSurveys.reduce((sum, s) => sum + s.rating, 0) /
-              agentSurveys.length
-            ).toFixed(1)
-          : "0.0";
-
-      return {
-        agent: agent[0],
-        totalTickets: agentConversations.length,
-        resolvedTickets: agentConversations.filter(c => c.status === "closed")
-          .length,
-        activeTickets: agentConversations.filter(
-          c => c.status === "assigned" || c.status === "open"
-        ).length,
-        ticketsByDay,
-        surveyCount: agentSurveys.length,
-        avgRating: parseFloat(avgRating),
-      };
-    }),
-
-  /**
-   * Get team overview statistics
-   */
-  getTeamStats: protectedProcedure
-    .input(
-      z.object({
-        timeRange: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
-      })
-    )
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db)
-        return {
-          totalAgents: 0,
-          totalTickets: 0,
-          avgSatisfaction: 0,
-          avgResponseTime: 0,
-        };
-
-      let startDate: Date | undefined;
-      if (input.timeRange !== "all") {
-        const days = parseInt(input.timeRange);
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-      }
-
-      const allAgents = await db
-        .select()
-        .from(users)
-        .where(eq(users.role, "user"));
-
-      const allConversations = await db
-        .select()
-        .from(conversations)
-        .where(startDate ? gte(conversations.openedAt, startDate) : undefined);
-
-      const allSurveys = await db
-        .select()
-        .from(surveyResponses)
-        .where(
-          startDate ? gte(surveyResponses.createdAt, startDate) : undefined
-        );
-
-      const avgSatisfaction =
-        allSurveys.length > 0
-          ? Math.round(
-              (allSurveys.reduce((sum, s) => sum + s.rating, 0) /
-                (allSurveys.length * 5)) *
-                100
-            )
-          : 0;
-
-      return {
-        totalAgents: allAgents.length,
-        totalTickets: allConversations.length,
-        avgSatisfaction,
-        avgResponseTime: 0,
-      };
-    }),
-
-  /**
-   * Get chart data for performance trends
-   */
   getChartData: protectedProcedure
     .input(
       z.object({
@@ -476,143 +380,83 @@ export const agentsRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      const startDate = startDateFromRange(input.timeRange);
 
-      let startDate: Date | undefined;
-      if (input.timeRange !== "all") {
-        const days = parseInt(input.timeRange);
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-      }
+      const convs = await db
+        .select({
+          openedAt: conversations.openedAt,
+          status: conversations.status,
+        })
+        .from(conversations)
+        .where(startDate ? gte(conversations.openedAt, startDate) : undefined);
 
-      const allAgents = await db
-        .select()
-        .from(users)
-        .orderBy(desc(users.createdAt));
+      const surveys = await safe<any[]>(
+        "survey_responses(chart)",
+        async () => {
+          const q = startDate
+            ? db
+                .select({
+                  createdAt: surveyResponses.createdAt,
+                  rating: surveyResponses.rating,
+                })
+                .from(surveyResponses)
+                .where(gte(surveyResponses.createdAt, startDate))
+            : db
+                .select({
+                  createdAt: surveyResponses.createdAt,
+                  rating: surveyResponses.rating,
+                })
+                .from(surveyResponses);
+          return (await q) as any;
+        },
+        []
+      );
 
-      if (allAgents.length === 0) {
-        return [];
-      }
-
-      const agentIds = allAgents.map(a => a.id);
-
-      // Get conversations grouped by date
-      const allConversations = startDate
-        ? await db
-            .select({
-              openedAt: conversations.openedAt,
-              status: conversations.status,
-            })
-            .from(conversations)
-            .where(
-              and(
-                sql`${conversations.assignedTo} IN (${agentIds.join(",")})`,
-                gte(conversations.openedAt, startDate)
-              )
-            )
-        : await db
-            .select({
-              openedAt: conversations.openedAt,
-              status: conversations.status,
-            })
-            .from(conversations)
-            .where(sql`${conversations.assignedTo} IN (${agentIds.join(",")})`);
-
-      // Get surveys grouped by date
-      const allSurveys = startDate
-        ? await db
-            .select({
-              createdAt: surveyResponses.createdAt,
-              rating: surveyResponses.rating,
-            })
-            .from(surveyResponses)
-            .where(
-              and(
-                sql`${surveyResponses.agentId} IN (${agentIds.join(",")})`,
-                gte(surveyResponses.createdAt, startDate)
-              )
-            )
-        : await db
-            .select({
-              createdAt: surveyResponses.createdAt,
-              rating: surveyResponses.rating,
-            })
-            .from(surveyResponses)
-            .where(sql`${surveyResponses.agentId} IN (${agentIds.join(",")})`);
-
-      // Group by date
-      const dataByDate: Record<
+      const byIso: Record<
         string,
-        {
-          tickets: number;
-          resolved: number;
-          satisfaction: number;
-          count: number;
-        }
+        { opened: number; resolved: number; satSum: number; satN: number }
       > = {};
+      for (const c of convs as any[]) {
+        if (!c.openedAt) continue;
+        const iso = new Date(c.openedAt).toISOString().slice(0, 10);
+        byIso[iso] = byIso[iso] || {
+          opened: 0,
+          resolved: 0,
+          satSum: 0,
+          satN: 0,
+        };
+        byIso[iso].opened += 1;
+        if (c.status === "closed") byIso[iso].resolved += 1;
+      }
 
-      allConversations.forEach(conv => {
-        if (conv.openedAt) {
-          const date = new Date(conv.openedAt).toLocaleDateString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-          });
-          if (!dataByDate[date]) {
-            dataByDate[date] = {
-              tickets: 0,
-              resolved: 0,
-              satisfaction: 0,
-              count: 0,
-            };
-          }
-          dataByDate[date].tickets++;
-          if (conv.status === "closed") {
-            dataByDate[date].resolved++;
-          }
-        }
-      });
+      for (const s of surveys as any[]) {
+        if (!(s as any).createdAt) continue;
+        const iso = new Date((s as any).createdAt).toISOString().slice(0, 10);
+        byIso[iso] = byIso[iso] || {
+          opened: 0,
+          resolved: 0,
+          satSum: 0,
+          satN: 0,
+        };
+        byIso[iso].satSum += Number((s as any).rating || 0);
+        byIso[iso].satN += 1;
+      }
 
-      allSurveys.forEach(survey => {
-        if (survey.createdAt) {
-          const date = new Date(survey.createdAt).toLocaleDateString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-          });
-          if (!dataByDate[date]) {
-            dataByDate[date] = {
-              tickets: 0,
-              resolved: 0,
-              satisfaction: 0,
-              count: 0,
-            };
-          }
-          dataByDate[date].satisfaction += survey.rating;
-          dataByDate[date].count++;
-        }
-      });
-
-      // Convert to array and calculate percentages
-      const chartData = Object.entries(dataByDate)
-        .map(([date, data]) => ({
-          date,
-          tickets: data.tickets,
-          resolved: data.resolved,
-          satisfacao:
-            data.count > 0
-              ? Math.round((data.satisfaction / data.count / 5) * 100)
-              : 0,
-        }))
-        .sort((a, b) => {
-          const [dayA, monthA] = a.date.split("/").map(Number);
-          const [dayB, monthB] = b.date.split("/").map(Number);
-          return monthA * 31 + dayA - (monthB * 31 + dayB);
+      return Object.keys(byIso)
+        .sort()
+        .map(iso => {
+          const d = byIso[iso];
+          const [, m, day] = iso.split("-");
+          return {
+            date: `${day}/${m}`,
+            tickets: d.opened,
+            resolved: d.resolved,
+            satisfacao:
+              d.satN > 0 ? Math.round((d.satSum / d.satN / 5) * 100) : 0,
+          };
         });
-
-      return chartData;
     }),
 
-  /**
-   * Generate real insights based on agent performance
-   */
   getInsights: protectedProcedure
     .input(
       z.object({
@@ -623,168 +467,126 @@ export const agentsRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      let startDate: Date | undefined;
-      if (input.timeRange !== "all") {
-        const days = parseInt(input.timeRange);
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
+      const { agentsWithMetrics, hasSurveyData } =
+        await computeAgentsWithMetrics(db, { timeRange: input.timeRange });
+      if (!agentsWithMetrics || agentsWithMetrics.length === 0) {
+        return [
+          "Sem dados suficientes para gerar insights no período selecionado.",
+        ];
       }
-
-      const allAgents = await db
-        .select()
-        .from(users)
-        .orderBy(desc(users.createdAt));
-
-      if (allAgents.length === 0) {
-        return ["Nenhum agente cadastrado no sistema."];
-      }
-
-      const agentIds = allAgents.map(a => a.id);
-
-      // Get all conversations and surveys
-      const allConversations = startDate
-        ? await db
-            .select()
-            .from(conversations)
-            .where(
-              and(
-                sql`${conversations.assignedTo} IN (${agentIds.join(",")})`,
-                gte(conversations.openedAt, startDate)
-              )
-            )
-        : await db
-            .select()
-            .from(conversations)
-            .where(sql`${conversations.assignedTo} IN (${agentIds.join(",")})`);
-
-      const allSurveys = startDate
-        ? await db
-            .select()
-            .from(surveyResponses)
-            .where(
-              and(
-                sql`${surveyResponses.agentId} IN (${agentIds.join(",")})`,
-                gte(surveyResponses.createdAt, startDate)
-              )
-            )
-        : await db
-            .select()
-            .from(surveyResponses)
-            .where(sql`${surveyResponses.agentId} IN (${agentIds.join(",")})`);
 
       const insights: string[] = [];
+      const byResolved = [...agentsWithMetrics].sort(
+        (a: any, b: any) => b.resolvedTickets - a.resolvedTickets
+      );
+      const byResponse = [...agentsWithMetrics]
+        .filter((a: any) => a.avgResponseTime > 0)
+        .sort((a: any, b: any) => a.avgResponseTime - b.avgResponseTime);
+      const bySatisfaction = [...agentsWithMetrics].sort(
+        (a: any, b: any) => b.satisfactionRate - a.satisfactionRate
+      );
 
-      // Check if there's data
-      if (allConversations.length === 0) {
+      if (byResolved[0]?.resolvedTickets > 0) {
         insights.push(
-          "Não há tickets atribuídos aos agentes no período selecionado."
+          `• ${byResolved[0].name} lidera em tickets resolvidos: ${byResolved[0].resolvedTickets}.`
         );
-        return insights;
       }
-
-      // Find top performer by satisfaction
-      const surveysByAgent: Record<number, number[]> = {};
-      allSurveys.forEach(survey => {
-        if (survey.agentId && !surveysByAgent[survey.agentId]) {
-          surveysByAgent[survey.agentId] = [];
-        }
-        if (survey.agentId) {
-          surveysByAgent[survey.agentId].push(survey.rating);
-        }
-      });
-
-      let bestAgentId: number | null = null;
-      let bestAgentName = "";
-      let bestAvgRating = 0;
-
-      Object.entries(surveysByAgent).forEach(([agentId, ratings]) => {
-        const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
-        const agent = allAgents.find(a => a.id === parseInt(agentId));
-        if (agent && avg > bestAvgRating) {
-          bestAgentId = agent.id;
-          bestAgentName = agent.name || agent.email || `Agente ${agent.id}`;
-          bestAvgRating = avg;
-        }
-      });
-
-      if (bestAgentId && bestAvgRating >= 4) {
+      if (byResponse[0]) {
         insights.push(
-          `• ${bestAgentName} mantém excelente performance com média de ${bestAvgRating.toFixed(1)} estrelas - considere reconhecê-lo(a)`
+          `• ${byResponse[0].name} tem o menor tempo médio de resposta: ${byResponse[0].avgResponseTime.toFixed(1)}min.`
+        );
+      }
+      if (hasSurveyData && bySatisfaction[0]?.satisfactionRate > 0) {
+        insights.push(
+          `• ${bySatisfaction[0].name} lidera em satisfação: ${bySatisfaction[0].satisfactionRate}%.`
         );
       }
 
-      // Find agent with most tickets
-      const ticketsByAgent: Record<number, number> = {};
-      allConversations.forEach(conv => {
-        if (conv.assignedTo) {
-          ticketsByAgent[conv.assignedTo] =
-            (ticketsByAgent[conv.assignedTo] || 0) + 1;
-        }
-      });
-
-      const topTicketAgent = Object.entries(ticketsByAgent).sort(
-        (a, b) => b[1] - a[1]
-      )[0];
-
-      if (topTicketAgent) {
-        const agent = allAgents.find(a => a.id === parseInt(topTicketAgent[0]));
-        if (agent) {
-          insights.push(
-            `• ${agent.name || agent.email} liderou com ${topTicketAgent[1]} tickets atendidos no período`
-          );
-        }
-      }
-
-      // Overall satisfaction
-      if (allSurveys.length > 0) {
-        const avgSatisfaction =
-          allSurveys.reduce((sum, s) => sum + s.rating, 0) / allSurveys.length;
-        const satisfactionPercent = (avgSatisfaction / 5) * 100;
-
-        if (satisfactionPercent >= 80) {
-          insights.push(
-            `• Equipe geral está com ${satisfactionPercent.toFixed(0)}% de satisfação - excelente desempenho! 🎉`
-          );
-        } else if (satisfactionPercent >= 60) {
-          insights.push(
-            `• Satisfação da equipe está em ${satisfactionPercent.toFixed(0)}% - há espaço para melhorias`
-          );
-        } else {
-          insights.push(
-            `• Satisfação da equipe está em ${satisfactionPercent.toFixed(0)}% - considere treinamentos`
-          );
-        }
-      }
-
-      // Resolution rate
-      const resolvedCount = allConversations.filter(
-        c => c.status === "closed"
-      ).length;
+      const totalTickets = agentsWithMetrics.reduce(
+        (sum: number, a: any) => sum + (a.totalTickets || 0),
+        0
+      );
+      const totalResolved = agentsWithMetrics.reduce(
+        (sum: number, a: any) => sum + (a.resolvedTickets || 0),
+        0
+      );
       const resolutionRate =
-        allConversations.length > 0
-          ? (resolvedCount / allConversations.length) * 100
-          : 0;
+        totalTickets > 0 ? (totalResolved / totalTickets) * 100 : 0;
+      insights.push(
+        `• Taxa de resolução da equipe: ${resolutionRate.toFixed(0)}%.`
+      );
 
-      if (resolutionRate >= 90) {
-        insights.push(
-          `• Taxa de resolução está excelente em ${resolutionRate.toFixed(0)}%`
-        );
-      } else if (resolutionRate >= 70) {
-        insights.push(
-          `• Taxa de resolução está em ${resolutionRate.toFixed(0)}%`
-        );
-      } else {
-        insights.push(
-          `• Taxa de resolução está em ${resolutionRate.toFixed(0)}% - verifique tickets pendentes`
-        );
-      }
+      const activeCount = agentsWithMetrics.filter(
+        (a: any) => (a.activeTickets || 0) > 0
+      ).length;
+      insights.push(
+        `• ${activeCount} agente(s) com tickets ativos no momento.`
+      );
 
-      if (insights.length === 0) {
-        insights.push(
-          "Dados insuficientes para gerar insights no período selecionado."
-        );
+      if (!hasSurveyData) {
+        insights.push("• Satisfação: ainda sem dados de pesquisa no banco.");
       }
 
       return insights;
+    }),
+
+  getRecentConversations: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.number(),
+        limit: z.number().min(1).max(50).default(15),
+        timeRange: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const startDate = startDateFromRange(input.timeRange);
+
+      const assigned = await db
+        .select()
+        .from(conversations)
+        .where(
+          startDate
+            ? sql`${conversations.assignedTo} = ${input.agentId} AND (${conversations.openedAt} >= ${startDate} OR ${conversations.lastMessageAt} >= ${startDate})`
+            : eq(conversations.assignedTo, input.agentId)
+        );
+
+      const byMsgs = await safe<any[]>(
+        "conversation_messages(recentByAgent)",
+        async () => {
+          return (await db.execute(sql`
+            SELECT DISTINCT conversation_id AS conversationId
+            FROM conversation_messages
+            WHERE sender_type = 'agent'
+              AND sender_id = ${input.agentId}
+              ${startDate ? sql`AND created_at >= ${startDate}` : sql``}
+          `)) as any;
+        },
+        []
+      );
+
+      const idSet = new Set<number>(assigned.map((c: any) => c.id));
+      for (const r of byMsgs as any[])
+        idSet.add(Number((r as any).conversationId));
+      const ids = Array.from(idSet);
+      if (ids.length === 0) return [];
+
+      const convs = await db
+        .select()
+        .from(conversations)
+        .where(sql`${conversations.id} IN (${sqlJoinNumbers(ids)})`)
+        .orderBy(desc(conversations.lastMessageAt));
+
+      return convs.slice(0, input.limit).map((c: any) => ({
+        id: c.id,
+        customerName: c.customerName,
+        customerPhone: c.customerPhone,
+        channel: c.channel,
+        status: c.status,
+        openedAt: c.openedAt,
+        lastMessageAt: c.lastMessageAt,
+        closedAt: c.closedAt,
+      }));
     }),
 });

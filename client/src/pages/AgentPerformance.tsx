@@ -13,6 +13,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,6 +37,8 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface AgentMetrics {
   id: number;
@@ -41,6 +50,8 @@ interface AgentMetrics {
   avgResolutionTime: number; // em horas
   satisfactionRate: number; // 0-100
   activeTickets: number;
+  agentMsgCount?: number;
+  lastActiveAt?: string | Date | null;
   badges: string[];
   trend: "up" | "down" | "stable";
   trendValue: number;
@@ -216,6 +227,23 @@ function AgentPerformanceContent() {
     return "text-red-600 bg-red-50";
   };
 
+  const [detailsAgent, setDetailsAgent] = useState<AgentMetrics | null>(null);
+  const isDetailsOpen = Boolean(detailsAgent);
+
+  const { data: recentConversations, isLoading: isRecentLoading } =
+    trpc.agents.getRecentConversations.useQuery(
+      {
+        agentId: detailsAgent?.id ?? 0,
+        limit: 15,
+        timeRange,
+      },
+      {
+        enabled: isDetailsOpen && Boolean(detailsAgent?.id),
+        retry: 1,
+        refetchOnWindowFocus: false,
+      }
+    );
+
   // Dados para o gráfico - usa dados reais ou array vazio
   const chartSeries =
     chartData && chartData.length > 0
@@ -224,6 +252,12 @@ function AgentPerformanceContent() {
             dataKey: "satisfacao",
             name: "Satisfação (%)",
             color: "#10b981",
+            type: "line" as const,
+          },
+          {
+            dataKey: "resolved",
+            name: "Tickets Resolvidos",
+            color: "#2563eb",
             type: "line" as const,
           },
           {
@@ -393,9 +427,8 @@ function AgentPerformanceContent() {
             Nenhum agente encontrado
           </h3>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Não há agentes cadastrados ou nenhum ticket foi atribuído ainda.
-            Verifique se os usuários têm a role 'user' e se os tickets estão
-            sendo atribuídos corretamente.
+            Não há dados de atendimento no período selecionado ou os
+            atendimentos ainda não foram atribuídos.
           </p>
         </div>
       )}
@@ -520,11 +553,28 @@ function AgentPerformanceContent() {
                       </p>
                     </div>
                   </div>
+
+                  <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                    <span>Mensagens do agente: {agent.agentMsgCount ?? 0}</span>
+                    <span>
+                      Última atividade:{" "}
+                      {agent.lastActiveAt
+                        ? formatDistanceToNow(new Date(agent.lastActiveAt), {
+                            addSuffix: true,
+                            locale: ptBR,
+                          })
+                        : "—"}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Ações */}
                 <div className="flex flex-col gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDetailsAgent(agent)}
+                  >
                     Ver Detalhes
                   </Button>
                   <Button variant="ghost" size="sm">
@@ -589,6 +639,123 @@ function AgentPerformanceContent() {
           </div>
         </div>
       </Card>
+
+      <Dialog
+        open={isDetailsOpen}
+        onOpenChange={open => {
+          if (!open) setDetailsAgent(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {detailsAgent?.name || "Detalhes do agente"}
+            </DialogTitle>
+            <DialogDescription>
+              Histórico recente de atendimentos e atividade (período:{" "}
+              {timeRange})
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="p-3">
+              <p className="text-xs text-muted-foreground">Tickets</p>
+              <p className="text-lg font-semibold">
+                {detailsAgent?.totalTickets ?? 0}
+              </p>
+            </Card>
+            <Card className="p-3">
+              <p className="text-xs text-muted-foreground">Resolvidos</p>
+              <p className="text-lg font-semibold">
+                {detailsAgent?.resolvedTickets ?? 0}
+              </p>
+            </Card>
+            <Card className="p-3">
+              <p className="text-xs text-muted-foreground">Resposta</p>
+              <p className="text-lg font-semibold">
+                {(detailsAgent?.avgResponseTime ?? 0).toFixed(1)}min
+              </p>
+            </Card>
+            <Card className="p-3">
+              <p className="text-xs text-muted-foreground">Mensagens</p>
+              <p className="text-lg font-semibold">
+                {detailsAgent?.agentMsgCount ?? 0}
+              </p>
+            </Card>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold">Atendimentos recentes</h4>
+              {isRecentLoading && (
+                <span className="text-xs text-muted-foreground">
+                  Carregando...
+                </span>
+              )}
+            </div>
+
+            {!isRecentLoading &&
+              (!recentConversations || recentConversations.length === 0) && (
+                <div className="text-sm text-muted-foreground">
+                  Nenhum atendimento recente encontrado para este agente.
+                </div>
+              )}
+
+            {recentConversations && recentConversations.length > 0 && (
+              <div className="max-h-80 overflow-auto rounded border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left p-2">Cliente</th>
+                      <th className="text-left p-2">Canal</th>
+                      <th className="text-left p-2">Status</th>
+                      <th className="text-left p-2">Última mensagem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentConversations.map((c: any) => (
+                      <tr key={c.id} className="border-t">
+                        <td className="p-2">
+                          <div className="font-medium">
+                            {c.customerName || "Sem nome"}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {c.customerPhone || ""}
+                          </div>
+                        </td>
+                        <td className="p-2">
+                          <Badge variant="outline">{c.channel}</Badge>
+                        </td>
+                        <td className="p-2">
+                          <Badge
+                            variant={
+                              c.status === "closed"
+                                ? "secondary"
+                                : c.status === "assigned"
+                                  ? "default"
+                                  : "outline"
+                            }
+                          >
+                            {c.status}
+                          </Badge>
+                        </td>
+                        <td className="p-2 text-muted-foreground">
+                          {c.lastMessageAt
+                            ? formatDistanceToNow(new Date(c.lastMessageAt), {
+                                addSuffix: true,
+                                locale: ptBR,
+                              })
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

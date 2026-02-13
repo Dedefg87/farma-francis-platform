@@ -15,7 +15,6 @@ import Messages from "./pages/Messages";
 import Inbox from "./pages/Inbox";
 import Automation from "./pages/Automation";
 import APISettings from "./pages/APISettings";
-import Executions from "./pages/Executions";
 import AgentPerformance from "./pages/AgentPerformance";
 import DebugData from "./pages/DebugData";
 import Login from "./pages/Login";
@@ -97,11 +96,6 @@ function Router() {
       <Route path={"/automation"}>
         <AdminRoute>
           <Automation />
-        </AdminRoute>
-      </Route>
-      <Route path={"/executions"}>
-        <AdminRoute>
-          <Executions />
         </AdminRoute>
       </Route>
       <Route path={"/agent-performance"}>
