@@ -188,6 +188,15 @@ async function startServer() {
         console.error("Failed to start Pharma refill worker:", err);
       });
 
+    // Start PharmaCore birthday worker (creates tasks on birthdays)
+    import("../pharma-birthday-worker")
+      .then(module => {
+        module.startPharmaBirthdayWorker(720);
+      })
+      .catch(err => {
+        console.error("Failed to start Pharma birthday worker:", err);
+      });
+
     // Start pause auto-finisher worker
     import("../workers/pause-auto-finisher")
       .then(module => {

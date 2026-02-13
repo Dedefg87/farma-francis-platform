@@ -314,6 +314,7 @@ export const conversationsRouter = router({
     const agentConversations = await db
       .select({
         id: conversations.id,
+        customerId: conversations.customerId,
         customerName: conversations.customerName,
         customerPhone: conversations.customerPhone,
         customerAvatar: customers.photoUrl,

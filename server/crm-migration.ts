@@ -618,6 +618,11 @@ export async function runCRMMigration() {
         color: "#06b6d4",
         description: "Tratamento oncológico",
       },
+      {
+        name: "Farmacia",
+        color: "#0ea5e9",
+        description: "Segmento geral de farmacia",
+      },
     ];
 
     // Seed initial tags using individual inserts with existence check

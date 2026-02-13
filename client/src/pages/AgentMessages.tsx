@@ -64,6 +64,8 @@ export default function AgentMessages() {
     number | null
   >(null);
   const [crmCustomerId, setCrmCustomerId] = useState<number | null>(null);
+  const [crmCustomerName, setCrmCustomerName] = useState<string>("");
+  const [crmCustomerPhone, setCrmCustomerPhone] = useState<string>("");
   const [message, setMessage] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
@@ -348,6 +350,8 @@ export default function AgentMessages() {
   // Ensure we don't leak customerId across conversations
   useEffect(() => {
     setCrmCustomerId(null);
+    setCrmCustomerName("");
+    setCrmCustomerPhone("");
   }, [selectedConversationId]);
 
   const ensureCustomerMutation = (
@@ -363,6 +367,8 @@ export default function AgentMessages() {
 
     if (selectedConversation.customerId) {
       setCrmCustomerId(Number(selectedConversation.customerId));
+      setCrmCustomerName(selectedConversation.customerName || "");
+      setCrmCustomerPhone(selectedConversation.customerPhone || "");
       setShowCRMPanel(true);
       return;
     }
@@ -385,6 +391,8 @@ export default function AgentMessages() {
       }
 
       setCrmCustomerId(id);
+      setCrmCustomerName(selectedConversation.customerName || "");
+      setCrmCustomerPhone(selectedConversation.customerPhone || "");
 
       // Persist link on conversation so it stays after refresh
       try {
@@ -995,15 +1003,15 @@ export default function AgentMessages() {
         onSuccess={refetchConversations}
       />
 
-      {selectedConversation && (
+      {showCRMPanel && crmCustomerId ? (
         <CRMPanel
           open={showCRMPanel}
           onOpenChange={setShowCRMPanel}
-          customerId={crmCustomerId || selectedConversation.customerId || null}
-          customerName={selectedConversation.customerName || ""}
-          customerPhone={selectedConversation.customerPhone || ""}
+          customerId={crmCustomerId}
+          customerName={crmCustomerName}
+          customerPhone={crmCustomerPhone}
         />
-      )}
+      ) : null}
     </>
   );
 }
