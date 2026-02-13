@@ -115,31 +115,21 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Primeiro, verificar se há dados na tabela
-      const [totalCount] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversations);
-
-      console.log(
-        "[Dashboard] Total conversations in DB:",
-        totalCount?.count || 0
-      );
-
-      // Contar conversas por hora dentro do periodo selecionado
+      // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
+      // naquele horario (dentro do periodo).
       const result = await db.execute(sql`
         SELECT 
-          HOUR(opened_at) as hour,
-          COUNT(*) as chats
-        FROM conversations
-        WHERE opened_at IS NOT NULL
-          AND opened_at >= ${start}
-          AND opened_at <= ${end}
-        GROUP BY HOUR(opened_at)
-        ORDER BY HOUR(opened_at)
+          HOUR(created_at) as hour,
+          COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
       `);
 
       const hourlyData = result as any[];
-      console.log("[Dashboard] Raw hourly data:", hourlyData);
 
       // Criar array com todas as 24 horas (00h-23h)
       const allHours = Array.from({ length: 24 }, (_, i) => {
@@ -154,10 +144,6 @@ export const dashboardStatsRouter = router({
         };
       });
 
-      console.log(
-        "[Dashboard] Returning hours data:",
-        allHours.filter(h => h.chats > 0)
-      );
       return allHours;
     }),
 
