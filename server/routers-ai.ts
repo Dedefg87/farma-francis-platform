@@ -50,20 +50,38 @@ export const aiRouter = router({
   }),
 
   /**
+   * Apply an AI automation template.
+   * NOTE: This is currently a safe no-op to avoid crashing production.
+   * It provides a stable API for the UI and can be wired to real template
+   * provisioning later.
+   */
+  applyTemplate: adminProcedure
+    .input(
+      z.object({
+        templateType: z.string(),
+        settings: z.record(z.string(), z.unknown()).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return {
+        success: true,
+        message: `Template "${input.templateType}" aplicado (modo seguro).`,
+      };
+    }),
+
+  /**
    * Process AI Conversation
    */
   processConversation: adminProcedure
-    .input((raw: unknown) => {
-      return z
-        .object({
-          templateId: z.string(),
-          customerId: z.number(),
-          channelId: z.string(),
-          message: z.string(),
-          context: z.record(z.unknown()).optional(),
-        })
-        .parse(raw);
-    })
+    .input(
+      z.object({
+        templateId: z.string(),
+        customerId: z.number(),
+        channelId: z.string(),
+        message: z.string(),
+        context: z.record(z.string(), z.unknown()).optional(),
+      })
+    )
     .mutation(async ({ input }) => {
       const { processAIConversation } = await import("./ai-integration");
       const req = {
@@ -81,16 +99,14 @@ export const aiRouter = router({
    * Process Automation Flow
    */
   processAutomation: adminProcedure
-    .input((raw: unknown) => {
-      return z
-        .object({
-          flowId: z.string(),
-          triggerType: z.string(),
-          triggerData: z.record(z.unknown()).optional(),
-          customerId: z.number().optional(),
-        })
-        .parse(raw);
-    })
+    .input(
+      z.object({
+        flowId: z.string(),
+        triggerType: z.string(),
+        triggerData: z.record(z.string(), z.unknown()).optional(),
+        customerId: z.number().optional(),
+      })
+    )
     .mutation(async ({ input }) => {
       const { processAutomationFlow } = await import("./ai-integration");
       const req = {

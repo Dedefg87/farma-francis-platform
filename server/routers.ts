@@ -1043,8 +1043,17 @@ export const appRouter = router({
   pauses: pausesRouter,
   contactFetch: contactFetchRouter,
 
+  // Inbox
+  inbox: inboxRouter,
+
+  // Dashboard
+  dashboard: dashboardRouter,
+
+  // Executions (legacy, UI may be removed)
+  executions: executionsRouter,
+
   // Tags management
-  // tags: tagsRouter, // Removido - tabelas de tags comentadas
+  tags: tagsRouter,
 
   // Agent Area (Atendimento)
   agent: agentRouter,
@@ -1074,3 +1083,4 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
+import { tagsRouter } from "./routers-tags";

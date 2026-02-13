@@ -1,20 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Clock, FileText, Users, MessageSquare, Workflow, X } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Clock,
+  FileText,
+  Users,
+  MessageSquare,
+  Workflow,
+  X,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { useNavigate } from 'wouter';
+} from "@/components/ui/dialog";
+import { useLocation } from "wouter";
 
 interface SearchResult {
   id: string;
-  type: 'flow' | 'customer' | 'ticket' | 'message' | 'employee';
+  type: "flow" | "customer" | "ticket" | "message" | "employee";
   title: string;
   subtitle: string;
   description?: string;
@@ -25,30 +33,30 @@ interface SearchResult {
 
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([
-    'Fluxo de boas-vindas',
-    'Cliente João Silva',
-    'Tickets pendentes',
+    "Fluxo de boas-vindas",
+    "Cliente João Silva",
+    "Tickets pendentes",
   ]);
   const [isSearching, setIsSearching] = useState(false);
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   // Atalho de teclado Ctrl+K
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setIsOpen(true);
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setIsOpen(false);
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Busca com debounce
@@ -69,7 +77,7 @@ export function GlobalSearch() {
   const performSearch = async (searchQuery: string) => {
     // Implementar busca real via tRPC
     // Simulação de resultados
-    const mockResults: SearchResult[] = [
+    const mockResultsBase: SearchResult[] = [
       // Temporariamente desabilitado - Automação
       // {
       //   id: '1',
@@ -82,29 +90,32 @@ export function GlobalSearch() {
       //   highlight: 'Fluxo automático de <mark>boas-vindas</mark> para novos clientes',
       // },
       {
-        id: '2',
-        type: 'customer',
-        title: 'João Silva',
-        subtitle: 'Cliente',
-        description: 'joao@email.com • +55 11 98765-4321',
-        url: '/crm/customer/2',
+        id: "2",
+        type: "customer" as const,
+        title: "João Silva",
+        subtitle: "Cliente",
+        description: "joao@email.com • +55 11 98765-4321",
+        url: "/crm/customer/2",
         relevance: 0.85,
       },
       {
-        id: '3',
-        type: 'ticket',
-        title: 'Dúvida sobre medicamento #12345',
-        subtitle: 'Ticket',
-        description: 'Aberto há 2 horas • Prioridade Alta',
-        url: '/tickets/12345',
+        id: "3",
+        type: "ticket" as const,
+        title: "Dúvida sobre medicamento #12345",
+        subtitle: "Ticket",
+        description: "Aberto há 2 horas • Prioridade Alta",
+        url: "/tickets/12345",
         relevance: 0.75,
       },
-    ].filter(r => 
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    ];
+
+    const filtered = mockResultsBase.filter(
+      (r: SearchResult) =>
+        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    setResults(mockResults);
+    setResults(filtered);
     setIsSearching(false);
   };
 
@@ -115,33 +126,33 @@ export function GlobalSearch() {
     }
 
     // Navegar
-    navigate(result.url);
+    setLocation(result.url);
     setIsOpen(false);
-    setQuery('');
+    setQuery("");
   };
 
-  const getIcon = (type: SearchResult['type']) => {
+  const getIcon = (type: SearchResult["type"]) => {
     switch (type) {
-      case 'flow':
+      case "flow":
         return <Workflow className="h-5 w-5 text-blue-500" />;
-      case 'customer':
+      case "customer":
         return <Users className="h-5 w-5 text-green-500" />;
-      case 'ticket':
+      case "ticket":
         return <FileText className="h-5 w-5 text-orange-500" />;
-      case 'message':
+      case "message":
         return <MessageSquare className="h-5 w-5 text-purple-500" />;
-      case 'employee':
+      case "employee":
         return <Users className="h-5 w-5 text-cyan-500" />;
     }
   };
 
-  const getTypeLabel = (type: SearchResult['type']) => {
+  const getTypeLabel = (type: SearchResult["type"]) => {
     const labels = {
-      flow: 'Fluxo',
-      customer: 'Cliente',
-      ticket: 'Ticket',
-      message: 'Mensagem',
-      employee: 'Funcionário',
+      flow: "Fluxo",
+      customer: "Cliente",
+      ticket: "Ticket",
+      message: "Mensagem",
+      employee: "Funcionário",
     };
     return labels[type];
   };
@@ -169,13 +180,13 @@ export function GlobalSearch() {
               <Input
                 placeholder="Buscar fluxos, clientes, tickets, mensagens..."
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={e => setQuery(e.target.value)}
                 className="pl-10 pr-10 h-12 text-base"
                 autoFocus
               />
               {query && (
                 <button
-                  onClick={() => setQuery('')}
+                  onClick={() => setQuery("")}
                   className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-5 w-5" />
@@ -223,17 +234,25 @@ export function GlobalSearch() {
                   ) : (
                     <div className="space-y-2">
                       {/* Agrupar por tipo */}
-                      {['flow', 'customer', 'ticket', 'message', 'employee'].map((type) => {
-                        const typeResults = results.filter(r => r.type === type);
+                      {[
+                        "flow",
+                        "customer",
+                        "ticket",
+                        "message",
+                        "employee",
+                      ].map(type => {
+                        const typeResults = results.filter(
+                          r => r.type === type
+                        );
                         if (typeResults.length === 0) return null;
 
                         return (
                           <div key={type} className="mb-4">
                             <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-2 px-3">
-                              {getTypeLabel(type as SearchResult['type'])}s
+                              {getTypeLabel(type as SearchResult["type"])}s
                             </h3>
                             <div className="space-y-1">
-                              {typeResults.map((result) => (
+                              {typeResults.map(result => (
                                 <button
                                   key={result.id}
                                   onClick={() => handleResultClick(result)}
@@ -241,23 +260,32 @@ export function GlobalSearch() {
                                 >
                                   <div className="flex items-start gap-3">
                                     {getIcon(result.type)}
-                                    
+
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
                                         <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">
                                           {result.title}
                                         </h4>
-                                        <Badge variant="outline" className="text-xs">
-                                          {result.relevance > 0.9 ? 'Alta' : 
-                                           result.relevance > 0.7 ? 'Média' : 'Baixa'} relevância
+                                        <Badge
+                                          variant="outline"
+                                          className="text-xs"
+                                        >
+                                          {result.relevance > 0.9
+                                            ? "Alta"
+                                            : result.relevance > 0.7
+                                              ? "Média"
+                                              : "Baixa"}{" "}
+                                          relevância
                                         </Badge>
                                       </div>
-                                      
+
                                       {result.description && (
-                                        <p 
+                                        <p
                                           className="text-sm text-muted-foreground mt-1"
-                                          dangerouslySetInnerHTML={{ 
-                                            __html: result.highlight || result.description 
+                                          dangerouslySetInnerHTML={{
+                                            __html:
+                                              result.highlight ||
+                                              result.description,
                                           }}
                                         />
                                       )}
@@ -281,13 +309,22 @@ export function GlobalSearch() {
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <div className="flex items-center gap-4">
                 <span>
-                  <kbd className="px-1.5 py-0.5 rounded bg-background border">↑↓</kbd> Navegar
+                  <kbd className="px-1.5 py-0.5 rounded bg-background border">
+                    ↑↓
+                  </kbd>{" "}
+                  Navegar
                 </span>
                 <span>
-                  <kbd className="px-1.5 py-0.5 rounded bg-background border">Enter</kbd> Abrir
+                  <kbd className="px-1.5 py-0.5 rounded bg-background border">
+                    Enter
+                  </kbd>{" "}
+                  Abrir
                 </span>
                 <span>
-                  <kbd className="px-1.5 py-0.5 rounded bg-background border">Esc</kbd> Fechar
+                  <kbd className="px-1.5 py-0.5 rounded bg-background border">
+                    Esc
+                  </kbd>{" "}
+                  Fechar
                 </span>
               </div>
               <span>{results.length} resultados</span>

@@ -3,11 +3,11 @@
  * Analisa a pergunta do cliente e sugere 3 opções de resposta
  */
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Loader2, Sparkles, Check } from 'lucide-react';
-import { trpc } from '@/lib/trpc';
-import { Card } from '@/components/ui/card';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Sparkles, Check } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { Card } from "@/components/ui/card";
 
 interface AISuggestionsProps {
   customerMessage: string;
@@ -24,7 +24,7 @@ export function AISuggestions({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const suggestMutation = trpc.ai.suggestResponses.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       setSuggestions(data.suggestions);
     },
   });
@@ -43,7 +43,7 @@ export function AISuggestions({
     onSelectSuggestion(suggestion);
   };
 
-  if (suggestMutation.isLoading) {
+  if (suggestMutation.isPending) {
     return (
       <Card className="p-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -82,8 +82,8 @@ export function AISuggestions({
             onClick={() => handleSelect(suggestion, index)}
             className={`w-full text-left p-3 rounded-lg border transition-all hover:border-primary hover:bg-primary/5 ${
               selectedIndex === index
-                ? 'border-primary bg-primary/10'
-                : 'border-border'
+                ? "border-primary bg-primary/10"
+                : "border-border"
             }`}
           >
             <div className="flex items-start gap-2">
@@ -97,7 +97,8 @@ export function AISuggestions({
       </div>
 
       <p className="text-xs text-muted-foreground mt-3">
-        💡 Clique em uma sugestão para usá-la como base. Você pode editá-la antes de enviar.
+        💡 Clique em uma sugestão para usá-la como base. Você pode editá-la
+        antes de enviar.
       </p>
     </Card>
   );

@@ -3,10 +3,10 @@
  * Transcreve áudios do WhatsApp automaticamente
  */
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Loader2, FileAudio, FileText } from 'lucide-react';
-import { trpc } from '@/lib/trpc';
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Loader2, FileAudio, FileText } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 interface AudioTranscriptionProps {
   audioUrl: string;
@@ -23,13 +23,13 @@ export function AudioTranscription({
   const [transcription, setTranscription] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const transcribeMutation = trpc.messages.transcribeAudio.useMutation({
-    onSuccess: (data) => {
+  const transcribeMutation = trpc.ai.transcribeAudio.useMutation({
+    onSuccess: data => {
       setTranscription(data.transcription);
       setIsTranscribing(false);
       onTranscriptionComplete?.(data.transcription);
     },
-    onError: (err) => {
+    onError: (err: any) => {
       setError(err.message);
       setIsTranscribing(false);
     },
@@ -76,9 +76,7 @@ export function AudioTranscription({
         </div>
       )}
 
-      {error && (
-        <div className="text-xs text-destructive">{error}</div>
-      )}
+      {error && <div className="text-xs text-destructive">{error}</div>}
     </div>
   );
 }
