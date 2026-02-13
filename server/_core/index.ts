@@ -170,6 +170,15 @@ async function startServer() {
         console.error("Failed to start flow engine:", err);
       });
 
+    // Start CRM outbox worker (async capture / projections)
+    import("../crm-outbox-worker")
+      .then(module => {
+        module.startCrmOutboxWorker();
+      })
+      .catch(err => {
+        console.error("Failed to start CRM outbox worker:", err);
+      });
+
     // Start pause auto-finisher worker
     import("../workers/pause-auto-finisher")
       .then(module => {

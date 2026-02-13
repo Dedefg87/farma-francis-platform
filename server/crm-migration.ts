@@ -90,6 +90,78 @@ export async function runCRMMigration() {
       )
     `);
 
+    // ==============================
+    // Enterprise CRM foundation
+    // ==============================
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS crm_outbox_events (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        event_name VARCHAR(120) NOT NULL,
+        entity_type VARCHAR(40) NOT NULL,
+        entity_id INT NULL,
+        actor_user_id INT NULL,
+        payload_json TEXT NULL,
+        idempotency_key VARCHAR(120) NULL,
+        status ENUM('pending','processed','failed') NOT NULL DEFAULT 'pending',
+        error TEXT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        processed_at DATETIME NULL,
+        INDEX idx_outbox_status_created (status, created_at),
+        INDEX idx_outbox_entity (entity_type, entity_id),
+        INDEX idx_outbox_actor (actor_user_id)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS crm_audit_logs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        action VARCHAR(80) NOT NULL,
+        entity_type VARCHAR(40) NOT NULL,
+        entity_id INT NULL,
+        actor_user_id INT NULL,
+        before_json TEXT NULL,
+        after_json TEXT NULL,
+        request_id VARCHAR(80) NULL,
+        ip VARCHAR(80) NULL,
+        user_agent VARCHAR(255) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_audit_entity (entity_type, entity_id),
+        INDEX idx_audit_actor_created (actor_user_id, created_at)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS crm_activities (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        entity_type VARCHAR(40) NOT NULL,
+        entity_id INT NOT NULL,
+        activity_type VARCHAR(40) NOT NULL,
+        title VARCHAR(255) NULL,
+        body TEXT NULL,
+        metadata_json TEXT NULL,
+        actor_user_id INT NULL,
+        occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_activity_entity_time (entity_type, entity_id, occurred_at),
+        INDEX idx_activity_actor_time (actor_user_id, occurred_at)
+      )
+    `);
+
+    await db.raw(`
+      CREATE TABLE IF NOT EXISTS frontend_telemetry_events (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NULL,
+        page VARCHAR(160) NULL,
+        event_name VARCHAR(120) NOT NULL,
+        payload_json TEXT NULL,
+        occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_telemetry_user_time (user_id, occurred_at),
+        INDEX idx_telemetry_event_time (event_name, occurred_at)
+      )
+    `);
+
     console.log("[CRM Migration] Tables created successfully");
 
     // Inserir tags iniciais

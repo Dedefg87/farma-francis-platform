@@ -19,6 +19,7 @@ import {
   fetchEvolutionProfile,
 } from "./messaging";
 import { sseManager, EVENTS } from "./_core/sse";
+import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
 
 /**
  * Normalizar número de telefone brasileiro
@@ -243,6 +244,20 @@ export const conversationsRouter = router({
         })
         .$returningId();
 
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "ConversationCreated",
+          entityType: "conversation",
+          entityId: newConversation[0].id,
+          actorUserId: ctx.user.id,
+          payload: {
+            customerId: customer.id,
+            channel: input.channel,
+            assignedTo: ctx.user.id,
+          },
+        });
+      });
+
       // Buscar conversa criada
       const [created] = await db
         .select()
@@ -386,6 +401,16 @@ export const conversationsRouter = router({
         })
         .where(eq(conversations.id, input.conversationId));
 
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "ConversationTransferred",
+          entityType: "conversation",
+          entityId: input.conversationId,
+          actorUserId: ctx.user.id,
+          payload: { toAgentId: input.agentId },
+        });
+      });
+
       return { success: true };
     }),
 
@@ -425,6 +450,16 @@ export const conversationsRouter = router({
           closeReason: input.reason || "conversa_anterior",
         })
         .where(eq(conversations.id, input.conversationId));
+
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "ConversationClosed",
+          entityType: "conversation",
+          entityId: input.conversationId,
+          actorUserId: ctx.user.id,
+          payload: { reason: input.reason || "conversa_anterior" },
+        });
+      });
 
       // Send closing message
       const { closeConversation } = await import("./chatbot");

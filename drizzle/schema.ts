@@ -158,6 +158,67 @@ export const ticketComments = mysqlTable("ticket_comments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/**
+ * CRM enterprise foundation tables
+ * - crm_outbox_events: async domain events (no UI impact)
+ * - crm_audit_logs: immutable audit trail (compliance)
+ * - crm_activities: timeline items (read model)
+ * - frontend_telemetry_events: optional UI event capture (batched)
+ */
+
+export const crmOutboxEvents = mysqlTable("crm_outbox_events", {
+  id: int("id").autoincrement().primaryKey(),
+  eventName: varchar("event_name", { length: 120 }).notNull(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  entityId: int("entity_id"),
+  actorUserId: int("actor_user_id").references(() => users.id),
+  payloadJson: text("payload_json"),
+  idempotencyKey: varchar("idempotency_key", { length: 120 }),
+  status: mysqlEnum("status", ["pending", "processed", "failed"])
+    .default("pending")
+    .notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const crmAuditLogs = mysqlTable("crm_audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  action: varchar("action", { length: 80 }).notNull(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  entityId: int("entity_id"),
+  actorUserId: int("actor_user_id").references(() => users.id),
+  beforeJson: text("before_json"),
+  afterJson: text("after_json"),
+  requestId: varchar("request_id", { length: 80 }),
+  ip: varchar("ip", { length: 80 }),
+  userAgent: varchar("user_agent", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const crmActivities = mysqlTable("crm_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  entityId: int("entity_id").notNull(),
+  activityType: varchar("activity_type", { length: 40 }).notNull(),
+  title: varchar("title", { length: 255 }),
+  body: text("body"),
+  metadataJson: text("metadata_json"),
+  actorUserId: int("actor_user_id").references(() => users.id),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const frontendTelemetryEvents = mysqlTable("frontend_telemetry_events", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").references(() => users.id),
+  page: varchar("page", { length: 160 }),
+  eventName: varchar("event_name", { length: 120 }).notNull(),
+  payloadJson: text("payload_json"),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type TicketComment = typeof ticketComments.$inferSelect;
 export type InsertTicketComment = typeof ticketComments.$inferInsert;
 

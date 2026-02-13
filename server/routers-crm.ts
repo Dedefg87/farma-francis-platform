@@ -10,6 +10,11 @@ import {
   conversationMessages,
 } from "../drizzle/schema.js";
 import { like, eq, and, desc, gte, lte, sql, or } from "drizzle-orm";
+import {
+  fireAndForget,
+  appendCrmAuditLog,
+  enqueueCrmOutboxEvent,
+} from "./crm-core";
 
 const calculateEndDate = (
   purchaseDate: Date,
@@ -105,6 +110,23 @@ export const crmRouter = router({
         })
         .where(eq(customers.id, input.id));
 
+      fireAndForget(async () => {
+        await appendCrmAuditLog({
+          action: "customer.update",
+          entityType: "customer",
+          entityId: input.id,
+          actorUserId: null,
+          after: input,
+        });
+        await enqueueCrmOutboxEvent({
+          eventName: "CustomerUpdated",
+          entityType: "customer",
+          entityId: input.id,
+          actorUserId: null,
+          payload: input,
+        });
+      });
+
       return { success: true };
     }),
 
@@ -124,7 +146,7 @@ export const crmRouter = router({
         observacoes: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -147,6 +169,16 @@ export const crmRouter = router({
           observacoes: input.observacoes,
         })
         .$returningId();
+
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "CustomerTreatmentCreated",
+          entityType: "customer",
+          entityId: input.customerId,
+          actorUserId: ctx.user.id,
+          payload: { treatmentId: newTreatment[0].id, ...input },
+        });
+      });
 
       return { id: newTreatment[0].id };
     }),
@@ -183,7 +215,7 @@ export const crmRouter = router({
         isActive: z.number().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -218,6 +250,16 @@ export const crmRouter = router({
         .update(customerTreatments)
         .set(updateData)
         .where(eq(customerTreatments.id, input.id));
+
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "CustomerTreatmentUpdated",
+          entityType: "treatment",
+          entityId: input.id,
+          actorUserId: ctx.user.id,
+          payload: input,
+        });
+      });
 
       return { success: true };
     }),
@@ -254,6 +296,16 @@ export const crmRouter = router({
           createdBy: ctx.user?.id,
         })
         .$returningId();
+
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "TagCreated",
+          entityType: "tag",
+          entityId: newTag[0].id,
+          actorUserId: ctx.user?.id ?? null,
+          payload: input,
+        });
+      });
 
       return { id: newTag[0].id };
     }),
