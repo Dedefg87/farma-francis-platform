@@ -388,28 +388,12 @@ export async function ingestInboundConversationMessage(message: {
   });
   console.log("[ingestInbound] Step D: Picked agent:", picked);
 
-  // FALLBACK: If no agent found, try to get any admin or user
+  // NO FALLBACK: If no agent found, leave conversation in queue (open/unassigned)
+  // This ensures equal distribution - only assign when agent is actually online
   if (!picked) {
-    console.log("[ingestInbound] Step D2: No agent found, using fallback");
-    const [fallbackUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.role, "admin"))
-      .orderBy(desc(users.lastSignedIn))
-      .limit(1);
-
-    if (fallbackUser) {
-      picked = {
-        userId: fallbackUser.id,
-        candidates: 1,
-        minLoad: 0,
-        source: "fallback_admin",
-      };
-      console.log(
-        "[ingestInbound] Step D3: Fallback to admin:",
-        fallbackUser.id
-      );
-    }
+    console.log(
+      "[ingestInbound] Step D2: No agent online - conversation stays in queue"
+    );
   }
 
   const assignedUserId =

@@ -468,6 +468,8 @@ export const conversationsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+      const { conversations } = await import("../drizzle/schema");
+      const { eq, or, and } = await import("drizzle-orm");
 
       const [conversation] = await db
         .select()
@@ -475,7 +477,10 @@ export const conversationsRouter = router({
         .where(
           and(
             eq(conversations.id, input.conversationId),
-            eq(conversations.assignedTo, ctx.user.id)
+            or(
+              eq(conversations.assignedTo, ctx.user.id),
+              eq(conversations.status, "open")
+            )
           )
         )
         .limit(1);
@@ -490,6 +495,7 @@ export const conversationsRouter = router({
           status: "closed",
           closedAt: new Date(),
           closeReason: input.reason || "conversa_anterior",
+          assignedTo: ctx.user.id, // Assign to whoever closes it
         })
         .where(eq(conversations.id, input.conversationId));
 
@@ -509,6 +515,48 @@ export const conversationsRouter = router({
         input.conversationId,
         input.reason || "conversa_anterior"
       );
+
+      return { success: true };
+    }),
+
+  // Pegar conversa da fila (atribuir a si mesmo)
+  take: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { conversations } = await import("../drizzle/schema");
+      const { eq, and, or } = await import("drizzle-orm");
+
+      // Find conversation that is open (in queue)
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, input.conversationId),
+            eq(conversations.status, "open")
+          )
+        )
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error("Conversa não encontrada ou já está atribuída");
+      }
+
+      // Assign to current user
+      await db
+        .update(conversations)
+        .set({
+          status: "assigned",
+          assignedTo: ctx.user.id,
+          queueId: null,
+        })
+        .where(eq(conversations.id, input.conversationId));
 
       return { success: true };
     }),

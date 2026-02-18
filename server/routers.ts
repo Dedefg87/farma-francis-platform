@@ -705,12 +705,13 @@ export const appRouter = router({
           .parse(raw);
       })
       .mutation(async ({ input }) => {
-        const { getDb } = await import("./db");
+        const { getDb, getDbRaw } = await import("./db");
         const { users, employees, conversations, surveyResponses } =
           await import("../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const db = await getDb();
-        if (!db) throw new Error("Database not available");
+        const rawDb = await getDbRaw();
+        if (!db || !rawDb) throw new Error("Database not available");
 
         const userId = input.userId;
 
@@ -729,6 +730,45 @@ export const appRouter = router({
 
           // Deletar employee primeiro (devido a foreign key)
           await db.delete(employees).where(eq(employees.userId, userId));
+
+          // Limpar outras tabelas que podem ter referências ao usuário
+          try {
+            await rawDb.raw("DELETE FROM agent_status WHERE user_id = ?", [
+              userId,
+            ]);
+          } catch (e) {
+            /* ignore */
+          }
+          try {
+            await rawDb.raw("DELETE FROM agent_pauses WHERE agent_id = ?", [
+              userId,
+            ]);
+          } catch (e) {
+            /* ignore */
+          }
+          try {
+            await rawDb.raw(
+              "DELETE FROM crm_outbox_events WHERE actor_user_id = ?",
+              [userId]
+            );
+          } catch (e) {
+            /* ignore */
+          }
+          try {
+            await rawDb.raw(
+              "DELETE FROM crm_audit_logs WHERE actor_user_id = ?",
+              [userId]
+            );
+          } catch (e) {
+            /* ignore */
+          }
+          try {
+            await rawDb.raw("DELETE FROM quick_replies WHERE created_by = ?", [
+              userId,
+            ]);
+          } catch (e) {
+            /* ignore */
+          }
 
           // Finalmente, deletar o usuário
           await db.delete(users).where(eq(users.id, userId));
