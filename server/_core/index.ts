@@ -4,7 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -12,6 +12,8 @@ import { serveStatic, setupVite } from "./vite";
 import { sseManager } from "./sse";
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
+import { getDb } from "../db";
+import { conversationMessages } from "../drizzle/schema";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -79,11 +81,11 @@ async function startServer() {
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {
-      const { getDb } = await import("../db");
-      const { conversationMessages } = await import("../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-
       const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
       const messageId = parseInt(req.params.messageId, 10);
 
       if (isNaN(messageId)) {
