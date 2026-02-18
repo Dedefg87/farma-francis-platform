@@ -625,7 +625,7 @@ export const receivedMessages = mysqlTable("received_messages", {
     "unknown",
   ]).notNull(),
   messageText: text("message_text"), // Text content
-  mediaUrl: varchar("media_url", { length: 512 }), // URL for media files
+  mediaUrl: longtext("media_url"), // URL for media files (can be base64 data URL)
   mediaId: varchar("media_id", { length: 255 }), // Media ID from provider
   mimeType: varchar("mime_type", { length: 100 }), // Media MIME type
   caption: text("caption"), // Media caption
@@ -947,7 +947,7 @@ export const conversationMessages = mysqlTable("conversation_messages", {
   senderType: mysqlEnum("sender_type", ["agent", "customer"]).notNull(),
   content: text("content").notNull(),
   // Campos de anexo
-  fileUrl: varchar("file_url", { length: 500 }),
+  fileUrl: longtext("file_url"), // Can contain base64 data URLs
   fileName: varchar("file_name", { length: 255 }),
   fileType: varchar("file_type", { length: 100 }), // MIME type
   fileSize: int("file_size"), // Tamanho em bytes
