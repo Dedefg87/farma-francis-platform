@@ -14,7 +14,6 @@ import {
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
-import { storagePut } from "./storage";
 
 // Import debug module
 let debugModule: any = null;
@@ -115,14 +114,14 @@ async function getEvolutionConfig() {
 }
 
 /**
- * Download media from WhatsApp/Evolution and save to permanent storage
- * Returns the permanent URL or null if failed
+ * Download media from WhatsApp/Evolution and convert to base64
+ * Returns base64 data URL that can be displayed directly
  */
 async function downloadAndSaveMedia(
   mediaUrl: string,
   mimeType: string | null,
   fromNumber: string
-): Promise<string | null> {
+): Promise<{ base64Data: string; dataUrl: string } | null> {
   try {
     console.log("[Media] Starting download:", mediaUrl);
 
@@ -133,7 +132,6 @@ async function downloadAndSaveMedia(
     if (!response.ok && mediaUrl.includes("whatsapp.net")) {
       const evoConfig = await getEvolutionConfig();
       if (evoConfig) {
-        // Extract media ID from URL if possible
         const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
         if (mediaIdMatch) {
           const mediaId = mediaIdMatch[1];
@@ -156,38 +154,17 @@ async function downloadAndSaveMedia(
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
 
-    // Determine file extension from mime type
-    const extMap: Record<string, string> = {
-      "image/jpeg": "jpg",
-      "image/png": "png",
-      "image/webp": "webp",
-      "image/gif": "gif",
-      "video/mp4": "mp4",
-      "video/3gpp": "3gp",
-      "audio/ogg": "ogg",
-      "audio/mpeg": "mp3",
-      "audio/amr": "amr",
-      "application/pdf": "pdf",
-    };
-    const ext = extMap[mimeType || ""] || "bin";
+    // Determine content type
+    const contentType = mimeType || "application/octet-stream";
+    const dataUrl = `data:${contentType};base64,${base64}`;
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const fileName = `whatsapp-${fromNumber.replace(/\D/g, "")}-${timestamp}-${randomSuffix}.${ext}`;
+    console.log("[Media] Downloaded successfully, size:", buffer.length);
 
-    // Upload to storage
-    const { url } = await storagePut(
-      `media/${fileName}`,
-      buffer,
-      mimeType || "application/octet-stream"
-    );
-
-    console.log("[Media] Saved to:", url);
-    return url;
+    return { base64Data: base64, dataUrl };
   } catch (error) {
-    console.error("[Media] Error saving media:", error);
+    console.error("[Media] Error downloading media:", error);
     return null;
   }
 }
@@ -1264,13 +1241,18 @@ async function processEvolutionWebhook(body: any) {
           ["image", "video", "audio", "document"].includes(messageType)
         ) {
           console.log("[Evolution Webhook] Downloading media...");
-          permanentMediaUrl = await downloadAndSaveMedia(
+          const mediaResult = await downloadAndSaveMedia(
             mediaUrl,
             mimeType,
             fromNumber
           );
-          if (permanentMediaUrl) {
-            console.log("[Evolution Webhook] Media saved permanently");
+          if (mediaResult) {
+            console.log(
+              "[Evolution Webhook] Media downloaded, size:",
+              mediaResult.base64Data.length
+            );
+            // Store base64 in raw_payload for permanent access
+            permanentMediaUrl = mediaResult.dataUrl;
           } else {
             console.log(
               "[Evolution Webhook] Media download failed, using original URL"
