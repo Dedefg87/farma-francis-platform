@@ -1023,14 +1023,33 @@ async function processEvolutionWebhook(body: any) {
       normalizedEvent === "messages_upsert".replace(/[-.]/g, "_")
     ) {
       console.log("[Evolution Webhook] Handling messages event");
+      console.log("[Evolution Webhook] Step 1: extracting data from body");
 
       // Tentar extrair mensagem de várias estruturas possíveis
       const data = body?.data || body;
+      console.log(
+        "[Evolution Webhook] Step 2: data extracted, keys:",
+        Object.keys(data || {})
+      );
 
       // Diferentes estruturas que o Evolution API pode usar
       const messageData = data?.message || data?.messages?.[0] || body || {};
+      console.log(
+        "[Evolution Webhook] Step 3: messageData keys:",
+        Object.keys(messageData || {})
+      );
+
       const key = data?.key || messageData?.key || {};
+      console.log(
+        "[Evolution Webhook] Step 4: key extracted:",
+        JSON.stringify(key).substring(0, 200)
+      );
+
       const messageContent = messageData?.message || messageData;
+      console.log(
+        "[Evolution Webhook] Step 5: messageContent type:",
+        typeof messageContent
+      );
 
       // Extrair dados
       const messageId =
@@ -1052,7 +1071,7 @@ async function processEvolutionWebhook(body: any) {
       const fromMe =
         key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
 
-      console.log("[Evolution Webhook] Extracted data:", {
+      console.log("[Evolution Webhook] Step 6: Extracted data:", {
         messageId,
         remoteJid,
         pushName,
