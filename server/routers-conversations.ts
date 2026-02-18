@@ -308,7 +308,7 @@ export const conversationsRouter = router({
       return { success: true };
     }),
 
-  // Listar conversas ativas do agente (inclui assigned E open)
+  // Listar conversas ativas do agente (inclui todas - open E assigned - para fila)
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -321,6 +321,7 @@ export const conversationsRouter = router({
         customerAvatar: customers.photoUrl,
         channel: conversations.channel,
         status: conversations.status,
+        assignedTo: conversations.assignedTo,
         openedAt: conversations.openedAt,
         lastMessageAt: conversations.lastMessageAt,
         lastMessage: sql<string>`(
@@ -341,12 +342,9 @@ export const conversationsRouter = router({
       .from(conversations)
       .leftJoin(customers, eq(conversations.customerId, customers.id))
       .where(
-        and(
-          eq(conversations.assignedTo, ctx.user.id),
-          or(
-            eq(conversations.status, "assigned"),
-            eq(conversations.status, "open")
-          )
+        or(
+          eq(conversations.status, "assigned"),
+          eq(conversations.status, "open")
         )
       )
       .orderBy(desc(conversations.lastMessageAt));
