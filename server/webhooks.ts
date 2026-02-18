@@ -1074,6 +1074,7 @@ async function processEvolutionWebhook(body: any) {
           fromMe,
         });
 
+        console.error("[Evolution Webhook] === STEP 7 START ===");
         console.log("[Evolution Webhook] Step 7: Checking send events");
         // Ignore send/ack events (outbound)
         if (
@@ -1084,12 +1085,14 @@ async function processEvolutionWebhook(body: any) {
           return;
         }
 
+        console.error("[Evolution Webhook] === STEP 8 START ===");
         console.log("[Evolution Webhook] Step 8: Checking remoteJid");
         if (!remoteJid) {
           console.warn("[Evolution Webhook] FAILED: No remoteJid");
           return;
         }
 
+        console.error("[Evolution Webhook] === STEP 9 START ===");
         console.log("[Evolution Webhook] Step 9: Normalizing phone");
         const fromNumber = normalizeInboundNumber(remoteJid);
         if (!fromNumber) {
@@ -1098,6 +1101,7 @@ async function processEvolutionWebhook(body: any) {
         }
         console.log("[Evolution Webhook] Step 9b: fromNumber=", fromNumber);
 
+        console.error("[Evolution Webhook] === STEP 10 START ===");
         console.log("[Evolution Webhook] Step 10: Checking fromMe");
         // Ignorar mensagens do próprio bot
         if (fromMe === true || fromMe === "true" || fromMe === 1) {
@@ -1105,6 +1109,7 @@ async function processEvolutionWebhook(body: any) {
           return;
         }
 
+        console.error("[Evolution Webhook] === STEP 11 START ===");
         console.log("[Evolution Webhook] Step 11: Checking duplicate");
         // Verificar duplicata
         const existing = await getReceivedMessageByExternalId(
@@ -1116,7 +1121,7 @@ async function processEvolutionWebhook(body: any) {
           return;
         }
 
-        console.log("[Evolution Webhook] Step 12: Parsing message content");
+        console.error("[Evolution Webhook] === STEP 12 START ===");
         // Determinar tipo e conteúdo da mensagem (robusto)
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;

@@ -362,6 +362,7 @@ export async function ingestInboundConversationMessage(message: {
     "[ingestInbound] Step A: Starting with fromNumber:",
     message.fromNumber
   );
+  console.error("[ingestInbound] === STEP A START ===");
   const db = await getDb();
   if (!db) {
     console.error("[ingestInbound] Database not available!");
@@ -381,6 +382,7 @@ export async function ingestInboundConversationMessage(message: {
   const now = message.createdAt ?? new Date();
 
   // Equal-load distribution: pick the least loaded online agent (not paused)
+  console.error("[ingestInbound] === STEP D START - picking agent ===");
   let picked = await pickLeastLoadedOnlineAgent({
     provider: message.provider,
   });
