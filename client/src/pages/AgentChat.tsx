@@ -436,6 +436,13 @@ export default function AgentChat() {
                                     style={{ maxHeight: "300px" }}
                                   />
                                 </a>
+                              ) : message.fileType?.startsWith("video/") ? (
+                                <video
+                                  src={message.fileUrl}
+                                  controls
+                                  className="max-w-full rounded"
+                                  style={{ maxHeight: "300px" }}
+                                />
                               ) : (
                                 <a
                                   href={message.fileUrl}

@@ -6,7 +6,9 @@ function normalizeWhatsAppNumber(value: string) {
   return value.replace(/\D/g, "");
 }
 
-async function getIntegrationConfig(type: "whatsapp_business" | "instagram_graph" | "evolution_api") {
+async function getIntegrationConfig(
+  type: "whatsapp_business" | "instagram_graph" | "evolution_api"
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -20,7 +22,10 @@ async function getIntegrationConfig(type: "whatsapp_business" | "instagram_graph
     throw new Error(`${type} configuration not found or inactive`);
   }
 
-  const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
+  const configData =
+    typeof config.config === "string"
+      ? JSON.parse(config.config)
+      : config.config;
   return { configData, configId: config.id };
 }
 
@@ -28,7 +33,9 @@ async function getEvolutionConfig() {
   try {
     const { configData } = await getIntegrationConfig("evolution_api");
     const apiUrl = configData.apiUrl as string | undefined;
-    const apiKey = (configData.apiKey as string | undefined) || (configData.accessToken as string | undefined);
+    const apiKey =
+      (configData.apiKey as string | undefined) ||
+      (configData.accessToken as string | undefined);
     const instanceName = configData.instanceName as string | undefined;
 
     if (!apiUrl || !apiKey || !instanceName) {
@@ -128,7 +135,10 @@ export async function sendWhatsAppMessage(params: {
 
   const evolutionConfig = await getEvolutionConfig();
   if (evolutionConfig) {
-    const result = await sendEvolutionText({ to: params.to, message: params.message });
+    const result = await sendEvolutionText({
+      to: params.to,
+      message: params.message,
+    });
     await db.insert(messages).values({
       channel: "whatsapp",
       direction: "outbound",
@@ -144,7 +154,9 @@ export async function sendWhatsAppMessage(params: {
   const phoneNumberId = configData.phoneNumberId;
 
   if (!token || !phoneNumberId) {
-    throw new Error("WhatsApp configuration missing accessToken or phoneNumberId");
+    throw new Error(
+      "WhatsApp configuration missing accessToken or phoneNumberId"
+    );
   }
 
   // Prepare request body
@@ -169,7 +181,7 @@ export async function sendWhatsAppMessage(params: {
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -193,7 +205,9 @@ export async function sendWhatsAppMessage(params: {
     status: "sent",
   });
 
-  console.log(`[WhatsApp Send] Message sent to ${params.to}: ${result.messages[0].id}`);
+  console.log(
+    `[WhatsApp Send] Message sent to ${params.to}: ${result.messages[0].id}`
+  );
 
   return {
     success: true,
@@ -215,15 +229,23 @@ export async function sendWhatsAppImage(params: {
 
   const evolutionConfig = await getEvolutionConfig();
   if (evolutionConfig) {
-    const messageText = params.caption ? `${params.caption}\n${params.imageUrl}` : params.imageUrl;
-    const result = await sendEvolutionText({ to: params.to, message: messageText });
+    const messageText = params.caption
+      ? `${params.caption}\n${params.imageUrl}`
+      : params.imageUrl;
+    const result = await sendEvolutionText({
+      to: params.to,
+      message: messageText,
+    });
     await db.insert(messages).values({
       channel: "whatsapp",
       direction: "outbound",
       content: messageText,
       messageId: result?.key?.id || null,
       status: "sent",
-      metadata: JSON.stringify({ imageUrl: params.imageUrl, caption: params.caption }),
+      metadata: JSON.stringify({
+        imageUrl: params.imageUrl,
+        caption: params.caption,
+      }),
     });
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
@@ -233,7 +255,9 @@ export async function sendWhatsAppImage(params: {
   const phoneNumberId = configData.phoneNumberId;
 
   if (!token || !phoneNumberId) {
-    throw new Error("WhatsApp configuration missing accessToken or phoneNumberId");
+    throw new Error(
+      "WhatsApp configuration missing accessToken or phoneNumberId"
+    );
   }
 
   const body = {
@@ -251,7 +275,7 @@ export async function sendWhatsAppImage(params: {
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -271,7 +295,109 @@ export async function sendWhatsAppImage(params: {
     content: params.caption || "[Image]",
     messageId: result.messages[0].id,
     status: "sent",
-    metadata: JSON.stringify({ imageUrl: params.imageUrl, caption: params.caption }),
+    metadata: JSON.stringify({
+      imageUrl: params.imageUrl,
+      caption: params.caption,
+    }),
+  });
+
+  return {
+    success: true,
+    messageId: result.messages[0].id,
+    to: params.to,
+  };
+}
+
+/**
+ * Send a view-once (disappearing) image or video via WhatsApp Business API
+ */
+export async function sendWhatsAppViewOnceMedia(params: {
+  to: string;
+  mediaUrl: string;
+  mediaType: "image" | "video";
+  caption?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const evolutionConfig = await getEvolutionConfig();
+  if (evolutionConfig) {
+    const messageText = params.caption
+      ? `${params.caption}\n${params.mediaUrl}`
+      : params.mediaUrl;
+    const result = await sendEvolutionText({
+      to: params.to,
+      message: messageText,
+    });
+    await db.insert(messages).values({
+      channel: "whatsapp",
+      direction: "outbound",
+      content: messageText,
+      messageId: result?.key?.id || null,
+      status: "sent",
+      metadata: JSON.stringify({
+        mediaUrl: params.mediaUrl,
+        mediaType: params.mediaType,
+        caption: params.caption,
+        viewOnce: true,
+      }),
+    });
+    return { success: true, messageId: result?.key?.id || null, to: params.to };
+  }
+
+  const { configData } = await getIntegrationConfig("whatsapp_business");
+  const token = configData.accessToken;
+  const phoneNumberId = configData.phoneNumberId;
+
+  if (!token || !phoneNumberId) {
+    throw new Error(
+      "WhatsApp configuration missing accessToken or phoneNumberId"
+    );
+  }
+
+  const body = {
+    messaging_product: "whatsapp",
+    to: normalizeWhatsAppNumber(params.to),
+    type: params.mediaType,
+    [params.mediaType]: {
+      link: params.mediaUrl,
+      caption: params.caption || undefined,
+      animated: false,
+    },
+    ephemeral: true,
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`WhatsApp API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+
+  await db.insert(messages).values({
+    channel: "whatsapp",
+    direction: "outbound",
+    content: params.caption || `[View-once ${params.mediaType}]`,
+    messageId: result.messages[0].id,
+    status: "sent",
+    metadata: JSON.stringify({
+      mediaUrl: params.mediaUrl,
+      mediaType: params.mediaType,
+      caption: params.caption,
+      viewOnce: true,
+    }),
   });
 
   return {
@@ -313,7 +439,7 @@ export async function sendInstagramMessage(params: {
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -336,7 +462,9 @@ export async function sendInstagramMessage(params: {
     status: "sent",
   });
 
-  console.log(`[Instagram Send] Message sent to ${params.to}: ${result.message_id}`);
+  console.log(
+    `[Instagram Send] Message sent to ${params.to}: ${result.message_id}`
+  );
 
   return {
     success: true,
@@ -383,7 +511,7 @@ export async function sendInstagramImage(params: {
     {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -434,7 +562,10 @@ export async function getSentMessages(filters?: {
     conditions.push(eq(messages.customerId, filters.customerId));
   }
 
-  let query = db.select().from(messages).where(and(...conditions));
+  let query = db
+    .select()
+    .from(messages)
+    .where(and(...conditions));
 
   if (filters?.limit) {
     query = query.limit(filters.limit) as any;

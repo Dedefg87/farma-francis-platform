@@ -14,6 +14,7 @@ import { storagePut } from "./storage";
 import {
   sendWhatsAppImage,
   sendWhatsAppMessage,
+  sendWhatsAppViewOnceMedia,
   sendInstagramImage,
   sendInstagramMessage,
   fetchEvolutionProfile,
@@ -735,6 +736,7 @@ export const messagesRouter = router({
         fileName: z.string().optional(),
         fileType: z.string().optional(),
         fileSize: z.number().optional(),
+        viewOnce: z.boolean().optional().default(false),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -773,15 +775,27 @@ export const messagesRouter = router({
       const isImage = Boolean(
         input.fileUrl && input.fileType?.startsWith("image/")
       );
+      const isVideo = Boolean(
+        input.fileUrl && input.fileType?.startsWith("video/")
+      );
 
       try {
         if (conversation.channel === "whatsapp") {
-          if (isImage && input.fileUrl) {
-            await sendWhatsAppImage({
-              to: destination,
-              imageUrl: input.fileUrl,
-              caption: input.content,
-            });
+          if ((isImage || isVideo) && input.fileUrl) {
+            if (input.viewOnce) {
+              await sendWhatsAppViewOnceMedia({
+                to: destination,
+                mediaUrl: input.fileUrl,
+                mediaType: isVideo ? "video" : "image",
+                caption: input.content,
+              });
+            } else {
+              await sendWhatsAppImage({
+                to: destination,
+                imageUrl: input.fileUrl,
+                caption: input.content,
+              });
+            }
           } else {
             await sendWhatsAppMessage({
               to: destination,

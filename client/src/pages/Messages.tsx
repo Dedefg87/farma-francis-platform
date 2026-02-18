@@ -57,6 +57,7 @@ export default function Messages() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isViewOnce, setIsViewOnce] = useState(false);
   const [activeTab, setActiveTab] = useState<"messages" | "notes" | "internal">(
     "messages"
   );
@@ -121,6 +122,9 @@ export default function Messages() {
       "image/png",
       "image/gif",
       "image/webp",
+      "video/mp4",
+      "video/webm",
+      "video/quicktime",
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -163,6 +167,12 @@ export default function Messages() {
     },
   });
 
+  const uploadFileMutation = trpc.messages.uploadFile.useMutation({
+    onError: error => {
+      toast.error(`Erro ao fazer upload: ${error.message}`);
+    },
+  });
+
   const sendInternalMessageMutation = trpc.internalMessages.send.useMutation({
     onSuccess: () => {
       toast.success("Mensagem interna enviada!");
@@ -173,17 +183,65 @@ export default function Messages() {
     },
   });
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!selectedConversation) {
       toast.error("Selecione uma conversa primeiro");
       return;
     }
     if (!messageInput.trim() && !selectedFile) return;
 
+    let fileData: {
+      fileUrl?: string;
+      fileName?: string;
+      fileType?: string;
+      fileSize?: number;
+    } = {};
+
+    if (selectedFile) {
+      try {
+        setIsUploading(true);
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64 = reader.result as string;
+            const base64Data = base64.split(",")[1];
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(selectedFile);
+        });
+
+        const base64Data = await base64Promise;
+
+        const uploadResult = await uploadFileMutation.mutateAsync({
+          conversation_id: selectedConversation,
+          fileName: selectedFile.name,
+          fileType: selectedFile.type,
+          fileSize: selectedFile.size,
+          fileData: base64Data,
+        });
+
+        fileData = {
+          fileUrl: uploadResult.fileUrl,
+          fileName: uploadResult.fileName,
+          fileType: uploadResult.fileType,
+          fileSize: uploadResult.fileSize,
+        };
+      } catch (error) {
+        console.error("Erro ao fazer upload:", error);
+        setIsUploading(false);
+        return;
+      }
+    }
+
     sendMessageMutation.mutate({
       conversation_id: selectedConversation,
       content: messageInput,
+      ...fileData,
+      viewOnce: isViewOnce && selectedFile ? true : false,
     });
+
+    setIsUploading(false);
   };
 
   const handleSendInternalMessage = () => {
@@ -727,17 +785,59 @@ export default function Messages() {
                                     : "bg-gray-100 text-gray-900"
                                 }`}
                               >
-                                <p className="text-sm">{msg.content}</p>
+                                {msg.content && msg.content !== "null" && (
+                                  <p className="text-sm">{msg.content}</p>
+                                )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    <a
-                                      href={msg.fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs underline"
-                                    >
-                                      📎 {msg.fileName || "Arquivo"}
-                                    </a>
+                                    {msg.fileType?.startsWith("image/") ? (
+                                      <div className="relative group">
+                                        <img
+                                          src={msg.fileUrl || undefined}
+                                          alt={msg.fileName || "Imagem"}
+                                          className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
+                                          onClick={() => {
+                                            if (msg.fileUrl) {
+                                              window.open(
+                                                msg.fileUrl,
+                                                "_blank"
+                                              );
+                                            }
+                                          }}
+                                        />
+                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg" />
+                                      </div>
+                                    ) : msg.fileType?.startsWith("video/") ? (
+                                      <div className="relative">
+                                        <video
+                                          src={msg.fileUrl}
+                                          controls
+                                          className="max-w-full rounded-lg max-h-64"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <a
+                                        href={msg.fileUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 text-xs underline"
+                                      >
+                                        <svg
+                                          className="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                                          />
+                                        </svg>
+                                        {msg.fileName || "Arquivo"}
+                                      </a>
+                                    )}
                                   </div>
                                 )}
                                 <span
@@ -895,9 +995,41 @@ export default function Messages() {
                               document.getElementById("file-upload")?.click()
                             }
                             disabled={sendMessageMutation.isPending}
+                            title="Anexar arquivo"
                           >
                             <Paperclip className="w-4 h-4" />
                           </Button>
+                          {(selectedFile?.type.startsWith("image/") ||
+                            selectedFile?.type.startsWith("video/")) && (
+                            <Button
+                              variant={isViewOnce ? "default" : "outline"}
+                              size="icon"
+                              className={`self-end ${isViewOnce ? "bg-orange-500 hover:bg-orange-600" : ""}`}
+                              onClick={() => setIsViewOnce(!isViewOnce)}
+                              disabled={sendMessageMutation.isPending}
+                              title="Enviar como visualização única (desaparece após visualização)"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                />
+                              </svg>
+                            </Button>
+                          )}
                           <Textarea
                             placeholder="Digite sua mensagem..."
                             value={messageInput}
