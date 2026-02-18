@@ -1015,14 +1015,13 @@ async function processEvolutionWebhook(body: any) {
 
     // Verificar se é evento de mensagens
     // IMPORTANTE: o Evolution pode enviar "chats_update" e outros eventos sem mensagem.
-    // Aqui processamos apenas eventos de mensagem.
+    // Aqui processamos apenas eventos de mensagem (messages.upsert).
+    // Ignoramos messages.update pois é apenas status (READ, DELIVERY_ACK, etc)
     if (
-      normalizedEvent.includes("messages") ||
-      normalizedEvent === "messages_update" ||
       normalizedEvent === "messages_upsert" ||
-      normalizedEvent === "messages_upsert".replace(/[-.]/g, "_")
+      normalizedEvent === "messages.upsert"
     ) {
-      console.log("[Evolution Webhook] Handling messages event - START");
+      console.log("[Evolution Webhook] Handling messages.upsert event - START");
 
       try {
         console.log("[Evolution Webhook] Step 1: extracting data from body");
@@ -1233,6 +1232,16 @@ async function processEvolutionWebhook(body: any) {
         "[Evolution Webhook] Presence event ignored:",
         normalizedEvent
       );
+      return;
+    }
+
+    // Messages update - status updates like READ, DELIVERY_ACK - ignore
+    if (
+      normalizedEvent === "messages_update" ||
+      normalizedEvent === "messages.update"
+    ) {
+      const status = body?.data?.status || body?.status;
+      console.log("[Evolution Webhook] Message status update ignored:", status);
       return;
     }
 
