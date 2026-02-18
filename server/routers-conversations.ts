@@ -308,7 +308,7 @@ export const conversationsRouter = router({
       return { success: true };
     }),
 
-  // Listar conversas ativas do agente
+  // Listar conversas ativas do agente (inclui assigned E open)
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -343,7 +343,10 @@ export const conversationsRouter = router({
       .where(
         and(
           eq(conversations.assignedTo, ctx.user.id),
-          eq(conversations.status, "assigned")
+          or(
+            eq(conversations.status, "assigned"),
+            eq(conversations.status, "open")
+          )
         )
       )
       .orderBy(desc(conversations.lastMessageAt));

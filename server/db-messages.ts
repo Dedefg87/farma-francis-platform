@@ -96,12 +96,13 @@ async function pickLeastLoadedOnlineAgent(params: {
     };
   }
 
-  // Final fallback: distribute across all agents (role=user) even if status is not set
+  // Final fallback: distribute across all users (admin or user role) even if status is not set
   const anyRows = (await db.execute(sql`
     SELECT 
       u.id AS userId,
+      u.role AS role,
       COUNT(c.id) AS loadCount,
-      MAX(u.lastSignedIn) AS lastSignedIn
+      MAX(u.last_signed_in) AS lastSignedIn
     FROM users u
     LEFT JOIN agent_pauses p
       ON p.agent_id = u.id AND p.status = 'active'
@@ -109,7 +110,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       ON c.assigned_to = u.id
      AND c.status IN ('open','assigned')
      AND c.channel = ${params.provider}
-    WHERE u.role = 'user'
+    WHERE (u.role = 'user' OR u.role = 'admin')
       AND p.id IS NULL
     GROUP BY u.id
     ORDER BY loadCount ASC, lastSignedIn DESC
@@ -380,14 +381,41 @@ export async function ingestInboundConversationMessage(message: {
   const now = message.createdAt ?? new Date();
 
   // Equal-load distribution: pick the least loaded online agent (not paused)
-  const picked = await pickLeastLoadedOnlineAgent({
+  let picked = await pickLeastLoadedOnlineAgent({
     provider: message.provider,
   });
   console.log("[ingestInbound] Step D: Picked agent:", picked);
+
+  // FALLBACK: If no agent found, try to get any admin or user
+  if (!picked) {
+    console.log("[ingestInbound] Step D2: No agent found, using fallback");
+    const [fallbackUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, "admin"))
+      .orderBy(desc(users.lastSignedIn))
+      .limit(1);
+
+    if (fallbackUser) {
+      picked = {
+        userId: fallbackUser.id,
+        candidates: 1,
+        minLoad: 0,
+        source: "fallback_admin",
+      };
+      console.log(
+        "[ingestInbound] Step D3: Fallback to admin:",
+        fallbackUser.id
+      );
+    }
+  }
+
   const assignedUserId =
     picked && Number.isFinite(picked.userId) && picked.userId > 0
       ? picked.userId
       : null;
+
+  console.log("[ingestInbound] Step D4: Final assignedUserId:", assignedUserId);
 
   const [defaultQueue] = await db
     .select()

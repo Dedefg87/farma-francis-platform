@@ -129,6 +129,81 @@ async function startServer() {
     app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
   }
 
+  // DEBUG routes - Always enabled for troubleshooting
+  app.get("/api/debug/conversations", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { conversations, users } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+      const allConversations = await db
+        .select({
+          id: conversations.id,
+          customerId: conversations.customerId,
+          customerName: conversations.customerName,
+          customerPhone: conversations.customerPhone,
+          channel: conversations.channel,
+          status: conversations.status,
+          assignedTo: conversations.assignedTo,
+          lastMessageAt: conversations.lastMessageAt,
+          unreadCount: conversations.unreadCount,
+        })
+        .from(conversations)
+        .orderBy(conversations.lastMessageAt);
+      res.json({
+        count: allConversations.length,
+        conversations: allConversations,
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.get("/api/debug/users", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { users } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+      const allUsers = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          role: users.role,
+          lastSignedIn: users.lastSignedIn,
+        })
+        .from(users);
+      res.json({ count: allUsers.length, users: allUsers });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.get("/api/debug/received-messages", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { receivedMessages } = await import("../../drizzle/schema");
+      const { desc } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+      const messages = await db
+        .select()
+        .from(receivedMessages)
+        .orderBy(desc(receivedMessages.createdAt))
+        .limit(20);
+      res.json({ count: messages.length, messages });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
