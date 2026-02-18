@@ -132,6 +132,73 @@ async function startServer() {
     }
   });
 
+  // Endpoint to migrate all old WhatsApp media URLs to base64
+  app.post("/api/media/migrate", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 5,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Get all messages with WhatsApp media URLs
+      const [rows]: any = await pool.execute(
+        `SELECT cm.id, cm.file_url, cm.file_type 
+         FROM conversation_messages cm 
+         WHERE cm.file_url IS NOT NULL 
+         AND cm.file_url LIKE '%whatsapp.net%'
+         AND cm.file_url NOT LIKE 'data:%'
+         LIMIT 50`
+      );
+
+      if (!rows || rows.length === 0) {
+        await pool.end();
+        return res.json({ message: "No images to migrate", processed: 0 });
+      }
+
+      let processed = 0;
+      let failed = 0;
+
+      for (const row of rows) {
+        try {
+          const mediaUrl = row.file_url;
+          const response = await fetch(mediaUrl);
+
+          if (!response.ok) {
+            console.log(
+              `[Migrate] Failed to download ${mediaUrl}: ${response.status}`
+            );
+            failed++;
+            continue;
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const base64 = buffer.toString("base64");
+          const mimeType = row.file_type || "image/jpeg";
+          const dataUrl = `data:${mimeType};base64,${base64}`;
+
+          await pool.execute(
+            "UPDATE conversation_messages SET file_url = ? WHERE id = ?",
+            [dataUrl, row.id]
+          );
+
+          processed++;
+          console.log(`[Migrate] Processed message ${row.id}`);
+        } catch (err) {
+          console.error(`[Migrate] Error processing ${row.id}:`, err);
+          failed++;
+        }
+      }
+
+      await pool.end();
+      res.json({ message: "Migration complete", processed, failed });
+    } catch (error) {
+      console.error("[Media] Migration error:", error);
+      res.status(500).json({ error: "Migration failed" });
+    }
+  });
+
   app.get("/api/events", async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
