@@ -113,15 +113,21 @@ async function startServer() {
   app.use("/api/webhooks", webhookRouter.default);
 
   // Test Routes - Sistema de Teste de Fluxos
-  const testFlowsRouter = await import("../test-flows");
-  app.get("/api/test/status", testFlowsRouter.getSystemStatus);
-  app.get("/api/test/flows", testFlowsRouter.listAllFlows);
-  app.post("/api/test/activate/:id", testFlowsRouter.activateFlow);
-  app.post("/api/test/simulate-message", testFlowsRouter.simulateMessage);
-  app.post("/api/test/trigger-flow", testFlowsRouter.triggerFlowManually);
-  app.get("/api/test/messages", testFlowsRouter.listRecentMessages);
-  app.get("/api/test/health", testFlowsRouter.healthCheck);
-  app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
+  // Safety: disabled by default in production.
+  const enableTestRoutes =
+    process.env.ENABLE_TEST_ROUTES === "1" ||
+    process.env.NODE_ENV === "development";
+  if (enableTestRoutes) {
+    const testFlowsRouter = await import("../test-flows");
+    app.get("/api/test/status", testFlowsRouter.getSystemStatus);
+    app.get("/api/test/flows", testFlowsRouter.listAllFlows);
+    app.post("/api/test/activate/:id", testFlowsRouter.activateFlow);
+    app.post("/api/test/simulate-message", testFlowsRouter.simulateMessage);
+    app.post("/api/test/trigger-flow", testFlowsRouter.triggerFlowManually);
+    app.get("/api/test/messages", testFlowsRouter.listRecentMessages);
+    app.get("/api/test/health", testFlowsRouter.healthCheck);
+    app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
+  }
 
   // tRPC API
   app.use(
