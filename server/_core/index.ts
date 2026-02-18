@@ -336,19 +336,11 @@ async function startServer() {
       // Check existing tables
       const tables = await db.execute(sql`SHOW TABLES LIKE 'broadcast%'`);
 
-      // Get schema for each table if exists
-      const schemas: any = {};
-      for (const row of tables as any[]) {
-        const tableName = String(Object.values(row)[0]);
-        const columns = await db.execute(
-          sql`DESCRIBE ${sql.identifier(tableName)}`
-        );
-        schemas[tableName] = columns;
-      }
+      // Get table names
+      const tableNames = tables.map((row: any) => Object.values(row)[0]);
 
       res.json({
-        tablesFound: tables,
-        schemas: schemas,
+        tablesFound: tableNames,
       });
     } catch (error) {
       console.error("Error checking tables:", error);
