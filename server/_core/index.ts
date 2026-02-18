@@ -101,7 +101,7 @@ async function startServer() {
     sseManager.addClient(String(decoded.userId), res);
 
     req.on("close", () => {
-      sseManager.addClient(String(decoded.userId), res);
+      // sseManager.addClient already registers a close handler for cleanup.
     });
   });
 

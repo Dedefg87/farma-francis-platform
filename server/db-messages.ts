@@ -18,6 +18,47 @@ async function pickLeastLoadedOnlineAgent(params: {
   const db = await getDb();
   if (!db) return null;
 
+  // Prefer agents with an active SSE connection (actually online in the UI)
+  const connected = sseManager
+    .getConnectedUsers()
+    .map(id => Number(id))
+    .filter(id => Number.isFinite(id) && id > 0);
+
+  if (connected.length > 0) {
+    const rows = (await db.execute(sql`
+      SELECT 
+        u.id AS userId,
+        COUNT(c.id) AS loadCount,
+        MAX(u.last_signed_in) AS lastSignedIn
+      FROM users u
+      LEFT JOIN agent_pauses p
+        ON p.agent_id = u.id AND p.status = 'active'
+      LEFT JOIN conversations c
+        ON c.assigned_to = u.id
+       AND c.status IN ('open','assigned')
+       AND c.channel = ${params.provider}
+      WHERE u.role = 'user'
+        AND u.id IN (${sql.join(
+          connected.map(id => sql`${id}`),
+          sql`, `
+        )})
+        AND p.id IS NULL
+      GROUP BY u.id
+      ORDER BY loadCount ASC, lastSignedIn DESC
+    `)) as any[];
+
+    if (Array.isArray(rows) && rows.length > 0) {
+      const minLoad = Number(rows[0]?.loadCount ?? 0);
+      const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
+      return {
+        userId: Number(minRows[0]?.userId),
+        candidates: rows.length,
+        minLoad,
+        source: "sse",
+      };
+    }
+  }
+
   const rows = (await db.execute(sql`
     SELECT 
       a.user_id AS userId,
@@ -49,6 +90,7 @@ async function pickLeastLoadedOnlineAgent(params: {
     userId: Number(minRows[0]?.userId),
     candidates: rows.length,
     minLoad,
+    source: "agent_status",
   };
 }
 
