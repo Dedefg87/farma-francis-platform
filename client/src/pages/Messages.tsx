@@ -8,6 +8,14 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+function getImageSrc(url: string | null | undefined): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) {
+    return url;
+  }
+  return url;
+}
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -793,13 +801,13 @@ export default function Messages() {
                                     {msg.fileType?.startsWith("image/") ? (
                                       <div className="relative group">
                                         <img
-                                          src={msg.fileUrl || undefined}
+                                          src={getImageSrc(msg.fileUrl)}
                                           alt={msg.fileName || "Imagem"}
                                           className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
                                           onClick={() => {
                                             if (msg.fileUrl) {
                                               window.open(
-                                                msg.fileUrl,
+                                                getImageSrc(msg.fileUrl),
                                                 "_blank"
                                               );
                                             }
@@ -810,14 +818,14 @@ export default function Messages() {
                                     ) : msg.fileType?.startsWith("video/") ? (
                                       <div className="relative">
                                         <video
-                                          src={msg.fileUrl}
+                                          src={getImageSrc(msg.fileUrl)}
                                           controls
                                           className="max-w-full rounded-lg max-h-64"
                                         />
                                       </div>
                                     ) : (
                                       <a
-                                        href={msg.fileUrl}
+                                        href={getImageSrc(msg.fileUrl)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 text-xs underline"

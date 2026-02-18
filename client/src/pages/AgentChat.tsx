@@ -10,6 +10,14 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+
+function getImageSrc(url: string | null | undefined): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) {
+    return url;
+  }
+  return url;
+}
 import {
   Send,
   Paperclip,
@@ -425,12 +433,12 @@ export default function AgentChat() {
                             <div className="mb-2">
                               {message.fileType?.startsWith("image/") ? (
                                 <a
-                                  href={message.fileUrl}
+                                  href={getImageSrc(message.fileUrl)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
                                   <img
-                                    src={message.fileUrl}
+                                    src={getImageSrc(message.fileUrl)}
                                     alt={message.fileName || "Imagem"}
                                     className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
                                     style={{ maxHeight: "300px" }}
@@ -438,14 +446,14 @@ export default function AgentChat() {
                                 </a>
                               ) : message.fileType?.startsWith("video/") ? (
                                 <video
-                                  src={message.fileUrl}
+                                  src={getImageSrc(message.fileUrl)}
                                   controls
                                   className="max-w-full rounded"
                                   style={{ maxHeight: "300px" }}
                                 />
                               ) : (
                                 <a
-                                  href={message.fileUrl}
+                                  href={getImageSrc(message.fileUrl)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className={`flex items-center gap-2 p-2 rounded border ${

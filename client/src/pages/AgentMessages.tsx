@@ -4,6 +4,14 @@ import AgentTopBar from "@/components/AgentTopBar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+function getImageSrc(url: string | null | undefined): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) {
+    return url;
+  }
+  return url;
+}
 import {
   MessageSquare,
   Clock,
@@ -725,22 +733,26 @@ export default function AgentMessages() {
                           <div className="mt-2">
                             {msg.fileType?.startsWith("image/") ? (
                               <img
-                                src={msg.fileUrl}
+                                src={getImageSrc(msg.fileUrl)}
                                 alt={msg.fileName || "Imagem"}
                                 className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
                                 onClick={() =>
-                                  window.open(msg.fileUrl, "_blank")
+                                  msg.fileUrl &&
+                                  window.open(
+                                    getImageSrc(msg.fileUrl),
+                                    "_blank"
+                                  )
                                 }
                               />
                             ) : msg.fileType?.startsWith("video/") ? (
                               <video
-                                src={msg.fileUrl}
+                                src={getImageSrc(msg.fileUrl)}
                                 controls
                                 className="max-w-full rounded-lg max-h-64"
                               />
                             ) : (
                               <a
-                                href={msg.fileUrl}
+                                href={getImageSrc(msg.fileUrl)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 text-xs underline"
