@@ -1290,7 +1290,11 @@ async function processEvolutionWebhook(body: any) {
           mimeType,
           caption,
           timestamp: messageTimestamp,
-          rawPayload: JSON.stringify(body),
+          rawPayload: JSON.stringify({
+            ...body,
+            mediaDownloaded: !!permanentMediaUrl,
+            mediaSize: permanentMediaUrl ? permanentMediaUrl.length : 0,
+          }),
           processed: 0,
         });
 
