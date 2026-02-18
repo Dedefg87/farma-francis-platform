@@ -1,44 +1,109 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Send, Search, Phone, Instagram, Settings, Paperclip, X, FileText, Image as ImageIcon, StickyNote, User } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import {
+  MessageSquare,
+  Send,
+  Search,
+  Phone,
+  Instagram,
+  Settings,
+  Paperclip,
+  X,
+  FileText,
+  Image as ImageIcon,
+  StickyNote,
+  User,
+  Mail,
+  Lightbulb,
+  ChevronRight,
+  Building,
+} from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-
-
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Messages() {
+  const { user, isAdmin } = useAuth();
   const [, setLocation] = useLocation();
-  const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<
+    number | null
+  >(null);
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'messages' | 'notes'>('messages');
+  const [activeTab, setActiveTab] = useState<"messages" | "notes" | "internal">(
+    "messages"
+  );
   const [internalNote, setInternalNote] = useState("");
+  const [internalMessageInput, setInternalMessageInput] = useState("");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Buscar conversas reais
-  const { data: conversations, isLoading: loadingConversations } = trpc.conversations.listActive.useQuery();
-  
+  const { data: conversations, isLoading: loadingConversations } =
+    trpc.conversations.listActive.useQuery();
+
   // Buscar mensagens da conversa selecionada
-  const { data: messages, isLoading: loadingMessages } = trpc.messages.list.useQuery(
-    { conversation_id: selectedConversation || 0 },
-    { enabled: selectedConversation !== null }
+  const { data: messages, isLoading: loadingMessages } =
+    trpc.messages.list.useQuery(
+      { conversation_id: selectedConversation || 0 },
+      { enabled: selectedConversation !== null }
+    );
+
+  // Buscar mensagens internas da conversa selecionada
+  const { data: internalMessages, isLoading: loadingInternalMessages } =
+    trpc.internalMessages.list.useQuery(
+      { conversation_id: selectedConversation || 0 },
+      { enabled: selectedConversation !== null && activeTab === "internal" }
+    );
+
+  // Buscar detalhes do cliente quando uma conversa é selecionada
+  const selectedConversationData = conversations?.find(
+    c => c.id === selectedConversation
   );
 
-  const filteredConversations = conversations?.filter((conv) =>
-    conv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    conv.customerPhone?.includes(searchQuery)
-  ) || [];
+  const { data: customerDetails } = trpc.customers.getById.useQuery(
+    { id: selectedConversationData?.customerId || 0 },
+    {
+      enabled:
+        selectedConversation !== null &&
+        !!selectedConversationData?.customerId &&
+        isProfileOpen,
+    }
+  );
+
+  const filteredConversations =
+    conversations?.filter(
+      conv =>
+        (conv.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ??
+          false) ||
+        (conv.customerPhone?.includes(searchQuery) ?? false)
+    ) || [];
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -52,19 +117,25 @@ export default function Messages() {
 
     // Validar tipo
     const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ];
     if (!allowedTypes.includes(file.type)) {
-      toast.error("Tipo de arquivo não suportado. Use imagens ou documentos PDF/DOCX.");
+      toast.error(
+        "Tipo de arquivo não suportado. Use imagens ou documentos PDF/DOCX."
+      );
       return;
     }
 
     setSelectedFile(file);
 
     // Criar preview para imagens
-    if (file.type.startsWith('image/')) {
+    if (file.type.startsWith("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result as string);
@@ -87,8 +158,18 @@ export default function Messages() {
       setSelectedFile(null);
       setFilePreview(null);
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(`Erro ao enviar: ${error.message}`);
+    },
+  });
+
+  const sendInternalMessageMutation = trpc.internalMessages.send.useMutation({
+    onSuccess: () => {
+      toast.success("Mensagem interna enviada!");
+      setInternalMessageInput("");
+    },
+    onError: error => {
+      toast.error(`Erro ao enviar mensagem interna: ${error.message}`);
     },
   });
 
@@ -98,10 +179,28 @@ export default function Messages() {
       return;
     }
     if (!messageInput.trim() && !selectedFile) return;
-    
+
     sendMessageMutation.mutate({
       conversation_id: selectedConversation,
       content: messageInput,
+    });
+  };
+
+  const handleSendInternalMessage = () => {
+    if (!selectedConversation) {
+      toast.error("Selecione uma conversa primeiro");
+      return;
+    }
+    if (!internalMessageInput.trim()) return;
+    if (!selectedConversationData?.assignedTo) {
+      toast.error("Esta conversa não tem um agente atribuído");
+      return;
+    }
+
+    sendInternalMessageMutation.mutate({
+      conversation_id: selectedConversation,
+      recipient_id: selectedConversationData.assignedTo,
+      content: internalMessageInput,
     });
   };
 
@@ -134,72 +233,111 @@ export default function Messages() {
     );
   };
 
+  // Sugestões de abordagem baseadas no contexto
+  const getApproachSuggestions = () => {
+    if (!customerDetails) return [];
+
+    const suggestions = [
+      "Saudação personalizada pelo nome do cliente",
+      "Mencionar histórico de compras anteriores se houver",
+      "Oferecer ajuda com base nos produtos de interesse",
+    ];
+
+    if (customerDetails.tags) {
+      suggestions.push("Referenciar tags de interesse do cliente");
+    }
+
+    if (customerDetails.lastPurchaseAt) {
+      suggestions.push("Perguntar sobre a satisfação com a última compra");
+    }
+
+    return suggestions;
+  };
+
   return (
     <FarmaDashboardLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Mensagens</h1>
-          <p className="text-gray-500 mt-1">Central de mensagens WhatsApp e Instagram</p>
+          <p className="text-gray-500 mt-1">
+            Central de mensagens WhatsApp e Instagram
+          </p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total de Conversas</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Total de Conversas
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{conversations?.length || 0}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Não Lidas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {conversations?.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0) || 0}
+              <div className="text-2xl font-bold">
+                {conversations?.length || 0}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Conversas Ativas</CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Não Lidas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-600">
+                {conversations?.reduce(
+                  (acc, conv) => acc + (conv.unreadCount || 0),
+                  0
+                ) || 0}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600">
+                Conversas Ativas
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {conversations?.filter(c => c.status === 'assigned').length || 0}
+                {conversations?.filter(c => c.status === "assigned").length ||
+                  0}
               </div>
             </CardContent>
           </Card>
         </div>
 
         {/* Messages Interface */}
-        <Card className="h-[600px]">
+        <Card className="h-[calc(100vh-280px)] min-h-[500px] overflow-hidden">
           <div className="grid grid-cols-12 h-full">
             {/* Conversations List */}
-            <div className="col-span-4 border-r border-gray-200">
-              <CardHeader>
+            <div className="col-span-4 border-r border-gray-200 flex flex-col">
+              <CardHeader className="flex-shrink-0">
                 <CardTitle className="text-lg">Conversas</CardTitle>
                 <div className="relative mt-2">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
                     placeholder="Buscar conversa..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value)}
                     className="pl-10"
                   />
                 </div>
               </CardHeader>
-              <ScrollArea className="h-[calc(600px-140px)]">
+              <ScrollArea className="flex-1">
                 <div className="space-y-1 p-4 pt-0">
                   {loadingConversations ? (
-                    <div className="text-center py-4 text-gray-500">Carregando...</div>
+                    <div className="text-center py-4 text-gray-500">
+                      Carregando...
+                    </div>
                   ) : filteredConversations.length === 0 ? (
-                    <div className="text-center py-4 text-gray-500">Nenhuma conversa encontrada</div>
+                    <div className="text-center py-4 text-gray-500">
+                      Nenhuma conversa encontrada
+                    </div>
                   ) : (
-                    filteredConversations.map((conv) => (
+                    filteredConversations.map(conv => (
                       <button
                         key={conv.id}
                         onClick={() => setSelectedConversation(conv.id)}
@@ -211,18 +349,27 @@ export default function Messages() {
                       >
                         <div className="flex items-start gap-3">
                           <Avatar>
-                            <AvatarFallback className="bg-indigo-600 text-white">
-                              {conv.customerName
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .toUpperCase()
-                                .slice(0, 2)}
-                            </AvatarFallback>
+                            {conv.customerAvatar ? (
+                              <AvatarImage
+                                src={conv.customerAvatar || undefined}
+                                alt={conv.customerName ?? "Cliente"}
+                              />
+                            ) : (
+                              <AvatarFallback className="bg-indigo-600 text-white">
+                                {(conv.customerName ?? "??")
+                                  .split(" ")
+                                  .map(n => n[0])
+                                  .join("")
+                                  .toUpperCase()
+                                  .slice(0, 2)}
+                              </AvatarFallback>
+                            )}
                           </Avatar>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-sm">{conv.customerName}</span>
+                              <span className="font-medium text-sm">
+                                {conv.customerName || "Cliente"}
+                              </span>
                               {(conv.unreadCount || 0) > 0 && (
                                 <Badge className="bg-indigo-600 text-white text-xs">
                                   {conv.unreadCount}
@@ -230,15 +377,23 @@ export default function Messages() {
                               )}
                             </div>
                             <div className="flex items-center gap-2 mb-1">
-                              {getChannelIcon(conv.channel as "whatsapp" | "instagram")}
+                              {getChannelIcon(
+                                conv.channel as "whatsapp" | "instagram"
+                              )}
                               <span className="text-xs text-gray-500">
-                                {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleTimeString("pt-BR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }) : ""}
+                                {conv.lastMessageAt
+                                  ? new Date(
+                                      conv.lastMessageAt
+                                    ).toLocaleTimeString("pt-BR", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                  : ""}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600 truncate">{conv.lastMessage || "Nova conversa"}</p>
+                            <p className="text-sm text-gray-600 truncate">
+                              {conv.lastMessage || "Nova conversa"}
+                            </p>
                           </div>
                         </div>
                       </button>
@@ -253,81 +408,321 @@ export default function Messages() {
               {selectedConversation ? (
                 <>
                   {/* Chat Header */}
-                  <CardHeader className="border-b border-gray-200 py-3">
+                  <CardHeader className="border-b border-gray-200 py-3 flex-shrink-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarFallback className="bg-indigo-600 text-white">
-                            {conversations
-                              ?.find((c) => c.id === selectedConversation)
-                              ?.customerName?.split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()
-                              .slice(0, 2) || "??"}
-                          </AvatarFallback>
+                          {selectedConversationData?.customerAvatar ? (
+                            <AvatarImage
+                              src={String(
+                                selectedConversationData.customerAvatar
+                              )}
+                              alt={String(
+                                selectedConversationData.customerName ??
+                                  "Cliente"
+                              )}
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-indigo-600 text-white">
+                              {selectedConversationData?.customerName
+                                ?.split(" ")
+                                .map(n => n[0])
+                                .join("")
+                                .toUpperCase()
+                                .slice(0, 2) || "??"}
+                            </AvatarFallback>
+                          )}
                         </Avatar>
                         <div>
                           <h3 className="font-semibold">
-                            {conversations?.find((c) => c.id === selectedConversation)?.customerName}
+                            {selectedConversationData?.customerName}
                           </h3>
                           <div className="flex items-center gap-2 text-sm text-gray-500">
                             {getChannelBadge(
-                              (conversations?.find((c) => c.id === selectedConversation)?.channel as "whatsapp" | "instagram") || "whatsapp"
+                              (selectedConversationData?.channel as
+                                | "whatsapp"
+                                | "instagram") || "whatsapp"
                             )}
-                            <span>{conversations?.find((c) => c.id === selectedConversation)?.customerPhone}</span>
+                            <span>
+                              {selectedConversationData?.customerPhone}
+                            </span>
                           </div>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm">
-                        Ver Perfil
-                      </Button>
+                      <Sheet
+                        open={isProfileOpen}
+                        onOpenChange={setIsProfileOpen}
+                      >
+                        <SheetTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <User className="w-4 h-4 mr-2" />
+                            Ver Perfil
+                          </Button>
+                        </SheetTrigger>
+                        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                          <SheetHeader>
+                            <SheetTitle>Perfil do Cliente</SheetTitle>
+                            <SheetDescription>
+                              Informações detalhadas do cliente
+                            </SheetDescription>
+                          </SheetHeader>
+                          <div className="mt-6 space-y-6">
+                            {/* Customer Header */}
+                            <div className="flex items-center gap-4">
+                              <Avatar className="w-20 h-20">
+                                {customerDetails?.photoUrl ? (
+                                  <AvatarImage
+                                    src={customerDetails.photoUrl}
+                                    alt={customerDetails.name}
+                                  />
+                                ) : (
+                                  <AvatarFallback className="bg-indigo-600 text-white text-2xl">
+                                    {customerDetails?.name
+                                      ?.split(" ")
+                                      .map(n => n[0])
+                                      .join("")
+                                      .toUpperCase()
+                                      .slice(0, 2) ||
+                                      selectedConversationData?.customerName
+                                        ?.split(" ")
+                                        .map(n => n[0])
+                                        .join("")
+                                        .toUpperCase()
+                                        .slice(0, 2) ||
+                                      "??"}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              <div>
+                                <h3 className="text-xl font-semibold">
+                                  {customerDetails?.name ||
+                                    selectedConversationData?.customerName}
+                                </h3>
+                                <p className="text-sm text-gray-500">
+                                  Cliente desde{" "}
+                                  {customerDetails?.createdAt
+                                    ? new Date(
+                                        customerDetails.createdAt
+                                      ).toLocaleDateString("pt-BR")
+                                    : "N/A"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* Contact Info */}
+                            <div className="space-y-4">
+                              <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                <Phone className="w-4 h-4" />
+                                Informações de Contato
+                              </h4>
+                              <div className="space-y-3">
+                                <div>
+                                  <Label className="text-xs text-gray-500">
+                                    Telefone
+                                  </Label>
+                                  <p className="text-sm">
+                                    {customerDetails?.phone ||
+                                      selectedConversationData?.customerPhone ||
+                                      "Não informado"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-gray-500">
+                                    Email
+                                  </Label>
+                                  <p className="text-sm">
+                                    {customerDetails?.email || "Não informado"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* Address Info */}
+                            {(customerDetails?.address ||
+                              customerDetails?.city) && (
+                              <>
+                                <div className="space-y-4">
+                                  <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                    <Building className="w-4 h-4" />
+                                    Endereço
+                                  </h4>
+                                  <div className="space-y-3">
+                                    {customerDetails?.address && (
+                                      <div>
+                                        <Label className="text-xs text-gray-500">
+                                          Logradouro
+                                        </Label>
+                                        <p className="text-sm">
+                                          {customerDetails.address}
+                                        </p>
+                                      </div>
+                                    )}
+                                    {(customerDetails?.city ||
+                                      customerDetails?.state) && (
+                                      <div>
+                                        <Label className="text-xs text-gray-500">
+                                          Cidade/Estado
+                                        </Label>
+                                        <p className="text-sm">
+                                          {customerDetails?.city}
+                                          {customerDetails?.state &&
+                                            `, ${customerDetails.state}`}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <Separator />
+                              </>
+                            )}
+
+                            {/* Status */}
+                            <div className="space-y-4">
+                              <h4 className="text-sm font-medium text-gray-900">
+                                Status
+                              </h4>
+                              <Badge
+                                variant={
+                                  customerDetails?.status === "active"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {customerDetails?.status === "active"
+                                  ? "Ativo"
+                                  : customerDetails?.status === "blocked"
+                                    ? "Bloqueado"
+                                    : "Inativo"}
+                              </Badge>
+                              {customerDetails?.lastPurchaseAt && (
+                                <div className="mt-2">
+                                  <Label className="text-xs text-gray-500">
+                                    Última Compra
+                                  </Label>
+                                  <p className="text-sm">
+                                    {new Date(
+                                      customerDetails.lastPurchaseAt
+                                    ).toLocaleDateString("pt-BR")}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            <Separator />
+
+                            {/* Approach Suggestions */}
+                            <div className="space-y-4">
+                              <h4 className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                <Lightbulb className="w-4 h-4 text-yellow-500" />
+                                Sugestões de Abordagem
+                              </h4>
+                              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                <ul className="space-y-2">
+                                  {getApproachSuggestions().map(
+                                    (suggestion, index) => (
+                                      <li
+                                        key={index}
+                                        className="flex items-start gap-2 text-sm text-yellow-800"
+                                      >
+                                        <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                        <span>{suggestion}</span>
+                                      </li>
+                                    )
+                                  )}
+                                  {getApproachSuggestions().length === 0 && (
+                                    <li className="text-sm text-yellow-800">
+                                      Inicie com uma saudação amigável e
+                                      pergunte como pode ajudar.
+                                    </li>
+                                  )}
+                                </ul>
+                              </div>
+                            </div>
+
+                            {/* Notes */}
+                            {customerDetails?.notes && (
+                              <>
+                                <Separator />
+                                <div className="space-y-4">
+                                  <h4 className="text-sm font-medium text-gray-900">
+                                    Observações
+                                  </h4>
+                                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                                    {customerDetails.notes}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </SheetContent>
+                      </Sheet>
                     </div>
                   </CardHeader>
 
                   {/* Tabs */}
-                  <div className="flex border-b border-gray-200">
+                  <div className="flex border-b border-gray-200 flex-shrink-0">
                     <button
-                      onClick={() => setActiveTab('messages')}
+                      onClick={() => setActiveTab("messages")}
                       className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                        activeTab === 'messages'
-                          ? 'border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50'
-                          : 'text-gray-600 hover:bg-gray-50'
+                        activeTab === "messages"
+                          ? "border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50"
+                          : "text-gray-600 hover:bg-gray-50"
                       }`}
                     >
                       <MessageSquare className="w-4 h-4" />
                       Conversa
                     </button>
                     <button
-                      onClick={() => setActiveTab('notes')}
+                      onClick={() => setActiveTab("notes")}
                       className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                        activeTab === 'notes'
-                          ? 'border-b-2 border-yellow-500 text-yellow-700 bg-yellow-50'
-                          : 'text-gray-600 hover:bg-gray-50'
+                        activeTab === "notes"
+                          ? "border-b-2 border-yellow-500 text-yellow-700 bg-yellow-50"
+                          : "text-gray-600 hover:bg-gray-50"
                       }`}
                     >
                       <StickyNote className="w-4 h-4" />
                       Notas Internas
                     </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setActiveTab("internal")}
+                        className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                          activeTab === "internal"
+                            ? "border-b-2 border-purple-600 text-purple-700 bg-purple-50"
+                            : "text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Send className="w-4 h-4" />
+                        Mensagens Internas
+                      </button>
+                    )}
                   </div>
 
                   {/* Messages */}
                   <ScrollArea className="flex-1 p-4">
-                    {activeTab === 'messages' ? (
+                    {activeTab === "messages" ? (
                       <div className="space-y-4">
                         {loadingMessages ? (
-                          <div className="text-center py-4 text-gray-500">Carregando mensagens...</div>
+                          <div className="text-center py-4 text-gray-500">
+                            Carregando mensagens...
+                          </div>
                         ) : messages?.length === 0 ? (
-                          <div className="text-center py-4 text-gray-500">Nenhuma mensagem ainda</div>
+                          <div className="text-center py-4 text-gray-500">
+                            Nenhuma mensagem ainda
+                          </div>
                         ) : (
-                          messages?.map((msg) => (
+                          messages?.map(msg => (
                             <div
                               key={msg.id}
-                              className={`flex ${msg.senderType === 'agent' ? "justify-end" : "justify-start"}`}
+                              className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
                             >
                               <div
                                 className={`max-w-[70%] rounded-lg p-3 ${
-                                  msg.senderType === 'agent'
+                                  msg.senderType === "agent"
                                     ? "bg-indigo-600 text-white"
                                     : "bg-gray-100 text-gray-900"
                                 }`}
@@ -335,62 +730,141 @@ export default function Messages() {
                                 <p className="text-sm">{msg.content}</p>
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline">
-                                      📎 {msg.fileName || 'Arquivo'}
+                                    <a
+                                      href={msg.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs underline"
+                                    >
+                                      📎 {msg.fileName || "Arquivo"}
                                     </a>
                                   </div>
                                 )}
                                 <span
                                   className={`text-xs mt-1 block ${
-                                    msg.senderType === 'agent' ? "text-indigo-100" : "text-gray-500"
+                                    msg.senderType === "agent"
+                                      ? "text-indigo-100"
+                                      : "text-gray-500"
                                   }`}
                                 >
-                                  {new Date(msg.createdAt).toLocaleTimeString("pt-BR", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
+                                  {new Date(msg.createdAt).toLocaleTimeString(
+                                    "pt-BR",
+                                    {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    }
+                                  )}
                                 </span>
                               </div>
                             </div>
                           ))
                         )}
                       </div>
-                    ) : (
+                    ) : activeTab === "notes" ? (
                       <div className="space-y-4">
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
                           <p className="text-sm text-yellow-800">
-                            <strong>Notas Internas</strong> - Somente você e outros agentes podem ver estas notas. 
-                            Elas não são enviadas para o cliente.
+                            <strong>Notas Internas</strong> - Somente você e
+                            outros agentes podem ver estas notas. Elas não são
+                            enviadas para o cliente.
                           </p>
                         </div>
                         {/* Aqui você pode listar notas internas se tiver uma tabela para isso */}
                         <div className="text-center py-8 text-gray-500">
                           <StickyNote className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                          <p className="text-sm">Adicione notas internas para orientação</p>
+                          <p className="text-sm">
+                            Adicione notas internas para orientação
+                          </p>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                          <p className="text-sm text-purple-800">
+                            <strong>Mensagens Internas</strong> - Comunicação
+                            entre Admin e Agentes. Estas mensagens aparecem como
+                            notificações para o agente responsável.
+                          </p>
+                        </div>
+                        {loadingInternalMessages ? (
+                          <div className="text-center py-4 text-gray-500">
+                            Carregando mensagens internas...
+                          </div>
+                        ) : internalMessages?.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <Send className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                            <p className="text-sm">
+                              Nenhuma mensagem interna ainda
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {internalMessages?.map(msg => (
+                              <div
+                                key={msg.id}
+                                className={`flex ${msg.senderId === user?.id ? "justify-end" : "justify-start"}`}
+                              >
+                                <div
+                                  className={`max-w-[70%] rounded-lg p-3 ${
+                                    msg.senderId === user?.id
+                                      ? "bg-purple-600 text-white"
+                                      : "bg-gray-100 text-gray-900"
+                                  }`}
+                                >
+                                  <p className="text-xs font-medium mb-1 opacity-75">
+                                    {msg.senderName || "Usuário"}
+                                  </p>
+                                  <p className="text-sm">{msg.content}</p>
+                                  <span
+                                    className={`text-xs mt-1 block ${
+                                      msg.senderId === user?.id
+                                        ? "text-purple-100"
+                                        : "text-gray-500"
+                                    }`}
+                                  >
+                                    {new Date(msg.createdAt).toLocaleTimeString(
+                                      "pt-BR",
+                                      {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      }
+                                    )}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </ScrollArea>
 
                   {/* Message Input */}
-                  <div className="p-4 border-t border-gray-200">
-                    {activeTab === 'messages' ? (
+                  <div className="p-4 border-t border-gray-200 flex-shrink-0">
+                    {activeTab === "messages" ? (
                       <>
                         {/* File Preview */}
                         {selectedFile && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                             <div className="flex items-center gap-3">
                               {filePreview ? (
-                                <img src={filePreview} alt="Preview" className="w-16 h-16 object-cover rounded" />
+                                <img
+                                  src={filePreview}
+                                  alt="Preview"
+                                  className="w-16 h-16 object-cover rounded"
+                                />
                               ) : (
                                 <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
                                   <FileText className="w-8 h-8 text-gray-500" />
                                 </div>
                               )}
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                                <p className="text-sm font-medium truncate">
+                                  {selectedFile.name}
+                                </p>
                                 <p className="text-xs text-gray-500">
-                                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                  {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
+                                  MB
                                 </p>
                               </div>
                               <Button
@@ -417,7 +891,9 @@ export default function Messages() {
                             variant="outline"
                             size="icon"
                             className="self-end"
-                            onClick={() => document.getElementById('file-upload')?.click()}
+                            onClick={() =>
+                              document.getElementById("file-upload")?.click()
+                            }
                             disabled={sendMessageMutation.isPending}
                           >
                             <Paperclip className="w-4 h-4" />
@@ -425,21 +901,24 @@ export default function Messages() {
                           <Textarea
                             placeholder="Digite sua mensagem..."
                             value={messageInput}
-                            onChange={(e) => setMessageInput(e.target.value)}
+                            onChange={e => setMessageInput(e.target.value)}
                             className="resize-none flex-1"
                             rows={2}
                             disabled={sendMessageMutation.isPending}
-                            onKeyDown={(e) => {
+                            onKeyDown={e => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
                                 handleSendMessage();
                               }
                             }}
                           />
-                          <Button 
-                            onClick={handleSendMessage} 
-                            className="self-end" 
-                            disabled={sendMessageMutation.isPending || (!messageInput.trim() && !selectedFile)}
+                          <Button
+                            onClick={handleSendMessage}
+                            className="self-end"
+                            disabled={
+                              sendMessageMutation.isPending ||
+                              (!messageInput.trim() && !selectedFile)
+                            }
                           >
                             {sendMessageMutation.isPending ? (
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -449,28 +928,61 @@ export default function Messages() {
                           </Button>
                         </div>
                       </>
-                    ) : (
+                    ) : activeTab === "notes" ? (
                       <div className="flex gap-2">
                         <Textarea
                           placeholder="Adicione uma nota interna (não será enviada ao cliente)..."
                           value={internalNote}
-                          onChange={(e) => setInternalNote(e.target.value)}
+                          onChange={e => setInternalNote(e.target.value)}
                           className="resize-none flex-1 bg-yellow-50 border-yellow-200"
                           rows={2}
-                          onKeyDown={(e) => {
+                          onKeyDown={e => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
                               handleSendInternalNote();
                             }
                           }}
                         />
-                        <Button 
-                          onClick={handleSendInternalNote} 
+                        <Button
+                          onClick={handleSendInternalNote}
                           className="self-end bg-yellow-500 hover:bg-yellow-600 text-white"
                           disabled={!internalNote.trim()}
                         >
                           <StickyNote className="w-4 h-4 mr-1" />
                           Salvar
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Textarea
+                          placeholder="Digite uma mensagem interna para o agente..."
+                          value={internalMessageInput}
+                          onChange={e =>
+                            setInternalMessageInput(e.target.value)
+                          }
+                          className="resize-none flex-1 bg-purple-50 border-purple-200"
+                          rows={2}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSendInternalMessage();
+                            }
+                          }}
+                        />
+                        <Button
+                          onClick={handleSendInternalMessage}
+                          className="self-end bg-purple-600 hover:bg-purple-700 text-white"
+                          disabled={
+                            sendInternalMessageMutation.isPending ||
+                            !internalMessageInput.trim()
+                          }
+                        >
+                          {sendInternalMessageMutation.isPending ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1" />
+                          ) : (
+                            <Send className="w-4 h-4 mr-1" />
+                          )}
+                          Enviar
                         </Button>
                       </div>
                     )}
@@ -496,7 +1008,8 @@ export default function Messages() {
               Integrações Configuradas
             </CardTitle>
             <CardDescription>
-              Status das integrações com canais de mensagem. Configure suas credenciais para começar a receber mensagens.
+              Status das integrações com canais de mensagem. Configure suas
+              credenciais para começar a receber mensagens.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -509,10 +1022,10 @@ export default function Messages() {
                   <h4 className="font-semibold text-gray-900">WhatsApp</h4>
                   <p className="text-sm text-gray-500">Evolution API</p>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
-                  onClick={() => setLocation('/settings/api')}
+                  onClick={() => setLocation("/settings/api")}
                   className="shrink-0"
                 >
                   Configurar
@@ -527,10 +1040,10 @@ export default function Messages() {
                   <h4 className="font-semibold text-gray-900">Instagram</h4>
                   <p className="text-sm text-gray-500">Graph API</p>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
-                  onClick={() => setLocation('/settings/api')}
+                  onClick={() => setLocation("/settings/api")}
                   className="shrink-0"
                 >
                   Configurar
@@ -545,10 +1058,10 @@ export default function Messages() {
                   <h4 className="font-semibold text-gray-900">Nova Conversa</h4>
                   <p className="text-sm text-gray-500">Iniciar manualmente</p>
                 </div>
-                <Button 
-                  variant="default" 
+                <Button
+                  variant="default"
                   size="sm"
-                  onClick={() => setLocation('/agent/messages')}
+                  onClick={() => setLocation("/agent/messages")}
                   className="shrink-0"
                 >
                   Abrir

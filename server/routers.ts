@@ -17,7 +17,11 @@ import { aiRouter } from "./routers-ai";
 // import { tagsRouter } from "./routers-tags"; // Removido - tabelas de tags comentadas
 import { agentRouter } from "./routers-agent";
 import { queuesRouter } from "./routers-queues";
-import { conversationsRouter, messagesRouter } from "./routers-conversations";
+import {
+  conversationsRouter,
+  messagesRouter,
+  internalMessagesRouter,
+} from "./routers-conversations";
 import { quickRepliesRouter } from "./routers-quick-replies";
 import { pausesRouter } from "./routers-pauses";
 import { dashboardStatsRouter } from "./routers-dashboard-stats";
@@ -31,6 +35,7 @@ import { crmRouter } from "./routers-crm";
 import { telemetryRouter } from "./routers-telemetry";
 import { automationRouter } from "./routers-automation";
 import { surveyRouter } from "./routers-survey";
+import { broadcastRouter } from "./routers-broadcast";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -1107,12 +1112,18 @@ export const appRouter = router({
   // Messages management
   messages: messagesRouter,
 
+  // Internal Messages (Admin ↔ Agente)
+  internalMessages: internalMessagesRouter,
+
   // CRM - Gestão de Clientes e Recorrência
   crm: crmRouter,
   telemetry: telemetryRouter,
 
   // Survey - Pesquisa de Satisfação
   survey: surveyRouter,
+
+  // Broadcast Lists - Listas de Transmissão
+  broadcast: broadcastRouter,
 
   // Dashboard Statistics
   dashboardStats: dashboardStatsRouter,

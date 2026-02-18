@@ -959,6 +959,29 @@ export type InsertConversationMessage =
   typeof conversationMessages.$inferInsert;
 
 /**
+ * Internal Messages - Mensagens internas entre Admin e Agente
+ * Não aparecem para o cliente, apenas como notificação para o agente
+ */
+export const internalMessages = mysqlTable("internal_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: int("conversation_id")
+    .references(() => conversations.id)
+    .notNull(),
+  senderId: int("sender_id")
+    .references(() => users.id)
+    .notNull(), // Quem enviou (admin)
+  recipientId: int("recipient_id")
+    .references(() => users.id)
+    .notNull(), // Quem recebe (agente)
+  content: text("content").notNull(),
+  readAt: timestamp("read_at"), // Quando o agente leu
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type InternalMessage = typeof internalMessages.$inferSelect;
+export type InsertInternalMessage = typeof internalMessages.$inferInsert;
+
+/**
  * Tags - Etiquetas para categorizar conversas
  * NOTA: Tabelas criadas diretamente no banco via SQL
  * Comentadas para evitar conflitos TypeScript
@@ -1210,3 +1233,65 @@ export type InsertCrmScript = typeof crmScripts.$inferInsert;
 
 export type SurveyResponse = typeof surveyResponses.$inferSelect;
 export type InsertSurveyResponse = typeof surveyResponses.$inferInsert;
+
+/**
+ * Broadcast Lists - Listas de Transmissão
+ * Permite criar listas de até 50 contatos para envio de mensagens em massa
+ */
+export const broadcastLists = mysqlTable("broadcast_lists", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  createdBy: int("created_by")
+    .references(() => users.id)
+    .notNull(),
+  status: mysqlEnum("status", ["active", "paused", "deleted"])
+    .default("active")
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type BroadcastList = typeof broadcastLists.$inferSelect;
+export type InsertBroadcastList = typeof broadcastLists.$inferInsert;
+
+/**
+ * Broadcast List Members - Membros das Listas de Transmissão
+ * Relaciona contatos às listas (máximo 50 por lista)
+ */
+export const broadcastListMembers = mysqlTable("broadcast_list_members", {
+  id: int("id").autoincrement().primaryKey(),
+  listId: int("list_id")
+    .references(() => broadcastLists.id)
+    .notNull(),
+  customerId: int("customer_id")
+    .references(() => customers.id)
+    .notNull(),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+});
+
+export type BroadcastListMember = typeof broadcastListMembers.$inferSelect;
+export type InsertBroadcastListMember =
+  typeof broadcastListMembers.$inferInsert;
+
+/**
+ * Broadcast Messages - Mensagens enviadas em listas de transmissão
+ * Registra o histórico de mensagens enviadas
+ */
+export const broadcastMessages = mysqlTable("broadcast_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  listId: int("list_id")
+    .references(() => broadcastLists.id)
+    .notNull(),
+  content: text("content").notNull(),
+  sentBy: int("sent_by")
+    .references(() => users.id)
+    .notNull(),
+  totalRecipients: int("total_recipients").notNull(),
+  successfulSends: int("successful_sends").default(0),
+  failedSends: int("failed_sends").default(0),
+  sentAt: timestamp("sent_at").defaultNow().notNull(),
+});
+
+export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
+export type InsertBroadcastMessage = typeof broadcastMessages.$inferInsert;

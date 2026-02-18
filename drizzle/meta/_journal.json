@@ -120,6 +120,13 @@
       "when": 1739123456789,
       "tag": "0016_crm_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1771433725041,
+      "tag": "0017_lazy_onslaught",
+      "breakpoints": true
     }
   ]
 }

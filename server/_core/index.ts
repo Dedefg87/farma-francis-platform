@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
+import { sql } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -200,6 +201,228 @@ async function startServer() {
         .limit(20);
       res.json({ count: messages.length, messages });
     } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // FIX: Endpoint para corrigir conversas órfãs (status=assigned mas assignedTo=null)
+  app.get("/api/fix-orphaned-conversations", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { conversations } = await import("../../drizzle/schema");
+      const { eq, and, isNull } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Buscar conversas órfãs
+      const orphaned = await db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.status, "assigned"),
+            isNull(conversations.assignedTo)
+          )
+        );
+
+      if (orphaned.length === 0) {
+        return res.json({
+          success: true,
+          message: "Nenhuma conversa órfã encontrada",
+          fixed: 0,
+        });
+      }
+
+      // Corrigir conversas órfãs
+      await db
+        .update(conversations)
+        .set({ status: "open" })
+        .where(
+          and(
+            eq(conversations.status, "assigned"),
+            isNull(conversations.assignedTo)
+          )
+        );
+
+      res.json({
+        success: true,
+        message: `${orphaned.length} conversa(s) corrigida(s)`,
+        fixed: orphaned.length,
+        ids: orphaned.map(c => c.id),
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // DEBUG: Verificar status específico de uma conversa
+  app.get("/api/debug/conversation/:id", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { conversations } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const convId = parseInt(req.params.id);
+      const [conversation] = await db
+        .select({
+          id: conversations.id,
+          status: conversations.status,
+          assignedTo: conversations.assignedTo,
+          customerName: conversations.customerName,
+          channel: conversations.channel,
+          lastMessageAt: conversations.lastMessageAt,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, convId));
+
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+
+      res.json({ conversation });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // EMERGENCY: Reset admin password
+  app.get("/api/emergency/reset-admin-password", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { users } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const bcrypt = await import("bcryptjs");
+      const db = await getDb();
+
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Hash da senha "admin"
+      const hashedPassword = await bcrypt.hash("admin", 10);
+
+      // Atualizar senha do usuário admin (ID 1)
+      await db
+        .update(users)
+        .set({ password: hashedPassword })
+        .where(eq(users.id, 1));
+
+      res.json({
+        success: true,
+        message: "Senha do admin (ID 1) redefinida para 'admin'",
+        login: "admin",
+        password: "admin",
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // DEBUG: Check broadcast tables status
+  app.get("/api/debug/check-broadcast-tables", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Check existing tables
+      const tables = await db.execute(sql`SHOW TABLES LIKE 'broadcast%'`);
+
+      // Get schema for each table if exists
+      const schemas: any = {};
+      for (const row of tables as any[]) {
+        const tableName = Object.values(row)[0];
+        const columns = await db.execute(sql`DESCRIBE ${sql.raw(tableName)}`);
+        schemas[tableName] = columns;
+      }
+
+      res.json({
+        tablesFound: tables,
+        schemas: schemas,
+      });
+    } catch (error) {
+      console.error("Error checking tables:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // DEBUG: Create broadcast tables manually
+  app.get("/api/debug/create-broadcast-tables", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Check existing tables before
+      const tablesBefore = await db.execute(sql`SHOW TABLES LIKE 'broadcast%'`);
+
+      // Drop existing tables if they exist - disable FK checks first to avoid constraint errors
+      await db.execute(sql`SET FOREIGN_KEY_CHECKS = 0`);
+      await db.execute(sql`DROP TABLE IF EXISTS broadcast_messages`);
+      await db.execute(sql`DROP TABLE IF EXISTS broadcast_list_members`);
+      await db.execute(sql`DROP TABLE IF EXISTS broadcast_lists`);
+      await db.execute(sql`SET FOREIGN_KEY_CHECKS = 1`);
+
+      // Create broadcast_lists table with correct schema matching drizzle
+      await db.execute(sql`
+        CREATE TABLE broadcast_lists (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          description TEXT,
+          created_by INT NOT NULL,
+          status ENUM('active', 'paused', 'deleted') DEFAULT 'active' NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        )
+      `);
+
+      // Create broadcast_list_members table
+      await db.execute(sql`
+        CREATE TABLE broadcast_list_members (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          list_id INT NOT NULL,
+          customer_id INT NOT NULL,
+          added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          FOREIGN KEY (list_id) REFERENCES broadcast_lists(id) ON DELETE CASCADE,
+          FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+          UNIQUE KEY unique_member (list_id, customer_id)
+        )
+      `);
+
+      // Create broadcast_messages table
+      await db.execute(sql`
+        CREATE TABLE broadcast_messages (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          list_id INT NOT NULL,
+          content TEXT NOT NULL,
+          sent_by INT NOT NULL,
+          total_recipients INT NOT NULL,
+          successful_sends INT DEFAULT 0,
+          failed_sends INT DEFAULT 0,
+          sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          FOREIGN KEY (list_id) REFERENCES broadcast_lists(id) ON DELETE CASCADE,
+          FOREIGN KEY (sent_by) REFERENCES users(id)
+        )
+      `);
+
+      res.json({
+        success: true,
+        message: "Tabelas de broadcast recriadas com sucesso!",
+        previousTables: tablesBefore,
+      });
+    } catch (error) {
+      console.error("Error creating tables:", error);
       res.status(500).json({ error: String(error) });
     }
   });

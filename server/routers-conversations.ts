@@ -9,7 +9,7 @@ import {
   agentStatus,
   integrationSettings,
 } from "../drizzle/schema";
-import { eq, and, desc, sql, or } from "drizzle-orm";
+import { eq, and, desc, sql, or, isNull } from "drizzle-orm";
 import { storagePut } from "./storage";
 import {
   sendWhatsAppImage,
@@ -426,7 +426,9 @@ export const conversationsRouter = router({
         .where(
           and(
             eq(conversations.id, input.conversationId),
-            eq(conversations.assignedTo, ctx.user.id)
+            ctx.user.role === "admin"
+              ? sql`1=1`
+              : eq(conversations.assignedTo, ctx.user.id)
           )
         )
         .limit(1);
@@ -477,10 +479,16 @@ export const conversationsRouter = router({
         .where(
           and(
             eq(conversations.id, input.conversationId),
-            or(
-              eq(conversations.assignedTo, ctx.user.id),
-              eq(conversations.status, "open")
-            )
+            ctx.user.role === "admin"
+              ? sql`1=1`
+              : or(
+                  eq(conversations.assignedTo, ctx.user.id),
+                  eq(conversations.status, "open"),
+                  and(
+                    eq(conversations.status, "assigned"),
+                    isNull(conversations.assignedTo)
+                  )
+                )
           )
         )
         .limit(1);
@@ -495,7 +503,7 @@ export const conversationsRouter = router({
           status: "closed",
           closedAt: new Date(),
           closeReason: input.reason || "conversa_anterior",
-          assignedTo: ctx.user.id, // Assign to whoever closes it
+          assignedTo: ctx.user.id,
         })
         .where(eq(conversations.id, input.conversationId));
 
@@ -580,6 +588,29 @@ export const conversationsRouter = router({
 
       return conversation;
     }),
+
+  // Endpoint temporário para corrigir conversas órfãs
+  fixOrphaned: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Atualizar conversas com status="assigned" mas assignedTo=null
+    await db
+      .update(conversations)
+      .set({ status: "open" })
+      .where(
+        and(
+          eq(conversations.status, "assigned"),
+          isNull(conversations.assignedTo)
+        )
+      );
+
+    return {
+      success: true,
+      message:
+        "Conversas órfãs corrigidas (status=assigned com assignedTo=null foram alteradas para status=open)",
+    };
+  }),
 });
 
 export const messagesRouter = router({
@@ -589,17 +620,24 @@ export const messagesRouter = router({
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      // Verificar se o agente tem acesso a esta conversa (assigned ou na fila open)
+      // Verificar se o agente tem acesso a esta conversa
+      // Admin pode ver todas, user apenas as atribuídas a ele ou na fila
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
             eq(conversations.id, input.conversation_id),
-            or(
-              eq(conversations.assignedTo, ctx.user.id),
-              eq(conversations.status, "open")
-            )
+            ctx.user.role === "admin"
+              ? sql`1=1` // Admin vê todas
+              : or(
+                  eq(conversations.assignedTo, ctx.user.id),
+                  eq(conversations.status, "open"),
+                  and(
+                    eq(conversations.status, "assigned"),
+                    isNull(conversations.assignedTo)
+                  )
+                )
           )
         )
         .limit(1);
@@ -632,17 +670,23 @@ export const messagesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Verificar se o agente tem acesso a esta conversa (assigned ou na fila open)
+      // Verificar se o agente tem acesso a esta conversa
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
             eq(conversations.id, input.conversation_id),
-            or(
-              eq(conversations.assignedTo, ctx.user.id),
-              eq(conversations.status, "open")
-            )
+            ctx.user.role === "admin"
+              ? sql`1=1`
+              : or(
+                  eq(conversations.assignedTo, ctx.user.id),
+                  eq(conversations.status, "open"),
+                  and(
+                    eq(conversations.status, "assigned"),
+                    isNull(conversations.assignedTo)
+                  )
+                )
           )
         )
         .limit(1);
@@ -696,17 +740,23 @@ export const messagesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      // Verificar se o agente tem acesso a esta conversa (assigned ou na fila open)
+      // Verificar se o agente tem acesso a esta conversa
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
             eq(conversations.id, input.conversation_id),
-            or(
-              eq(conversations.assignedTo, ctx.user.id),
-              eq(conversations.status, "open")
-            )
+            ctx.user.role === "admin"
+              ? sql`1=1`
+              : or(
+                  eq(conversations.assignedTo, ctx.user.id),
+                  eq(conversations.status, "open"),
+                  and(
+                    eq(conversations.status, "assigned"),
+                    isNull(conversations.assignedTo)
+                  )
+                )
           )
         )
         .limit(1);
@@ -792,4 +842,133 @@ export const messagesRouter = router({
 
       return { success: true, messageId: message.id };
     }),
+});
+
+// Router para mensagens internas (Admin ↔ Agente)
+export const internalMessagesRouter = router({
+  // Listar mensagens internas de uma conversa
+  list: protectedProcedure
+    .input(z.object({ conversation_id: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { internalMessages, users } = await import("../drizzle/schema");
+      const { eq, desc } = await import("drizzle-orm");
+
+      // Admin vê todas, agente vê apenas as que enviou ou recebeu
+      const messages = await db
+        .select({
+          id: internalMessages.id,
+          content: internalMessages.content,
+          senderId: internalMessages.senderId,
+          recipientId: internalMessages.recipientId,
+          readAt: internalMessages.readAt,
+          createdAt: internalMessages.createdAt,
+          senderName: users.name,
+        })
+        .from(internalMessages)
+        .leftJoin(users, eq(internalMessages.senderId, users.id))
+        .where(eq(internalMessages.conversationId, input.conversation_id))
+        .orderBy(desc(internalMessages.createdAt));
+
+      return messages;
+    }),
+
+  // Enviar mensagem interna
+  send: protectedProcedure
+    .input(
+      z.object({
+        conversation_id: z.number(),
+        recipient_id: z.number(),
+        content: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { internalMessages, conversations } = await import(
+        "../drizzle/schema"
+      );
+      const { eq } = await import("drizzle-orm");
+
+      // Verificar se a conversa existe
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, input.conversation_id))
+        .limit(1);
+
+      if (!conversation) {
+        throw new Error("Conversa não encontrada");
+      }
+
+      // Criar mensagem interna
+      const [message] = await db
+        .insert(internalMessages)
+        .values({
+          conversationId: input.conversation_id,
+          senderId: ctx.user.id,
+          recipientId: input.recipient_id,
+          content: input.content,
+          createdAt: new Date(),
+        })
+        .$returningId();
+
+      // Notificar o agente via SSE
+      sseManager.emitToUser(String(input.recipient_id), {
+        type: "INTERNAL_MESSAGE",
+        data: {
+          messageId: message.id,
+          conversationId: input.conversation_id,
+          senderId: ctx.user.id,
+          senderName: ctx.user.name,
+          content: input.content,
+          customerName: conversation.customerName,
+        },
+        timestamp: Date.now(),
+      });
+
+      return { success: true, messageId: message.id };
+    }),
+
+  // Marcar como lida
+  markAsRead: protectedProcedure
+    .input(z.object({ message_id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { internalMessages } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+
+      await db
+        .update(internalMessages)
+        .set({ readAt: new Date() })
+        .where(eq(internalMessages.id, input.message_id));
+
+      return { success: true };
+    }),
+
+  // Contar mensagens não lidas
+  countUnread: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return 0;
+
+    const { internalMessages } = await import("../drizzle/schema");
+    const { eq, and, isNull } = await import("drizzle-orm");
+
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(internalMessages)
+      .where(
+        and(
+          eq(internalMessages.recipientId, ctx.user.id),
+          isNull(internalMessages.readAt)
+        )
+      );
+
+    return result[0]?.count || 0;
+  }),
 });
