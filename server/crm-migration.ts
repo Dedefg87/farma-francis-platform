@@ -852,6 +852,45 @@ export async function runCRMMigration() {
     }
 
     console.log("[CRM Migration] Tags seeded successfully");
+
+    // ==============================
+    // Ensure admin user exists with password "admin"
+    // ==============================
+    try {
+      const bcrypt = await import("bcrypt");
+      const adminPasswordHash = await bcrypt.hash("admin", 10);
+
+      // Check if admin user exists
+      const adminExists = await db.raw(
+        `SELECT id FROM users WHERE email = 'admin' LIMIT 1`
+      );
+
+      if (Array.isArray(adminExists) && adminExists.length > 0) {
+        // Update existing admin password
+        await db.raw(
+          `UPDATE users SET passwordHash = ? WHERE email = 'admin'`,
+          [adminPasswordHash]
+        );
+        console.log("[CRM Migration] Admin password updated to 'admin'");
+      } else {
+        // Create admin user
+        await db.raw(
+          `INSERT INTO users (openId, name, email, passwordHash, role, loginMethod) VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            `admin-${Date.now()}`,
+            "Administrador",
+            "admin",
+            adminPasswordHash,
+            "admin",
+            "email",
+          ]
+        );
+        console.log("[CRM Migration] Admin user created with password 'admin'");
+      }
+    } catch (adminError) {
+      console.error("[CRM Migration] Admin user setup error:", adminError);
+    }
+
     return true;
   } catch (error) {
     console.error("[CRM Migration] Error:", error);
