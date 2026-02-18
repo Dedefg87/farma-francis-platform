@@ -357,12 +357,25 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   createdAt?: Date;
 }) {
+  console.log(
+    "[ingestInbound] Step A: Starting with fromNumber:",
+    message.fromNumber
+  );
   const db = await getDb();
-  if (!db) return null;
+  if (!db) {
+    console.error("[ingestInbound] Database not available!");
+    return null;
+  }
+  console.log("[ingestInbound] Step B: DB connected");
 
   const customer = await findOrCreateCustomerByPhone(
     message.fromNumber,
     message.fromName || undefined
+  );
+  console.log(
+    "[ingestInbound] Step C: Customer created/found:",
+    customer?.id,
+    customer?.name
   );
   const now = message.createdAt ?? new Date();
 
@@ -370,6 +383,7 @@ export async function ingestInboundConversationMessage(message: {
   const picked = await pickLeastLoadedOnlineAgent({
     provider: message.provider,
   });
+  console.log("[ingestInbound] Step D: Picked agent:", picked);
   const assignedUserId =
     picked && Number.isFinite(picked.userId) && picked.userId > 0
       ? picked.userId
@@ -399,24 +413,55 @@ export async function ingestInboundConversationMessage(message: {
     .limit(1);
 
   let conversationId = existingConversation?.id;
+  console.log(
+    "[ingestInbound] Step E: Existing conversation?",
+    existingConversation?.id,
+    "status:",
+    existingConversation?.status
+  );
 
   if (!conversationId) {
+    console.log(
+      "[ingestInbound] Step F: Creating NEW conversation for customer:",
+      customer.id
+    );
+    const insertData = {
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      channel: message.provider,
+      status: (assignedUserId ? "assigned" : "open") as
+        | "open"
+        | "assigned"
+        | "closed",
+      assignedTo: assignedUserId,
+      queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
+      openedAt: now,
+      lastMessageAt: now,
+      unreadCount: 1,
+    };
+    console.log(
+      "[ingestInbound] Step G: Insert data:",
+      JSON.stringify(insertData)
+    );
+
+    await db.insert(conversations).values(insertData);
+    console.log(
+      "[ingestInbound] Step G2: Insert done, fetching new conversation"
+    );
+
     const [newConversation] = await db
-      .insert(conversations)
-      .values({
-        customerId: customer.id,
-        customerName: customer.name,
-        customerPhone: customer.phone,
-        channel: message.provider,
-        status: assignedUserId ? "assigned" : "open",
-        assignedTo: assignedUserId,
-        queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
-        openedAt: now,
-        lastMessageAt: now,
-        unreadCount: 1,
-      })
-      .$returningId();
-    conversationId = newConversation.id;
+      .select()
+      .from(conversations)
+      .where(eq(conversations.customerId, customer.id))
+      .orderBy(desc(conversations.id))
+      .limit(1);
+
+    conversationId = newConversation?.id;
+    console.log(
+      "[ingestInbound] Step H: Conversation created with ID:",
+      conversationId
+    );
   } else {
     const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
     await db
