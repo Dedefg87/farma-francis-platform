@@ -20,6 +20,24 @@ function getImageSrc(
   }
   return url;
 }
+
+function handleImageClick(url: string | null | undefined, messageId?: number) {
+  const src = getImageSrc(url, messageId);
+  if (!src) return;
+
+  if (src.startsWith("data:")) {
+    // Open data URL in a new window with HTML that displays the image
+    const win = window.open("", "_blank", "width=800,height=600");
+    if (win) {
+      win.document.write(
+        `<html><head><title>Imagem</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;"><img src="${src}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body></html>`
+      );
+      win.document.close();
+    }
+  } else {
+    window.open(src, "_blank");
+  }
+}
 import {
   MessageSquare,
   Clock,
@@ -745,11 +763,7 @@ export default function AgentMessages() {
                                 alt={msg.fileName || "Imagem"}
                                 className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
                                 onClick={() =>
-                                  msg.fileUrl &&
-                                  window.open(
-                                    getImageSrc(msg.fileUrl, msg.id),
-                                    "_blank"
-                                  )
+                                  handleImageClick(msg.fileUrl, msg.id)
                                 }
                               />
                             ) : msg.fileType?.startsWith("video/") ? (

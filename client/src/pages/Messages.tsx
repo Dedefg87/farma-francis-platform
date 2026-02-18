@@ -24,6 +24,23 @@ function getImageSrc(
   }
   return url;
 }
+
+function handleImageClick(url: string | null | undefined, messageId?: number) {
+  const src = getImageSrc(url, messageId);
+  if (!src) return;
+
+  if (src.startsWith("data:")) {
+    const win = window.open("", "_blank", "width=800,height=600");
+    if (win) {
+      win.document.write(
+        `<html><head><title>Imagem</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;"><img src="${src}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body></html>`
+      );
+      win.document.close();
+    }
+  } else {
+    window.open(src, "_blank");
+  }
+}
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -812,17 +829,12 @@ export default function Messages() {
                                           src={getImageSrc(msg.fileUrl, msg.id)}
                                           alt={msg.fileName || "Imagem"}
                                           className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
-                                          onClick={() => {
-                                            if (msg.fileUrl) {
-                                              window.open(
-                                                getImageSrc(
-                                                  msg.fileUrl,
-                                                  msg.id
-                                                ),
-                                                "_blank"
-                                              );
-                                            }
-                                          }}
+                                          onClick={() =>
+                                            handleImageClick(
+                                              msg.fileUrl,
+                                              msg.id
+                                            )
+                                          }
                                         />
                                         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg" />
                                       </div>
