@@ -3,6 +3,7 @@ import {
   date,
   decimal,
   int,
+  longtext,
   mysqlEnum,
   mysqlTable,
   text,
@@ -631,7 +632,7 @@ export const receivedMessages = mysqlTable("received_messages", {
   latitude: decimal("latitude", { precision: 10, scale: 8 }), // Location latitude
   longitude: decimal("longitude", { precision: 11, scale: 8 }), // Location longitude
   timestamp: bigint("timestamp", { mode: "number" }).notNull(), // Unix timestamp from provider
-  rawPayload: text("raw_payload"), // Full JSON payload for debugging
+  rawPayload: longtext("raw_payload"), // Full JSON payload for debugging
   processed: int("processed").default(0).notNull(), // 0 = pending, 1 = processed
   processedAt: timestamp("processed_at"),
   customerId: int("customer_id").references(() => customers.id), // Link to customer if identified

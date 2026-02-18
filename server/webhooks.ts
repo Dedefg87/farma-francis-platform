@@ -14,6 +14,7 @@ import {
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
+import { storagePut } from "./storage";
 
 // Import debug module
 let debugModule: any = null;
@@ -78,6 +79,117 @@ function normalizeInboundNumber(value: string | undefined | null) {
   // Usar normalização brasileira
   const normalized = normalizeBrazilianNumber(stripped);
   return normalized.startsWith("+") ? normalized : `+${normalized}`;
+}
+
+/**
+ * Get Evolution API configuration
+ */
+async function getEvolutionConfig() {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [config] = await db
+    .select()
+    .from(integrationSettings)
+    .where(eq(integrationSettings.integrationType, "evolution_api"))
+    .limit(1);
+
+  if (!config || !config.isActive) return null;
+
+  const configData =
+    typeof config.config === "string"
+      ? JSON.parse(config.config)
+      : config.config;
+
+  const apiUrl = configData.apiUrl as string | undefined;
+  const apiKey = configData.apiKey || configData.accessToken;
+  const instanceName = configData.instanceName;
+
+  if (!apiUrl || !apiKey || !instanceName) return null;
+
+  return {
+    apiUrl: apiUrl.replace(/\/$/, ""),
+    apiKey,
+    instanceName,
+  };
+}
+
+/**
+ * Download media from WhatsApp/Evolution and save to permanent storage
+ * Returns the permanent URL or null if failed
+ */
+async function downloadAndSaveMedia(
+  mediaUrl: string,
+  mimeType: string | null,
+  fromNumber: string
+): Promise<string | null> {
+  try {
+    console.log("[Media] Starting download:", mediaUrl);
+
+    // Try to download from the provided URL first
+    let response = await fetch(mediaUrl);
+
+    // If direct URL fails, try Evolution API endpoint
+    if (!response.ok && mediaUrl.includes("whatsapp.net")) {
+      const evoConfig = await getEvolutionConfig();
+      if (evoConfig) {
+        // Extract media ID from URL if possible
+        const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
+        if (mediaIdMatch) {
+          const mediaId = mediaIdMatch[1];
+          const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
+          response = await fetch(mediaFetchUrl, {
+            headers: { apikey: evoConfig.apiKey },
+          });
+        }
+      }
+    }
+
+    if (!response.ok) {
+      console.error(
+        "[Media] Failed to download:",
+        response.status,
+        response.statusText
+      );
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Determine file extension from mime type
+    const extMap: Record<string, string> = {
+      "image/jpeg": "jpg",
+      "image/png": "png",
+      "image/webp": "webp",
+      "image/gif": "gif",
+      "video/mp4": "mp4",
+      "video/3gpp": "3gp",
+      "audio/ogg": "ogg",
+      "audio/mpeg": "mp3",
+      "audio/amr": "amr",
+      "application/pdf": "pdf",
+    };
+    const ext = extMap[mimeType || ""] || "bin";
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const fileName = `whatsapp-${fromNumber.replace(/\D/g, "")}-${timestamp}-${randomSuffix}.${ext}`;
+
+    // Upload to storage
+    const { url } = await storagePut(
+      `media/${fileName}`,
+      buffer,
+      mimeType || "application/octet-stream"
+    );
+
+    console.log("[Media] Saved to:", url);
+    return url;
+  } catch (error) {
+    console.error("[Media] Error saving media:", error);
+    return null;
+  }
 }
 
 /**
@@ -1145,6 +1257,27 @@ async function processEvolutionWebhook(body: any) {
           return;
         }
 
+        // Download and save media to permanent storage if present
+        let permanentMediaUrl = null;
+        if (
+          mediaUrl &&
+          ["image", "video", "audio", "document"].includes(messageType)
+        ) {
+          console.log("[Evolution Webhook] Downloading media...");
+          permanentMediaUrl = await downloadAndSaveMedia(
+            mediaUrl,
+            mimeType,
+            fromNumber
+          );
+          if (permanentMediaUrl) {
+            console.log("[Evolution Webhook] Media saved permanently");
+          } else {
+            console.log(
+              "[Evolution Webhook] Media download failed, using original URL"
+            );
+          }
+        }
+
         console.log("[Evolution Webhook] Step 13: Saving to database");
 
         const messageTimestamp =
@@ -1171,7 +1304,7 @@ async function processEvolutionWebhook(body: any) {
             | "reaction"
             | "unknown",
           messageText,
-          mediaUrl,
+          mediaUrl: permanentMediaUrl || mediaUrl,
           mimeType,
           caption,
           timestamp: messageTimestamp,
@@ -1199,7 +1332,7 @@ async function processEvolutionWebhook(body: any) {
             messageType,
             messageText,
             caption,
-            mediaUrl,
+            mediaUrl: permanentMediaUrl || mediaUrl,
             mimeType,
           });
           console.log(
