@@ -1022,204 +1022,212 @@ async function processEvolutionWebhook(body: any) {
       normalizedEvent === "messages_upsert" ||
       normalizedEvent === "messages_upsert".replace(/[-.]/g, "_")
     ) {
-      console.log("[Evolution Webhook] Handling messages event");
-      console.log("[Evolution Webhook] Step 1: extracting data from body");
+      console.log("[Evolution Webhook] Handling messages event - START");
 
-      // Tentar extrair mensagem de várias estruturas possíveis
-      const data = body?.data || body;
-      console.log(
-        "[Evolution Webhook] Step 2: data extracted, keys:",
-        Object.keys(data || {})
-      );
-
-      // Diferentes estruturas que o Evolution API pode usar
-      const messageData = data?.message || data?.messages?.[0] || body || {};
-      console.log(
-        "[Evolution Webhook] Step 3: messageData keys:",
-        Object.keys(messageData || {})
-      );
-
-      const key = data?.key || messageData?.key || {};
-      console.log(
-        "[Evolution Webhook] Step 4: key extracted:",
-        JSON.stringify(key).substring(0, 200)
-      );
-
-      const messageContent = messageData?.message || messageData;
-      console.log(
-        "[Evolution Webhook] Step 5: messageContent type:",
-        typeof messageContent
-      );
-
-      // Extrair dados
-      const messageId =
-        key?.id || data?.id || messageData?.id || `evo-${Date.now()}`;
-      const remoteJid =
-        key?.remoteJid ||
-        data?.remoteJid ||
-        messageData?.remoteJid ||
-        body?.remoteJid ||
-        extractEvolutionRemoteJid(body);
-      const pushName =
-        data?.pushName ||
-        data?.senderName ||
-        messageData?.pushName ||
-        body?.pushName ||
-        body?.sender?.name ||
-        body?.sender?.pushName ||
-        body?.data?.sender?.name;
-      const fromMe =
-        key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
-
-      console.log("[Evolution Webhook] Step 6: Extracted data:", {
-        messageId,
-        remoteJid,
-        pushName,
-        fromMe,
-        hasContent: !!messageContent,
-      });
-
-      // Ignore send/ack events (outbound)
-      if (
-        normalizedEvent.startsWith("send") ||
-        normalizedEvent.includes("send_message")
-      ) {
+      try {
+        console.log("[Evolution Webhook] Step 1: extracting data from body");
+        const data = body?.data || body;
+        console.log("[Evolution Webhook] Step 2: data extracted");
         console.log(
-          "[Evolution Webhook] Ignoring send event:",
-          normalizedEvent
+          "[Evolution Webhook] Step 2b: data keys:",
+          JSON.stringify(Object.keys(data || {}))
         );
-        return;
-      }
 
-      if (!remoteJid) {
-        console.warn("[Evolution Webhook] No remoteJid found");
-        return;
-      }
-
-      const fromNumber = normalizeInboundNumber(remoteJid);
-      if (!fromNumber) {
-        console.warn(
-          "[Evolution Webhook] Could not normalize phone from remoteJid",
-          {
-            remoteJid,
-          }
-        );
-        return;
-      }
-
-      // Ignorar mensagens do próprio bot
-      if (fromMe === true || fromMe === "true" || fromMe === 1) {
+        const messageData = data?.message || data?.messages?.[0] || body || {};
         console.log(
-          "[Evolution Webhook] Ignoring message from self (fromMe=true)"
+          "[Evolution Webhook] Step 3: messageData type:",
+          typeof messageData
         );
-        return;
-      }
 
-      // Verificar duplicata
-      const existing = await getReceivedMessageByExternalId(
-        messageId,
-        "whatsapp"
-      );
-      if (existing) {
+        const key = data?.key || messageData?.key || {};
+        console.log("[Evolution Webhook] Step 4: key exists:", !!key);
+
+        const messageContent = messageData?.message || messageData;
         console.log(
-          `[Evolution Webhook] Duplicate message ${messageId} ignored`
+          "[Evolution Webhook] Step 5: messageContent type:",
+          typeof messageContent
         );
-        return;
-      }
 
-      // Determinar tipo e conteúdo da mensagem (robusto)
-      const parsed = parseEvolutionMessageContent(messageContent);
-      const messageType = parsed.type;
-      const messageText = parsed.text;
-      const caption = parsed.caption;
-      const mediaUrl = parsed.mediaUrl;
-      const mimeType = parsed.mimeType;
+        const messageId =
+          key?.id || data?.id || messageData?.id || `evo-${Date.now()}`;
+        const remoteJid =
+          key?.remoteJid ||
+          data?.remoteJid ||
+          messageData?.remoteJid ||
+          body?.remoteJid ||
+          extractEvolutionRemoteJid(body);
+        const pushName =
+          data?.pushName ||
+          data?.senderName ||
+          messageData?.pushName ||
+          body?.pushName ||
+          body?.sender?.name ||
+          body?.sender?.pushName ||
+          body?.data?.sender?.name;
+        const fromMe =
+          key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
 
-      // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
-      const hasRealContent =
-        Boolean(messageText && String(messageText).trim()) ||
-        Boolean(caption && String(caption).trim()) ||
-        Boolean(mediaUrl && String(mediaUrl).trim());
-      if (!hasRealContent && messageType === "unknown") {
-        console.log(
-          "[Evolution Webhook] Ignoring payload without message content"
+        console.log("[Evolution Webhook] Step 6: Extracted:", {
+          messageId,
+          remoteJid,
+          pushName,
+          fromMe,
+        });
+
+        // Ignore send/ack events (outbound)
+        if (
+          normalizedEvent.startsWith("send") ||
+          normalizedEvent.includes("send_message")
+        ) {
+          console.log(
+            "[Evolution Webhook] Ignoring send event:",
+            normalizedEvent
+          );
+          return;
+        }
+
+        if (!remoteJid) {
+          console.warn("[Evolution Webhook] No remoteJid found");
+          return;
+        }
+
+        const fromNumber = normalizeInboundNumber(remoteJid);
+        if (!fromNumber) {
+          console.warn(
+            "[Evolution Webhook] Could not normalize phone from remoteJid",
+            {
+              remoteJid,
+            }
+          );
+          return;
+        }
+
+        // Ignorar mensagens do próprio bot
+        if (fromMe === true || fromMe === "true" || fromMe === 1) {
+          console.log(
+            "[Evolution Webhook] Ignoring message from self (fromMe=true)"
+          );
+          return;
+        }
+
+        // Verificar duplicata
+        const existing = await getReceivedMessageByExternalId(
+          messageId,
+          "whatsapp"
         );
-        return;
-      }
+        if (existing) {
+          console.log(
+            `[Evolution Webhook] Duplicate message ${messageId} ignored`
+          );
+          return;
+        }
 
-      console.log("[Evolution Webhook] Parsed message:", {
-        messageType,
-        messageText,
-        caption,
-      });
+        // Determinar tipo e conteúdo da mensagem (robusto)
+        const parsed = parseEvolutionMessageContent(messageContent);
+        const messageType = parsed.type;
+        const messageText = parsed.text;
+        const caption = parsed.caption;
+        const mediaUrl = parsed.mediaUrl;
+        const mimeType = parsed.mimeType;
 
-      const messageTimestamp =
-        data?.messageTimestamp ||
-        messageData?.timestamp ||
-        messageContent?.timestamp ||
-        Math.floor(Date.now() / 1000);
+        // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
+        const hasRealContent =
+          Boolean(messageText && String(messageText).trim()) ||
+          Boolean(caption && String(caption).trim()) ||
+          Boolean(mediaUrl && String(mediaUrl).trim());
+        if (!hasRealContent && messageType === "unknown") {
+          console.log(
+            "[Evolution Webhook] Ignoring payload without message content"
+          );
+          return;
+        }
 
-      // Salvar mensagem no banco
-      await db.insert(receivedMessages).values({
-        provider: "whatsapp",
-        externalId: messageId,
-        fromNumber,
-        fromName: pushName || null,
-        messageType: messageType as
-          | "text"
-          | "image"
-          | "audio"
-          | "video"
-          | "document"
-          | "location"
-          | "contact"
-          | "sticker"
-          | "reaction"
-          | "unknown",
-        messageText,
-        mediaUrl,
-        mimeType,
-        caption,
-        timestamp: messageTimestamp,
-        rawPayload: JSON.stringify(body),
-        processed: 0,
-      });
-
-      console.log("[Evolution Webhook] Message saved to database:", messageId);
-
-      // Check if this might be a survey response (single digit 1-5)
-      const isPossibleSurveyResponse =
-        messageType === "text" &&
-        messageText &&
-        /^\s*[1-5]\s*$/.test(messageText.trim());
-
-      if (!isPossibleSurveyResponse) {
-        // Ingerir na conversa apenas se não for resposta de pesquisa
-        await ingestInboundConversationMessage({
-          provider: "whatsapp",
-          fromNumber,
-          fromName: pushName || null,
+        console.log("[Evolution Webhook] Parsed message:", {
           messageType,
           messageText,
           caption,
+        });
+
+        const messageTimestamp =
+          data?.messageTimestamp ||
+          messageData?.timestamp ||
+          messageContent?.timestamp ||
+          Math.floor(Date.now() / 1000);
+
+        // Salvar mensagem no banco
+        await db.insert(receivedMessages).values({
+          provider: "whatsapp",
+          externalId: messageId,
+          fromNumber,
+          fromName: pushName || null,
+          messageType: messageType as
+            | "text"
+            | "image"
+            | "audio"
+            | "video"
+            | "document"
+            | "location"
+            | "contact"
+            | "sticker"
+            | "reaction"
+            | "unknown",
+          messageText,
           mediaUrl,
           mimeType,
+          caption,
+          timestamp: messageTimestamp,
+          rawPayload: JSON.stringify(body),
+          processed: 0,
         });
+
         console.log(
-          "[Evolution Webhook] Message ingested to conversation:",
+          "[Evolution Webhook] Message saved to database:",
           messageId
         );
-      } else {
-        console.log(
-          "[Evolution Webhook] Message appears to be a survey response, not inserting into conversation:",
-          messageId
+
+        // Check if this might be a survey response (single digit 1-5)
+        const isPossibleSurveyResponse =
+          messageType === "text" &&
+          messageText &&
+          /^\s*[1-5]\s*$/.test(messageText.trim());
+
+        if (!isPossibleSurveyResponse) {
+          // Ingerir na conversa apenas se não for resposta de pesquisa
+          await ingestInboundConversationMessage({
+            provider: "whatsapp",
+            fromNumber,
+            fromName: pushName || null,
+            messageType,
+            messageText,
+            caption,
+            mediaUrl,
+            mimeType,
+          });
+          console.log(
+            "[Evolution Webhook] Message ingested to conversation:",
+            messageId
+          );
+        } else {
+          console.log(
+            "[Evolution Webhook] Message appears to be a survey response, not inserting into conversation:",
+            messageId
+          );
+        }
+
+        console.log("[Evolution Webhook] Webhook processed successfully:", {
+          messageId,
+          fromNumber: remoteJid,
+        });
+      } catch (msgError) {
+        console.error(
+          "[Evolution Webhook] ERROR in message processing:",
+          msgError
+        );
+        console.error(
+          "[Evolution Webhook] Error stack:",
+          msgError instanceof Error ? msgError.stack : "no stack"
         );
       }
-
-      console.log("[Evolution Webhook] Webhook processed successfully:", {
-        messageId,
-        fromNumber: remoteJid,
-      });
       return;
     }
 
