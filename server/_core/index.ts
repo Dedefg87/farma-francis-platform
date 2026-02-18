@@ -339,8 +339,10 @@ async function startServer() {
       // Get schema for each table if exists
       const schemas: any = {};
       for (const row of tables as any[]) {
-        const tableName = Object.values(row)[0];
-        const columns = await db.execute(sql`DESCRIBE ${sql.raw(tableName)}`);
+        const tableName = String(Object.values(row)[0]);
+        const columns = await db.execute(
+          sql`DESCRIBE ${sql.identifier(tableName)}`
+        );
         schemas[tableName] = columns;
       }
 
