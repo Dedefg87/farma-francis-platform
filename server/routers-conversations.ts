@@ -589,14 +589,17 @@ export const messagesRouter = router({
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      // Verificar se o agente tem acesso a esta conversa
+      // Verificar se o agente tem acesso a esta conversa (assigned ou na fila open)
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
             eq(conversations.id, input.conversation_id),
-            eq(conversations.assignedTo, ctx.user.id)
+            or(
+              eq(conversations.assignedTo, ctx.user.id),
+              eq(conversations.status, "open")
+            )
           )
         )
         .limit(1);
@@ -629,14 +632,17 @@ export const messagesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Verificar se o agente tem acesso a esta conversa
+      // Verificar se o agente tem acesso a esta conversa (assigned ou na fila open)
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
             eq(conversations.id, input.conversation_id),
-            eq(conversations.assignedTo, ctx.user.id)
+            or(
+              eq(conversations.assignedTo, ctx.user.id),
+              eq(conversations.status, "open")
+            )
           )
         )
         .limit(1);
@@ -690,14 +696,17 @@ export const messagesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-      // Verificar se o agente tem acesso a esta conversa
+      // Verificar se o agente tem acesso a esta conversa (assigned ou na fila open)
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
             eq(conversations.id, input.conversation_id),
-            eq(conversations.assignedTo, ctx.user.id)
+            or(
+              eq(conversations.assignedTo, ctx.user.id),
+              eq(conversations.status, "open")
+            )
           )
         )
         .limit(1);
