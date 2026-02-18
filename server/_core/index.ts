@@ -4,7 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
-import { sql, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -12,8 +12,6 @@ import { serveStatic, setupVite } from "./vite";
 import { sseManager } from "./sse";
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
-import { getDb } from "../db";
-import { conversationMessages } from "../drizzle/schema";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -81,33 +79,40 @@ async function startServer() {
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
 
       const messageId = parseInt(req.params.messageId, 10);
 
       if (isNaN(messageId)) {
+        await pool.end();
         return res.status(400).json({ error: "Invalid message ID" });
       }
 
-      const [msg] = await db
-        .select({
-          fileUrl: conversationMessages.fileUrl,
-          fileType: conversationMessages.fileType,
-        })
-        .from(conversationMessages)
-        .where(eq(conversationMessages.id, messageId))
-        .limit(1);
+      const [rows]: any = await pool.execute(
+        "SELECT file_url, file_type FROM conversation_messages WHERE id = ?",
+        [messageId]
+      );
 
-      if (!msg || !msg.fileUrl) {
+      await pool.end();
+
+      if (!rows || rows.length === 0) {
+        return res.status(404).json({ error: "Image not found" });
+      }
+
+      const msg = rows[0];
+      const fileUrl = msg.file_url;
+
+      if (!fileUrl) {
         return res.status(404).json({ error: "Image not found" });
       }
 
       // If it's a data URL, extract and serve directly
-      if (msg.fileUrl.startsWith("data:")) {
-        const match = msg.fileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (fileUrl.startsWith("data:")) {
+        const match = fileUrl.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
           const mimeType = match[1];
           const base64Data = match[2];
@@ -120,7 +125,7 @@ async function startServer() {
       }
 
       // If it's a regular URL, redirect
-      return res.redirect(msg.fileUrl);
+      return res.redirect(fileUrl);
     } catch (error) {
       console.error("[Media] Error serving media:", error);
       return res.status(500).json({ error: "Internal server error" });
