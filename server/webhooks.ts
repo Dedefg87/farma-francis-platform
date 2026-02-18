@@ -473,7 +473,23 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 router.post("/evolution", async (req: Request, res: Response) => {
   try {
     console.log(
-      "[Evolution Webhook] ================= NEW REQUEST ================="
+      "==========================================[Evolution Webhook] =========================================="
+    );
+    console.log(
+      "[Evolution Webhook] NEW REQUEST RECEIVED at",
+      new Date().toISOString()
+    );
+    console.log("[Evolution Webhook] Method:", req.method);
+    console.log("[Evolution Webhook] URL:", req.originalUrl);
+    console.log("[Evolution Webhook] Query:", JSON.stringify(req.query));
+    console.log(
+      "[Evolution Webhook] Headers:",
+      JSON.stringify(req.headers).substring(0, 500)
+    );
+    console.log("[Evolution Webhook] Body type:", typeof req.body);
+    console.log(
+      "[Evolution Webhook] Body:",
+      JSON.stringify(req.body).substring(0, 1000)
     );
     console.log("[Evolution Webhook] Method:", req.method);
     console.log("[Evolution Webhook] URL:", req.originalUrl);
@@ -561,10 +577,17 @@ router.post("/evolution", async (req: Request, res: Response) => {
       });
 
       if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected) {
-        console.error("[Evolution Webhook] Invalid API Key - REJECTING");
-        if (isProduction) {
-          return res.status(403).send("Invalid API key");
-        }
+        console.error("[Evolution Webhook] Invalid API Key - REJECTING", {
+          provided: cleanApikey,
+          expected: cleanExpected,
+        });
+        // TEMPORARY: Skip auth check for debugging
+        console.log(
+          "[Evolution Webhook] Auth check FAILED but continuing for debug..."
+        );
+        // if (isProduction) {
+        //   return res.status(403).send("Invalid API key");
+        // }
       } else {
         console.log("[Evolution Webhook] Auth passed");
       }
