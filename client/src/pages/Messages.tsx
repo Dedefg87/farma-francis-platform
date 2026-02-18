@@ -9,10 +9,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-function getImageSrc(url: string | null | undefined): string {
+function getImageSrc(
+  url: string | null | undefined,
+  messageId?: number
+): string {
   if (!url) return "";
+  // If it's a data URL, return it directly
   if (url.startsWith("data:")) {
     return url;
+  }
+  // If it's a WhatsApp URL (temporary), use our media endpoint
+  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
+    return `/api/media/${messageId}`;
   }
   return url;
 }
@@ -801,13 +809,16 @@ export default function Messages() {
                                     {msg.fileType?.startsWith("image/") ? (
                                       <div className="relative group">
                                         <img
-                                          src={getImageSrc(msg.fileUrl)}
+                                          src={getImageSrc(msg.fileUrl, msg.id)}
                                           alt={msg.fileName || "Imagem"}
                                           className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
                                           onClick={() => {
                                             if (msg.fileUrl) {
                                               window.open(
-                                                getImageSrc(msg.fileUrl),
+                                                getImageSrc(
+                                                  msg.fileUrl,
+                                                  msg.id
+                                                ),
                                                 "_blank"
                                               );
                                             }
@@ -818,14 +829,14 @@ export default function Messages() {
                                     ) : msg.fileType?.startsWith("video/") ? (
                                       <div className="relative">
                                         <video
-                                          src={getImageSrc(msg.fileUrl)}
+                                          src={getImageSrc(msg.fileUrl, msg.id)}
                                           controls
                                           className="max-w-full rounded-lg max-h-64"
                                         />
                                       </div>
                                     ) : (
                                       <a
-                                        href={getImageSrc(msg.fileUrl)}
+                                        href={getImageSrc(msg.fileUrl, msg.id)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 text-xs underline"

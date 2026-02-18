@@ -76,6 +76,55 @@ async function startServer() {
 
   app.use("/api/", apiLimiter);
 
+  // Media endpoint - serves images from conversation_messages table
+  app.get("/api/media/:messageId", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { conversationMessages } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const db = await getDb();
+      const messageId = parseInt(req.params.messageId, 10);
+
+      if (isNaN(messageId)) {
+        return res.status(400).json({ error: "Invalid message ID" });
+      }
+
+      const [msg] = await db
+        .select({
+          fileUrl: conversationMessages.fileUrl,
+          fileType: conversationMessages.fileType,
+        })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.id, messageId))
+        .limit(1);
+
+      if (!msg || !msg.fileUrl) {
+        return res.status(404).json({ error: "Image not found" });
+      }
+
+      // If it's a data URL, extract and serve directly
+      if (msg.fileUrl.startsWith("data:")) {
+        const match = msg.fileUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          const mimeType = match[1];
+          const base64Data = match[2];
+          const buffer = Buffer.from(base64Data, "base64");
+          res.setHeader("Content-Type", mimeType);
+          res.setHeader("Content-Length", buffer.length);
+          res.setHeader("Cache-Control", "public, max-age=31536000");
+          return res.send(buffer);
+        }
+      }
+
+      // If it's a regular URL, redirect
+      return res.redirect(msg.fileUrl);
+    } catch (error) {
+      console.error("[Media] Error serving media:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/events", async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
