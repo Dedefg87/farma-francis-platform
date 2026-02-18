@@ -50,8 +50,10 @@ async function pickLeastLoadedOnlineAgent(params: {
     if (Array.isArray(rows) && rows.length > 0) {
       const minLoad = Number(rows[0]?.loadCount ?? 0);
       const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
+      const chosenId = Number(minRows[0]?.userId);
+      if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
       return {
-        userId: Number(minRows[0]?.userId),
+        userId: chosenId,
         candidates: rows.length,
         minLoad,
         source: "sse",
@@ -80,17 +82,48 @@ async function pickLeastLoadedOnlineAgent(params: {
     ORDER BY loadCount ASC, lastActivity DESC
   `)) as any[];
 
-  if (!Array.isArray(rows) || rows.length === 0) return null;
+  if (Array.isArray(rows) && rows.length > 0) {
+    const minLoad = Number(rows[0]?.loadCount ?? 0);
+    const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
+    const chosenId = Number(minRows[0]?.userId);
+    if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
 
-  // Enforce equal distribution: pick among the minimum load.
-  const minLoad = Number(rows[0]?.loadCount ?? 0);
-  const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
-  // If multiple, pick the most recently active among them (already sorted).
+    return {
+      userId: chosenId,
+      candidates: rows.length,
+      minLoad,
+      source: "agent_status",
+    };
+  }
+
+  // Final fallback: distribute across all agents (role=user) even if status is not set
+  const anyRows = (await db.execute(sql`
+    SELECT 
+      u.id AS userId,
+      COUNT(c.id) AS loadCount,
+      MAX(u.lastSignedIn) AS lastSignedIn
+    FROM users u
+    LEFT JOIN agent_pauses p
+      ON p.agent_id = u.id AND p.status = 'active'
+    LEFT JOIN conversations c
+      ON c.assigned_to = u.id
+     AND c.status IN ('open','assigned')
+     AND c.channel = ${params.provider}
+    WHERE u.role = 'user'
+      AND p.id IS NULL
+    GROUP BY u.id
+    ORDER BY loadCount ASC, lastSignedIn DESC
+    LIMIT 1
+  `)) as any[];
+
+  if (!Array.isArray(anyRows) || anyRows.length === 0) return null;
+  const chosenId = Number(anyRows[0]?.userId);
+  if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
   return {
-    userId: Number(minRows[0]?.userId),
-    candidates: rows.length,
-    minLoad,
-    source: "agent_status",
+    userId: chosenId,
+    candidates: 1,
+    minLoad: Number(anyRows[0]?.loadCount ?? 0),
+    source: "any_user",
   };
 }
 
@@ -337,7 +370,10 @@ export async function ingestInboundConversationMessage(message: {
   const picked = await pickLeastLoadedOnlineAgent({
     provider: message.provider,
   });
-  const assignedUserId = picked?.userId ?? null;
+  const assignedUserId =
+    picked && Number.isFinite(picked.userId) && picked.userId > 0
+      ? picked.userId
+      : null;
 
   const [defaultQueue] = await db
     .select()
