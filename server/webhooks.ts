@@ -1074,54 +1074,49 @@ async function processEvolutionWebhook(body: any) {
           fromMe,
         });
 
+        console.log("[Evolution Webhook] Step 7: Checking send events");
         // Ignore send/ack events (outbound)
         if (
           normalizedEvent.startsWith("send") ||
           normalizedEvent.includes("send_message")
         ) {
-          console.log(
-            "[Evolution Webhook] Ignoring send event:",
-            normalizedEvent
-          );
+          console.log("[Evolution Webhook] IGNORING: send event");
           return;
         }
 
+        console.log("[Evolution Webhook] Step 8: Checking remoteJid");
         if (!remoteJid) {
-          console.warn("[Evolution Webhook] No remoteJid found");
+          console.warn("[Evolution Webhook] FAILED: No remoteJid");
           return;
         }
 
+        console.log("[Evolution Webhook] Step 9: Normalizing phone");
         const fromNumber = normalizeInboundNumber(remoteJid);
         if (!fromNumber) {
-          console.warn(
-            "[Evolution Webhook] Could not normalize phone from remoteJid",
-            {
-              remoteJid,
-            }
-          );
+          console.warn("[Evolution Webhook] FAILED: Could not normalize phone");
           return;
         }
+        console.log("[Evolution Webhook] Step 9b: fromNumber=", fromNumber);
 
+        console.log("[Evolution Webhook] Step 10: Checking fromMe");
         // Ignorar mensagens do próprio bot
         if (fromMe === true || fromMe === "true" || fromMe === 1) {
-          console.log(
-            "[Evolution Webhook] Ignoring message from self (fromMe=true)"
-          );
+          console.log("[Evolution Webhook] IGNORING: fromMe=true");
           return;
         }
 
+        console.log("[Evolution Webhook] Step 11: Checking duplicate");
         // Verificar duplicata
         const existing = await getReceivedMessageByExternalId(
           messageId,
           "whatsapp"
         );
         if (existing) {
-          console.log(
-            `[Evolution Webhook] Duplicate message ${messageId} ignored`
-          );
+          console.log("[Evolution Webhook] IGNORING: Duplicate message");
           return;
         }
 
+        console.log("[Evolution Webhook] Step 12: Parsing message content");
         // Determinar tipo e conteúdo da mensagem (robusto)
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;
@@ -1129,6 +1124,12 @@ async function processEvolutionWebhook(body: any) {
         const caption = parsed.caption;
         const mediaUrl = parsed.mediaUrl;
         const mimeType = parsed.mimeType;
+        console.log(
+          "[Evolution Webhook] Step 12b: messageType=",
+          messageType,
+          "text=",
+          messageText
+        );
 
         // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
         const hasRealContent =
@@ -1136,17 +1137,11 @@ async function processEvolutionWebhook(body: any) {
           Boolean(caption && String(caption).trim()) ||
           Boolean(mediaUrl && String(mediaUrl).trim());
         if (!hasRealContent && messageType === "unknown") {
-          console.log(
-            "[Evolution Webhook] Ignoring payload without message content"
-          );
+          console.log("[Evolution Webhook] IGNORING: No content");
           return;
         }
 
-        console.log("[Evolution Webhook] Parsed message:", {
-          messageType,
-          messageText,
-          caption,
-        });
+        console.log("[Evolution Webhook] Step 13: Saving to database");
 
         const messageTimestamp =
           data?.messageTimestamp ||
@@ -1180,10 +1175,7 @@ async function processEvolutionWebhook(body: any) {
           processed: 0,
         });
 
-        console.log(
-          "[Evolution Webhook] Message saved to database:",
-          messageId
-        );
+        console.log("[Evolution Webhook] Step 14: Saved to receivedMessages");
 
         // Check if this might be a survey response (single digit 1-5)
         const isPossibleSurveyResponse =
@@ -1192,6 +1184,9 @@ async function processEvolutionWebhook(body: any) {
           /^\s*[1-5]\s*$/.test(messageText.trim());
 
         if (!isPossibleSurveyResponse) {
+          console.log(
+            "[Evolution Webhook] Step 15: Calling ingestInboundConversationMessage"
+          );
           // Ingerir na conversa apenas se não for resposta de pesquisa
           await ingestInboundConversationMessage({
             provider: "whatsapp",
@@ -1204,20 +1199,13 @@ async function processEvolutionWebhook(body: any) {
             mimeType,
           });
           console.log(
-            "[Evolution Webhook] Message ingested to conversation:",
-            messageId
+            "[Evolution Webhook] Step 16: ingestInboundConversationMessage DONE"
           );
         } else {
-          console.log(
-            "[Evolution Webhook] Message appears to be a survey response, not inserting into conversation:",
-            messageId
-          );
+          console.log("[Evolution Webhook] IGNORING: Survey response");
         }
 
-        console.log("[Evolution Webhook] Webhook processed successfully:", {
-          messageId,
-          fromNumber: remoteJid,
-        });
+        console.log("[Evolution Webhook] SUCCESS: Webhook processed");
       } catch (msgError) {
         console.error(
           "[Evolution Webhook] ERROR in message processing:",
