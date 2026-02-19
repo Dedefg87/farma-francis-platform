@@ -438,10 +438,20 @@ export default function AgentChat() {
                                   rel="noopener noreferrer"
                                 >
                                   <img
-                                    src={getImageSrc(message.fileUrl)}
+                                    src={getImageSrc(
+                                      message.fileUrl,
+                                      message.id
+                                    )}
                                     alt={message.fileName || "Imagem"}
                                     className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
                                     style={{ maxHeight: "300px" }}
+                                    onError={e => {
+                                      const el =
+                                        e.currentTarget as HTMLImageElement;
+                                      el.src =
+                                        "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+                                      el.alt = "Imagem indisponível";
+                                    }}
                                   />
                                 </a>
                               ) : message.fileType?.startsWith("video/") ? (

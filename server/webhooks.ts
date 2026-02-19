@@ -127,6 +127,12 @@ async function downloadAndSaveMedia(
 
     // Try to download from the provided URL first
     let response = await fetch(mediaUrl);
+    // Simple retry if initial fetch fails
+    if (!response.ok) {
+      console.warn("[Media] Initial download failed, retrying... ");
+      await new Promise(resolve => setTimeout(resolve, 400));
+      response = await fetch(mediaUrl);
+    }
 
     // If direct URL fails, try Evolution API endpoint
     if (!response.ok && mediaUrl.includes("whatsapp.net")) {
@@ -156,8 +162,12 @@ async function downloadAndSaveMedia(
     const buffer = Buffer.from(arrayBuffer);
     const base64 = buffer.toString("base64");
 
-    // Determine content type
-    const contentType = mimeType || "application/octet-stream";
+    // Determine content type (prefer response header if available)
+    let contentType = mimeType || "application/octet-stream";
+    const headerCt = response.headers.get("content-type");
+    if (headerCt) {
+      contentType = headerCt.split(";")[0];
+    }
     const dataUrl = `data:${contentType};base64,${base64}`;
 
     console.log("[Media] Downloaded successfully, size:", buffer.length);

@@ -765,6 +765,13 @@ export default function AgentMessages() {
                                 onClick={() =>
                                   handleImageClick(msg.fileUrl, msg.id)
                                 }
+                                onError={e => {
+                                  const el =
+                                    e.currentTarget as HTMLImageElement;
+                                  el.src =
+                                    "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+                                  el.alt = "Imagem indisponível";
+                                }}
                               />
                             ) : msg.fileType?.startsWith("video/") ? (
                               <video

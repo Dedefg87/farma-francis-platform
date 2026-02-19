@@ -835,6 +835,14 @@ export default function Messages() {
                                               msg.id
                                             )
                                           }
+                                          onError={e => {
+                                            const el =
+                                              e.currentTarget as HTMLImageElement;
+                                            // Fallback simples: substitui pela menor placeholder
+                                            el.src =
+                                              "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+                                            el.alt = "Imagem indisponível";
+                                          }}
                                         />
                                         <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg" />
                                       </div>
