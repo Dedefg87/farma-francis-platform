@@ -148,27 +148,51 @@ export default function Messages() {
       toast.error("Arquivo muito grande. Tamanho máximo: 16MB");
       return;
     }
-
-    // Validar tipo
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "image/webp",
-      "video/mp4",
-      "video/webm",
-      "video/quicktime",
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error(
-        "Tipo de arquivo não suportado. Use imagens ou documentos PDF/DOCX."
-      );
-      return;
+    // Infer MIME type from extension; do not block other types
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    let inferredMime = file.type || "";
+    if (!inferredMime) {
+      switch (ext) {
+        case "jpg":
+        case "jpeg":
+          inferredMime = "image/jpeg";
+          break;
+        case "png":
+          inferredMime = "image/png";
+          break;
+        case "gif":
+          inferredMime = "image/gif";
+          break;
+        case "webp":
+          inferredMime = "image/webp";
+          break;
+        case "pdf":
+          inferredMime = "application/pdf";
+          break;
+        case "doc":
+          inferredMime = "application/msword";
+          break;
+        case "docx":
+          inferredMime =
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          break;
+        case "txt":
+          inferredMime = "text/plain";
+          break;
+        case "mp4":
+          inferredMime = "video/mp4";
+          break;
+        case "mov":
+          inferredMime = "video/quicktime";
+          break;
+        case "webm":
+          inferredMime = "video/webm";
+          break;
+        default:
+          inferredMime = "application/octet-stream";
+      }
     }
-
+    // Accept any file type up to size limit
     setSelectedFile(file);
 
     // Criar preview para imagens

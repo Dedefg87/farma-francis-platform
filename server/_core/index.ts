@@ -10,6 +10,9 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { sseManager } from "./sse";
+
+// Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
+console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
 
@@ -134,6 +137,36 @@ async function startServer() {
     } catch (error) {
       console.error("[Media] Error serving media:", error);
       return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Debug: list old WhatsApp media URLs for migration planning
+  app.get("/api/media/inspect-old", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { conversationMessages } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { sql } = await import("drizzle-orm");
+      const rows = await db
+        .select({
+          id: conversationMessages.id,
+          fileUrl: conversationMessages.fileUrl,
+          fileType: conversationMessages.fileType,
+        })
+        .from(conversationMessages)
+        .limit(100);
+
+      // Filter old WhatsApp URLs in memory (avoid dialect specifics)
+      const old = rows.filter(
+        (r: any) =>
+          typeof r.fileUrl === "string" && r.fileUrl.includes("whatsapp.net")
+      );
+      res.json({ count: old.length, rows: old });
+    } catch (error) {
+      console.error("[Inspect Old]", error);
+      res.status(500).json({ error: String(error) });
     }
   });
 
