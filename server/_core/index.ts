@@ -76,6 +76,11 @@ async function startServer() {
 
   app.use("/api/", apiLimiter);
 
+  // Basic health check for load balancers and uptime monitoring
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {

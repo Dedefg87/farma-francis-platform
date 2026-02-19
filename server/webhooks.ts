@@ -473,6 +473,10 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 router.post("/evolution", async (req: Request, res: Response) => {
   try {
     console.log(
+      "[Evolution Webhook] Received Evolution webhook call at",
+      new Date().toISOString()
+    );
+    console.log(
       "==========================================[Evolution Webhook] =========================================="
     );
     console.log(
