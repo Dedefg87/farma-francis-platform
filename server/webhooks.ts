@@ -473,6 +473,10 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 router.post("/evolution", async (req: Request, res: Response) => {
   try {
     console.log(
+      "[Evolution Webhook] Received Evolution webhook call at",
+      new Date().toISOString()
+    );
+    console.log(
       "==========================================[Evolution Webhook] =========================================="
     );
     console.log(
@@ -559,6 +563,11 @@ router.post("/evolution", async (req: Request, res: Response) => {
       .limit(1);
 
     if (configRow) {
+      if (process.env.EVO_DEBUG_ENABLE === "1") {
+        console.log(
+          "[Evolution Webhook] EVO_DEBUG: Evolution webhook debug mode ON"
+        );
+      }
       const configData =
         typeof configRow.config === "string"
           ? JSON.parse(configRow.config)
@@ -581,13 +590,15 @@ router.post("/evolution", async (req: Request, res: Response) => {
           provided: cleanApikey,
           expected: cleanExpected,
         });
-        // TEMPORARY: Skip auth check for debugging
-        console.log(
-          "[Evolution Webhook] Auth check FAILED but continuing for debug..."
-        );
-        // if (isProduction) {
-        //   return res.status(403).send("Invalid API key");
-        // }
+        // EVO_DEBUG: allow debugging in non-production only
+        if (process.env.EVO_DEBUG_ENABLE === "1" && !isProduction) {
+          console.log(
+            "[Evolution Webhook] EVO_DEBUG: auth mismatch detected (debug mode, non-prod)"
+          );
+        }
+        if (isProduction) {
+          return res.status(403).send("Invalid API key");
+        }
       } else {
         console.log("[Evolution Webhook] Auth passed");
       }
