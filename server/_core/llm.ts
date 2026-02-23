@@ -297,22 +297,15 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       );
       if (hasImagePart) {
         console.log(
-          "[invokeLLM] Image detected - but skipping vision for now due to model limitations"
+          "[invokeLLM] Image detected - images not supported, removing from message"
         );
+        // Remove image content from message to prevent errors
+        msg.content = content.filter((part: any) => part?.type !== "image_url");
       }
-      return hasImagePart;
+      return false; // Always return false to prevent image processing
     }
     return false;
   });
-
-  // TEMPORARILY DISABLED: Image processing requires a vision-capable model
-  // TODO: Re-enable once we have a working vision model
-  /*
-  if (hasImage) {
-    payload.model = "gemini-2.0-flash-preview-05-20";
-    console.log("[invokeLLM] Using vision model for image");
-  }
-  */
 
   if (tools && tools.length > 0) {
     payload.tools = tools;
