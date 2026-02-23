@@ -289,23 +289,26 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     messages: messages.map(normalizeMessage),
   };
 
-  const hasImage = messages.some(msg => {
-    const content = msg.content;
-    if (Array.isArray(content)) {
-      const hasImagePart = content.some(
+  // STRIP ALL IMAGES from messages - the current AI model doesn't support vision
+  // This prevents "Cannot read image.png" errors
+  for (const msg of messages) {
+    if (Array.isArray(msg.content)) {
+      const hasImages = msg.content.some(
         (part: any) => part?.type === "image_url"
       );
-      if (hasImagePart) {
+      if (hasImages) {
         console.log(
-          "[invokeLLM] Image detected - images not supported, removing from message"
+          "[invokeLLM] Found images in message - STRIPPING ALL to prevent API error"
         );
-        // Remove image content from message to prevent errors
-        msg.content = content.filter((part: any) => part?.type !== "image_url");
+        msg.content = msg.content.filter((part: any) => {
+          if (typeof part === "string") return true;
+          return part?.type !== "image_url";
+        });
       }
-      return false; // Always return false to prevent image processing
     }
-    return false;
-  });
+  }
+
+  const hasImage = false; // Always false - we strip all images
 
   if (tools && tools.length > 0) {
     payload.tools = tools;
