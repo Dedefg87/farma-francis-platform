@@ -350,11 +350,20 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   if (!response.ok) {
     const errorText = await response.text();
 
+    // Log full error for debugging
+    console.error(
+      "[invokeLLM] API Error:",
+      response.status,
+      response.statusText
+    );
+    console.error("[invokeLLM] Error response:", errorText);
+
     // Check if it's an image-related error
     if (
       errorText.includes("image") ||
       errorText.includes("image_url") ||
-      errorText.includes("does not support")
+      errorText.includes("does not support") ||
+      errorText.includes("Cannot read")
     ) {
       throw new Error("IMAGE_NOT_SUPPORTED");
     }
