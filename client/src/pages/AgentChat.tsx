@@ -613,11 +613,12 @@ export default function AgentChat() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="mb-1"
+                  className="mb-1 flex-shrink-0"
                   onClick={() =>
                     document.getElementById("file-upload-agent")?.click()
                   }
                   disabled={isUploading}
+                  title="Anexar imagem ou arquivo"
                 >
                   <Paperclip className="h-5 w-5" />
                 </Button>

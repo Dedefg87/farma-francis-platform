@@ -1053,12 +1053,12 @@ export default function Messages() {
                           <Button
                             variant="outline"
                             size="icon"
-                            className="self-end"
+                            className="self-end flex-shrink-0"
                             onClick={() =>
                               document.getElementById("file-upload")?.click()
                             }
                             disabled={sendMessageMutation.isPending}
-                            title="Anexar arquivo"
+                            title="Anexar imagem ou arquivo"
                           >
                             <Paperclip className="w-4 h-4" />
                           </Button>
