@@ -159,8 +159,13 @@ async function startServer() {
         }
       }
 
-      // If it's a regular URL, redirect
-      return res.redirect(fileUrl);
+      // If it's a regular URL (not base64), it's likely an expired WhatsApp URL
+      // Return 404 instead of redirecting to a blocked/expired URL
+      console.log(
+        "[Media] file_url is not a data URL, likely expired WhatsApp URL:",
+        fileUrl.substring(0, 50)
+      );
+      return res.status(404).json({ error: "Image not found or expired" });
     } catch (error) {
       console.error("[Media] Error serving media:", error);
       return res.status(500).json({ error: "Internal server error" });
