@@ -985,12 +985,22 @@ async function callAIProvider(options: {
     if (!response.ok) {
       const errorText = await response.text();
 
+      // Log full error for debugging
+      console.error(
+        "[AI Integration] API Error:",
+        response.status,
+        response.statusText
+      );
+      console.error("[AI Integration] Error response:", errorText);
+
       // Check if it's an image-related error
       if (
         errorText.includes("image") ||
         errorText.includes("image_url") ||
-        errorText.includes("does not support")
+        errorText.includes("does not support") ||
+        errorText.includes("Cannot read")
       ) {
+        console.error("[AI Integration] Image not supported error detected");
         throw new Error("IMAGE_NOT_SUPPORTED");
       }
 
