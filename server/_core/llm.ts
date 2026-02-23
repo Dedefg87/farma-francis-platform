@@ -131,14 +131,16 @@ const normalizeContentPart = (
   }
 
   if (part.type === "image_url") {
-    return part;
+    // Images are stripped at invokeLLM entry, convert to placeholder text
+    return { type: "text", text: "[imagem]" };
   }
 
   if (part.type === "file_url") {
-    return part;
+    return { type: "text", text: "[arquivo]" };
   }
 
-  throw new Error("Unsupported message content part");
+  // For any other type, convert to text
+  return { type: "text", text: "[conteúdo não suportado]" };
 };
 
 const normalizeMessage = (message: Message) => {
@@ -286,14 +288,9 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       response_format,
     } = params;
 
-    const payload: Record<string, unknown> = {
-      model: "gemini-2.0-flash-preview-05-20",
-      messages: messages.map(normalizeMessage),
-    };
-
-    // STRIP ALL IMAGES from messages - the current AI model doesn't support vision
+    // STRIP ALL IMAGES from messages BEFORE creating payload
     // This prevents "Cannot read image.png" errors
-    for (const msg of messages) {
+    const processedMessages = messages.map(msg => {
       if (Array.isArray(msg.content)) {
         const hasImages = msg.content.some(
           (part: any) => part?.type === "image_url"
@@ -302,13 +299,22 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
           console.log(
             "[invokeLLM] Found images in message - STRIPPING ALL to prevent API error"
           );
-          msg.content = msg.content.filter((part: any) => {
-            if (typeof part === "string") return true;
-            return part?.type !== "image_url";
-          });
+          return {
+            ...msg,
+            content: msg.content.filter((part: any) => {
+              if (typeof part === "string") return true;
+              return part?.type !== "image_url";
+            }),
+          };
         }
       }
-    }
+      return msg;
+    });
+
+    const payload: Record<string, unknown> = {
+      model: "gemini-2.0-flash-preview-05-20",
+      messages: processedMessages.map(normalizeMessage),
+    };
 
     const hasImage = false; // Always false - we strip all images
 
