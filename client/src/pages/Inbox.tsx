@@ -338,11 +338,15 @@ export default function Inbox() {
               <div className="space-y-4">
                 {history?.map(msg => {
                   // Atualizar última mensagem do cliente para sugestões IA e analisar sentimento
+                  // Só analisar sentimento se for mensagem de texto (não imagem/arquivo)
                   if (msg.direction === "inbound" && msg.content) {
-                    if (msg.content !== lastCustomerMessage) {
+                    const isTextOnly =
+                      msg.messageType === "text" || !msg.mediaUrl;
+
+                    if (isTextOnly && msg.content !== lastCustomerMessage) {
                       setLastCustomerMessage(msg.content);
 
-                      // Analisar sentimento da mensagem
+                      // Analisar sentimento da mensagem (apenas texto)
                       const convKey = `${selectedConversation.provider}-${selectedConversation.fromNumber}`;
                       if (!sentiments[convKey]) {
                         trpc.ai.analyzeSentiment
