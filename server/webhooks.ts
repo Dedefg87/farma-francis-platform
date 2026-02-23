@@ -122,61 +122,153 @@ async function downloadAndSaveMedia(
   mimeType: string | null,
   fromNumber: string
 ): Promise<{ base64Data: string; dataUrl: string } | null> {
-  try {
-    console.log("[Media] Starting download:", mediaUrl);
+  const maxRetries = 3;
+  const initialDelay = 500;
 
-    // Try to download from the provided URL first
-    let response = await fetch(mediaUrl);
-    // Simple retry if initial fetch fails
-    if (!response.ok) {
-      console.warn("[Media] Initial download failed, retrying... ");
-      await new Promise(resolve => setTimeout(resolve, 400));
-      response = await fetch(mediaUrl);
-    }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(
+        `[Media] Attempt ${attempt}/${maxRetries}: Downloading from ${mediaUrl.substring(0, 80)}...`
+      );
 
-    // If direct URL fails, try Evolution API endpoint
-    if (!response.ok && mediaUrl.includes("whatsapp.net")) {
-      const evoConfig = await getEvolutionConfig();
-      if (evoConfig) {
-        const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
-        if (mediaIdMatch) {
-          const mediaId = mediaIdMatch[1];
-          const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
-          response = await fetch(mediaFetchUrl, {
-            headers: { apikey: evoConfig.apiKey },
-          });
+      // Try direct download first
+      let response = await fetch(mediaUrl, {
+        signal: AbortSignal.timeout(15000), // 15 second timeout
+      });
+
+      // If direct URL fails, try again after a short delay
+      if (!response.ok) {
+        console.warn(
+          `[Media] Attempt ${attempt} failed with status ${response.status}, retrying...`
+        );
+        if (attempt < maxRetries) {
+          await new Promise(resolve =>
+            setTimeout(resolve, initialDelay * attempt)
+          );
+          continue;
         }
       }
-    }
 
-    if (!response.ok) {
-      console.error(
-        "[Media] Failed to download:",
-        response.status,
-        response.statusText
+      // If direct URL fails, try Evolution API endpoint
+      if (!response.ok && mediaUrl.includes("whatsapp.net")) {
+        console.log("[Media] Direct download failed, trying Evolution API...");
+        const evoConfig = await getEvolutionConfig();
+        if (evoConfig) {
+          // Try to extract media ID from URL
+          const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
+          if (mediaIdMatch) {
+            const mediaId = mediaIdMatch[1];
+            console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
+
+            // Try the correct Evolution API endpoint
+            const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
+            const evoResponse = await fetch(mediaFetchUrl, {
+              headers: {
+                apikey: evoConfig.apiKey,
+                "Content-Type": "application/json",
+              },
+              signal: AbortSignal.timeout(15000),
+            });
+
+            if (evoResponse.ok) {
+              const evoData = await evoResponse.json();
+              if (evoData?.base64) {
+                console.log("[Media] Got base64 from Evolution API");
+                const contentType = mimeType || "application/octet-stream";
+                const dataUrl = `data:${contentType};base64,${evoData.base64}`;
+                return { base64Data: evoData.base64, dataUrl };
+              }
+            } else {
+              console.warn(
+                `[Media] Evolution API fetch failed: ${evoResponse.status}`
+              );
+            }
+          }
+        } else {
+          console.warn(
+            "[Media] No Evolution API config available for fallback"
+          );
+        }
+      }
+
+      if (!response.ok) {
+        console.error(
+          `[Media] Failed to download after ${attempt} attempts:`,
+          response.status,
+          response.statusText
+        );
+        if (attempt < maxRetries) {
+          await new Promise(resolve =>
+            setTimeout(resolve, initialDelay * attempt)
+          );
+          continue;
+        }
+        return null;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64 = buffer.toString("base64");
+
+      // Determine content type (prefer response header if available)
+      let contentType = mimeType || "application/octet-stream";
+      const headerCt = response.headers.get("content-type");
+      if (headerCt) {
+        contentType = headerCt.split(";")[0];
+      }
+
+      // If still no valid content type, try to detect from first bytes
+      if (!contentType || contentType === "application/octet-stream") {
+        if (buffer.length >= 2) {
+          // JPEG: FF D8
+          if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+            contentType = "image/jpeg";
+          }
+          // PNG: 89 50
+          else if (buffer[0] === 0x89 && buffer[1] === 0x50) {
+            contentType = "image/png";
+          }
+          // GIF: 47 49 46
+          else if (
+            buffer[0] === 0x47 &&
+            buffer[1] === 0x49 &&
+            buffer[2] === 0x46
+          ) {
+            contentType = "image/gif";
+          }
+          // PDF: 25 50 44
+          else if (
+            buffer[0] === 0x25 &&
+            buffer[1] === 0x50 &&
+            buffer[2] === 0x44
+          ) {
+            contentType = "application/pdf";
+          }
+        }
+      }
+
+      const dataUrl = `data:${contentType};base64,${base64}`;
+
+      console.log(
+        "[Media] Downloaded successfully, size:",
+        buffer.length,
+        "content-type:",
+        contentType
       );
-      return null;
+
+      return { base64Data: base64, dataUrl };
+    } catch (error) {
+      console.error(`[Media] Error on attempt ${attempt}:`, error);
+      if (attempt < maxRetries) {
+        await new Promise(resolve =>
+          setTimeout(resolve, initialDelay * attempt)
+        );
+      }
     }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString("base64");
-
-    // Determine content type (prefer response header if available)
-    let contentType = mimeType || "application/octet-stream";
-    const headerCt = response.headers.get("content-type");
-    if (headerCt) {
-      contentType = headerCt.split(";")[0];
-    }
-    const dataUrl = `data:${contentType};base64,${base64}`;
-
-    console.log("[Media] Downloaded successfully, size:", buffer.length);
-
-    return { base64Data: base64, dataUrl };
-  } catch (error) {
-    console.error("[Media] Error downloading media:", error);
-    return null;
   }
+
+  console.error("[Media] All download attempts failed");
+  return null;
 }
 
 /**
@@ -1010,8 +1102,10 @@ function parseEvolutionMessageContent(message: any) {
       type: "image",
       text: null,
       caption: message.imageMessage.caption || null,
-      mediaUrl: message.imageMessage.url || null,
-      mimeType: message.imageMessage.mimetype || null,
+      mediaUrl:
+        message.imageMessage.url || message.imageMessage.mediaUrl || null,
+      mimeType:
+        message.imageMessage.mimetype || message.imageMessage.mimeType || null,
     };
   }
 
@@ -1020,8 +1114,10 @@ function parseEvolutionMessageContent(message: any) {
       type: "video",
       text: null,
       caption: message.videoMessage.caption || null,
-      mediaUrl: message.videoMessage.url || null,
-      mimeType: message.videoMessage.mimetype || null,
+      mediaUrl:
+        message.videoMessage.url || message.videoMessage.mediaUrl || null,
+      mimeType:
+        message.videoMessage.mimetype || message.videoMessage.mimeType || null,
     };
   }
 
@@ -1030,8 +1126,12 @@ function parseEvolutionMessageContent(message: any) {
       type: "document",
       text: null,
       caption: message.documentMessage.caption || null,
-      mediaUrl: message.documentMessage.url || null,
-      mimeType: message.documentMessage.mimetype || null,
+      mediaUrl:
+        message.documentMessage.url || message.documentMessage.mediaUrl || null,
+      mimeType:
+        message.documentMessage.mimetype ||
+        message.documentMessage.mimeType ||
+        null,
     };
   }
 
@@ -1040,8 +1140,27 @@ function parseEvolutionMessageContent(message: any) {
       type: "audio",
       text: null,
       caption: null,
-      mediaUrl: message.audioMessage.url || null,
-      mimeType: message.audioMessage.mimetype || null,
+      mediaUrl:
+        message.audioMessage.url || message.audioMessage.mediaUrl || null,
+      mimeType:
+        message.audioMessage.mimetype ||
+        message.audioMessage.mimeType ||
+        "audio/ogg",
+    };
+  }
+
+  // Handle sticker messages
+  if (message.stickerMessage) {
+    return {
+      type: "sticker",
+      text: null,
+      caption: null,
+      mediaUrl:
+        message.stickerMessage.url || message.stickerMessage.mediaUrl || null,
+      mimeType:
+        message.stickerMessage.mimetype ||
+        message.stickerMessage.mimeType ||
+        "image/webp",
     };
   }
 
@@ -1265,7 +1384,11 @@ async function processEvolutionWebhook(body: any) {
           "[Evolution Webhook] Step 12b: messageType=",
           messageType,
           "text=",
-          messageText
+          messageText,
+          "mediaUrl=",
+          mediaUrl ? mediaUrl.substring(0, 60) + "..." : null,
+          "mimeType=",
+          mimeType
         );
 
         // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
@@ -1282,9 +1405,15 @@ async function processEvolutionWebhook(body: any) {
         let permanentMediaUrl = null;
         if (
           mediaUrl &&
-          ["image", "video", "audio", "document"].includes(messageType)
+          ["image", "video", "audio", "document", "sticker"].includes(
+            messageType
+          )
         ) {
-          console.log("[Evolution Webhook] Downloading media...");
+          console.log(
+            "[Evolution Webhook] Downloading media:",
+            messageType,
+            mediaUrl.substring(0, 80)
+          );
           const mediaResult = await downloadAndSaveMedia(
             mediaUrl,
             mimeType,

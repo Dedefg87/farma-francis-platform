@@ -84,6 +84,33 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // OpenClaw Bridge endpoint - receives tasks from OpenClaw via WS bridge
+  app.post("/api/openclaw/tasks", async (req, res) => {
+    try {
+      const { task, openclawTaskId } = req.body;
+
+      if (!task) {
+        return res.status(400).json({ error: "Task payload is required" });
+      }
+
+      console.log("[OpenClaw] Received task:", openclawTaskId, task);
+
+      // Here you can process the task as needed
+      // For now, just acknowledge and log
+      // TODO: Implement actual task processing logic
+
+      res.json({
+        success: true,
+        bridgeTaskId: `local-${Date.now()}`,
+        openclawTaskId,
+        message: "Task received",
+      });
+    } catch (error) {
+      console.error("[OpenClaw] Error processing task:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {

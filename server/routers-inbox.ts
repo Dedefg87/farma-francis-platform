@@ -28,7 +28,7 @@ export const inboxRouter = router({
       let filteredConversationIds: string[] | null = null;
       if (input.tagIds && input.tagIds.length > 0) {
         const { conversationTags } = await import("../drizzle/schema.js");
-        
+
         // Buscar conversões que possuem TODAS as tags selecionadas
         const taggedConversations = await db
           .select({
@@ -36,12 +36,21 @@ export const inboxRouter = router({
             tagCount: sql<number>`COUNT(DISTINCT ${conversationTags.tagId})`,
           })
           .from(conversationTags)
-          .where(sql`${conversationTags.tagId} IN (${sql.join(input.tagIds.map(id => sql`${id}`), sql`, `)})`)
+          .where(
+            sql`${conversationTags.tagId} IN (${sql.join(
+              input.tagIds.map(id => sql`${id}`),
+              sql`, `
+            )})`
+          )
           .groupBy(conversationTags.conversationId)
-          .having(sql`COUNT(DISTINCT ${conversationTags.tagId}) = ${input.tagIds.length}`);
-        
-        filteredConversationIds = taggedConversations.map(c => c.conversationId);
-        
+          .having(
+            sql`COUNT(DISTINCT ${conversationTags.tagId}) = ${input.tagIds.length}`
+          );
+
+        filteredConversationIds = taggedConversations.map(
+          c => c.conversationId
+        );
+
         // Se nenhuma conversa tem todas as tags, retornar vazio
         if (filteredConversationIds.length === 0) {
           return [];
@@ -67,25 +76,28 @@ export const inboxRouter = router({
 
       // Aplicar filtros
       const conditions = [];
-      
+
       if (input.provider && input.provider !== "all") {
         conditions.push(eq(receivedMessages.provider, input.provider));
       }
-      
+
       if (filteredConversationIds) {
         // Filtrar por conversationIds que possuem as tags
         conditions.push(
-          sql`CONCAT(${receivedMessages.provider}, '-', ${receivedMessages.fromNumber}) IN (${sql.join(filteredConversationIds.map(id => sql`${id}`), sql`, `)})`
+          sql`CONCAT(${receivedMessages.provider}, '-', ${receivedMessages.fromNumber}) IN (${sql.join(
+            filteredConversationIds.map(id => sql`${id}`),
+            sql`, `
+          )})`
         );
       }
-      
+
       if (conditions.length > 0) {
         query = query.where(sql`${sql.join(conditions, sql` AND `)}`) as any;
       }
 
       const conversations = await query;
 
-      return conversations.map((conv) => ({
+      return conversations.map(conv => ({
         ...conv,
         lastMessageTime: Number(conv.lastMessageTime),
         unreadCount: Number(conv.unreadCount),
@@ -135,7 +147,7 @@ export const inboxRouter = router({
 
       // Merge and sort by timestamp
       const allMessages = [
-        ...received.map((msg) => ({
+        ...received.map(msg => ({
           id: `received-${msg.id}`,
           direction: "inbound" as const,
           content: msg.messageText || "[Media]",
@@ -146,7 +158,7 @@ export const inboxRouter = router({
           fromName: msg.fromName,
           processed: msg.processed === 1,
         })),
-        ...sent.map((msg) => ({
+        ...sent.map(msg => ({
           id: `sent-${msg.id}`,
           direction: "outbound" as const,
           content: msg.content,
@@ -172,6 +184,9 @@ export const inboxRouter = router({
         provider: z.enum(["whatsapp", "instagram"]),
         message: z.string(),
         customerId: z.number().optional(),
+        fileUrl: z.string().optional(),
+        fileName: z.string().optional(),
+        fileType: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -179,12 +194,15 @@ export const inboxRouter = router({
         const result = await sendWhatsAppMessage({
           to: input.to,
           message: input.message,
+          mediaUrl: input.fileUrl,
+          caption: input.fileName,
         });
         return result;
       } else if (input.provider === "instagram") {
         const result = await sendInstagramMessage({
           to: input.to,
           message: input.message,
+          mediaUrl: input.fileUrl,
         });
         return result;
       }

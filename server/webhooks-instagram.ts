@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 
 /**
  * Instagram Webhook Handler
- * 
+ *
  * Handles webhook verification (GET) and incoming messages (POST)
  * from Instagram Graph API
  */
@@ -58,7 +58,10 @@ export async function verifyInstagramWebhook(req: Request, res: Response) {
 // POST /api/webhooks/instagram - Receive messages
 export async function receiveInstagramMessage(req: Request, res: Response) {
   try {
-    console.log("[Instagram Webhook] Received payload:", JSON.stringify(req.body, null, 2));
+    console.log(
+      "[Instagram Webhook] Received payload:",
+      JSON.stringify(req.body, null, 2)
+    );
 
     // Validate signature (optional but recommended for production)
     const signature = req.headers["x-hub-signature-256"] as string;
@@ -136,7 +139,7 @@ async function processInstagramMessage(event: any) {
     } else if (event.message.attachments) {
       const attachment = event.message.attachments[0];
       messageType = attachment.type || "unknown";
-      
+
       switch (messageType) {
         case "image":
           mediaUrl = attachment.payload?.url;
@@ -152,7 +155,8 @@ async function processInstagramMessage(event: any) {
           break;
         case "file":
           mediaUrl = attachment.payload?.url;
-          mimeType = "application/octet-stream";
+          mimeType =
+            attachment.payload?.extension || "application/octet-stream";
           break;
       }
     } else if (event.message.quick_reply) {
@@ -163,10 +167,49 @@ async function processInstagramMessage(event: any) {
       messageText = event.message.text || "[Reply]";
     }
 
+    // Download and save media to permanent storage if present
+    let permanentMediaUrl = null;
+    if (mediaUrl && ["image", "video", "audio", "file"].includes(messageType)) {
+      console.log(`[Instagram Webhook] Downloading media: ${messageType}`);
+      try {
+        const response = await fetch(mediaUrl, {
+          signal: AbortSignal.timeout(15000),
+        });
+        if (response.ok) {
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const base64 = buffer.toString("base64");
+
+          // Detect content type
+          let contentType = mimeType;
+          const headerCt = response.headers.get("content-type");
+          if (headerCt) {
+            contentType = headerCt.split(";")[0];
+          }
+
+          permanentMediaUrl = `data:${contentType};base64,${base64}`;
+          console.log(
+            `[Instagram Webhook] Media downloaded, size: ${buffer.length}`
+          );
+        } else {
+          console.warn(
+            `[Instagram Webhook] Media download failed: ${response.status}`
+          );
+        }
+      } catch (downloadError) {
+        console.error(
+          "[Instagram Webhook] Media download error:",
+          downloadError
+        );
+      }
+    }
+
     // Save to database
     const db = await getDb();
     if (!db) {
-      console.error("[Instagram Webhook] Database not available for saving message");
+      console.error(
+        "[Instagram Webhook] Database not available for saving message"
+      );
       return;
     }
 
@@ -177,16 +220,24 @@ async function processInstagramMessage(event: any) {
       fromName: null, // Instagram doesn't provide name in webhook
       messageType: messageType as any,
       messageText,
-      mediaUrl,
+      mediaUrl: permanentMediaUrl || mediaUrl,
       mediaId,
       mimeType,
       timestamp: parseInt(timestamp),
-      rawPayload: JSON.stringify(event),
+      rawPayload: JSON.stringify({
+        ...event,
+        mediaDownloaded: !!permanentMediaUrl,
+      }),
       processed: 0,
     });
 
-    console.log(`[Instagram Webhook] Message saved: ${messageId} from ${fromNumber}`);
+    console.log(
+      `[Instagram Webhook] Message saved: ${messageId} from ${fromNumber}`
+    );
   } catch (error) {
-    console.error("[Instagram Webhook] Error processing individual message:", error);
+    console.error(
+      "[Instagram Webhook] Error processing individual message:",
+      error
+    );
   }
 }

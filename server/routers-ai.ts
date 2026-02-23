@@ -257,31 +257,78 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
   extractRecipeData: protectedProcedure
     .input(
       z.object({
-        imageUrl: z.string().url(),
+        imageUrl: z.string(),
       })
     )
     .mutation(async ({ input }: { input: { imageUrl: string } }) => {
-      // TODO: Integrar com OCR (Tesseract ou Cloud Vision)
-      // Por enquanto, retorna estrutura de exemplo
+      let base64Image = "";
+      let mimeType = "image/jpeg";
 
-      const prompt = `Analise esta imagem de receita médica e extraia:
+      try {
+        // If already base64, use it directly
+        if (input.imageUrl.startsWith("data:")) {
+          const match = input.imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            mimeType = match[1];
+            base64Image = match[2];
+          }
+        } else {
+          // Download image and convert to base64
+          console.log(
+            "[extractRecipeData] Downloading image from:",
+            input.imageUrl.substring(0, 80)
+          );
+          const response = await fetch(input.imageUrl, {
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to download image: ${response.status}`);
+          }
+
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          base64Image = buffer.toString("base64");
+
+          // Detect content type
+          const headerCt = response.headers.get("content-type");
+          if (headerCt) {
+            mimeType = headerCt.split(";")[0];
+          } else if (buffer.length >= 2) {
+            // Detect by magic bytes
+            if (buffer[0] === 0xff && buffer[1] === 0xd8)
+              mimeType = "image/jpeg";
+            else if (buffer[0] === 0x89 && buffer[1] === 0x50)
+              mimeType = "image/png";
+            else if (buffer[0] === 0x47 && buffer[1] === 0x49)
+              mimeType = "image/gif";
+          }
+
+          console.log(
+            "[extractRecipeData] Image downloaded, size:",
+            buffer.length,
+            "type:",
+            mimeType
+          );
+        }
+
+        const dataUrl = `data:${mimeType};base64,${base64Image}`;
+
+        const prompt = `Analise esta imagem de receita médica e extraia:
 1. Nome do medicamento
 2. Dosagem
 3. Quantidade prescrita
 4. Nome do médico (se visível)
 5. CRM do médico (se visível)
 
-Imagem: ${input.imageUrl}
-
 Retorne em formato JSON.`;
 
-      try {
         const response = await invokeLLM({
           messages: [
             {
               role: "system",
               content:
-                "Você é um assistente de extração de dados de receitas médicas.",
+                "Você é um assistente de extração de dados de receitas médicas. Analise a imagem e retorne os dados em JSON.",
             },
             {
               role: "user",
@@ -293,7 +340,7 @@ Retorne em formato JSON.`;
                 {
                   type: "image_url",
                   image_url: {
-                    url: input.imageUrl,
+                    url: dataUrl,
                   },
                 },
               ],
@@ -326,7 +373,11 @@ Retorne em formato JSON.`;
           };
         }
       } catch (error: any) {
-        if (error.message === "IMAGE_NOT_SUPPORTED") {
+        console.error("[extractRecipeData] Error:", error.message);
+        if (
+          error.message === "IMAGE_NOT_SUPPORTED" ||
+          error.message?.includes("does not support image")
+        ) {
           return {
             medication: "",
             dosage: "",
@@ -335,7 +386,7 @@ Retorne em formato JSON.`;
             doctorCRM: "",
             confidence: 0,
             error:
-              "No momento, não conseguimos processar imagens de receitas. Por favor, digite as informações da receita manualmente.",
+              "O modelo de IA atual não suporta análise de imagens. Por favor, digite as informações da receita manualmente.",
           };
         }
         throw error;

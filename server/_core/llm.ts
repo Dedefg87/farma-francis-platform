@@ -285,9 +285,21 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: "gemini-2.0-flash-preview-05-20",
     messages: messages.map(normalizeMessage),
   };
+
+  const hasImage = messages.some(msg => {
+    const content = msg.content;
+    if (Array.isArray(content)) {
+      return content.some((part: any) => part?.type === "image_url");
+    }
+    return false;
+  });
+
+  if (hasImage) {
+    payload.model = "gemini-2.0-flash-preview-05-20";
+  }
 
   if (tools && tools.length > 0) {
     payload.tools = tools;

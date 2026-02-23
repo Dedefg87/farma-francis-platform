@@ -1,0 +1,15 @@
+{
+  "name": "openclaw-ws-bridge",
+  "version": "0.1.0",
+  "type": "commonjs",
+  "description": "WebSocket bridge to OpenClaw, forwarding tasks to OpenCode REST API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.19.3",
+    "node-fetch": "^2.6.7",
+    "dotenv": "^16.0.3"
+  }
+}
