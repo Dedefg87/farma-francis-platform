@@ -1426,6 +1426,10 @@ async function processEvolutionWebhook(body: any) {
             );
             // Store base64 in raw_payload for permanent access
             permanentMediaUrl = mediaResult.dataUrl;
+            console.log(
+              "[Evolution Webhook] permanentMediaUrl set, type:",
+              mediaResult.dataUrl.substring(0, 30)
+            );
           } else {
             console.log(
               "[Evolution Webhook] Media download failed, using original URL"
@@ -1482,6 +1486,14 @@ async function processEvolutionWebhook(body: any) {
         if (!isPossibleSurveyResponse) {
           console.log(
             "[Evolution Webhook] Step 15: Calling ingestInboundConversationMessage"
+          );
+          console.log(
+            "[Evolution Webhook] mediaUrl being passed:",
+            permanentMediaUrl
+              ? "base64 data URL"
+              : mediaUrl
+                ? "original URL"
+                : "null"
           );
           // Ingerir na conversa apenas se não for resposta de pesquisa
           await ingestInboundConversationMessage({
