@@ -357,14 +357,18 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       response.statusText
     );
     console.error("[invokeLLM] Error response:", errorText);
+    console.error("[invokeLLM] Model used:", payload.model);
 
-    // Check if it's an image-related error
+    // Check if it's an image-related error - try to use a fallback model
     if (
       errorText.includes("image") ||
       errorText.includes("image_url") ||
       errorText.includes("does not support") ||
       errorText.includes("Cannot read")
     ) {
+      console.error(
+        "[invokeLLM] Image not supported by current model, throwing IMAGE_NOT_SUPPORTED"
+      );
       throw new Error("IMAGE_NOT_SUPPORTED");
     }
 
