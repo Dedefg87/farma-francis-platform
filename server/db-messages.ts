@@ -12,6 +12,47 @@ import {
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 
+/**
+ * Download media from URL and convert to base64 Data URL
+ * This ensures the file persists even after the temporary WhatsApp/Meta URL expires
+ */
+async function downloadMediaAsBase64(
+  mediaUrl: string,
+  mimeType: string | null
+): Promise<string | null> {
+  try {
+    console.log("[Media Download] Starting download:", mediaUrl.substring(0, 100) + "...");
+    
+    if (mediaUrl.startsWith("data:")) {
+      console.log("[Media Download] Already base64 data URL");
+      return mediaUrl;
+    }
+    
+    let response = await fetch(mediaUrl);
+    if (!response.ok) {
+      console.warn("[Media Download] Initial failed, retrying...");
+      await new Promise(r => setTimeout(r, 500));
+      response = await fetch(mediaUrl);
+    }
+    if (!response.ok) {
+      console.error("[Media Download] Failed:", response.status);
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    let contentType = mimeType || "application/octet-stream";
+    const headerCt = response.headers.get("content-type");
+    if (headerCt) contentType = headerCt.split(";")[0];
+    const dataUrl = `data:${contentType};base64,${base64}`;
+    console.log("[Media Download] Success! Size:", Math.round(buffer.length / 1024), "KB");
+    return dataUrl;
+  } catch (error) {
+    console.error("[Media Download] Error:", error);
+    return null;
+  }
+}
+
 async function pickLeastLoadedOnlineAgent(params: {
   provider: "whatsapp" | "instagram";
 }) {
@@ -494,12 +535,24 @@ export async function ingestInboundConversationMessage(message: {
       .where(eq(conversations.id, conversationId));
   }
 
+      // Download media immediately if present (URLs from WhatsApp expire quickly!)
+      let fileUrlToSave = message.mediaUrl || null;
+      if (fileUrlToSave && message.messageType !== "text") {
+        console.log("[ingestInbound] Downloading media file...");
+        const base64Url = await downloadMediaAsBase64(fileUrlToSave, message.mimeType);
+        if (base64Url) {
+          fileUrlToSave = base64Url;
+          console.log("[ingestInbound] Media converted to base64 successfully");
+        } else {
+          console.warn("[ingestInbound] Failed to download media, keeping original URL");
+        }
+      }
   await db.insert(conversationMessages).values({
     conversationId,
     senderId: null,
     senderType: "customer",
     content: buildInboundContent(message),
-    fileUrl: message.mediaUrl || null,
+    fileUrl: fileUrlToSave,
     fileName: null,
     fileType: message.mimeType || null,
     fileSize: null,
