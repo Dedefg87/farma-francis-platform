@@ -25,6 +25,22 @@ function getImageSrc(
   return url;
 }
 
+/**
+ * Extrai o MIME type real de um arquivo.
+ * Prioriza o MIME type do data URL (mais confiável) sobre o fileType do banco.
+ */
+function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
+  // Se tem data URL, extrair MIME type dele (mais confiável)
+  if (fileUrl?.startsWith('data:')) {
+    const mimeMatch = fileUrl.match(/^data:([^;]+);/);
+    if (mimeMatch && mimeMatch[1]) {
+      return mimeMatch[1];
+    }
+  }
+  // Fallback para o fileType do banco
+  return fileType || '';
+}
+
 function handleImageClick(url: string | null | undefined, messageId?: number) {
   const src = getImageSrc(url, messageId);
   if (!src) {
@@ -906,7 +922,7 @@ export default function Messages() {
                                 {msg.fileUrl && (
                                   <div className="mt-2">
                                     {(() => {
-                                      const ft = msg.fileType || '';
+                                      const ft = getMimeType(msg.fileUrl, msg.fileType);
                                       const isImage = ft.startsWith('image/');
                                       const isVideo = ft.startsWith('video/');
                                       const isAudio = ft.startsWith('audio/');
@@ -942,7 +958,7 @@ export default function Messages() {
                                           <span className="text-3xl">📄</span>
                                           <div className="flex-1 min-w-0">
                                             <p className="text-sm font-medium truncate">{msg.fileName || "Documento.pdf"}</p>
-                                            <p className="text-xs opacity-70">{getFileIcon(msg.fileType, msg.fileName).label || "Arquivo"}</p>
+                                            <p className="text-xs opacity-70">{getFileIcon(ft, msg.fileName).label || "Arquivo"}</p>
                                           </div>
                                           <span className="text-xs bg-white/30 px-2 py-1 rounded">Clique para baixar</span>
                                         </div>

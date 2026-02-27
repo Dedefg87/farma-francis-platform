@@ -21,6 +21,22 @@ function getImageSrc(
   return url;
 }
 
+/**
+ * Extrai o MIME type real de um arquivo.
+ * Prioriza o MIME type do data URL (mais confiável) sobre o fileType do banco.
+ */
+function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
+  // Se tem data URL, extrair MIME type dele (mais confiável)
+  if (fileUrl?.startsWith('data:')) {
+    const mimeMatch = fileUrl.match(/^data:([^;]+);/);
+    if (mimeMatch && mimeMatch[1]) {
+      return mimeMatch[1];
+    }
+  }
+  // Fallback para o fileType do banco
+  return fileType || '';
+}
+
 function handleImageClick(url: string | null | undefined, messageId?: number) {
   const src = getImageSrc(url, messageId);
   if (!src) return;
@@ -757,7 +773,7 @@ export default function AgentMessages() {
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
-                            {msg.fileType?.startsWith("image/") ? (
+                            {getMimeType(msg.fileUrl, msg.fileType).startsWith("image/") ? (
                               <img
                                 src={getImageSrc(msg.fileUrl, msg.id)}
                                 alt={msg.fileName || "Imagem"}
@@ -773,7 +789,7 @@ export default function AgentMessages() {
                                   el.alt = "Imagem indisponível";
                                 }}
                               />
-                            ) : msg.fileType?.startsWith("video/") ? (
+                            ) : getMimeType(msg.fileUrl, msg.fileType).startsWith("video/") ? (
                               <video
                                 src={getImageSrc(msg.fileUrl, msg.id)}
                                 controls
@@ -912,7 +928,7 @@ export default function AgentMessages() {
                     className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
                   >
                     <div className="flex items-center gap-3">
-                      {item.fileType?.startsWith("image/") && item.fileUrl ? (
+                      {getMimeType(item.fileUrl, item.fileType).startsWith("image/") && item.fileUrl ? (
                         <img
                           src={item.fileUrl}
                           alt={item.fileName || "midia"}

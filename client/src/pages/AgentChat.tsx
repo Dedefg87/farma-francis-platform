@@ -18,6 +18,22 @@ function getImageSrc(url: string | null | undefined): string {
   }
   return url;
 }
+
+/**
+ * Extrai o MIME type real de um arquivo.
+ * Prioriza o MIME type do data URL (mais confiável) sobre o fileType do banco.
+ */
+function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
+  // Se tem data URL, extrair MIME type dele (mais confiável)
+  if (fileUrl?.startsWith('data:')) {
+    const mimeMatch = fileUrl.match(/^data:([^;]+);/);
+    if (mimeMatch && mimeMatch[1]) {
+      return mimeMatch[1];
+    }
+  }
+  // Fallback para o fileType do banco
+  return fileType || '';
+}
 import {
   Send,
   Paperclip,
@@ -431,7 +447,7 @@ export default function AgentChat() {
                           {/* Arquivo anexado */}
                           {message.fileUrl && (
                             <div className="mb-2">
-                              {message.fileType?.startsWith("image/") ? (
+                              {getMimeType(message.fileUrl, message.fileType).startsWith("image/") ? (
                                 <a
                                   href={getImageSrc(message.fileUrl)}
                                   target="_blank"
@@ -454,7 +470,7 @@ export default function AgentChat() {
                                     }}
                                   />
                                 </a>
-                              ) : message.fileType?.startsWith("video/") ? (
+                              ) : getMimeType(message.fileUrl, message.fileType).startsWith("video/") ? (
                                 <video
                                   src={getImageSrc(message.fileUrl)}
                                   controls
