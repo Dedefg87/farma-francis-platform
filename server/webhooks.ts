@@ -114,6 +114,68 @@ async function getEvolutionConfig() {
 }
 
 /**
+ * Get media as base64 from Evolution API using the message key
+ * This is the recommended way to get media from WhatsApp messages
+ */
+async function getMediaBase64FromEvolution(
+  messageKey: { id: string; remoteJid?: string; fromMe?: boolean },
+  instanceName: string
+): Promise<{ base64Data: string; dataUrl: string; mimeType: string } | null> {
+  try {
+    const evoConfig = await getEvolutionConfig();
+    if (!evoConfig) {
+      console.error("[Media] No Evolution config found");
+      return null;
+    }
+
+    console.log("[Media] Using getBase64FromMediaMessage for message:", messageKey.id);
+
+    const url = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evoConfig.apiKey,
+      },
+      body: JSON.stringify({
+        message: {
+          key: messageKey,
+        },
+        convertToMp4: false,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Media] getBase64FromMediaMessage failed:", response.status, response.statusText);
+      const errorText = await response.text();
+      console.error("[Media] Error response:", errorText.substring(0, 500));
+      return null;
+    }
+
+    const data = await response.json();
+    
+    // The response contains base64, mimetype, and filename
+    if (data.base64) {
+      const mimeType = data.mimetype || 'application/octet-stream';
+      const dataUrl = `data:${mimeType};base64,${data.base64}`;
+      console.log("[Media] Successfully got base64, size:", data.base64.length, "type:", mimeType);
+      return {
+        base64Data: data.base64,
+        dataUrl,
+        mimeType,
+      };
+    }
+
+    console.error("[Media] No base64 in response:", JSON.stringify(data).substring(0, 200));
+    return null;
+  } catch (error) {
+    console.error("[Media] Error in getMediaBase64FromEvolution:", error);
+    return null;
+  }
+}
+
+/**
  * Download media from WhatsApp/Evolution and convert to base64
  * Returns base64 data URL that can be displayed directly
  */
@@ -1324,30 +1386,47 @@ async function processEvolutionWebhook(body: any) {
         }
 
         // Download and save media to permanent storage if present
-        // Check for both mediaUrl and mediaKey (Evolution API may send only mediaKey)
+        // Use Evolution API's getBase64FromMediaMessage endpoint for reliable media download
         let permanentMediaUrl = null;
+        let finalMimeType = mimeType;
         if (
           ["image", "video", "audio", "document"].includes(messageType) &&
-          (mediaUrl || mediaKey)
+          key?.id
         ) {
-          console.log("[Evolution Webhook] Downloading media...", { hasUrl: !!mediaUrl, hasKey: !!mediaKey });
-          const mediaResult = await downloadAndSaveMedia(
-            mediaUrl,
-            mimeType,
-            fromNumber,
-            mediaKey
+          console.log("[Evolution Webhook] Downloading media using getBase64FromMediaMessage...");
+          
+          // Use the new Evolution API endpoint to get base64 directly
+          const mediaResult = await getMediaBase64FromEvolution(
+            {
+              id: key.id,
+              remoteJid: remoteJid,
+              fromMe: fromMe,
+            },
+            body?.instance || "default"
           );
+          
           if (mediaResult) {
             console.log(
-              "[Evolution Webhook] Media downloaded, size:",
+              "[Evolution Webhook] Media downloaded successfully, size:",
               mediaResult.base64Data.length
             );
-            // Store base64 in raw_payload for permanent access
             permanentMediaUrl = mediaResult.dataUrl;
+            finalMimeType = mediaResult.mimeType;
           } else {
             console.log(
-              "[Evolution Webhook] Media download failed, using original URL"
+              "[Evolution Webhook] getBase64FromMediaMessage failed, trying fallback..."
             );
+            // Fallback to old method
+            const fallbackResult = await downloadAndSaveMedia(
+              mediaUrl,
+              mimeType,
+              fromNumber,
+              mediaKey
+            );
+            if (fallbackResult) {
+              permanentMediaUrl = fallbackResult.dataUrl;
+              console.log("[Evolution Webhook] Fallback download succeeded");
+            }
           }
         }
 
@@ -1378,7 +1457,7 @@ async function processEvolutionWebhook(body: any) {
             | "unknown",
           messageText,
           mediaUrl: permanentMediaUrl || mediaUrl,
-          mimeType,
+          mimeType: finalMimeType,
           caption,
           timestamp: messageTimestamp,
           rawPayload: JSON.stringify({
@@ -1410,7 +1489,7 @@ async function processEvolutionWebhook(body: any) {
             messageText,
             caption,
             mediaUrl: permanentMediaUrl || mediaUrl,
-            mimeType,
+            mimeType: finalMimeType,
           });
           console.log(
             "[Evolution Webhook] Step 16: ingestInboundConversationMessage DONE"
