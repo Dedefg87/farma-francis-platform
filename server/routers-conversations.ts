@@ -775,6 +775,15 @@ export const messagesRouter = router({
         throw new Error("Destino não encontrado para esta conversa");
       }
 
+      console.log("[SEND MESSAGE] Input:", JSON.stringify({
+        content: input.content,
+        fileUrl: input.fileUrl,
+        fileName: input.fileName,
+        fileType: input.fileType,
+        fileSize: input.fileSize,
+        viewOnce: input.viewOnce,
+      }));
+
       const isImage = Boolean(
         input.fileUrl && input.fileType?.startsWith("image/")
       );
@@ -791,10 +800,24 @@ export const messagesRouter = router({
          input.fileType?.startsWith("text/"))
       );
 
+      console.log("[SEND MESSAGE] Type detection:", {
+        isImage,
+        isVideo,
+        isAudio,
+        isDocument,
+        fileType: input.fileType
+      });
+
       try {
         if (conversation.channel === "whatsapp") {
           if (isDocument && input.fileUrl) {
             // Enviar documento (PDF, DOC, XLS, etc.)
+            console.log("[SEND MESSAGE] Sending DOCUMENT to WhatsApp:", {
+              to: destination,
+              documentUrl: input.fileUrl,
+              filename: input.fileName,
+              mimeType: input.fileType
+            });
             await sendWhatsAppDocument({
               to: destination,
               documentUrl: input.fileUrl,
@@ -804,6 +827,7 @@ export const messagesRouter = router({
             });
           } else if (isAudio && input.fileUrl) {
             // Enviar áudio
+            console.log("[SEND MESSAGE] Sending AUDIO to WhatsApp");
             await sendWhatsAppMedia({
               to: destination,
               mediaUrl: input.fileUrl,
@@ -811,6 +835,7 @@ export const messagesRouter = router({
               mimeType: input.fileType || "audio/mp3",
             });
           } else if ((isImage || isVideo) && input.fileUrl) {
+            console.log("[SEND MESSAGE] Sending IMAGE/VIDEO to WhatsApp, viewOnce:", input.viewOnce);
             if (input.viewOnce) {
               await sendWhatsAppViewOnceMedia({
                 to: destination,
@@ -826,6 +851,7 @@ export const messagesRouter = router({
               });
             }
           } else {
+            console.log("[SEND MESSAGE] Sending TEXT to WhatsApp");
             await sendWhatsAppMessage({
               to: destination,
               message: input.content,

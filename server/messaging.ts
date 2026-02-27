@@ -587,37 +587,49 @@ export async function sendWhatsAppDocument(params: {
   mimeType: string;
   caption?: string;
 }) {
+  console.log("[sendWhatsAppDocument] Params:", JSON.stringify(params));
+  
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const evolutionConfig = await getEvolutionConfig();
+  console.log("[sendWhatsAppDocument] Evolution config:", evolutionConfig ? "FOUND" : "NOT FOUND");
+  
   if (evolutionConfig) {
     // Evolution API - usar sendMedia com mediatype 'document'
-    const response = await fetch(
-      `${evolutionConfig.apiUrl}/message/sendMedia/${evolutionConfig.instanceName}`,
-      {
-        method: "POST",
-        headers: {
-          apikey: evolutionConfig.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          number: normalizeWhatsAppNumber(params.to),
-          mediatype: "document",
-          media: params.documentUrl,
-          fileName: params.filename,
-          mimetype: params.mimeType,
-          caption: params.caption || undefined,
-        }),
-      }
-    );
+    const url = `${evolutionConfig.apiUrl}/message/sendMedia/${evolutionConfig.instanceName}`;
+    const body = {
+      number: normalizeWhatsAppNumber(params.to),
+      mediatype: "document",
+      media: params.documentUrl,
+      fileName: params.filename,
+      mimetype: params.mimeType,
+      caption: params.caption || undefined,
+    };
+    
+    console.log("[sendWhatsAppDocument] Sending to Evolution API:", url);
+    console.log("[sendWhatsAppDocument] Body:", JSON.stringify(body));
+    
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        apikey: evolutionConfig.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
+    console.log("[sendWhatsAppDocument] Response status:", response.status);
+    
     if (!response.ok) {
       const error = await response.text();
+      console.error("[sendWhatsAppDocument] Error:", error);
       throw new Error(`Evolution API error: ${response.status} - ${error}`);
     }
 
     const result = await response.json();
+    console.log("[sendWhatsAppDocument] Result:", JSON.stringify(result));
+    
     await db.insert(messages).values({
       channel: "whatsapp",
       direction: "outbound",
