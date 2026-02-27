@@ -892,6 +892,7 @@ export default function Messages() {
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
+                                    {console.log("[RENDER FILE]", msg.id, "fileType:", msg.fileType, "fileUrl length:", msg.fileUrl?.length)}
                                     {msg.fileType?.startsWith("image/") ? (
                                       <div className="relative group">
                                         <img
