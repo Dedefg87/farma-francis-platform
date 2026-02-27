@@ -870,7 +870,12 @@ export default function Messages() {
                             Nenhuma mensagem ainda
                           </div>
                         ) : (
-                          messages?.map(msg => (
+                          messages?.map(msg => {
+                            // Debug: log de mensagens com arquivo
+                            if (msg.fileUrl) {
+                              console.log("[RENDER] Message", msg.id, "fileUrl:", msg.fileUrl?.substring(0, 100), "fileType:", msg.fileType);
+                            }
+                            return (
                             <div
                               key={msg.id}
                               className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
@@ -952,7 +957,7 @@ export default function Messages() {
                                 </span>
                               </div>
                             </div>
-                          ))
+                          )})
                         )}
                       </div>
                     ) : activeTab === "notes" ? (

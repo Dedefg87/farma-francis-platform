@@ -656,6 +656,13 @@ export const messagesRouter = router({
         .where(eq(conversationMessages.conversationId, input.conversation_id))
         .orderBy(conversationMessages.createdAt);
 
+      // Log para debug de arquivos
+      messagesList.forEach((msg: any) => {
+        if (msg.fileUrl) {
+          console.log("[MESSAGES LIST] Message", msg.id, "has fileUrl:", msg.fileUrl?.substring(0, 100) + "...", "fileType:", msg.fileType);
+        }
+      });
+
       return messagesList;
     }),
 
