@@ -47,6 +47,8 @@ function handleImageClick(url: string | null | undefined, messageId?: number) {
 
 function handleDocumentClick(url: string | null | undefined, messageId?: number, fileName?: string) {
   const src = getImageSrc(url, messageId);
+  console.log("[handleDocumentClick] src:", src?.substring(0, 100));
+  
   if (!src) {
     console.warn("[handleDocumentClick] URL vazia");
     return;
@@ -61,6 +63,8 @@ function handleDocumentClick(url: string | null | undefined, messageId?: number,
         const mimeType = match[1];
         const base64Data = match[2];
         
+        console.log("[handleDocumentClick] Convertendo base64 para Blob, mimeType:", mimeType, "size:", base64Data.length);
+        
         // Converter base64 para blob
         const byteCharacters = atob(base64Data);
         const byteNumbers = new Array(byteCharacters.length);
@@ -73,10 +77,19 @@ function handleDocumentClick(url: string | null | undefined, messageId?: number,
         // Criar URL temporária do blob
         const blobUrl = URL.createObjectURL(blob);
         
-        // Abrir em nova aba
-        const newWindow = window.open(blobUrl, "_blank");
+        console.log("[handleDocumentClick] Blob URL criada:", blobUrl);
         
-        // Limpar a URL após um tempo (o navegador vai manter o blob enquanto a aba estiver aberta)
+        // Para PDFs e outros documentos, fazer download em vez de abrir
+        // pois o Chrome pode bloquear window.open de blob URLs
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName || 'documento.pdf';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Limpar a URL após um tempo
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
         
         return;
@@ -923,17 +936,15 @@ export default function Messages() {
                                       // Documentos (PDF, DOC, etc)
                                       return (
                                         <div 
-                                          className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
+                                          className="flex items-center gap-3 p-3 bg-white/20 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-white/30 transition-colors border border-white/30"
                                           onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName)}
                                         >
-                                          <span className="text-2xl">{getFileIcon(msg.fileType, msg.fileName).icon}</span>
+                                          <span className="text-3xl">📄</span>
                                           <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-gray-800 truncate">{msg.fileName || "Documento"}</p>
-                                            <p className="text-xs text-gray-500">{getFileIcon(msg.fileType, msg.fileName).label}</p>
+                                            <p className="text-sm font-medium truncate">{msg.fileName || "Documento.pdf"}</p>
+                                            <p className="text-xs opacity-70">{getFileIcon(msg.fileType, msg.fileName).label || "Arquivo"}</p>
                                           </div>
-                                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                          </svg>
+                                          <span className="text-xs bg-white/30 px-2 py-1 rounded">Clique para baixar</span>
                                         </div>
                                       );
                                     })()}
