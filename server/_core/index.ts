@@ -125,6 +125,10 @@ async function startServer() {
           res.setHeader("Content-Type", mimeType);
           res.setHeader("Content-Length", buffer.length);
           res.setHeader("Cache-Control", "public, max-age=31536000");
+          // Para PDFs, forçar exibição inline em vez de download
+          if (mimeType === "application/pdf") {
+            res.setHeader("Content-Disposition", "inline");
+          }
           return res.send(buffer);
         }
       }
