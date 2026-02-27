@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, X, ExternalLink } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
 
 interface PDFPreviewProps {
   open: boolean;
@@ -19,8 +19,9 @@ interface PDFPreviewProps {
 export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDFPreviewProps) {
   // Construir URL final - usar endpoint de mídia se tiver messageId
   const getFinalUrl = () => {
-    if (url?.startsWith('data:')) {
-      // Para data URLs, criar blob URL para o iframe
+    if (!url) return '';
+    
+    if (url.startsWith('data:')) {
       try {
         const match = url.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
@@ -39,7 +40,7 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
         console.error("[PDFPreview] Erro ao criar blob:", e);
       }
     }
-    // Usar endpoint de mídia
+    
     if (messageId) {
       return `/api/media/${messageId}`;
     }
@@ -105,5 +106,6 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
           )}
         </div>
       </DialogContent>
+    </Dialog>
   );
 }
