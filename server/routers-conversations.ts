@@ -17,6 +17,9 @@ import {
   sendWhatsAppViewOnceMedia,
   sendInstagramImage,
   sendInstagramMessage,
+  sendWhatsAppDocument,
+  sendInstagramDocument,
+  sendWhatsAppMedia,
   fetchEvolutionProfile,
 } from "./messaging";
 import { sseManager, EVENTS } from "./_core/sse";
@@ -778,10 +781,36 @@ export const messagesRouter = router({
       const isVideo = Boolean(
         input.fileUrl && input.fileType?.startsWith("video/")
       );
+      const isAudio = Boolean(
+        input.fileUrl && input.fileType?.startsWith("audio/")
+      );
+      const isDocument = Boolean(
+        input.fileUrl && 
+        (input.fileType?.startsWith("application/") || 
+         input.fileType === "text/plain" ||
+         input.fileType?.startsWith("text/"))
+      );
 
       try {
         if (conversation.channel === "whatsapp") {
-          if ((isImage || isVideo) && input.fileUrl) {
+          if (isDocument && input.fileUrl) {
+            // Enviar documento (PDF, DOC, XLS, etc.)
+            await sendWhatsAppDocument({
+              to: destination,
+              documentUrl: input.fileUrl,
+              filename: input.fileName || "documento",
+              mimeType: input.fileType || "application/octet-stream",
+              caption: input.content,
+            });
+          } else if (isAudio && input.fileUrl) {
+            // Enviar áudio
+            await sendWhatsAppMedia({
+              to: destination,
+              mediaUrl: input.fileUrl,
+              mediaType: "audio",
+              mimeType: input.fileType || "audio/mp3",
+            });
+          } else if ((isImage || isVideo) && input.fileUrl) {
             if (input.viewOnce) {
               await sendWhatsAppViewOnceMedia({
                 to: destination,
@@ -803,7 +832,15 @@ export const messagesRouter = router({
             });
           }
         } else if (conversation.channel === "instagram") {
-          if (isImage && input.fileUrl) {
+          if (isDocument && input.fileUrl) {
+            // Enviar documento via Instagram
+            await sendInstagramDocument({
+              to: destination,
+              documentUrl: input.fileUrl,
+              filename: input.fileName || "documento",
+              mimeType: input.fileType || "application/octet-stream",
+            });
+          } else if (isImage && input.fileUrl) {
             await sendInstagramImage({
               to: destination,
               imageUrl: input.fileUrl,

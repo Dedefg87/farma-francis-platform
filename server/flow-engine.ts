@@ -14,6 +14,9 @@ import {
   sendInstagramMessage,
   sendWhatsAppImage,
   sendInstagramImage,
+  sendWhatsAppDocument,
+  sendInstagramDocument,
+  sendWhatsAppMedia,
 } from "./messaging";
 import {
   markMessageAsProcessed,
