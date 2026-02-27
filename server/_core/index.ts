@@ -452,6 +452,30 @@ async function startServer() {
     }
   });
 
+  // DEBUG: Check conversation_messages with files
+  app.get("/api/debug/conversation-messages-files", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, conversation_id, file_type, LEFT(file_url, 150) as file_url_preview, LENGTH(file_url) as file_url_length
+         FROM conversation_messages 
+         WHERE file_url IS NOT NULL 
+         ORDER BY id DESC 
+         LIMIT 20`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, messages: rows });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // DEBUG: Check broadcast tables status
   app.get("/api/debug/check-broadcast-tables", async (req, res) => {
     try {
