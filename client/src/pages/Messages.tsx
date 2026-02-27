@@ -221,13 +221,18 @@ export default function Messages() {
       "video/mp4",
       "video/webm",
       "video/quicktime",
+      "video/3gpp",
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/zip",
+      "application/x-rar-compressed",
     ];
-    if (!allowedTypes.includes(file.type)) {
+    if (!allowedTypes.includes(file.type) && !file.type.startsWith("image/") && !file.type.startsWith("video/")) {
       toast.error(
-        "Tipo de arquivo não suportado. Use imagens ou documentos PDF/DOCX."
+        "Tipo de arquivo não suportado. Use imagens, vídeos ou documentos."
       );
       return;
     }
@@ -241,6 +246,20 @@ export default function Messages() {
         setFilePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    } else if (file.type.startsWith("video/")) {
+      // Criar thumbnail para vídeos
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      video.currentTime = 1; // Pegar frame no segundo 1
+      video.onloadeddata = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 90;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setFilePreview(canvas.toDataURL('image/jpeg'));
+        URL.revokeObjectURL(video.src);
+      };
     } else {
       setFilePreview(null);
     }
@@ -1081,6 +1100,16 @@ export default function Messages() {
                                   alt="Preview"
                                   className="w-16 h-16 object-cover rounded"
                                 />
+                              ) : selectedFile.type.startsWith("video/") ? (
+                                <div className="w-16 h-16 bg-purple-100 rounded flex items-center justify-center">
+                                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
+                              ) : selectedFile.type === "application/pdf" ? (
+                                <div className="w-16 h-16 bg-red-100 rounded flex items-center justify-center">
+                                  <span className="text-2xl">📄</span>
+                                </div>
                               ) : (
                                 <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
                                   <FileText className="w-8 h-8 text-gray-500" />
@@ -1091,7 +1120,7 @@ export default function Messages() {
                                   {selectedFile.name}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
+                                  {selectedFile.type || "Arquivo"} • {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
                                   MB
                                 </p>
                               </div>
@@ -1112,7 +1141,7 @@ export default function Messages() {
                             type="file"
                             id="file-upload"
                             className="hidden"
-                            accept="image/*,.pdf,.doc,.docx"
+                            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
                             onChange={handleFileSelect}
                           />
                           <Button
@@ -1123,7 +1152,7 @@ export default function Messages() {
                               document.getElementById("file-upload")?.click()
                             }
                             disabled={sendMessageMutation.isPending}
-                            title="Anexar arquivo"
+                            title="Anexar arquivo (imagens, vídeos, documentos)"
                           >
                             <Paperclip className="w-4 h-4" />
                           </Button>
