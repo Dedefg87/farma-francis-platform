@@ -892,53 +892,51 @@ export default function Messages() {
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    {console.log("[RENDER FILE]", msg.id, "fileType:", msg.fileType, "fileUrl length:", msg.fileUrl?.length)}
-                                    {msg.fileType?.startsWith("image/") ? (
-                                      <div className="relative group">
-                                        <img
-                                          src={getImageSrc(msg.fileUrl, msg.id)}
-                                          alt={msg.fileName || "Imagem"}
-                                          className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
-                                          onClick={() =>
-                                            handleImageClick(
-                                              msg.fileUrl,
-                                              msg.id
-                                            )
-                                          }
-                                          onError={e => {
-                                            const el =
-                                              e.currentTarget as HTMLImageElement;
-                                            // Fallback simples: substitui pela menor placeholder
-                                            el.src =
-                                              "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
-                                            el.alt = "Imagem indisponível";
-                                          }}
-                                        />
-                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg" />
-                                      </div>
-                                    ) : msg.fileType?.startsWith("video/") ? (
-                                      <div className="relative">
-                                        <video
-                                          src={getImageSrc(msg.fileUrl, msg.id)}
-                                          controls
-                                          className="max-w-full rounded-lg max-h-64"
-                                        />
-                                      </div>
-                                    ) : (
-                                      <div 
-                                        className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
-                                        onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName)}
-                                      >
-                                        <span className="text-2xl">{getFileIcon(msg.fileType, msg.fileName).icon}</span>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="text-sm font-medium text-gray-800 truncate">{msg.fileName || "Arquivo"}</p>
-                                          <p className="text-xs text-gray-500">{getFileIcon(msg.fileType, msg.fileName).label}</p>
+                                    {(() => {
+                                      const ft = msg.fileType || '';
+                                      const isImage = ft.startsWith('image/');
+                                      const isVideo = ft.startsWith('video/');
+                                      const isAudio = ft.startsWith('audio/');
+                                      const isDocument = ft.startsWith('application/') || ft.startsWith('text/') || (!isImage && !isVideo && !isAudio && ft);
+                                      
+                                      if (isImage) return (
+                                        <div className="relative group">
+                                          <img
+                                            src={getImageSrc(msg.fileUrl, msg.id)}
+                                            alt={msg.fileName || "Imagem"}
+                                            className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
+                                            onClick={() => handleImageClick(msg.fileUrl, msg.id)}
+                                          />
                                         </div>
-                                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                        </svg>
-                                      </div>
-                                    )}
+                                      );
+                                      
+                                      if (isVideo) return (
+                                        <div className="relative">
+                                          <video
+                                            src={getImageSrc(msg.fileUrl, msg.id)}
+                                            controls
+                                            className="max-w-full rounded-lg max-h-64"
+                                          />
+                                        </div>
+                                      );
+                                      
+                                      // Documentos (PDF, DOC, etc)
+                                      return (
+                                        <div 
+                                          className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
+                                          onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName)}
+                                        >
+                                          <span className="text-2xl">{getFileIcon(msg.fileType, msg.fileName).icon}</span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-gray-800 truncate">{msg.fileName || "Documento"}</p>
+                                            <p className="text-xs text-gray-500">{getFileIcon(msg.fileType, msg.fileName).label}</p>
+                                          </div>
+                                          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                          </svg>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 )}
                                 <span
