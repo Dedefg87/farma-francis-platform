@@ -671,6 +671,8 @@ export const messagesRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      console.log("[UPLOAD FILE] Iniciando upload:", input.fileName, input.fileType, input.fileSize);
+      
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -713,12 +715,16 @@ export const messagesRouter = router({
       const fileExtension = input.fileName.split(".").pop();
       const fileKey = `chat-files/${ctx.user.id}/${timestamp}-${randomSuffix}.${fileExtension}`;
 
+      console.log("[UPLOAD FILE] Upload para S3:", fileKey);
+
       // Upload para S3
       const { url: fileUrl } = await storagePut(
         fileKey,
         fileBuffer,
         input.fileType
       );
+
+      console.log("[UPLOAD FILE] Upload concluído. URL:", fileUrl);
 
       return {
         success: true,

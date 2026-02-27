@@ -27,7 +27,10 @@ function getImageSrc(
 
 function handleImageClick(url: string | null | undefined, messageId?: number) {
   const src = getImageSrc(url, messageId);
-  if (!src) return;
+  if (!src) {
+    console.warn("[handleImageClick] URL vazia");
+    return;
+  }
 
   if (src.startsWith("data:")) {
     const win = window.open("", "_blank", "width=800,height=600");
@@ -40,6 +43,32 @@ function handleImageClick(url: string | null | undefined, messageId?: number) {
   } else {
     window.open(src, "_blank");
   }
+}
+
+function handleDocumentClick(url: string | null | undefined, messageId?: number, fileName?: string) {
+  const src = getImageSrc(url, messageId);
+  if (!src) {
+    console.warn("[handleDocumentClick] URL vazia");
+    return;
+  }
+  // Abre o documento em uma nova aba para visualização/download
+  window.open(src, "_blank");
+}
+
+function getFileIcon(fileType?: string, fileName?: string): { icon: string; color: string; label: string } {
+  if (!fileType && fileName) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') return { icon: '📄', color: 'text-red-500', label: 'PDF' };
+    if (ext === 'doc' || ext === 'docx') return { icon: '📝', color: 'text-blue-500', label: 'Word' };
+    if (ext === 'xls' || ext === 'xlsx') return { icon: '📊', color: 'text-green-500', label: 'Excel' };
+  }
+  
+  if (fileType?.includes('pdf')) return { icon: '📄', color: 'text-red-500', label: 'PDF' };
+  if (fileType?.includes('word') || fileType?.includes('document')) return { icon: '📝', color: 'text-blue-500', label: 'Word' };
+  if (fileType?.includes('excel') || fileType?.includes('spreadsheet')) return { icon: '📊', color: 'text-green-500', label: 'Excel' };
+  if (fileType?.includes('zip') || fileType?.includes('rar')) return { icon: '📦', color: 'text-yellow-500', label: 'Compactado' };
+  
+  return { icon: '📎', color: 'text-gray-500', label: 'Arquivo' };
 }
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -855,27 +884,19 @@ export default function Messages() {
                                         />
                                       </div>
                                     ) : (
-                                      <a
-                                        href={getImageSrc(msg.fileUrl, msg.id)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 text-xs underline"
+                                      <div 
+                                        className="flex items-center gap-3 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors"
+                                        onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName)}
                                       >
-                                        <svg
-                                          className="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                          />
+                                        <span className="text-2xl">{getFileIcon(msg.fileType, msg.fileName).icon}</span>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="text-sm font-medium text-gray-800 truncate">{msg.fileName || "Arquivo"}</p>
+                                          <p className="text-xs text-gray-500">{getFileIcon(msg.fileType, msg.fileName).label}</p>
+                                        </div>
+                                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                                         </svg>
-                                        {msg.fileName || "Arquivo"}
-                                      </a>
+                                      </div>
                                     )}
                                   </div>
                                 )}
