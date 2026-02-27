@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import QuickRepliesModal from "@/components/QuickRepliesModal";
+import { PDFPreview } from "@/components/PDFPreview";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
@@ -77,6 +78,12 @@ export default function AgentChat() {
   const [isUploading, setIsUploading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showQuickRepliesModal, setShowQuickRepliesModal] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{
+    open: boolean;
+    url: string | null;
+    fileName?: string;
+    messageId?: number;
+  }>({ open: false, url: null });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
 
@@ -478,20 +485,23 @@ export default function AgentChat() {
                                   style={{ maxHeight: "300px" }}
                                 />
                               ) : (
-                                <a
-                                  href={getImageSrc(message.fileUrl)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className={`flex items-center gap-2 p-2 rounded border ${
+                                <div
+                                  onClick={() => setPdfPreview({
+                                    open: true,
+                                    url: message.fileUrl,
+                                    fileName: message.fileName || undefined,
+                                    messageId: message.id
+                                  })}
+                                  className={`flex items-center gap-2 p-2 rounded border cursor-pointer ${
                                     isAgent
-                                      ? "bg-blue-600 border-blue-400"
-                                      : "bg-gray-50 border-gray-300"
+                                      ? "bg-blue-600 border-blue-400 hover:bg-blue-700"
+                                      : "bg-gray-50 border-gray-300 hover:bg-gray-100"
                                   } hover:opacity-90 transition-opacity`}
                                 >
                                   <FileText className="w-5 h-5" />
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium truncate">
-                                      {message.fileName}
+                                      {message.fileName || "Documento"}
                                     </p>
                                     {message.fileSize && (
                                       <p
@@ -510,7 +520,7 @@ export default function AgentChat() {
                                       </p>
                                     )}
                                   </div>
-                                </a>
+                                </div>
                               )}
                             </div>
                           )}
@@ -705,5 +715,14 @@ export default function AgentChat() {
         )}
       </div>
     </div>
+
+    {/* PDF Preview Modal */}
+    <PDFPreview
+      open={pdfPreview.open}
+      onOpenChange={(open) => setPdfPreview({ ...pdfPreview, open })}
+      url={pdfPreview.url || ''}
+      fileName={pdfPreview.fileName}
+      messageId={pdfPreview.messageId}
+    />
   );
 }

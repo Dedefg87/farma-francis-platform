@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
+import { PDFPreview } from "@/components/PDFPreview";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,6 +133,12 @@ export default function AgentMessages() {
   const [showMessageSearch, setShowMessageSearch] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [showMediaDialog, setShowMediaDialog] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{
+    open: boolean;
+    url: string | null;
+    fileName?: string;
+    messageId?: number;
+  }>({ open: false, url: null });
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
@@ -796,11 +803,14 @@ export default function AgentMessages() {
                                 className="max-w-full rounded-lg max-h-64"
                               />
                             ) : (
-                              <a
-                                href={getImageSrc(msg.fileUrl, msg.id)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 text-xs underline"
+                              <div
+                                onClick={() => setPdfPreview({
+                                  open: true,
+                                  url: msg.fileUrl,
+                                  fileName: msg.fileName || undefined,
+                                  messageId: msg.id
+                                })}
+                                className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
                               >
                                 <svg
                                   className="w-4 h-4"
@@ -816,7 +826,7 @@ export default function AgentMessages() {
                                   />
                                 </svg>
                                 {msg.fileName || "Arquivo"}
-                              </a>
+                              </div>
                             )}
                           </div>
                         )}
@@ -1114,6 +1124,15 @@ export default function AgentMessages() {
           customerPhone={crmCustomerPhone}
         />
       ) : null}
+
+      {/* PDF Preview Modal */}
+      <PDFPreview
+        open={pdfPreview.open}
+        onOpenChange={(open) => setPdfPreview({ ...pdfPreview, open })}
+        url={pdfPreview.url || ''}
+        fileName={pdfPreview.fileName}
+        messageId={pdfPreview.messageId}
+      />
     </>
   );
 }

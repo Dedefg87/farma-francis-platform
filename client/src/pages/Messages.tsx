@@ -61,62 +61,23 @@ function handleImageClick(url: string | null | undefined, messageId?: number) {
   }
 }
 
-function handleDocumentClick(url: string | null | undefined, messageId?: number, fileName?: string) {
-  const src = getImageSrc(url, messageId);
-  console.log("[handleDocumentClick] src:", src?.substring(0, 100));
+function handleDocumentClick(
+  url: string | null | undefined, 
+  messageId?: number, 
+  fileName?: string,
+  setPdfPreview?: (preview: { open: boolean; url: string | null; fileName?: string; messageId?: number }) => void
+) {
+  console.log("[handleDocumentClick] URL:", url?.substring(0, 100), "messageId:", messageId);
   
-  if (!src) {
+  if (!url) {
     console.warn("[handleDocumentClick] URL vazia");
     return;
   }
   
-  // Para data URLs, criar um Blob e abrir como arquivo real
-  if (src.startsWith("data:")) {
-    try {
-      // Extrair mime type e base64 data
-      const match = src.match(/^data:([^;]+);base64,(.+)$/);
-      if (match) {
-        const mimeType = match[1];
-        const base64Data = match[2];
-        
-        console.log("[handleDocumentClick] Convertendo base64 para Blob, mimeType:", mimeType, "size:", base64Data.length);
-        
-        // Converter base64 para blob
-        const byteCharacters = atob(base64Data);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i);
-        }
-        const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: mimeType });
-        
-        // Criar URL temporária do blob
-        const blobUrl = URL.createObjectURL(blob);
-        
-        console.log("[handleDocumentClick] Blob URL criada:", blobUrl);
-        
-        // Para PDFs e outros documentos, fazer download em vez de abrir
-        // pois o Chrome pode bloquear window.open de blob URLs
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileName || 'documento.pdf';
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Limpar a URL após um tempo
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-        
-        return;
-      }
-    } catch (error) {
-      console.error("[handleDocumentClick] Erro ao processar data URL:", error);
-    }
+  // Abrir preview de PDF em vez de download direto
+  if (setPdfPreview) {
+    setPdfPreview({ open: true, url, fileName, messageId });
   }
-  
-  // Para URLs normais, abrir diretamente
-  window.open(src, "_blank");
 }
 
 function getFileIcon(fileType?: string, fileName?: string): { icon: string; color: string; label: string } {
@@ -171,6 +132,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
+import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -190,6 +152,14 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  
+  // Estado para preview de PDF
+  const [pdfPreview, setPdfPreview] = useState<{
+    open: boolean;
+    url: string | null;
+    fileName?: string;
+    messageId?: number;
+  }>({ open: false, url: null });
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -953,7 +923,7 @@ export default function Messages() {
                                       return (
                                         <div 
                                           className="flex items-center gap-3 p-3 bg-white/20 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-white/30 transition-colors border border-white/30"
-                                          onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName)}
+                                          onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName, setPdfPreview)}
                                         >
                                           <span className="text-3xl">📄</span>
                                           <div className="flex-1 min-w-0">
@@ -1330,5 +1300,14 @@ export default function Messages() {
         </Card>
       </div>
     </FarmaDashboardLayout>
+
+    {/* PDF Preview Modal */}
+    <PDFPreview
+      open={pdfPreview.open}
+      onOpenChange={(open) => setPdfPreview({ ...pdfPreview, open })}
+      url={pdfPreview.url || ''}
+      fileName={pdfPreview.fileName}
+      messageId={pdfPreview.messageId}
+    />
   );
 }
