@@ -51,7 +51,42 @@ function handleDocumentClick(url: string | null | undefined, messageId?: number,
     console.warn("[handleDocumentClick] URL vazia");
     return;
   }
-  // Abre o documento em uma nova aba para visualização/download
+  
+  // Para data URLs, criar um Blob e abrir como arquivo real
+  if (src.startsWith("data:")) {
+    try {
+      // Extrair mime type e base64 data
+      const match = src.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const mimeType = match[1];
+        const base64Data = match[2];
+        
+        // Converter base64 para blob
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        
+        // Criar URL temporária do blob
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Abrir em nova aba
+        const newWindow = window.open(blobUrl, "_blank");
+        
+        // Limpar a URL após um tempo (o navegador vai manter o blob enquanto a aba estiver aberta)
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        
+        return;
+      }
+    } catch (error) {
+      console.error("[handleDocumentClick] Erro ao processar data URL:", error);
+    }
+  }
+  
+  // Para URLs normais, abrir diretamente
   window.open(src, "_blank");
 }
 
