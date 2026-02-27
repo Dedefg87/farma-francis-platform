@@ -9,40 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-function getImageSrc(
-  url: string | null | undefined,
-  messageId?: number
-): string {
-  if (!url) return "";
-  // If it's a data URL, return it directly
-  if (url.startsWith("data:")) {
-    return url;
-  }
-  // If it's a WhatsApp URL (temporary), use our media endpoint
-  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
-    return `/api/media/${messageId}`;
-  }
-  return url;
-}
-
-/**
- * Extrai o MIME type real de um arquivo.
- * Prioriza o MIME type do data URL (mais confiável) sobre o fileType do banco.
- */
-function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
-  // Se tem data URL, extrair MIME type dele (mais confiável)
-  if (fileUrl?.startsWith('data:')) {
-    const mimeMatch = fileUrl.match(/^data:([^;]+);/);
-    if (mimeMatch && mimeMatch[1]) {
-      return mimeMatch[1];
-    }
-  }
-  // Fallback para o fileType do banco
-  return fileType || '';
-}
-
 function handleImageClick(url: string | null | undefined, messageId?: number) {
-  const src = getImageSrc(url, messageId);
+  const src = getMediaUrl(url, messageId);
   if (!src) {
     console.warn("[handleImageClick] URL vazia");
     return;
@@ -61,25 +29,6 @@ function handleImageClick(url: string | null | undefined, messageId?: number) {
   }
 }
 
-function handleDocumentClick(
-  url: string | null | undefined, 
-  messageId?: number, 
-  fileName?: string,
-  setPdfPreview?: (preview: { open: boolean; url: string | null; fileName?: string; messageId?: number }) => void
-) {
-  console.log("[handleDocumentClick] URL:", url?.substring(0, 100), "messageId:", messageId);
-  
-  if (!url) {
-    console.warn("[handleDocumentClick] URL vazia");
-    return;
-  }
-  
-  // Abrir preview de PDF em vez de download direto
-  if (setPdfPreview) {
-    setPdfPreview({ open: true, url, fileName, messageId });
-  }
-}
-
 function getFileIcon(fileType?: string, fileName?: string): { icon: string; color: string; label: string } {
   if (!fileType && fileName) {
     const ext = fileName.split('.').pop()?.toLowerCase();
@@ -95,6 +44,7 @@ function getFileIcon(fileType?: string, fileName?: string): { icon: string; colo
   
   return { icon: '📎', color: 'text-gray-500', label: 'Arquivo' };
 }
+
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -127,12 +77,15 @@ import {
   ChevronRight,
   Building,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import { PDFPreview } from "@/components/PDFPreview";
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { usePdfViewer, getMimeType, getMediaUrl } from "@/hooks/usePdfViewer";
+import { FilePreviewAttachment } from "@/components/shared/FilePreviewAttachment";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -142,8 +95,6 @@ export default function Messages() {
   >(null);
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isViewOnce, setIsViewOnce] = useState(false);
   const [activeTab, setActiveTab] = useState<"messages" | "notes" | "internal">(
@@ -153,13 +104,11 @@ export default function Messages() {
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
-  // Estado para preview de PDF
-  const [pdfPreview, setPdfPreview] = useState<{
-    open: boolean;
-    url: string | null;
-    fileName?: string;
-    messageId?: number;
-  }>({ open: false, url: null });
+  // Hooks compartilhados
+  const { selectedFile, filePreview, handleFileSelect, removeFile, toBase64 } = useFileUpload({
+    onError: (error) => toast.error(error),
+  });
+  const pdfViewer = usePdfViewer();
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -201,81 +150,11 @@ export default function Messages() {
           false) ||
         (conv.customerPhone?.includes(searchQuery) ?? false)
     ) || [];
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validar tamanho (máximo 16MB)
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Tamanho máximo: 16MB");
-      return;
-    }
-
-    // Validar tipo
-    const allowedTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "image/webp",
-      "video/mp4",
-      "video/webm",
-      "video/quicktime",
-      "video/3gpp",
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "application/zip",
-      "application/x-rar-compressed",
-    ];
-    if (!allowedTypes.includes(file.type) && !file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-      toast.error(
-        "Tipo de arquivo não suportado. Use imagens, vídeos ou documentos."
-      );
-      return;
-    }
-
-    setSelectedFile(file);
-
-    // Criar preview para imagens
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFilePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else if (file.type.startsWith("video/")) {
-      // Criar thumbnail para vídeos
-      const video = document.createElement('video');
-      video.src = URL.createObjectURL(file);
-      video.currentTime = 1; // Pegar frame no segundo 1
-      video.onloadeddata = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 160;
-        canvas.height = 90;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        setFilePreview(canvas.toDataURL('image/jpeg'));
-        URL.revokeObjectURL(video.src);
-      };
-    } else {
-      setFilePreview(null);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
-  };
-
   const sendMessageMutation = trpc.messages.send.useMutation({
     onSuccess: () => {
       toast.success("Mensagem enviada!");
       setMessageInput("");
-      setSelectedFile(null);
-      setFilePreview(null);
+      removeFile();
     },
     onError: error => {
       toast.error(`Erro ao enviar: ${error.message}`);
@@ -945,7 +824,7 @@ export default function Messages() {
                                         <div className="rounded-lg overflow-hidden border border-white/30 bg-white">
                                           <div 
                                             className="h-48 overflow-hidden cursor-pointer"
-                                            onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName, setPdfPreview)}
+                                            onClick={() => pdfViewer.open(msg.fileUrl, { fileName: msg.fileName || undefined, messageId: msg.id })}
                                           >
                                             <iframe
                                               src={getImageSrc(msg.fileUrl, msg.id)}
@@ -960,7 +839,7 @@ export default function Messages() {
                                             </div>
                                             <div className="flex gap-1">
                                               <button
-                                                onClick={(e) => { e.stopPropagation(); handleDocumentClick(msg.fileUrl, msg.id, msg.fileName, setPdfPreview); }}
+                                                onClick={(e) => { e.stopPropagation(); pdfViewer.open(msg.fileUrl, { fileName: msg.fileName || undefined, messageId: msg.id }); }}
                                                 className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                                               >
                                                 Ampliar
@@ -974,7 +853,7 @@ export default function Messages() {
                                       return (
                                         <div 
                                           className="flex items-center gap-3 p-3 bg-white/20 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-white/30 transition-colors border border-white/30"
-                                          onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName, setPdfPreview)}
+                                          onClick={() => pdfViewer.open(msg.fileUrl, { fileName: msg.fileName || undefined, messageId: msg.id })}
                                         >
                                           <span className="text-3xl">📄</span>
                                           <div className="flex-1 min-w-0">
@@ -1127,7 +1006,7 @@ export default function Messages() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={handleRemoveFile}
+                                onClick={removeFile}
                                 className="text-gray-500 hover:text-red-600"
                               >
                                 <X className="w-4 h-4" />
@@ -1364,11 +1243,11 @@ export default function Messages() {
 
     {/* PDF Preview Modal */}
     <PDFPreview
-      open={pdfPreview.open}
-      onOpenChange={(open) => setPdfPreview({ ...pdfPreview, open })}
-      url={pdfPreview.url || ''}
-      fileName={pdfPreview.fileName}
-      messageId={pdfPreview.messageId}
+      open={pdfViewer.isOpen}
+      onOpenChange={(open) => open ? null : pdfViewer.close()}
+      url={pdfViewer.url || ''}
+      fileName={pdfViewer.fileName || undefined}
+      messageId={pdfViewer.messageId || undefined}
     />
     </>
   );
