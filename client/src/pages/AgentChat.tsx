@@ -485,6 +485,42 @@ export default function AgentChat() {
                                   className="max-w-full rounded"
                                   style={{ maxHeight: "300px" }}
                                 />
+                              ) : getMimeType(message.fileUrl, message.fileType) === "application/pdf" ? (
+                                // PDF - mostrar preview inline
+                                <div className="rounded-lg overflow-hidden border bg-white max-w-sm">
+                                  <div 
+                                    className="h-32 overflow-hidden cursor-pointer"
+                                    onClick={() => setPdfPreview({
+                                      open: true,
+                                      url: message.fileUrl,
+                                      fileName: message.fileName || undefined,
+                                      messageId: message.id
+                                    })}
+                                  >
+                                    <iframe
+                                      src={getImageSrc(message.fileUrl)}
+                                      className="w-full h-full pointer-events-none"
+                                      title={message.fileName || "PDF"}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
+                                    <div className="flex items-center gap-2">
+                                      <FileText className="w-4 h-4 text-red-500" />
+                                      <span className="text-xs font-medium truncate max-w-[120px]">{message.fileName || "PDF"}</span>
+                                    </div>
+                                    <button
+                                      onClick={() => setPdfPreview({
+                                        open: true,
+                                        url: message.fileUrl,
+                                        fileName: message.fileName || undefined,
+                                        messageId: message.id
+                                      })}
+                                      className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                                    >
+                                      Ampliar
+                                    </button>
+                                  </div>
+                                </div>
                               ) : (
                                 <div
                                   onClick={() => setPdfPreview({

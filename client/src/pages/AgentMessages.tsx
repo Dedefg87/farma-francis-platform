@@ -802,6 +802,44 @@ export default function AgentMessages() {
                                 controls
                                 className="max-w-full rounded-lg max-h-64"
                               />
+                            ) : getMimeType(msg.fileUrl, msg.fileType) === "application/pdf" ? (
+                              // PDF - mostrar preview inline
+                              <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
+                                <div 
+                                  className="h-32 overflow-hidden cursor-pointer"
+                                  onClick={() => setPdfPreview({
+                                    open: true,
+                                    url: msg.fileUrl,
+                                    fileName: msg.fileName || undefined,
+                                    messageId: msg.id
+                                  })}
+                                >
+                                  <iframe
+                                    src={getImageSrc(msg.fileUrl, msg.id)}
+                                    className="w-full h-full pointer-events-none"
+                                    title={msg.fileName || "PDF"}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
+                                  <div className="flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span className="text-xs font-medium truncate max-w-[100px]">{msg.fileName || "PDF"}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => setPdfPreview({
+                                      open: true,
+                                      url: msg.fileUrl,
+                                      fileName: msg.fileName || undefined,
+                                      messageId: msg.id
+                                    })}
+                                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                                  >
+                                    Ampliar
+                                  </button>
+                                </div>
+                              </div>
                             ) : (
                               <div
                                 onClick={() => setPdfPreview({

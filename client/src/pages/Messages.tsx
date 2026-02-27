@@ -898,6 +898,7 @@ export default function Messages() {
                                       const isVideo = ft.startsWith('video/');
                                       const isAudio = ft.startsWith('audio/');
                                       const isDocument = ft.startsWith('application/') || ft.startsWith('text/') || (!isImage && !isVideo && !isAudio && ft);
+                                      const isPDF = ft === 'application/pdf';
                                       
                                       if (isImage) return (
                                         <div className="relative group">
@@ -920,7 +921,37 @@ export default function Messages() {
                                         </div>
                                       );
                                       
-                                      // Documentos (PDF, DOC, etc)
+                                      // PDF - mostrar preview inline
+                                      if (isPDF) return (
+                                        <div className="rounded-lg overflow-hidden border border-white/30 bg-white">
+                                          <div 
+                                            className="h-48 overflow-hidden cursor-pointer"
+                                            onClick={() => handleDocumentClick(msg.fileUrl, msg.id, msg.fileName, setPdfPreview)}
+                                          >
+                                            <iframe
+                                              src={getImageSrc(msg.fileUrl, msg.id)}
+                                              className="w-full h-full pointer-events-none"
+                                              title={msg.fileName || "PDF"}
+                                            />
+                                          </div>
+                                          <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-lg">📄</span>
+                                              <span className="text-xs font-medium truncate max-w-[150px]">{msg.fileName || "Documento.pdf"}</span>
+                                            </div>
+                                            <div className="flex gap-1">
+                                              <button
+                                                onClick={(e) => { e.stopPropagation(); handleDocumentClick(msg.fileUrl, msg.id, msg.fileName, setPdfPreview); }}
+                                                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                                              >
+                                                Ampliar
+                                              </button>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                      
+                                      // Outros Documentos (DOC, XLS, etc)
                                       return (
                                         <div 
                                           className="flex items-center gap-3 p-3 bg-white/20 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-white/30 transition-colors border border-white/30"
@@ -928,7 +959,7 @@ export default function Messages() {
                                         >
                                           <span className="text-3xl">📄</span>
                                           <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">{msg.fileName || "Documento.pdf"}</p>
+                                            <p className="text-sm font-medium truncate">{msg.fileName || "Documento"}</p>
                                             <p className="text-xs opacity-70">{getFileIcon(ft, msg.fileName).label || "Arquivo"}</p>
                                           </div>
                                           <span className="text-xs bg-white/30 px-2 py-1 rounded">Clique para baixar</span>
