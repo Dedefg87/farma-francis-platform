@@ -118,35 +118,66 @@ async function getEvolutionConfig() {
  * Returns base64 data URL that can be displayed directly
  */
 async function downloadAndSaveMedia(
-  mediaUrl: string,
+  mediaUrl: string | null,
   mimeType: string | null,
-  fromNumber: string
+  fromNumber: string,
+  mediaKey?: string | null
 ): Promise<{ base64Data: string; dataUrl: string } | null> {
   try {
-    console.log("[Media] Starting download:", mediaUrl);
+    console.log("[Media] Starting download. mediaUrl:", mediaUrl ? "present" : "null", "mediaKey:", mediaKey ? "present" : "null");
 
-    // Try to download from the provided URL first
-    let response = await fetch(mediaUrl);
-    // Simple retry if initial fetch fails
-    if (!response.ok) {
-      console.warn("[Media] Initial download failed, retrying... ");
-      await new Promise(resolve => setTimeout(resolve, 400));
-      response = await fetch(mediaUrl);
-    }
+    let response: Response | null = null;
+    let usedEvolutionApi = false;
 
-    // If direct URL fails, try Evolution API endpoint
-    if (!response.ok && mediaUrl.includes("whatsapp.net")) {
+    // If no URL but we have mediaKey, use Evolution API to fetch media
+    if (!mediaUrl && mediaKey) {
       const evoConfig = await getEvolutionConfig();
       if (evoConfig) {
-        const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
-        if (mediaIdMatch) {
-          const mediaId = mediaIdMatch[1];
-          const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
-          response = await fetch(mediaFetchUrl, {
-            headers: { apikey: evoConfig.apiKey },
-          });
+        console.log("[Media] Using Evolution API to fetch media with mediaKey");
+        const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaKey}`;
+        response = await fetch(mediaFetchUrl, {
+          headers: { apikey: evoConfig.apiKey },
+        });
+        usedEvolutionApi = true;
+        console.log("[Media] Evolution API response status:", response.status);
+      } else {
+        console.error("[Media] No Evolution config found for mediaKey fetch");
+        return null;
+      }
+    }
+
+    // If we have a URL, try to download from it
+    if (!response && mediaUrl) {
+      console.log("[Media] Downloading from URL:", mediaUrl);
+      response = await fetch(mediaUrl);
+      // Simple retry if initial fetch fails
+      if (!response.ok) {
+        console.warn("[Media] Initial download failed, retrying... ");
+        await new Promise(resolve => setTimeout(resolve, 400));
+        response = await fetch(mediaUrl);
+      }
+
+      // If direct URL fails, try Evolution API endpoint
+      if (!response.ok && mediaUrl.includes("whatsapp.net")) {
+        const evoConfig = await getEvolutionConfig();
+        if (evoConfig) {
+          const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
+          if (mediaIdMatch) {
+            const mediaId = mediaIdMatch[1];
+            console.log("[Media] Trying Evolution fetchMedia with ID:", mediaId);
+            const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
+            response = await fetch(mediaFetchUrl, {
+              headers: { apikey: evoConfig.apiKey },
+            });
+            usedEvolutionApi = true;
+          }
         }
       }
+    }
+
+    if (!response) {
+      console.error("[Media] No response - no URL or mediaKey available");
+      return null;
     }
 
     if (!response.ok) {
@@ -170,7 +201,7 @@ async function downloadAndSaveMedia(
     }
     const dataUrl = `data:${contentType};base64,${base64}`;
 
-    console.log("[Media] Downloaded successfully, size:", buffer.length);
+    console.log("[Media] Downloaded successfully, size:", buffer.length, "type:", contentType);
 
     return { base64Data: base64, dataUrl };
   } catch (error) {
@@ -982,6 +1013,7 @@ function parseEvolutionMessageContent(message: any) {
       text: null,
       caption: null,
       mediaUrl: null,
+      mediaKey: null,
       mimeType: null,
     };
 
@@ -991,6 +1023,7 @@ function parseEvolutionMessageContent(message: any) {
       text: message.conversation,
       caption: null,
       mediaUrl: null,
+      mediaKey: null,
       mimeType: null,
     };
   }
@@ -1001,6 +1034,7 @@ function parseEvolutionMessageContent(message: any) {
       text: message.extendedTextMessage.text,
       caption: null,
       mediaUrl: null,
+      mediaKey: null,
       mimeType: null,
     };
   }
@@ -1011,6 +1045,7 @@ function parseEvolutionMessageContent(message: any) {
       text: null,
       caption: message.imageMessage.caption || null,
       mediaUrl: message.imageMessage.url || null,
+      mediaKey: message.imageMessage.mediaKey || null,
       mimeType: message.imageMessage.mimetype || null,
     };
   }
@@ -1021,6 +1056,7 @@ function parseEvolutionMessageContent(message: any) {
       text: null,
       caption: message.videoMessage.caption || null,
       mediaUrl: message.videoMessage.url || null,
+      mediaKey: message.videoMessage.mediaKey || null,
       mimeType: message.videoMessage.mimetype || null,
     };
   }
@@ -1031,6 +1067,7 @@ function parseEvolutionMessageContent(message: any) {
       text: null,
       caption: message.documentMessage.caption || null,
       mediaUrl: message.documentMessage.url || null,
+      mediaKey: message.documentMessage.mediaKey || null,
       mimeType: message.documentMessage.mimetype || null,
     };
   }
@@ -1041,6 +1078,7 @@ function parseEvolutionMessageContent(message: any) {
       text: null,
       caption: null,
       mediaUrl: message.audioMessage.url || null,
+      mediaKey: message.audioMessage.mediaKey || null,
       mimeType: message.audioMessage.mimetype || null,
     };
   }
@@ -1050,6 +1088,7 @@ function parseEvolutionMessageContent(message: any) {
     text: null,
     caption: null,
     mediaUrl: null,
+    mediaKey: null,
     mimeType: null,
   };
 }
@@ -1260,35 +1299,43 @@ async function processEvolutionWebhook(body: any) {
         const messageText = parsed.text;
         const caption = parsed.caption;
         const mediaUrl = parsed.mediaUrl;
+        const mediaKey = parsed.mediaKey;
         const mimeType = parsed.mimeType;
         console.log(
           "[Evolution Webhook] Step 12b: messageType=",
           messageType,
           "text=",
-          messageText
+          messageText,
+          "hasMediaUrl=",
+          !!mediaUrl,
+          "hasMediaKey=",
+          !!mediaKey
         );
 
         // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
         const hasRealContent =
           Boolean(messageText && String(messageText).trim()) ||
           Boolean(caption && String(caption).trim()) ||
-          Boolean(mediaUrl && String(mediaUrl).trim());
+          Boolean(mediaUrl && String(mediaUrl).trim()) ||
+          Boolean(mediaKey); // mediaKey indicates media is present even without URL
         if (!hasRealContent && messageType === "unknown") {
           console.log("[Evolution Webhook] IGNORING: No content");
           return;
         }
 
         // Download and save media to permanent storage if present
+        // Check for both mediaUrl and mediaKey (Evolution API may send only mediaKey)
         let permanentMediaUrl = null;
         if (
-          mediaUrl &&
-          ["image", "video", "audio", "document"].includes(messageType)
+          ["image", "video", "audio", "document"].includes(messageType) &&
+          (mediaUrl || mediaKey)
         ) {
-          console.log("[Evolution Webhook] Downloading media...");
+          console.log("[Evolution Webhook] Downloading media...", { hasUrl: !!mediaUrl, hasKey: !!mediaKey });
           const mediaResult = await downloadAndSaveMedia(
             mediaUrl,
             mimeType,
-            fromNumber
+            fromNumber,
+            mediaKey
           );
           if (mediaResult) {
             console.log(
