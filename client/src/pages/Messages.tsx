@@ -409,7 +409,8 @@ export default function Messages() {
   };
 
   return (
-    <FarmaDashboardLayout>
+    <>
+      <FarmaDashboardLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -1309,5 +1310,6 @@ export default function Messages() {
       fileName={pdfPreview.fileName}
       messageId={pdfPreview.messageId}
     />
+    </>
   );
 }

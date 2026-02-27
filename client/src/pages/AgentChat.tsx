@@ -300,7 +300,8 @@ export default function AgentChat() {
   const selectedConv = conversations?.find(c => c.id === selectedConversation);
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <>
+      <div className="flex h-screen bg-gray-50">
       {/* Lista de Conversas - Sidebar Esquerda */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
         {/* Header da Lista */}
@@ -724,5 +725,6 @@ export default function AgentChat() {
       fileName={pdfPreview.fileName}
       messageId={pdfPreview.messageId}
     />
+    </>
   );
 }
