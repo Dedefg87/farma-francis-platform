@@ -2,41 +2,11 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
+import { useFileUpload } from "@/hooks/useFileUpload";
+import { usePdfViewer, getMimeType, getMediaUrl } from "@/hooks/usePdfViewer";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-function getImageSrc(
-  url: string | null | undefined,
-  messageId?: number
-): string {
-  if (!url) return "";
-  // If it's a data URL, return it directly
-  if (url.startsWith("data:")) {
-    return url;
-  }
-  // If it's a WhatsApp URL (temporary), use our media endpoint
-  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
-    return `/api/media/${messageId}`;
-  }
-  return url;
-}
-
-/**
- * Extrai o MIME type real de um arquivo.
- * Prioriza o MIME type do data URL (mais confiável) sobre o fileType do banco.
- */
-function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
-  // Se tem data URL, extrair MIME type dele (mais confiável)
-  if (fileUrl?.startsWith('data:')) {
-    const mimeMatch = fileUrl.match(/^data:([^;]+);/);
-    if (mimeMatch && mimeMatch[1]) {
-      return mimeMatch[1];
-    }
-  }
-  // Fallback para o fileType do banco
-  return fileType || '';
-}
 
 function handleImageClick(url: string | null | undefined, messageId?: number) {
   const src = getImageSrc(url, messageId);
@@ -135,14 +105,10 @@ export default function AgentMessages() {
   const [showMessageSearch, setShowMessageSearch] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [showMediaDialog, setShowMediaDialog] = useState(false);
-  const [pdfPreview, setPdfPreview] = useState<{
-    open: boolean;
-    url: string | null;
-    fileName?: string;
-    messageId?: number;
-  }>({ open: false, url: null });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
+  
+  // Hooks compartilhados
+  const { selectedFile, filePreview, handleFileSelect, removeFile, toBase64 } = useFileUpload();
+  const pdfViewer = usePdfViewer();
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
@@ -385,69 +351,24 @@ export default function AgentMessages() {
     previousMessagesCountRef.current = currentCount;
   }, [messages, notificationsMuted, playNotificationSound]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validar tamanho (máximo 16MB)
-    if (file.size > 16 * 1024 * 1024) {
-      alert("Arquivo muito grande. Tamanho máximo: 16MB");
-      return;
-    }
-
-    setSelectedFile(file);
-
-    // Criar preview para imagens
-    if (file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFilePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    } else if (file.type.startsWith("video/")) {
-      // Criar thumbnail para vídeos
-      const video = document.createElement('video');
-      video.src = URL.createObjectURL(file);
-      video.currentTime = 1;
-      video.onloadeddata = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 160;
-        canvas.height = 90;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        setFilePreview(canvas.toDataURL('image/jpeg'));
-        URL.revokeObjectURL(video.src);
-      };
-    } else {
-      setFilePreview(null);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    setSelectedFile(null);
-    setFilePreview(null);
-  };
-
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if ((!message.trim() && !selectedFile) || !selectedConversationId) return;
 
     // Se tem arquivo, converter para base64 e enviar
     if (selectedFile) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
+      const base64 = await toBase64();
+      if (base64) {
         sendMessageMutation.mutate({
           conversation_id: selectedConversationId,
           content: message.trim() || "",
-          fileUrl: reader.result as string,
+          fileUrl: base64,
           fileName: selectedFile.name,
           fileType: selectedFile.type,
           fileSize: selectedFile.size,
         });
-        setSelectedFile(null);
-        setFilePreview(null);
+        removeFile();
         setMessage("");
-      };
-      reader.readAsDataURL(selectedFile);
+      }
     } else {
       sendMessageMutation.mutate({
         conversation_id: selectedConversationId,
@@ -873,11 +794,11 @@ export default function AgentMessages() {
                               <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
                                 <div 
                                   className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={() => setPdfPreview({
-                                    open: true,
+                                  onClick={() => pdfViewer.open(
+                                    
                                     url: msg.fileUrl,
-                                    fileName: msg.fileName || undefined,
-                                    messageId: msg.id
+                                    msg.fileUrl, { fileName: msg.fileName || undefined,
+                                    messageId: msg.id })
                                   })}
                                 >
                                   <iframe
@@ -894,11 +815,11 @@ export default function AgentMessages() {
                                     <span className="text-xs font-medium truncate max-w-[100px]">{msg.fileName || "PDF"}</span>
                                   </div>
                                   <button
-                                    onClick={() => setPdfPreview({
-                                      open: true,
+                                    onClick={() => pdfViewer.open(
+                                      
                                       url: msg.fileUrl,
-                                      fileName: msg.fileName || undefined,
-                                      messageId: msg.id
+                                      msg.fileUrl, { fileName: msg.fileName || undefined,
+                                      messageId: msg.id })
                                     })}
                                     className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                                   >
@@ -908,11 +829,11 @@ export default function AgentMessages() {
                               </div>
                             ) : (
                               <div
-                                onClick={() => setPdfPreview({
-                                  open: true,
+                                onClick={() => pdfViewer.open(
+                                  
                                   url: msg.fileUrl,
-                                  fileName: msg.fileName || undefined,
-                                  messageId: msg.id
+                                  msg.fileUrl, { fileName: msg.fileName || undefined,
+                                  messageId: msg.id })
                                 })}
                                 className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
                               >
@@ -997,7 +918,7 @@ export default function AgentMessages() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleRemoveFile}
+                        onClick={removeFile}
                         className="text-gray-500 hover:text-red-600"
                       >
                         <X className="w-4 h-4" />
@@ -1290,11 +1211,11 @@ export default function AgentMessages() {
 
       {/* PDF Preview Modal */}
       <PDFPreview
-        open={pdfPreview.open}
-        onOpenChange={(open) => setPdfPreview({ ...pdfPreview, open })}
-        url={pdfPreview.url || ''}
-        fileName={pdfPreview.fileName}
-        messageId={pdfPreview.messageId}
+        open={pdfViewer.isOpen}
+        onOpenChange={(open) => open ? null : pdfViewer.close()}
+        url={pdfViewer.url || ''}
+        fileName={pdfViewer.fileName || undefined}
+        messageId={pdfViewer.messageId || undefined}
       />
     </>
   );
