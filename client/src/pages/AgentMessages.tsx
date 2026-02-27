@@ -74,6 +74,8 @@ import {
   XCircle,
   Video,
   Tag,
+  FileText,
+  X,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -139,6 +141,8 @@ export default function AgentMessages() {
     fileName?: string;
     messageId?: number;
   }>({ open: false, url: null });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
@@ -381,13 +385,75 @@ export default function AgentMessages() {
     previousMessagesCountRef.current = currentCount;
   }, [messages, notificationsMuted, playNotificationSound]);
 
-  const handleSendMessage = () => {
-    if (!message.trim() || !selectedConversationId) return;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    sendMessageMutation.mutate({
-      conversation_id: selectedConversationId,
-      content: message,
-    });
+    // Validar tamanho (máximo 16MB)
+    if (file.size > 16 * 1024 * 1024) {
+      alert("Arquivo muito grande. Tamanho máximo: 16MB");
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Criar preview para imagens
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith("video/")) {
+      // Criar thumbnail para vídeos
+      const video = document.createElement('video');
+      video.src = URL.createObjectURL(file);
+      video.currentTime = 1;
+      video.onloadeddata = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 90;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setFilePreview(canvas.toDataURL('image/jpeg'));
+        URL.revokeObjectURL(video.src);
+      };
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+  };
+
+  const handleSendMessage = () => {
+    if ((!message.trim() && !selectedFile) || !selectedConversationId) return;
+
+    // Se tem arquivo, converter para base64 e enviar
+    if (selectedFile) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        sendMessageMutation.mutate({
+          conversation_id: selectedConversationId,
+          content: message.trim() || "",
+          fileUrl: reader.result as string,
+          fileName: selectedFile.name,
+          fileType: selectedFile.type,
+          fileSize: selectedFile.size,
+        });
+        setSelectedFile(null);
+        setFilePreview(null);
+        setMessage("");
+      };
+      reader.readAsDataURL(selectedFile);
+    } else {
+      sendMessageMutation.mutate({
+        conversation_id: selectedConversationId,
+        content: message,
+      });
+    }
   };
 
   const handleEmojiClick = (emojiData: any) => {
@@ -897,7 +963,66 @@ export default function AgentMessages() {
 
               {/* Input de Mensagem */}
               <div className="bg-white border-t border-gray-200 p-4">
+                {/* File Preview */}
+                {selectedFile && (
+                  <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-3">
+                      {filePreview ? (
+                        <img
+                          src={filePreview}
+                          alt="Preview"
+                          className="w-16 h-16 object-cover rounded"
+                        />
+                      ) : selectedFile.type.startsWith("video/") ? (
+                        <div className="w-16 h-16 bg-purple-100 rounded flex items-center justify-center">
+                          <Video className="w-8 h-8 text-purple-500" />
+                        </div>
+                      ) : selectedFile.type === "application/pdf" ? (
+                        <div className="w-16 h-16 bg-red-100 rounded flex items-center justify-center">
+                          <FileText className="w-8 h-8 text-red-500" />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
+                          <FileText className="w-8 h-8 text-gray-500" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {selectedFile.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {selectedFile.type || "Arquivo"} • {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveFile}
+                        className="text-gray-500 hover:text-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    id="file-upload-agent"
+                    className="hidden"
+                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
+                    onChange={handleFileSelect}
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => document.getElementById("file-upload-agent")?.click()}
+                    title="Anexar arquivo (imagens, vídeos, documentos)"
+                  >
+                    <Paperclip className="w-4 h-4" />
+                  </Button>
+
                   <Button
                     variant="outline"
                     size="icon"
@@ -933,7 +1058,7 @@ export default function AgentMessages() {
 
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!message.trim()}
+                    disabled={!message.trim() && !selectedFile}
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Enviar
