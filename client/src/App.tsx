@@ -1,138 +1,166 @@
-import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
-import ErrorBoundary from "./components/ErrorBoundary";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider } from "./contexts/AuthContext";
-import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
-import CRM from "./pages/CRM";
-import Tickets from "./pages/Tickets";
-import Employees from "./pages/Employees";
-import Reports from "./pages/Reports";
-import Messages from "./pages/Messages";
-import Inbox from "./pages/Inbox";
-import Automation from "./pages/Automation";
-import APISettings from "./pages/APISettings";
-import AgentPerformance from "./pages/AgentPerformance";
-import DebugData from "./pages/DebugData";
-import Login from "./pages/Login";
-import Unauthorized from "./pages/Unauthorized";
-import QueueManagement from "./pages/QueueManagement";
-import QueuePanel from "./pages/QueuePanel";
-import AgentChat from "./pages/AgentChat";
-import AgentMessages from "./pages/AgentMessages";
-import QuickRepliesManagement from "./pages/QuickRepliesManagement";
-import { ProtectedRoute } from "./components/ProtectedRoute";
-import { AdminRoute } from "./components/AdminRoute";
+import { lazy, Suspense } from 'react';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import NotFound from '@/pages/NotFound';
+import { Route, Switch } from 'wouter';
+import ErrorBoundary from './components/ErrorBoundary';
+import { ThemeProvider } from './contexts/ThemeContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminRoute } from './components/AdminRoute';
+import Login from './pages/Login';
+import Unauthorized from './pages/Unauthorized';
+
+// Lazy loading de páginas para melhor performance
+// Só carrega quando o usuário acessa a rota
+
+const Home = lazy(() => import('./pages/Home'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CRM = lazy(() => import('./pages/CRM'));
+const Tickets = lazy(() => import('./pages/Tickets'));
+const Employees = lazy(() => import('./pages/Employees'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Messages = lazy(() => import('./pages/Messages'));
+const Inbox = lazy(() => import('./pages/Inbox'));
+const Automation = lazy(() => import('./pages/Automation'));
+const APISettings = lazy(() => import('./pages/APISettings'));
+const AgentPerformance = lazy(() => import('./pages/AgentPerformance'));
+const DebugData = lazy(() => import('./pages/DebugData'));
+const QueuePanel = lazy(() => import('./pages/QueuePanel'));
+const AgentChat = lazy(() => import('./pages/AgentChat'));
+const AgentMessages = lazy(() => import('./pages/AgentMessages'));
+const QuickRepliesManagement = lazy(() => import('./pages/QuickRepliesManagement'));
+
+// Loading spinner component
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">Carregando...</p>
+      </div>
+    </div>
+  );
+}
+
+// Wrapper para páginas com lazy loading
+function LazyPage({ component: Component }: { component: React.LazyExoticComponent<React.ComponentType> }) {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <Component />
+    </Suspense>
+  );
+}
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/login"} component={Login} />
-      <Route path={"/unauthorized"} component={Unauthorized} />
-      <Route path={"/agent/queues"}>
+      {/* Rotas públicas */}
+      <Route path="/login" component={Login} />
+      <Route path="/unauthorized" component={Unauthorized} />
+
+      {/* Rotas protegidas - Agent */}
+      <Route path="/agent/queues">
         <ProtectedRoute>
-          <QueuePanel />
+          <LazyPage component={QueuePanel} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/agent/chat"}>
+      <Route path="/agent/chat">
         <ProtectedRoute>
-          <AgentChat />
+          <LazyPage component={AgentChat} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/agent/messages"}>
+      <Route path="/agent/messages">
         <ProtectedRoute>
-          <AgentMessages />
+          <LazyPage component={AgentMessages} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/admin/quick-replies"}>
+
+      {/* Rotas admin */}
+      <Route path="/admin/quick-replies">
         <AdminRoute>
-          <QuickRepliesManagement />
+          <LazyPage component={QuickRepliesManagement} />
         </AdminRoute>
       </Route>
-      <Route path={"/"}>
+
+      {/* Rotas protegidas - Geral */}
+      <Route path="/">
         <ProtectedRoute>
-          <Home />
+          <LazyPage component={Home} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/dashboard"}>
+      <Route path="/dashboard">
         <ProtectedRoute>
-          <Dashboard />
+          <LazyPage component={Dashboard} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/crm"}>
+
+      {/* Rotas admin */}
+      <Route path="/crm">
         <AdminRoute>
-          <CRM />
+          <LazyPage component={CRM} />
         </AdminRoute>
       </Route>
-      <Route path={"/tickets"}>
+      <Route path="/employees">
+        <AdminRoute>
+          <LazyPage component={Employees} />
+        </AdminRoute>
+      </Route>
+      <Route path="/inbox">
+        <AdminRoute>
+          <LazyPage component={Inbox} />
+        </AdminRoute>
+      </Route>
+      <Route path="/automation">
+        <AdminRoute>
+          <LazyPage component={Automation} />
+        </AdminRoute>
+      </Route>
+      <Route path="/agent-performance">
+        <AdminRoute>
+          <LazyPage component={AgentPerformance} />
+        </AdminRoute>
+      </Route>
+      <Route path="/debug-data">
+        <AdminRoute>
+          <LazyPage component={DebugData} />
+        </AdminRoute>
+      </Route>
+      <Route path="/settings/api">
+        <AdminRoute>
+          <LazyPage component={APISettings} />
+        </AdminRoute>
+      </Route>
+
+      {/* Rotas protegidas */}
+      <Route path="/tickets">
         <ProtectedRoute>
-          <Tickets />
+          <LazyPage component={Tickets} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/employees"}>
-        <AdminRoute>
-          <Employees />
-        </AdminRoute>
-      </Route>
-      <Route path={"/reports"}>
+      <Route path="/reports">
         <ProtectedRoute>
-          <Reports />
+          <LazyPage component={Reports} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/messages"}>
+      <Route path="/messages">
         <ProtectedRoute>
-          <Messages />
+          <LazyPage component={Messages} />
         </ProtectedRoute>
       </Route>
-      <Route path={"/inbox"}>
-        <AdminRoute>
-          <Inbox />
-        </AdminRoute>
-      </Route>
-      <Route path={"/automation"}>
-        <AdminRoute>
-          <Automation />
-        </AdminRoute>
-      </Route>
-      <Route path={"/agent-performance"}>
-        <AdminRoute>
-          <AgentPerformance />
-        </AdminRoute>
-      </Route>
-      <Route path={"/debug-data"}>
-        <AdminRoute>
-          <DebugData />
-        </AdminRoute>
-      </Route>
-      <Route path={"/settings/api"}>
-        <AdminRoute>
-          <APISettings />
-        </AdminRoute>
-      </Route>
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+
+      {/* 404 */}
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ThemeProvider
-          defaultTheme="light"
-          // switchable
-        >
+        <ThemeProvider defaultTheme="light">
           <TooltipProvider>
             <Toaster />
             <Router />
