@@ -20,11 +20,12 @@ import { TemplateCard } from "./components/TemplateCard";
 import { ImportDialog } from "./components/ImportDialog";
 import { CreateDialog } from "./components/CreateDialog";
 import { FlowEditor } from "./components/FlowEditor";
+import { ValidationDialog } from "./components/ValidationDialog";
 import { flowTemplates } from "./templates";
 
 export default function Automation() {
   const { state, actions } = useFlowState();
-  const { validateBeforeSave } = useFlowValidation();
+  const { validateBeforeSave, validateFlow } = useFlowValidation();
 
   const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
   const { data: automationFlows } = trpc.automation.list.useQuery();
@@ -167,20 +168,23 @@ export default function Automation() {
   const handleSaveFlow = useCallback((nodes: Node[], edges: any[]) => {
     if (!state.selectedFlowId) return;
 
-    const validation = validateBeforeSave(nodes, edges);
-    if (!validation.canSave) {
-      toast.error(validation.message);
-      return;
-    }
-    if (validation.message !== "Fluxo válido!") {
-      toast.warning(validation.message);
-    }
+    // Validar fluxo antes de salvar
+    const result = validateFlow(nodes, edges);
+    actions.showValidation(result, { nodes, edges });
+  }, [state.selectedFlowId, validateFlow, actions]);
+
+  const confirmSaveFlow = useCallback(() => {
+    if (!state.selectedFlowId || !state.pendingSaveData) return;
 
     updateFlow.mutate({
       id: state.selectedFlowId,
-      flowData: JSON.stringify({ nodes, edges }),
+      flowData: JSON.stringify(state.pendingSaveData),
     });
-  }, [state.selectedFlowId, validateBeforeSave, updateFlow]);
+
+    actions.hideValidation();
+    actions.setPendingSaveData(null);
+    toast.success("Fluxo salvo com sucesso!");
+  }, [state.selectedFlowId, state.pendingSaveData, updateFlow, actions]);
 
   const handleNodeSave = useCallback((nodeId: string, data: any) => {
     if (!state.selectedFlowId) return;
@@ -356,6 +360,13 @@ export default function Automation() {
         open={state.isConfigOpen}
         onClose={actions.closeNodeConfig}
         onSave={handleNodeSave}
+      />
+
+      <ValidationDialog
+        open={state.showValidationDialog}
+        onOpenChange={actions.hideValidation}
+        result={state.validationResult}
+        onConfirm={confirmSaveFlow}
       />
     </FarmaDashboardLayout>
   );

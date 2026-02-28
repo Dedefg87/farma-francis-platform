@@ -4,8 +4,21 @@ import {
   FlowState,
   FlowAction,
 } from "../types";
+import { ValidationResult } from "./useFlowValidation";
 
-const initialState: FlowState = {
+interface ExtendedFlowState extends FlowState {
+  validationResult: ValidationResult | null;
+  showValidationDialog: boolean;
+  pendingSaveData: { nodes: Node[]; edges: any[] } | null;
+}
+
+type ExtendedFlowAction = 
+  | FlowAction
+  | { type: "SET_VALIDATION_RESULT"; payload: ValidationResult | null }
+  | { type: "SET_SHOW_VALIDATION"; payload: boolean }
+  | { type: "SET_PENDING_SAVE"; payload: { nodes: Node[]; edges: any[] } | null };
+
+const initialState: ExtendedFlowState = {
   selectedFlowId: null,
   isCreating: false,
   isImporting: false,
@@ -16,9 +29,12 @@ const initialState: FlowState = {
   isConfigOpen: false,
   newFlowName: "",
   newFlowDescription: "",
+  validationResult: null,
+  showValidationDialog: false,
+  pendingSaveData: null,
 };
 
-function flowReducer(state: FlowState, action: FlowAction): FlowState {
+function flowReducer(state: ExtendedFlowState, action: ExtendedFlowAction): ExtendedFlowState {
   switch (action.type) {
     case "SET_SELECTED_FLOW":
       return { ...state, selectedFlowId: action.payload };
@@ -48,6 +64,12 @@ function flowReducer(state: FlowState, action: FlowAction): FlowState {
         importLoading: false,
         importProgress: 0,
       };
+    case "SET_VALIDATION_RESULT":
+      return { ...state, validationResult: action.payload };
+    case "SET_SHOW_VALIDATION":
+      return { ...state, showValidationDialog: action.payload };
+    case "SET_PENDING_SAVE":
+      return { ...state, pendingSaveData: action.payload };
     default:
       return state;
   }
@@ -111,6 +133,28 @@ export function useFlowState() {
     setSelectedNode(null);
   }, []);
 
+  const setValidationResult = useCallback((result: ValidationResult | null) => {
+    dispatch({ type: "SET_VALIDATION_RESULT", payload: result });
+  }, []);
+
+  const setShowValidationDialog = useCallback((show: boolean) => {
+    dispatch({ type: "SET_SHOW_VALIDATION", payload: show });
+  }, []);
+
+  const setPendingSaveData = useCallback((data: { nodes: Node[]; edges: any[] } | null) => {
+    dispatch({ type: "SET_PENDING_SAVE", payload: data });
+  }, []);
+
+  const showValidation = useCallback((result: ValidationResult, data: { nodes: Node[]; edges: any[] }) => {
+    setValidationResult(result);
+    setPendingSaveData(data);
+    setShowValidationDialog(true);
+  }, []);
+
+  const hideValidation = useCallback(() => {
+    setShowValidationDialog(false);
+  }, []);
+
   return {
     state,
     actions: {
@@ -127,6 +171,11 @@ export function useFlowState() {
       resetImport,
       openNodeConfig,
       closeNodeConfig,
+      setValidationResult,
+      setShowValidationDialog,
+      setPendingSaveData,
+      showValidation,
+      hideValidation,
     },
   };
 }
