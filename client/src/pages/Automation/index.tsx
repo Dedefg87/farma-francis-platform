@@ -70,42 +70,6 @@ export default function Automation() {
     onSuccess: () => refetchFlows(),
   });
 
-  // Duplicar fluxo
-  const handleDuplicateFlow = useCallback((flow: typeof visualFlows extends (infer T)[] ? T : never) => {
-    if (!flow) return;
-    
-    createFlow.mutate({
-      name: `Cópia de ${flow.name}`,
-      description: flow.description || undefined,
-      flowData: flow.flowData,
-    });
-  }, [createFlow]);
-
-  // Exportar fluxo como JSON
-  const handleExportFlow = useCallback((flow: typeof visualFlows extends (infer T)[] ? T : never) => {
-    if (!flow) return;
-    
-    const exportData = {
-      name: flow.name,
-      description: flow.description,
-      flowData: JSON.parse(flow.flowData),
-      exportedAt: new Date().toISOString(),
-      version: "1.0",
-    };
-    
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `fluxo-${flow.name.toLowerCase().replace(/\s+/g, "-")}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast.success("Fluxo exportado com sucesso!");
-  }, []);
-
   const handleCreateFlow = useCallback(() => {
     if (!state.newFlowName.trim()) {
       toast.error("Nome do fluxo é obrigatório");
