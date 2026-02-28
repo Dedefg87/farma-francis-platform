@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Check, X, Phone, Instagram, Zap, QrCode } from "lucide-react";
+import { Loader2, Check, X, Phone, Instagram, Zap, QrCode, Send } from "lucide-react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import QrCodeModal from "@/components/QrCodeModal";
 import QuickRepliesSettingsTab from "@/components/QuickRepliesSettingsTab";
@@ -38,6 +38,10 @@ export default function APISettings() {
   const [evolutionInstanceName, setEvolutionInstanceName] = useState("");
   const [showQrModal, setShowQrModal] = useState(false);
 
+  // Telegram Bot
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramWebhook, setTelegramWebhook] = useState("");
+
   const utils = trpc.useUtils();
 
   // Queries - Carregar configurações existentes
@@ -54,6 +58,11 @@ export default function APISettings() {
   const { data: evolutionConfig, isLoading: loadingEvolution } =
     trpc.apiConfig.get.useQuery({
       integrationType: "evolution_api",
+    });
+
+  const { data: telegramConfig, isLoading: loadingTelegram } =
+    trpc.apiConfig.get.useQuery({
+      integrationType: "telegram",
     });
 
   // Mutations - Salvar configurações
@@ -81,6 +90,16 @@ export default function APISettings() {
     onSuccess: () => {
       toast.success("Configuração da Evolution API salva com sucesso!");
       utils.apiConfig.get.invalidate({ integrationType: "evolution_api" });
+    },
+    onError: error => {
+      toast.error(`Erro ao salvar: ${error.message}`);
+    },
+  });
+
+  const saveTelegram = trpc.apiConfig.save.useMutation({
+    onSuccess: () => {
+      toast.success("Configuração do Telegram salva com sucesso!");
+      utils.apiConfig.get.invalidate({ integrationType: "telegram" });
     },
     onError: error => {
       toast.error(`Erro ao salvar: ${error.message}`);
@@ -127,6 +146,19 @@ export default function APISettings() {
     },
   });
 
+  const testTelegram = trpc.apiConfig.test.useMutation({
+    onSuccess: data => {
+      toast.success(data.message, {
+        description: data.data
+          ? `@${data.data.botUsername} (${data.data.botName})`
+          : undefined,
+      });
+    },
+    onError: error => {
+      toast.error(`Erro ao testar: ${error.message}`);
+    },
+  });
+
   // Carregar dados existentes nos inputs
   useEffect(() => {
     if (whatsappConfig?.config) {
@@ -158,6 +190,14 @@ export default function APISettings() {
       setEvolutionInstanceName(config.instanceName || "");
     }
   }, [evolutionConfig]);
+
+  useEffect(() => {
+    if (telegramConfig?.config) {
+      const config = telegramConfig.config as any;
+      setTelegramBotToken(config.botToken || config.accessToken || "");
+      setTelegramWebhook(config.webhookUrl || "");
+    }
+  }, [telegramConfig]);
 
   // Handlers
   const handleSaveWhatsapp = () => {
@@ -257,6 +297,33 @@ export default function APISettings() {
       return;
     }
     setShowQrModal(true);
+  };
+
+  const handleSaveTelegram = () => {
+    if (!telegramBotToken) {
+      toast.error("Preencha o Bot Token");
+      return;
+    }
+
+    saveTelegram.mutate({
+      integrationType: "telegram",
+      name: "Telegram Bot",
+      botToken: telegramBotToken,
+      webhookUrl: telegramWebhook,
+      isActive: true,
+    });
+  };
+
+  const handleTestTelegram = () => {
+    if (!telegramBotToken) {
+      toast.error("Preencha o Bot Token primeiro");
+      return;
+    }
+
+    testTelegram.mutate({
+      integrationType: "telegram",
+      accessToken: telegramBotToken,
+    });
   };
 
   return (
@@ -665,6 +732,95 @@ export default function APISettings() {
                       >
                         <QrCode className="mr-2 h-4 w-4" />
                         Gerar QR Code
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Telegram Bot */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-sky-100 dark:bg-sky-900/20 rounded-lg">
+                    <Send className="h-6 w-6 text-sky-600 dark:text-sky-400" />
+                  </div>
+                  <div>
+                    <CardTitle>Telegram Bot</CardTitle>
+                    <CardDescription>
+                      Configure seu bot do Telegram para enviar e receber mensagens
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {loadingTelegram ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="telegram-token">Bot Token *</Label>
+                      <Input
+                        id="telegram-token"
+                        type="password"
+                        placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                        value={telegramBotToken}
+                        onChange={e => setTelegramBotToken(e.target.value)}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Token do bot obtido via @BotFather no Telegram
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="telegram-webhook">Webhook URL (opcional)</Label>
+                      <Input
+                        id="telegram-webhook"
+                        placeholder="https://sua-plataforma.com/api/webhooks/telegram"
+                        value={telegramWebhook}
+                        onChange={e => setTelegramWebhook(e.target.value)}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        URL para receber atualizações do Telegram
+                      </p>
+                    </div>
+
+                    {telegramConfig && (
+                      <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                        {telegramConfig.testStatus === "success" ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : telegramConfig.testStatus === "failed" ? (
+                          <X className="h-4 w-4 text-red-600" />
+                        ) : null}
+                        <span className="text-sm">
+                          {telegramConfig.testMessage ||
+                            "Configuração não testada"}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleSaveTelegram}
+                        disabled={saveTelegram.isPending}
+                      >
+                        {saveTelegram.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Salvar Configuração
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleTestTelegram}
+                        disabled={testTelegram.isPending}
+                      >
+                        {testTelegram.isPending && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
+                        Testar Conexão
                       </Button>
                     </div>
                   </>

@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { integrationSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { validateTelegramCredentials } from "./integrations/telegram";
 
 /**
  * Router para gerenciar configurações de APIs (WhatsApp, Instagram, etc)
@@ -55,6 +56,7 @@ export const apiConfigRouter = router({
       apiUrl: z.string().optional(),
       apiKey: z.string().optional(),
       instanceName: z.string().optional(),
+      botToken: z.string().optional(), // Telegram
       isActive: z.boolean().default(true),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -75,6 +77,7 @@ export const apiConfigRouter = router({
         apiUrl: input.apiUrl,
         apiKey: input.apiKey,
         instanceName: input.instanceName,
+        botToken: input.botToken, // Telegram
       };
 
       // Verificar se já existe configuração
@@ -117,7 +120,7 @@ export const apiConfigRouter = router({
    */
   test: adminProcedure
     .input(z.object({
-      integrationType: z.enum(["whatsapp_business", "instagram_graph", "evolution_api"]),
+      integrationType: z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram"]),
       accessToken: z.string(),
       phoneNumberId: z.string().optional(),
       businessAccountId: z.string().optional(),
@@ -125,6 +128,35 @@ export const apiConfigRouter = router({
     }))
     .mutation(async ({ input }) => {
       try {
+        if (input.integrationType === "telegram") {
+          // Testar Telegram Bot API
+          if (!input.accessToken) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Bot Token é obrigatório",
+            });
+          }
+
+          const result = await validateTelegramCredentials({ botToken: input.accessToken });
+
+          if (!result.valid) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Erro ao conectar: ${result.error || "Token inválido"}`,
+            });
+          }
+
+          return {
+            success: true,
+            message: "Bot do Telegram conectado com sucesso!",
+            data: {
+              botUsername: result.botInfo?.username,
+              botName: result.botInfo?.firstName,
+              botId: result.botInfo?.id,
+            },
+          };
+        }
+
         if (input.integrationType === "whatsapp_business") {
           // Testar WhatsApp Business API
           if (!input.accessToken || !input.phoneNumberId) {
