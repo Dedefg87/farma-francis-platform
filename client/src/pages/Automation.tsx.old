@@ -1,0 +1,3 @@
+// Re-export do novo módulo estruturado
+// Mantém compatibilidade com imports existentes
+export { default } from "./Automation/index";
