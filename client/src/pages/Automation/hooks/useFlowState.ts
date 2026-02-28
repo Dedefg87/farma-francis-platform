@@ -10,13 +10,17 @@ interface ExtendedFlowState extends FlowState {
   validationResult: ValidationResult | null;
   showValidationDialog: boolean;
   pendingSaveData: { nodes: Node[]; edges: any[] } | null;
+  isSaving: boolean;
+  duplicatingFlowId: number | null;
 }
 
 type ExtendedFlowAction = 
   | FlowAction
   | { type: "SET_VALIDATION_RESULT"; payload: ValidationResult | null }
   | { type: "SET_SHOW_VALIDATION"; payload: boolean }
-  | { type: "SET_PENDING_SAVE"; payload: { nodes: Node[]; edges: any[] } | null };
+  | { type: "SET_PENDING_SAVE"; payload: { nodes: Node[]; edges: any[] } | null }
+  | { type: "SET_SAVING"; payload: boolean }
+  | { type: "SET_DUPLICATING"; payload: number | null };
 
 const initialState: ExtendedFlowState = {
   selectedFlowId: null,
@@ -32,6 +36,8 @@ const initialState: ExtendedFlowState = {
   validationResult: null,
   showValidationDialog: false,
   pendingSaveData: null,
+  isSaving: false,
+  duplicatingFlowId: null,
 };
 
 function flowReducer(state: ExtendedFlowState, action: ExtendedFlowAction): ExtendedFlowState {
@@ -70,6 +76,10 @@ function flowReducer(state: ExtendedFlowState, action: ExtendedFlowAction): Exte
       return { ...state, showValidationDialog: action.payload };
     case "SET_PENDING_SAVE":
       return { ...state, pendingSaveData: action.payload };
+    case "SET_SAVING":
+      return { ...state, isSaving: action.payload };
+    case "SET_DUPLICATING":
+      return { ...state, duplicatingFlowId: action.payload };
     default:
       return state;
   }
@@ -155,6 +165,14 @@ export function useFlowState() {
     setShowValidationDialog(false);
   }, []);
 
+  const setIsSaving = useCallback((saving: boolean) => {
+    dispatch({ type: "SET_SAVING", payload: saving });
+  }, []);
+
+  const setDuplicatingFlowId = useCallback((id: number | null) => {
+    dispatch({ type: "SET_DUPLICATING", payload: id });
+  }, []);
+
   return {
     state,
     actions: {
@@ -176,6 +194,8 @@ export function useFlowState() {
       setPendingSaveData,
       showValidation,
       hideValidation,
+      setIsSaving,
+      setDuplicatingFlowId,
     },
   };
 }

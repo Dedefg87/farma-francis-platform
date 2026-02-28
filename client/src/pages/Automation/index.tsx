@@ -70,6 +70,42 @@ export default function Automation() {
     onSuccess: () => refetchFlows(),
   });
 
+  // Duplicar fluxo
+  const handleDuplicateFlow = useCallback((flow: typeof visualFlows extends (infer T)[] ? T : never) => {
+    if (!flow) return;
+    
+    createFlow.mutate({
+      name: `Cópia de ${flow.name}`,
+      description: flow.description || undefined,
+      flowData: flow.flowData,
+    });
+  }, [createFlow]);
+
+  // Exportar fluxo como JSON
+  const handleExportFlow = useCallback((flow: typeof visualFlows extends (infer T)[] ? T : never) => {
+    if (!flow) return;
+    
+    const exportData = {
+      name: flow.name,
+      description: flow.description,
+      flowData: JSON.parse(flow.flowData),
+      exportedAt: new Date().toISOString(),
+      version: "1.0",
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fluxo-${flow.name.toLowerCase().replace(/\s+/g, "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success("Fluxo exportado com sucesso!");
+  }, []);
+
   const handleCreateFlow = useCallback(() => {
     if (!state.newFlowName.trim()) {
       toast.error("Nome do fluxo é obrigatório");
@@ -176,14 +212,27 @@ export default function Automation() {
   const confirmSaveFlow = useCallback(() => {
     if (!state.selectedFlowId || !state.pendingSaveData) return;
 
-    updateFlow.mutate({
-      id: state.selectedFlowId,
-      flowData: JSON.stringify(state.pendingSaveData),
-    });
+    actions.setIsSaving(true);
+    updateFlow.mutate(
+      {
+        id: state.selectedFlowId,
+        flowData: JSON.stringify(state.pendingSaveData),
+      },
+      {
+        onSuccess: () => {
+          toast.success("Fluxo salvo com sucesso!");
+        },
+        onError: () => {
+          toast.error("Erro ao salvar fluxo");
+        },
+        onSettled: () => {
+          actions.setIsSaving(false);
+        },
+      }
+    );
 
     actions.hideValidation();
     actions.setPendingSaveData(null);
-    toast.success("Fluxo salvo com sucesso!");
   }, [state.selectedFlowId, state.pendingSaveData, updateFlow, actions]);
 
   const handleNodeSave = useCallback((nodeId: string, data: any) => {
@@ -204,6 +253,53 @@ export default function Automation() {
       }
     );
   }, [state.selectedFlowId, visualFlows, updateFlow]);
+
+  // Duplicar fluxo
+  const handleDuplicateFlow = useCallback((flow: any) => {
+    actions.setDuplicatingFlowId(flow.id);
+    createFlow.mutate(
+      {
+        name: `Cópia de ${flow.name}`,
+        description: flow.description,
+        flowData: flow.flowData,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Fluxo duplicado com sucesso!");
+          actions.setDuplicatingFlowId(null);
+          refetchFlows();
+        },
+        onError: () => {
+          toast.error("Erro ao duplicar fluxo");
+          actions.setDuplicatingFlowId(null);
+        },
+      }
+    );
+  }, [createFlow, actions, refetchFlows]);
+
+  // Exportar fluxo
+  const handleExportFlow = useCallback((flow: any) => {
+    const flowData = flow.flowData ? JSON.parse(flow.flowData) : { nodes: [], edges: [] };
+    const exportData = {
+      name: flow.name,
+      description: flow.description,
+      nodes: flowData.nodes,
+      edges: flowData.edges,
+      exportedAt: new Date().toISOString(),
+      version: "1.0",
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fluxo-${flow.name.replace(/\s+/g, "-").toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Fluxo exportado!");
+  }, []);
 
   const selectedFlow = visualFlows?.find(f => f.id === state.selectedFlowId);
 
@@ -270,6 +366,7 @@ export default function Automation() {
                 onDelete={() => deleteFlow.mutate({ id: state.selectedFlowId! })}
                 onSave={handleSaveFlow}
                 onNodeDoubleClick={actions.openNodeConfig}
+                isSaving={state.isSaving}
               />
             ) : (
               <div className="p-4">
@@ -279,6 +376,9 @@ export default function Automation() {
                       key={flow.id}
                       flow={flow}
                       onClick={() => actions.setSelectedFlowId(flow.id)}
+                      onDuplicate={() => handleDuplicateFlow(flow)}
+                      onExport={() => handleExportFlow(flow)}
+                      isDuplicating={state.duplicatingFlowId === flow.id}
                     />
                   ))}
                   {(!visualFlows || visualFlows.length === 0) && (

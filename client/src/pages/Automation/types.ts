@@ -51,6 +51,7 @@ export interface FlowState {
   isConfigOpen: boolean;
   newFlowName: string;
   newFlowDescription: string;
+  isSaving: boolean;
 }
 
 // Ações do fluxo
@@ -65,4 +66,5 @@ export type FlowAction =
   | { type: "SET_CONFIG_OPEN"; payload: boolean }
   | { type: "SET_NEW_FLOW_NAME"; payload: string }
   | { type: "SET_NEW_FLOW_DESCRIPTION"; payload: string }
+  | { type: "SET_SAVING"; payload: boolean }
   | { type: "RESET_IMPORT" };
