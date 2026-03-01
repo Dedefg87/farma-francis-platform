@@ -58,6 +58,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
   CMD curl -f http://localhost:${PORT:-3000}/api/health || exit 1
 
-# Start server - Railway provides PORT env var
-# Note: Migrations should be run separately or handled by Railway
+# Start server directly
+# Note: Migrations should be run separately via Railway dashboard
 CMD ["node", "dist/index.js"]

@@ -567,9 +567,6 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
-
-  const port = parseInt(process.env.PORT || "3000"); // Railway requires exact PORT
-
   }
 
   server.listen(port, async () => {
