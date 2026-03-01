@@ -6,7 +6,11 @@
 import { router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { getDb } from "./db";
-import { workflowExecutions, executionData, visualFlows } from "../drizzle/schema";
+import {
+  workflowExecutions,
+  executionData,
+  visualFlows,
+} from "../drizzle/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
 export const executionsRouter = router({
@@ -14,42 +18,51 @@ export const executionsRouter = router({
    * List all executions with filters and pagination
    */
   list: protectedProcedure
-    .input(z.object({
-      page: z.number().min(1).default(1),
-      pageSize: z.number().min(1).max(100).default(20),
-      status: z.enum(['all', 'running', 'success', 'error', 'canceled']).default('all'),
-      workflowId: z.number().optional(),
-      startDate: z.date().optional(),
-      endDate: z.date().optional(),
-    }))
+    .input(
+      z.object({
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(20),
+        status: z
+          .enum(["all", "running", "success", "error", "canceled"])
+          .default("all"),
+        workflowId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      })
+    )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return { executions: [], pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 } };
+      if (!db)
+        return {
+          executions: [],
+          pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
+        };
 
       const { page, pageSize, status, workflowId, startDate, endDate } = input;
       const offset = (page - 1) * pageSize;
 
       // Build filter conditions
       const conditions = [];
-      
-      if (status !== 'all') {
+
+      if (status !== "all") {
         conditions.push(eq(workflowExecutions.status, status));
       }
-      
+
       if (workflowId) {
         conditions.push(eq(workflowExecutions.workflowId, workflowId));
       }
-      
+
       if (startDate) {
         conditions.push(gte(workflowExecutions.startedAt, startDate));
       }
-      
+
       if (endDate) {
         conditions.push(lte(workflowExecutions.startedAt, endDate));
       }
 
-      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-      
+      const whereClause =
+        conditions.length > 0 ? and(...conditions) : undefined;
+
       // Get executions with workflow names
       const executions = await db
         .select({
@@ -64,7 +77,10 @@ export const executionsRouter = router({
           error: workflowExecutions.error,
         })
         .from(workflowExecutions)
-        .leftJoin(visualFlows, eq(workflowExecutions.workflowId, visualFlows.id))
+        .leftJoin(
+          visualFlows,
+          eq(workflowExecutions.workflowId, visualFlows.id)
+        )
         .where(whereClause)
         .orderBy(desc(workflowExecutions.startedAt))
         .limit(pageSize)
@@ -75,7 +91,7 @@ export const executionsRouter = router({
         .select()
         .from(workflowExecutions)
         .where(whereClause);
-      
+
       const total = allExecutions.length;
 
       return {
@@ -93,11 +109,13 @@ export const executionsRouter = router({
    * Get all executions for a workflow
    */
   getByWorkflow: protectedProcedure
-    .input(z.object({
-      workflowId: z.number(),
-      limit: z.number().optional().default(50),
-      offset: z.number().optional().default(0),
-    }))
+    .input(
+      z.object({
+        workflowId: z.number(),
+        limit: z.number().optional().default(50),
+        offset: z.number().optional().default(0),
+      })
+    )
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
@@ -147,20 +165,23 @@ export const executionsRouter = router({
    * Get execution statistics
    */
   getStats: protectedProcedure
-    .input(z.object({
-      workflowId: z.number().optional(),
-      startDate: z.date().optional(),
-      endDate: z.date().optional(),
-    }))
+    .input(
+      z.object({
+        workflowId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      })
+    )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) return {
-        total: 0,
-        success: 0,
-        error: 0,
-        running: 0,
-        avgExecutionTime: 0,
-      };
+      if (!db)
+        return {
+          total: 0,
+          success: 0,
+          error: 0,
+          running: 0,
+          avgExecutionTime: 0,
+        };
 
       const conditions = [];
       if (input.workflowId) {
@@ -182,11 +203,15 @@ export const executionsRouter = router({
       const success = executions.filter(e => e.status === "success").length;
       const error = executions.filter(e => e.status === "error").length;
       const running = executions.filter(e => e.status === "running").length;
-      
+
       const completedExecutions = executions.filter(e => e.executionTime);
-      const avgExecutionTime = completedExecutions.length > 0
-        ? completedExecutions.reduce((sum, e) => sum + (e.executionTime || 0), 0) / completedExecutions.length
-        : 0;
+      const avgExecutionTime =
+        completedExecutions.length > 0
+          ? completedExecutions.reduce(
+              (sum, e) => sum + (e.executionTime || 0),
+              0
+            ) / completedExecutions.length
+          : 0;
 
       return {
         total,
@@ -202,9 +227,11 @@ export const executionsRouter = router({
    * Get recent executions (all workflows)
    */
   getRecent: protectedProcedure
-    .input(z.object({
-      limit: z.number().optional().default(20),
-    }))
+    .input(
+      z.object({
+        limit: z.number().optional().default(20),
+      })
+    )
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
@@ -222,7 +249,10 @@ export const executionsRouter = router({
           error: workflowExecutions.error,
         })
         .from(workflowExecutions)
-        .leftJoin(visualFlows, eq(workflowExecutions.workflowId, visualFlows.id))
+        .leftJoin(
+          visualFlows,
+          eq(workflowExecutions.workflowId, visualFlows.id)
+        )
         .orderBy(desc(workflowExecutions.startedAt))
         .limit(input.limit);
 
@@ -250,9 +280,15 @@ export const executionsRouter = router({
 
       // Import and execute workflow
       const { executeWorkflow } = await import("./workflow-executor");
-      
-      const triggerData = execution.triggerData ? JSON.parse(execution.triggerData) : undefined;
-      const result = await executeWorkflow(execution.workflowId, triggerData, ctx.user.id);
+
+      const triggerData = execution.triggerData
+        ? JSON.parse(execution.triggerData)
+        : undefined;
+      const result = await executeWorkflow(
+        execution.workflowId,
+        triggerData,
+        ctx.user.id
+      );
 
       return result;
     }),
@@ -268,7 +304,7 @@ export const executionsRouter = router({
 
       await db
         .update(workflowExecutions)
-        .set({ 
+        .set({
           status: "canceled",
           finishedAt: new Date(),
         })
@@ -303,38 +339,43 @@ export const executionsRouter = router({
    * Export executions to CSV or PDF
    */
   export: protectedProcedure
-    .input(z.object({
-      format: z.enum(['csv', 'pdf']),
-      status: z.enum(['all', 'running', 'success', 'error', 'canceled']).default('all'),
-      workflowId: z.number().optional(),
-      startDate: z.date().optional(),
-      endDate: z.date().optional(),
-    }))
+    .input(
+      z.object({
+        format: z.enum(["csv", "pdf"]),
+        status: z
+          .enum(["all", "running", "success", "error", "canceled"])
+          .default("all"),
+        workflowId: z.number().optional(),
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      })
+    )
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
       // Build filter conditions (same as list)
       const conditions = [];
-      
-      if (input.status !== 'all') {
+
+      if (input.status !== "all") {
         conditions.push(eq(workflowExecutions.status, input.status));
       }
-      
+
       if (input.workflowId) {
         conditions.push(eq(workflowExecutions.workflowId, input.workflowId));
       }
-      
+
       if (input.startDate) {
         conditions.push(gte(workflowExecutions.startedAt, input.startDate));
       }
-      
+
       if (input.endDate) {
         conditions.push(lte(workflowExecutions.startedAt, input.endDate));
       }
 
-      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-      
+      const whereClause =
+        conditions.length > 0 ? and(...conditions) : undefined;
+
       // Get all executions (no pagination for export)
       const executions = await db
         .select({
@@ -349,40 +390,52 @@ export const executionsRouter = router({
           error: workflowExecutions.error,
         })
         .from(workflowExecutions)
-        .leftJoin(visualFlows, eq(workflowExecutions.workflowId, visualFlows.id))
+        .leftJoin(
+          visualFlows,
+          eq(workflowExecutions.workflowId, visualFlows.id)
+        )
         .where(whereClause)
         .orderBy(desc(workflowExecutions.startedAt));
 
-      if (input.format === 'csv') {
+      if (input.format === "csv") {
         // Generate CSV
-        const headers = ['ID', 'Fluxo', 'Status', 'Modo', 'Início', 'Fim', 'Tempo (ms)', 'Erro'];
+        const headers = [
+          "ID",
+          "Fluxo",
+          "Status",
+          "Modo",
+          "Início",
+          "Fim",
+          "Tempo (ms)",
+          "Erro",
+        ];
         const rows = executions.map(e => [
           e.id,
           e.workflowName || `Fluxo ${e.workflowId}`,
           e.status,
           e.mode,
-          e.startedAt?.toISOString() || '',
-          e.finishedAt?.toISOString() || '',
-          e.executionTime || '',
-          e.error || '',
+          e.startedAt?.toISOString() || "",
+          e.finishedAt?.toISOString() || "",
+          e.executionTime || "",
+          e.error || "",
         ]);
 
         const csv = [
-          headers.join(','),
-          ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-        ].join('\n');
+          headers.join(","),
+          ...rows.map(row => row.map(cell => `"${cell}"`).join(",")),
+        ].join("\n");
 
         return {
-          format: 'csv' as const,
+          format: "csv" as const,
           data: csv,
-          filename: `execucoes_${new Date().toISOString().split('T')[0]}.csv`,
+          filename: `execucoes_${new Date().toISOString().split("T")[0]}.csv`,
         };
       } else {
         // Generate PDF (simplified - return data for client-side PDF generation)
         return {
-          format: 'pdf' as const,
+          format: "pdf" as const,
           data: JSON.stringify(executions),
-          filename: `execucoes_${new Date().toISOString().split('T')[0]}.pdf`,
+          filename: `execucoes_${new Date().toISOString().split("T")[0]}.pdf`,
         };
       }
     }),
@@ -406,9 +459,7 @@ export const executionsRouter = router({
 
       // Delete execution data
       for (const id of executionIds) {
-        await db
-          .delete(executionData)
-          .where(eq(executionData.executionId, id));
+        await db.delete(executionData).where(eq(executionData.executionId, id));
       }
 
       // Delete executions
@@ -423,19 +474,27 @@ export const executionsRouter = router({
    * Get analytics data for dashboard charts
    */
   getAnalytics: protectedProcedure
-    .input(z.object({
-      period: z.enum(['7d', '30d', '90d']).default('7d'),
-    }))
+    .input(
+      z.object({
+        period: z.enum(["7d", "30d", "90d"]).default("7d"),
+      })
+    )
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) {
         return {
-          summary: { total: 0, success: 0, failed: 0, avgTime: 0, successRate: 0 },
+          summary: {
+            total: 0,
+            success: 0,
+            failed: 0,
+            avgTime: 0,
+            successRate: 0,
+          },
           dailyStats: [],
         };
       }
 
-      const days = { '7d': 7, '30d': 30, '90d': 90 }[input.period];
+      const days = { "7d": 7, "30d": 30, "90d": 90 }[input.period];
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
       startDate.setHours(0, 0, 0, 0);
@@ -447,19 +506,25 @@ export const executionsRouter = router({
         .orderBy(workflowExecutions.startedAt);
 
       const total = executions.length;
-      const success = executions.filter(e => e.status === 'success').length;
-      const failed = executions.filter(e => e.status === 'error').length;
+      const success = executions.filter(e => e.status === "success").length;
+      const failed = executions.filter(e => e.status === "error").length;
       const completedWithTime = executions.filter(e => e.executionTime);
-      const avgTime = completedWithTime.length > 0
-        ? Math.round(completedWithTime.reduce((sum, e) => sum + (e.executionTime || 0), 0) / completedWithTime.length)
-        : 0;
+      const avgTime =
+        completedWithTime.length > 0
+          ? Math.round(
+              completedWithTime.reduce(
+                (sum, e) => sum + (e.executionTime || 0),
+                0
+              ) / completedWithTime.length
+            )
+          : 0;
 
       const dailyMap = new Map();
       executions.forEach(exec => {
-        const dateKey = exec.startedAt.toISOString().split('T')[0];
+        const dateKey = exec.startedAt.toISOString().split("T")[0];
         const current = dailyMap.get(dateKey) || { success: 0, failed: 0 };
-        if (exec.status === 'success') current.success++;
-        if (exec.status === 'error') current.failed++;
+        if (exec.status === "success") current.success++;
+        if (exec.status === "error") current.failed++;
         dailyMap.set(dateKey, current);
       });
 
@@ -467,13 +532,23 @@ export const executionsRouter = router({
       for (let i = 0; i < days; i++) {
         const date = new Date(startDate);
         date.setDate(date.getDate() + i);
-        const dateKey = date.toISOString().split('T')[0];
+        const dateKey = date.toISOString().split("T")[0];
         const stats = dailyMap.get(dateKey) || { success: 0, failed: 0 };
-        dailyStats.push({ date: dateKey, success: stats.success, failed: stats.failed });
+        dailyStats.push({
+          date: dateKey,
+          success: stats.success,
+          failed: stats.failed,
+        });
       }
 
       return {
-        summary: { total, success, failed, avgTime, successRate: total > 0 ? Math.round((success / total) * 100) : 0 },
+        summary: {
+          total,
+          success,
+          failed,
+          avgTime,
+          successRate: total > 0 ? Math.round((success / total) * 100) : 0,
+        },
         dailyStats,
       };
     }),
