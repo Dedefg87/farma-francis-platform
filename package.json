@@ -1,6 +1,6 @@
 {
   "name": "farma-francis-platform",
-  "version": "1.0.0.1",
+  "version": "1.0.0.2",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -18,6 +18,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
     "@aws-sdk/s3-request-presigner": "^3.693.0",
+    "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -90,7 +91,6 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
     "@playwright/test": "^1.58.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
