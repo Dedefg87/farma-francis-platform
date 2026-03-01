@@ -419,3 +419,61 @@ export const executionsRouter = router({
       return { success: true, deleted: executionIds.length };
     }),
 });
+
+  /** * Get analytics data for dashboard charts */
+  getAnalytics: protectedProcedure
+    .input(z.object({
+      period: z.enum(['7d', '30d', '90d']).default('7d'),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) {
+        return {
+          summary: { total: 0, success: 0, failed: 0, avgTime: 0, successRate: 0 },
+          dailyStats: [],
+        };
+      }
+
+      const days = { '7d': 7, '30d': 30, '90d': 90 }[input.period];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+
+      const executions = await db
+        .select()
+        .from(workflowExecutions)
+        .where(gte(workflowExecutions.startedAt, startDate))
+        .orderBy(workflowExecutions.startedAt);
+
+      const total = executions.length;
+      const success = executions.filter(e => e.status === 'success').length;
+      const failed = executions.filter(e => e.status === 'error').length;
+      const completedWithTime = executions.filter(e => e.executionTime);
+      const avgTime = completedWithTime.length > 0
+        ? Math.round(completedWithTime.reduce((sum, e) => sum + (e.executionTime || 0), 0) / completedWithTime.length)
+        : 0;
+
+      const dailyMap = new Map();
+      executions.forEach(exec => {
+        const dateKey = exec.startedAt.toISOString().split('T')[0];
+        const current = dailyMap.get(dateKey) || { success: 0, failed: 0 };
+        if (exec.status === 'success') current.success++;
+        if (exec.status === 'error') current.failed++;
+        dailyMap.set(dateKey, current);
+      });
+
+      const dailyStats = [];
+      for (let i = 0; i < days; i++) {
+        const date = new Date(startDate);
+        date.setDate(date.getDate() + i);
+        const dateKey = date.toISOString().split('T')[0];
+        const stats = dailyMap.get(dateKey) || { success: 0, failed: 0 };
+        dailyStats.push({ date: dateKey, success: stats.success, failed: stats.failed });
+      }
+
+      return {
+        summary: { total, success, failed, avgTime, successRate: total > 0 ? Math.round((success / total) * 100) : 0 },
+        dailyStats,
+      };
+    }),
+});
