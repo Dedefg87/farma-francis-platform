@@ -46,8 +46,8 @@ COPY patches ./patches/
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy built files from build stage
+# Note: vite build outputs to dist/public, esbuild outputs to dist
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/dist/public ./client/dist
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
 
