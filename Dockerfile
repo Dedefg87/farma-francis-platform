@@ -47,7 +47,7 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Copy built files from build stage
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/client/dist ./client/dist
+COPY --from=build /app/dist/public ./client/dist
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
 
