@@ -2,8 +2,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { executeAutomationWithSSE } from "./automation-sse";
 import { getDb } from "./db";
-import { flowExecutions } from "../drizzle/schema_executions";
-import { visualFlows } from "../drizzle/schema";
+import { flowExecutions, visualFlows } from "@/drizzle/schema_executions";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
 
 export const automationRouter = router({
@@ -107,16 +106,17 @@ export const automationRouter = router({
 
   // Analytics and Statistics
   stats: protectedProcedure
-    .input(z.object({
-      period: z.enum(["today", "week", "month"]).default("today"),
-    }))
+    .input(
+      z.object({
+        period: z.enum(["today", "week", "month"]).default("today"),
+      })
+    )
     .query(async ({ input }) => {
       try {
         const db = await getDb();
         if (!db) {
           throw new Error("Database not available");
         }
-
         const now = new Date();
         let startDate: Date;
 
@@ -139,23 +139,38 @@ export const automationRouter = router({
           .where(gte(flowExecutions.startedAt, startDate));
 
         const totalExecutions = executions.length;
-        const successfulExecutions = executions.filter(e => e.status === "completed").length;
-        const failedExecutions = executions.filter(e => e.status === "failed").length;
+        const successfulExecutions = executions.filter(
+          e => e.status === "completed"
+        ).length;
+        const failedExecutions = executions.filter(
+          e => e.status === "failed"
+        ).length;
 
         // Calculate average duration
-        const durationsWithValues = executions.filter(e => e.duration !== null && e.duration > 0);
-        const avgDuration = durationsWithValues.length > 0
-          ? Math.round(durationsWithValues.reduce((sum, e) => sum + (e.duration || 0), 0) / durationsWithValues.length / 1000)
-          : 0;
+        const durationsWithValues = executions.filter(
+          e => e.duration !== null && e.duration > 0
+        );
+        const avgDuration =
+          durationsWithValues.length > 0
+            ? Math.round(
+                durationsWithValues.reduce(
+                  (sum, e) => sum + (e.duration || 0),
+                  0
+                ) /
+                  durationsWithValues.length /
+                  1000
+              )
+            : 0;
 
         // Get flows with execution counts
-        const flows = await db
-          .select()
-          .from(visualFlows);
+        const flows = await db.select().from(visualFlows);
 
         // Calculate conversions (placeholder - would need business logic)
         const conversions = Math.round(successfulExecutions * 0.15);
-        const conversionRate = totalExecutions > 0 ? Math.round((conversions / totalExecutions) * 100) : 0;
+        const conversionRate =
+          totalExecutions > 0
+            ? Math.round((conversions / totalExecutions) * 100)
+            : 0;
 
         // Channel breakdown (mock for now - would need channel tracking)
         const whatsappExecutions = Math.round(totalExecutions * 0.7);
