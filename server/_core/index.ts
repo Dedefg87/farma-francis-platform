@@ -568,6 +568,10 @@ async function startServer() {
     serveStatic(app);
   }
 
+  // Railway requires exact PORT from environment variable
+  const port = parseInt(process.env.PORT || "3000");
+  console.log(`[Server] Starting on port ${port}...`);
+
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
