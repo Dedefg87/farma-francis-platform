@@ -1,8 +1,9 @@
 import { router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { executeAutomationWithSSE } from "./automation-sse";
-import { db } from "./_core/db";
-import { flowExecutions, visualFlows } from "@/drizzle/schema_executions";
+import { getDb } from "./db";
+import { flowExecutions } from "../drizzle/schema_executions";
+import { visualFlows } from "../drizzle/schema";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
 
 export const automationRouter = router({
@@ -111,6 +112,11 @@ export const automationRouter = router({
     }))
     .query(async ({ input }) => {
       try {
+        const db = await getDb();
+        if (!db) {
+          throw new Error("Database not available");
+        }
+
         const now = new Date();
         let startDate: Date;
 
