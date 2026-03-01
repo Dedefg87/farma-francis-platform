@@ -25,78 +25,99 @@ async function downloadMediaAsBase64(
   mimeType: string | null
 ): Promise<string | null> {
   try {
-    console.log("[Media Download] Starting download:", mediaUrl.substring(0, 100) + "...");
-    
+    console.log(
+      "[Media Download] Starting download:",
+      mediaUrl.substring(0, 100) + "..."
+    );
+
     // If already data URL, return as-is
     if (mediaUrl.startsWith("data:")) {
       console.log("[Media Download] Already base64 data URL");
       return mediaUrl;
     }
-    
+
     // WhatsApp URLs expire quickly - download immediately with retry
     let lastError: Error | null = null;
-    
+
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`[Media Download] Attempt ${attempt}/3...`);
-        
+
         const response = await fetch(mediaUrl, {
-          method: 'GET',
+          method: "GET",
           // Important headers for WhatsApp/Meta URLs
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept: "image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
           },
           // Follow redirects
-          redirect: 'follow',
+          redirect: "follow",
         });
-        
+
         if (!response.ok) {
-          console.warn(`[Media Download] Attempt ${attempt} failed:`, response.status, response.statusText);
+          console.warn(
+            `[Media Download] Attempt ${attempt} failed:`,
+            response.status,
+            response.statusText
+          );
           throw new Error(`HTTP ${response.status}`);
         }
-        
+
         const arrayBuffer = await response.arrayBuffer();
-        
+
         // Check if we got actual data
         if (arrayBuffer.byteLength === 0) {
           throw new Error("Empty response");
         }
-        
+
         const buffer = Buffer.from(arrayBuffer);
         const base64 = buffer.toString("base64");
-        
+
         // Determine content type
         let contentType = mimeType || "application/octet-stream";
         const headerCt = response.headers.get("content-type");
         if (headerCt) {
           contentType = headerCt.split(";")[0];
         }
-        
+
         // Guess from URL if still unknown
         if (contentType === "application/octet-stream") {
           const ext = mediaUrl.split("?")[0].split(".").pop()?.toLowerCase();
           const mimeMap: Record<string, string> = {
-            jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", 
-            gif: "image/gif", webp: "image/webp", pdf: "application/pdf", 
-            mp4: "video/mp4", mp3: "audio/mpeg", ogg: "audio/ogg", 
-            webm: "video/webm", pdf: "application/pdf", mp4: "video/mp4",
+            jpg: "image/jpeg",
+            jpeg: "image/jpeg",
+            png: "image/png",
+            gif: "image/gif",
+            webp: "image/webp",
+            pdf: "application/pdf",
+            mp4: "video/mp4",
+            mp3: "audio/mpeg",
+            ogg: "audio/ogg",
+            webm: "video/webm",
           };
           if (ext && mimeMap[ext]) {
             contentType = mimeMap[ext];
           }
         }
-        
+
         const dataUrl = `data:${contentType};base64,${base64}`;
-        console.log("[Media Download] Success! Size:", Math.round(buffer.length / 1024), "KB, Type:", contentType);
-        
+        console.log(
+          "[Media Download] Success! Size:",
+          Math.round(buffer.length / 1024),
+          "KB, Type:",
+          contentType
+        );
+
         return dataUrl;
-        
       } catch (attemptError) {
         lastError = attemptError as Error;
-        console.warn(`[Media Download] Attempt ${attempt} error:`, lastError.message);
-        
+        console.warn(
+          `[Media Download] Attempt ${attempt} error:`,
+          lastError.message
+        );
+
         if (attempt < 3) {
           // Wait before retry (exponential backoff)
           const delay = attempt * 1000;
@@ -105,16 +126,16 @@ async function downloadMediaAsBase64(
         }
       }
     }
-    
+
     // All attempts failed
     console.error("[Media Download] All attempts failed:", lastError?.message);
     return null;
-    
   } catch (error) {
     console.error("[Media Download] Fatal error:", error);
     return null;
   }
-}async function pickLeastLoadedOnlineAgent(params: {
+}
+async function pickLeastLoadedOnlineAgent(params: {
   provider: "whatsapp" | "instagram";
 }) {
   const db = await getDb();
@@ -596,18 +617,23 @@ export async function ingestInboundConversationMessage(message: {
       .where(eq(conversations.id, conversationId));
   }
 
-      // Download media immediately if present (URLs from WhatsApp expire quickly!)
-      let fileUrlToSave = message.mediaUrl || null;
-      if (fileUrlToSave && message.messageType !== "text") {
-        console.log("[ingestInbound] Downloading media file...");
-        const base64Url = await downloadMediaAsBase64(fileUrlToSave, message.mimeType);
-        if (base64Url) {
-          fileUrlToSave = base64Url;
-          console.log("[ingestInbound] Media converted to base64 successfully");
-        } else {
-          console.warn("[ingestInbound] Failed to download media, keeping original URL");
-        }
-      }
+  // Download media immediately if present (URLs from WhatsApp expire quickly!)
+  let fileUrlToSave = message.mediaUrl || null;
+  if (fileUrlToSave && message.messageType !== "text") {
+    console.log("[ingestInbound] Downloading media file...");
+    const base64Url = await downloadMediaAsBase64(
+      fileUrlToSave,
+      message.mimeType ?? null
+    );
+    if (base64Url) {
+      fileUrlToSave = base64Url;
+      console.log("[ingestInbound] Media converted to base64 successfully");
+    } else {
+      console.warn(
+        "[ingestInbound] Failed to download media, keeping original URL"
+      );
+    }
+  }
   await db.insert(conversationMessages).values({
     conversationId,
     senderId: null,
