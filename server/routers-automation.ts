@@ -105,6 +105,57 @@ export const automationRouter = router({
       }),
   }),
 
+  // Test flow execution
+  testFlow: protectedProcedure
+    .input(z.object({
+      flowId: z.number(),
+      testMessage: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const db = await getDb();
+        
+        // Get the flow
+        const flows = await db
+          .select()
+          .from(visualFlows)
+          .where(eq(visualFlows.id, input.flowId))
+          .limit(1);
+        
+        const flow = flows[0];
+        if (!flow) {
+          throw new Error("Fluxo não encontrado");
+        }
+
+        // Mark as test mode
+        await db
+          .update(visualFlows)
+          .set({ isTestMode: true })
+          .where(eq(visualFlows.id, input.flowId));
+
+        // Create test execution
+        const execution = await db
+          .insert(flowExecutions)
+          .values({
+            flowId: input.flowId,
+            status: "running",
+            trigger: "manual_test",
+            startedAt: new Date(),
+            input: JSON.stringify({ testMessage: input.testMessage || "Teste manual" }),
+          })
+          .returning();
+
+        return {
+          success: true,
+          executionId: execution[0].id,
+          message: "Fluxo em modo teste. Mensagens não serão enviadas.",
+        };
+      } catch (error) {
+        console.error("Error testing flow:", error);
+        throw error;
+      }
+    }),
+
   // Analytics and Statistics
   stats: protectedProcedure
     .input(

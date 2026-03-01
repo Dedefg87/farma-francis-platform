@@ -36,6 +36,7 @@ interface FlowCardProProps {
     flowData?: string;
     createdAt?: string;
     updatedAt?: string;
+    isTestMode?: boolean;
   };
   type?: "visual" | "simple" | "ura";
   trigger?: string;
@@ -51,7 +52,9 @@ interface FlowCardProProps {
   onDuplicate?: () => void;
   onExport?: () => void;
   onDelete?: () => void;
+  onTest?: () => void;
   isDuplicating?: boolean;
+  isTesting?: boolean;
 }
 
 const typeConfig = {
@@ -93,7 +96,9 @@ export function FlowCardPro({
   onDuplicate,
   onExport,
   onDelete,
+  onTest,
   isDuplicating,
+  isTesting,
 }: FlowCardProProps) {
   const config = typeConfig[type];
   const Icon = config.icon;
@@ -111,10 +116,18 @@ export function FlowCardPro({
     <Card
       className={cn(
         "group relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-[1.02] cursor-pointer border-0",
-        `bg-gradient-to-br ${config.bgGradient}`
+        `bg-gradient-to-br ${config.bgGradient}`,
+        flow.isTestMode && "ring-2 ring-amber-400 ring-offset-2"
       )}
       onClick={onClick}
     >
+      {/* Test Mode Banner */}
+      {flow.isTestMode && (
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold py-1 px-3 text-center z-10">
+          🧪 MODO TESTE - Mensagens não são enviadas
+        </div>
+      )}
+      
       {/* Gradient top bar */}
       <div className={cn("h-1.5 w-full bg-gradient-to-r", config.gradient)} />
 
@@ -193,6 +206,15 @@ export function FlowCardPro({
                       Ativar
                     </>
                   )}
+                </DropdownMenuItem>
+              )}
+              {onTest && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onTest();
+                }} disabled={isTesting}>
+                  <Play className="h-4 w-4 mr-2" />
+                  {isTesting ? "Testando..." : "Testar Fluxo"}
                 </DropdownMenuItem>
               )}
               {onDuplicate && (

@@ -545,6 +545,7 @@ export const visualFlows = mysqlTable("visual_flows", {
   description: text("description"),
   flowData: text("flow_data").notNull(), // JSON: {nodes: [], edges: []}
   isActive: int("is_active").default(0).notNull(),
+  isTestMode: int("is_test_mode").default(0).notNull(), // Test mode flag
   executionCount: int("execution_count").default(0).notNull(),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
