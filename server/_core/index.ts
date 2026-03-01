@@ -636,7 +636,8 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, async () => {
+  // Bind to all interfaces to be accessible from Railway's router
+  server.listen(port, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
     // Run CRM migration on startup
