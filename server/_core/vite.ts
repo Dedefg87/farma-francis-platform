@@ -5,9 +5,19 @@ import { nanoid } from "nanoid";
 import path from "path";
 
 export async function setupVite(app: Express, server: Server) {
-  // Dynamic import for vite (devDependency - not available in production)
-  const { createServer: createViteServer } = await import("vite");
-  const viteConfig = (await import("../../vite.config.js")).default;
+  // Only load vite in development - these are devDependencies
+  // In production, this function should never be called
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("setupVite should not be called in production");
+  }
+
+  // Dynamic imports for devDependencies - use a path that esbuild cannot resolve statically
+  const viteModule = await import(/* @vite-ignore */ "vite");
+  const createViteServer = viteModule.createServer;
+  
+  // Import vite.config using a dynamic path to prevent bundling
+  const configPath = "../../vite.config.js";
+  const viteConfig = (await import(configPath)).default;
 
   const serverOptions = {
     middlewareMode: true,

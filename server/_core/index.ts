@@ -630,7 +630,14 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
-    const { setupVite } = await import("./vite");
+    // Dynamic import - only loads vite in development
+    // vite.ts imports devDependencies that are not available in production
+    const vitePath = "./vite";
+    const { setupVite } = await import(
+      /* webpackIgnore: true */ 
+      /* @vite-ignore */
+      vitePath
+    );
     await setupVite(app, server);
   } else {
     serveStatic(app);
