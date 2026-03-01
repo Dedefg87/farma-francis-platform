@@ -43,7 +43,7 @@ export default function Automation() {
   const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
   const { data: automationFlows } = trpc.automation.list.useQuery();
   const { data: uraMenus } = trpc.uraMenus.list.useQuery();
-  const { data: automationStats } = trpc.automation.stats.useQuery({ period: "today" });
+  const { data: automationStats } = trpc.automationSSE.stats.useQuery({ period: "today" });
 
   const { parseJSON, convertN8N } = useFlowImportWorker({
     onProgress: actions.setImportProgress,
@@ -330,9 +330,20 @@ export default function Automation() {
             ) : (
               <div className="p-6">
                 {/* Analytics Dashboard */}
-                {automationStats && (
-                  <AutomationStats stats={automationStats} period="today" />
-                )}
+                <AutomationStats 
+                  stats={automationStats || {
+                    totalExecutions: 0,
+                    successfulExecutions: 0,
+                    failedExecutions: 0,
+                    avgResponseTime: 0,
+                    totalConversations: 0,
+                    whatsappExecutions: 0,
+                    instagramExecutions: 0,
+                    conversions: 0,
+                    conversionRate: 0,
+                  }} 
+                  period="today" 
+                />
                 
                 {/* Flows Grid */}
                 <div className="mt-6">
