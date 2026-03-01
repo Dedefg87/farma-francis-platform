@@ -129,9 +129,25 @@ export async function sendWhatsAppMessage(params: {
   to: string; // Phone number in international format (e.g., +5511999999999)
   message: string;
   replyToMessageId?: string;
+  mediaUrl?: string;
+  caption?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // If mediaUrl is provided, send media message
+  if (params.mediaUrl) {
+    return sendWhatsAppViewOnceMedia({
+      to: params.to,
+      mediaUrl: params.mediaUrl,
+      mediaType:
+        params.mediaUrl.startsWith("data:") ||
+        params.mediaUrl.includes("base64")
+          ? "image"
+          : "image",
+      caption: params.caption || params.message,
+    });
+  }
 
   const evolutionConfig = await getEvolutionConfig();
   if (evolutionConfig) {
@@ -449,6 +465,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
 export async function sendInstagramMessage(params: {
   to: string; // Instagram user ID (IGSID)
   message: string;
+  mediaUrl?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -459,6 +476,54 @@ export async function sendInstagramMessage(params: {
 
   if (!token || !pageId) {
     throw new Error("Instagram configuration missing accessToken or pageId");
+  }
+
+  // If mediaUrl is provided, send media message
+  if (params.mediaUrl) {
+    // For Instagram, we send the media as a message with the image URL
+    const body = {
+      recipient: {
+        id: params.to,
+      },
+      message: {
+        attachment: {
+          type: "image",
+          payload: {
+            url: params.mediaUrl,
+            is_reusable: true,
+          },
+        },
+      },
+    };
+
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${pageId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("[Instagram] Send media error:", data);
+      throw new Error(data.error?.message || "Failed to send media");
+    }
+
+    await db.insert(messages).values({
+      channel: "instagram",
+      direction: "outbound",
+      content: params.message || "[Imagem]",
+      messageId: data.message_id || null,
+      status: "sent",
+      metadata: JSON.stringify({ mediaUrl: params.mediaUrl }),
+    });
+
+    return { success: true, messageId: data.message_id, to: params.to };
   }
 
   const body = {

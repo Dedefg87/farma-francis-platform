@@ -131,14 +131,16 @@ const normalizeContentPart = (
   }
 
   if (part.type === "image_url") {
-    return part;
+    // Images are stripped at invokeLLM entry, convert to placeholder text
+    return { type: "text", text: "[imagem]" };
   }
 
   if (part.type === "file_url") {
-    return part;
+    return { type: "text", text: "[arquivo]" };
   }
 
-  throw new Error("Unsupported message content part");
+  // For any other type, convert to text
+  return { type: "text", text: "[conteúdo não suportado]" };
 };
 
 const normalizeMessage = (message: Message) => {
@@ -273,75 +275,120 @@ const normalizeResponseFormat = ({
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-  } = params;
+  // Wrap entire function in try-catch to provide better error logging
+  try {
+    const {
+      messages,
+      tools,
+      toolChoice,
+      tool_choice,
+      outputSchema,
+      output_schema,
+      responseFormat,
+      response_format,
+    } = params;
 
-  const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage),
-  };
+    // STRIP ALL IMAGES from messages BEFORE creating payload
+    // This prevents "Cannot read image.png" errors
+    const processedMessages = messages.map(msg => {
+      if (Array.isArray(msg.content)) {
+        const hasImages = msg.content.some(
+          (part: any) => part?.type === "image_url"
+        );
+        if (hasImages) {
+          console.log(
+            "[invokeLLM] Found images in message - STRIPPING ALL to prevent API error"
+          );
+          return {
+            ...msg,
+            content: msg.content.filter((part: any) => {
+              if (typeof part === "string") return true;
+              return part?.type !== "image_url";
+            }),
+          };
+        }
+      }
+      return msg;
+    });
 
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
+    const payload: Record<string, unknown> = {
+      model: "gemini-2.0-flash-preview-05-20",
+      messages: processedMessages.map(normalizeMessage),
+    };
 
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
-  );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
+    const hasImage = false; // Always false - we strip all images
 
-  payload.max_tokens = 32768;
-  payload.thinking = {
-    budget_tokens: 128,
-  };
-
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-
-    // Check if it's an image-related error
-    if (
-      errorText.includes("image") ||
-      errorText.includes("image_url") ||
-      errorText.includes("does not support")
-    ) {
-      throw new Error("IMAGE_NOT_SUPPORTED");
+    if (tools && tools.length > 0) {
+      payload.tools = tools;
     }
 
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+    const normalizedToolChoice = normalizeToolChoice(
+      toolChoice || tool_choice,
+      tools
     );
-  }
+    if (normalizedToolChoice) {
+      payload.tool_choice = normalizedToolChoice;
+    }
 
-  return (await response.json()) as InvokeResult;
+    payload.max_tokens = 32768;
+    payload.thinking = {
+      budget_tokens: 128,
+    };
+
+    const normalizedResponseFormat = normalizeResponseFormat({
+      responseFormat,
+      response_format,
+      outputSchema,
+      output_schema,
+    });
+
+    if (normalizedResponseFormat) {
+      payload.response_format = normalizedResponseFormat;
+    }
+
+    const response = await fetch(resolveApiUrl(), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${ENV.forgeApiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      // Log full error for debugging
+      console.error(
+        "[invokeLLM] API Error:",
+        response.status,
+        response.statusText
+      );
+      console.error("[invokeLLM] Error response:", errorText);
+      console.error("[invokeLLM] Model used:", payload.model);
+
+      // Check if it's an image-related error - try to use a fallback model
+      if (
+        errorText.includes("image") ||
+        errorText.includes("image_url") ||
+        errorText.includes("does not support") ||
+        errorText.includes("Cannot read")
+      ) {
+        console.error(
+          "[invokeLLM] Image not supported by current model, throwing IMAGE_NOT_SUPPORTED"
+        );
+        throw new Error("IMAGE_NOT_SUPPORTED");
+      }
+
+      throw new Error(
+        `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      );
+    }
+
+    return (await response.json()) as InvokeResult;
+  } catch (error: any) {
+    console.error("[invokeLLM] Caught error:", error.message || error);
+    console.error("[invokeLLM] Stack trace:", error.stack);
+    throw error;
+  }
 }

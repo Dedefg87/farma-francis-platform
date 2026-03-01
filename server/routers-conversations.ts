@@ -720,20 +720,51 @@ export const messagesRouter = router({
       // Decodificar base64 para Buffer
       const fileBuffer = Buffer.from(input.fileData, "base64");
 
+      // Infer MIME type from extension if not provided
+      const ext = (
+        (input.fileName?.split(".").pop() || "") as string
+      ).toLowerCase();
+      const mimeFromExt = (ext: string): string => {
+        switch (ext) {
+          case "jpg":
+          case "jpeg":
+            return "image/jpeg";
+          case "png":
+            return "image/png";
+          case "gif":
+            return "image/gif";
+          case "webp":
+            return "image/webp";
+          case "pdf":
+            return "application/pdf";
+          case "doc":
+            return "application/msword";
+          case "docx":
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          case "txt":
+            return "text/plain";
+          case "mp4":
+            return "video/mp4";
+          case "mov":
+            return "video/quicktime";
+          case "webm":
+            return "video/webm";
+          default:
+            return "application/octet-stream";
+        }
+      };
+      const mime = input.fileType || mimeFromExt(ext);
+
       // Gerar chave única para o arquivo
       const timestamp = Date.now();
       const randomSuffix = Math.random().toString(36).substring(2, 8);
-      const fileExtension = input.fileName.split(".").pop();
+      const fileExtension = ext;
       const fileKey = `chat-files/${ctx.user.id}/${timestamp}-${randomSuffix}.${fileExtension}`;
 
       console.log("[UPLOAD FILE] Upload para S3:", fileKey);
 
       // Upload para S3
-      const { url: fileUrl } = await storagePut(
-        fileKey,
-        fileBuffer,
-        input.fileType
-      );
+      const { url: fileUrl } = await storagePut(fileKey, fileBuffer, mime);
 
       console.log("[UPLOAD FILE] Upload concluído. URL:", fileUrl);
 

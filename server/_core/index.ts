@@ -12,6 +12,9 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
+
+// Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
+console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
 
@@ -83,6 +86,33 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // OpenClaw Bridge endpoint - receives tasks from OpenClaw via WS bridge
+  app.post("/api/openclaw/tasks", async (req, res) => {
+    try {
+      const { task, openclawTaskId } = req.body;
+
+      if (!task) {
+        return res.status(400).json({ error: "Task payload is required" });
+      }
+
+      console.log("[OpenClaw] Received task:", openclawTaskId, task);
+
+      // Here you can process the task as needed
+      // For now, just acknowledge and log
+      // TODO: Implement actual task processing logic
+
+      res.json({
+        success: true,
+        bridgeTaskId: `local-${Date.now()}`,
+        openclawTaskId,
+        message: "Task received",
+      });
+    } catch (error) {
+      console.error("[OpenClaw] Error processing task:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {
@@ -135,11 +165,46 @@ async function startServer() {
         }
       }
 
-      // If it's a regular URL, redirect
-      return res.redirect(fileUrl);
+      // If it's a regular URL (not base64), it's likely an expired WhatsApp URL
+      // Return 404 instead of redirecting to a blocked/expired URL
+      console.log(
+        "[Media] file_url is not a data URL, likely expired WhatsApp URL:",
+        fileUrl.substring(0, 50)
+      );
+      return res.status(404).json({ error: "Image not found or expired" });
     } catch (error) {
       console.error("[Media] Error serving media:", error);
       return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Debug: list old WhatsApp media URLs for migration planning
+  app.get("/api/media/inspect-old", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const { conversationMessages } = await import("../../drizzle/schema");
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { sql } = await import("drizzle-orm");
+      const rows = await db
+        .select({
+          id: conversationMessages.id,
+          fileUrl: conversationMessages.fileUrl,
+          fileType: conversationMessages.fileType,
+        })
+        .from(conversationMessages)
+        .limit(100);
+
+      // Filter old WhatsApp URLs in memory (avoid dialect specifics)
+      const old = rows.filter(
+        (r: any) =>
+          typeof r.fileUrl === "string" && r.fileUrl.includes("whatsapp.net")
+      );
+      res.json({ count: old.length, rows: old });
+    } catch (error) {
+      console.error("[Inspect Old]", error);
+      res.status(500).json({ error: String(error) });
     }
   });
 
@@ -577,7 +642,8 @@ async function startServer() {
   console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
   console.log(`[Server] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
 
-  server.listen(port, async () => {
+  // Bind to all interfaces to be accessible from Railway's router
+  server.listen(port, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
     // Run CRM migration on startup

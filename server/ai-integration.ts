@@ -964,6 +964,33 @@ async function callAIProvider(options: {
 }) {
   const provider = AI_INTEGRATION_CONFIG.providers.openai;
 
+  // Strip any image content from messages to prevent errors
+  const messages =
+    options.messages?.map(msg => {
+      if (Array.isArray(msg.content)) {
+        return {
+          ...msg,
+          content: msg.content.filter((part: any) => {
+            if (typeof part === "string") return true;
+            return part?.type !== "image_url";
+          }),
+        };
+      }
+      return msg;
+    }) || [];
+
+  // Check if there were images and log
+  const hadImages = options.messages?.some(msg => {
+    if (Array.isArray(msg.content)) {
+      return msg.content.some((part: any) => part?.type === "image_url");
+    }
+    return false;
+  });
+
+  if (hadImages) {
+    console.log("[callAIProvider] Images detected and stripped from message");
+  }
+
   try {
     const response = await fetch(`${provider.baseURL}/chat/completions`, {
       method: "POST",
@@ -973,10 +1000,13 @@ async function callAIProvider(options: {
       },
       body: JSON.stringify({
         model: options.model,
-        messages: options.messages || [
-          { role: "system", content: options.prompt },
-          { role: "user", content: options.prompt },
-        ],
+        messages:
+          messages.length > 0
+            ? messages
+            : [
+                { role: "system", content: options.prompt },
+                { role: "user", content: options.prompt },
+              ],
         max_tokens: options.maxTokens || 1000,
         temperature: options.temperature || 0.3,
       }),
@@ -985,12 +1015,22 @@ async function callAIProvider(options: {
     if (!response.ok) {
       const errorText = await response.text();
 
+      // Log full error for debugging
+      console.error(
+        "[AI Integration] API Error:",
+        response.status,
+        response.statusText
+      );
+      console.error("[AI Integration] Error response:", errorText);
+
       // Check if it's an image-related error
       if (
         errorText.includes("image") ||
         errorText.includes("image_url") ||
-        errorText.includes("does not support")
+        errorText.includes("does not support") ||
+        errorText.includes("Cannot read")
       ) {
+        console.error("[AI Integration] Image not supported error detected");
         throw new Error("IMAGE_NOT_SUPPORTED");
       }
 

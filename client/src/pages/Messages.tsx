@@ -9,12 +9,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-function handleImageClick(url: string | null | undefined, messageId?: number) {
-  const src = getMediaUrl(url, messageId);
-  if (!src) {
-    console.warn("[handleImageClick] URL vazia");
-    return;
+function getImageSrc(
+  url: string | null | undefined,
+  messageId?: number
+): string {
+  if (!url) return "";
+  // If it's a data URL, return it directly
+  if (url.startsWith("data:")) {
+    return url;
   }
+  // If it's a WhatsApp URL (temporary), use our media endpoint
+  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
+    return `/api/media/${messageId}`;
+  }
+  return url;
+}
+
+function handleImageClick(url: string | null | undefined, messageId?: number) {
+  const src = getImageSrc(url, messageId);
+  if (!src) return;
 
   if (src.startsWith("data:")) {
     const win = window.open("", "_blank", "width=800,height=600");
@@ -28,23 +41,6 @@ function handleImageClick(url: string | null | undefined, messageId?: number) {
     window.open(src, "_blank");
   }
 }
-
-function getFileIcon(fileType?: string, fileName?: string): { icon: string; color: string; label: string } {
-  if (!fileType && fileName) {
-    const ext = fileName.split('.').pop()?.toLowerCase();
-    if (ext === 'pdf') return { icon: '📄', color: 'text-red-500', label: 'PDF' };
-    if (ext === 'doc' || ext === 'docx') return { icon: '📝', color: 'text-blue-500', label: 'Word' };
-    if (ext === 'xls' || ext === 'xlsx') return { icon: '📊', color: 'text-green-500', label: 'Excel' };
-  }
-  
-  if (fileType?.includes('pdf')) return { icon: '📄', color: 'text-red-500', label: 'PDF' };
-  if (fileType?.includes('word') || fileType?.includes('document')) return { icon: '📝', color: 'text-blue-500', label: 'Word' };
-  if (fileType?.includes('excel') || fileType?.includes('spreadsheet')) return { icon: '📊', color: 'text-green-500', label: 'Excel' };
-  if (fileType?.includes('zip') || fileType?.includes('rar')) return { icon: '📦', color: 'text-yellow-500', label: 'Compactado' };
-  
-  return { icon: '📎', color: 'text-gray-500', label: 'Arquivo' };
-}
-
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -77,15 +73,11 @@ import {
   ChevronRight,
   Building,
 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
-import { PDFPreview } from "@/components/PDFPreview";
-import { useFileUpload } from "@/hooks/useFileUpload";
-import { usePdfViewer, getMimeType, getMediaUrl } from "@/hooks/usePdfViewer";
-import { FilePreviewAttachment } from "@/components/shared/FilePreviewAttachment";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -95,6 +87,8 @@ export default function Messages() {
   >(null);
   const [messageInput, setMessageInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isViewOnce, setIsViewOnce] = useState(false);
   const [activeTab, setActiveTab] = useState<"messages" | "notes" | "internal">(
@@ -103,12 +97,6 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  
-  // Hooks compartilhados
-  const { selectedFile, filePreview, handleFileSelect, removeFile, toBase64 } = useFileUpload({
-    onError: (error) => toast.error(error),
-  });
-  const pdfViewer = usePdfViewer();
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -150,11 +138,86 @@ export default function Messages() {
           false) ||
         (conv.customerPhone?.includes(searchQuery) ?? false)
     ) || [];
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tamanho (máximo 16MB)
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Tamanho máximo: 16MB");
+      return;
+    }
+    // Infer MIME type from extension; do not block other types
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    let inferredMime = file.type || "";
+    if (!inferredMime) {
+      switch (ext) {
+        case "jpg":
+        case "jpeg":
+          inferredMime = "image/jpeg";
+          break;
+        case "png":
+          inferredMime = "image/png";
+          break;
+        case "gif":
+          inferredMime = "image/gif";
+          break;
+        case "webp":
+          inferredMime = "image/webp";
+          break;
+        case "pdf":
+          inferredMime = "application/pdf";
+          break;
+        case "doc":
+          inferredMime = "application/msword";
+          break;
+        case "docx":
+          inferredMime =
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          break;
+        case "txt":
+          inferredMime = "text/plain";
+          break;
+        case "mp4":
+          inferredMime = "video/mp4";
+          break;
+        case "mov":
+          inferredMime = "video/quicktime";
+          break;
+        case "webm":
+          inferredMime = "video/webm";
+          break;
+        default:
+          inferredMime = "application/octet-stream";
+      }
+    }
+    // Accept any file type up to size limit
+    setSelectedFile(file);
+
+    // Criar preview para imagens
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFilePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+  };
+
   const sendMessageMutation = trpc.messages.send.useMutation({
     onSuccess: () => {
       toast.success("Mensagem enviada!");
       setMessageInput("");
-      removeFile();
+      setSelectedFile(null);
+      setFilePreview(null);
     },
     onError: error => {
       toast.error(`Erro ao enviar: ${error.message}`);
@@ -307,8 +370,7 @@ export default function Messages() {
   };
 
   return (
-    <>
-      <FarmaDashboardLayout>
+    <FarmaDashboardLayout>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -768,12 +830,7 @@ export default function Messages() {
                             Nenhuma mensagem ainda
                           </div>
                         ) : (
-                          messages?.map(msg => {
-                            // Debug: log de mensagens com arquivo
-                            if (msg.fileUrl) {
-                              console.log("[RENDER] Message", msg.id, "fileUrl:", msg.fileUrl?.substring(0, 100), "fileType:", msg.fileType);
-                            }
-                            return (
+                          messages?.map(msg => (
                             <div
                               key={msg.id}
                               className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
@@ -790,80 +847,60 @@ export default function Messages() {
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    {(() => {
-                                      const ft = getMimeType(msg.fileUrl, msg.fileType);
-                                      const isImage = ft.startsWith('image/');
-                                      const isVideo = ft.startsWith('video/');
-                                      const isAudio = ft.startsWith('audio/');
-                                      const isDocument = ft.startsWith('application/') || ft.startsWith('text/') || (!isImage && !isVideo && !isAudio && ft);
-                                      const isPDF = ft === 'application/pdf';
-                                      
-                                      if (isImage) return (
-                                        <div className="relative group">
-                                          <img
-                                            src={getImageSrc(msg.fileUrl, msg.id)}
-                                            alt={msg.fileName || "Imagem"}
-                                            className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
-                                            onClick={() => handleImageClick(msg.fileUrl, msg.id)}
-                                          />
-                                        </div>
-                                      );
-                                      
-                                      if (isVideo) return (
-                                        <div className="relative">
-                                          <video
-                                            src={getImageSrc(msg.fileUrl, msg.id)}
-                                            controls
-                                            className="max-w-full rounded-lg max-h-64"
-                                          />
-                                        </div>
-                                      );
-                                      
-                                      // PDF - mostrar preview inline
-                                      if (isPDF) return (
-                                        <div className="rounded-lg overflow-hidden border border-white/30 bg-white">
-                                          <div 
-                                            className="h-48 overflow-hidden cursor-pointer"
-                                            onClick={() => pdfViewer.open(msg.fileUrl, { fileName: msg.fileName || undefined, messageId: msg.id })}
-                                          >
-                                            <iframe
-                                              src={getImageSrc(msg.fileUrl, msg.id)}
-                                              className="w-full h-full pointer-events-none"
-                                              title={msg.fileName || "PDF"}
-                                            />
-                                          </div>
-                                          <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-lg">📄</span>
-                                              <span className="text-xs font-medium truncate max-w-[150px]">{msg.fileName || "Documento.pdf"}</span>
-                                            </div>
-                                            <div className="flex gap-1">
-                                              <button
-                                                onClick={(e) => { e.stopPropagation(); pdfViewer.open(msg.fileUrl, { fileName: msg.fileName || undefined, messageId: msg.id }); }}
-                                                className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                                              >
-                                                Ampliar
-                                              </button>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                      
-                                      // Outros Documentos (DOC, XLS, etc)
-                                      return (
-                                        <div 
-                                          className="flex items-center gap-3 p-3 bg-white/20 backdrop-blur-sm rounded-lg cursor-pointer hover:bg-white/30 transition-colors border border-white/30"
-                                          onClick={() => pdfViewer.open(msg.fileUrl, { fileName: msg.fileName || undefined, messageId: msg.id })}
+                                    {msg.fileType?.startsWith("image/") ? (
+                                      <div className="relative group">
+                                        <img
+                                          src={getImageSrc(msg.fileUrl, msg.id)}
+                                          alt={msg.fileName || "Imagem"}
+                                          className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
+                                          onClick={() =>
+                                            handleImageClick(
+                                              msg.fileUrl,
+                                              msg.id
+                                            )
+                                          }
+                                          onError={e => {
+                                            const el =
+                                              e.currentTarget as HTMLImageElement;
+                                            // Fallback simples: substitui pela menor placeholder
+                                            el.src =
+                                              "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+                                            el.alt = "Imagem indisponível";
+                                          }}
+                                        />
+                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg" />
+                                      </div>
+                                    ) : msg.fileType?.startsWith("video/") ? (
+                                      <div className="relative">
+                                        <video
+                                          src={getImageSrc(msg.fileUrl, msg.id)}
+                                          controls
+                                          className="max-w-full rounded-lg max-h-64"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <a
+                                        href={getImageSrc(msg.fileUrl, msg.id)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 text-xs underline"
+                                      >
+                                        <svg
+                                          className="w-4 h-4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          viewBox="0 0 24 24"
                                         >
-                                          <span className="text-3xl">📄</span>
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium truncate">{msg.fileName || "Documento"}</p>
-                                            <p className="text-xs opacity-70">{getFileIcon(ft, msg.fileName).label || "Arquivo"}</p>
-                                          </div>
-                                          <span className="text-xs bg-white/30 px-2 py-1 rounded">Clique para baixar</span>
-                                        </div>
-                                      );
-                                    })()}
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
+                                          />
+                                        </svg>
+                                        {msg.fileName || "Arquivo"}
+                                      </a>
+                                    )}
                                   </div>
                                 )}
                                 <span
@@ -883,7 +920,7 @@ export default function Messages() {
                                 </span>
                               </div>
                             </div>
-                          )})
+                          ))
                         )}
                       </div>
                     ) : activeTab === "notes" ? (
@@ -979,16 +1016,6 @@ export default function Messages() {
                                   alt="Preview"
                                   className="w-16 h-16 object-cover rounded"
                                 />
-                              ) : selectedFile.type.startsWith("video/") ? (
-                                <div className="w-16 h-16 bg-purple-100 rounded flex items-center justify-center">
-                                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                </div>
-                              ) : selectedFile.type === "application/pdf" ? (
-                                <div className="w-16 h-16 bg-red-100 rounded flex items-center justify-center">
-                                  <span className="text-2xl">📄</span>
-                                </div>
                               ) : (
                                 <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
                                   <FileText className="w-8 h-8 text-gray-500" />
@@ -999,14 +1026,14 @@ export default function Messages() {
                                   {selectedFile.name}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {selectedFile.type || "Arquivo"} • {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
+                                  {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
                                   MB
                                 </p>
                               </div>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={removeFile}
+                                onClick={handleRemoveFile}
                                 className="text-gray-500 hover:text-red-600"
                               >
                                 <X className="w-4 h-4" />
@@ -1020,18 +1047,18 @@ export default function Messages() {
                             type="file"
                             id="file-upload"
                             className="hidden"
-                            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
+                            accept="image/*,.pdf,.doc,.docx"
                             onChange={handleFileSelect}
                           />
                           <Button
                             variant="outline"
                             size="icon"
-                            className="self-end"
+                            className="self-end flex-shrink-0"
                             onClick={() =>
                               document.getElementById("file-upload")?.click()
                             }
                             disabled={sendMessageMutation.isPending}
-                            title="Anexar arquivo (imagens, vídeos, documentos)"
+                            title="Anexar imagem ou arquivo"
                           >
                             <Paperclip className="w-4 h-4" />
                           </Button>
@@ -1240,15 +1267,5 @@ export default function Messages() {
         </Card>
       </div>
     </FarmaDashboardLayout>
-
-    {/* PDF Preview Modal */}
-    <PDFPreview
-      open={pdfViewer.isOpen}
-      onOpenChange={(open) => open ? null : pdfViewer.close()}
-      url={pdfViewer.url || ''}
-      fileName={pdfViewer.fileName || undefined}
-      messageId={pdfViewer.messageId || undefined}
-    />
-    </>
   );
 }
