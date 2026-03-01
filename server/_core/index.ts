@@ -1,4 +1,6 @@
 import "dotenv/config";
+console.log("[Server] Starting initialization...");
+
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -571,6 +573,8 @@ async function startServer() {
   // Railway requires exact PORT from environment variable
   const port = parseInt(process.env.PORT || "3000");
   console.log(`[Server] Starting on port ${port}...`);
+  console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[Server] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
 
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
