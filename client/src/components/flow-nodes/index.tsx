@@ -180,7 +180,7 @@ export const APINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
         <Badge className="bg-cyan-600">API</Badge>
       </div>
     </div>
-    <Handle type="target" position={Position.Top" className="!bg-cyan-600" />
+    <Handle type="target" position={Position.Top} className="!bg-cyan-600" />
     <Handle type="source" position={Position.Bottom} className="!bg-cyan-600" />
   </Card>
 ));

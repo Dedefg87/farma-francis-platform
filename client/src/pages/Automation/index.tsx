@@ -27,6 +27,7 @@ import { useFlowValidation } from "./hooks/useFlowValidation";
 import { FlowCardPro } from "./components/FlowCardPro";
 import { AutomationHeader } from "./components/AutomationHeader";
 import { AutomationEmptyState } from "./components/AutomationEmptyState";
+import { AutomationStats } from "./components/AutomationStats";
 import { TemplateCard } from "./components/TemplateCard";
 import { ImportDialog } from "./components/ImportDialog";
 import { CreateDialog } from "./components/CreateDialog";
@@ -42,6 +43,7 @@ export default function Automation() {
   const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
   const { data: automationFlows } = trpc.automation.list.useQuery();
   const { data: uraMenus } = trpc.uraMenus.list.useQuery();
+  const { data: automationStats } = trpc.automation.stats.useQuery({ period: "today" });
 
   const { parseJSON, convertN8N } = useFlowImportWorker({
     onProgress: actions.setImportProgress,
@@ -327,26 +329,35 @@ export default function Automation() {
               </div>
             ) : (
               <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredFlows.map(flow => (
-                    <FlowCardPro
-                      key={flow.id}
-                      flow={flow}
-                      type="visual"
-                      onClick={() => actions.setSelectedFlowId(flow.id)}
-                      onToggle={(isActive) => toggleFlow.mutate({ id: flow.id, isActive })}
-                      onDuplicate={() => handleDuplicateFlow(flow)}
-                      onExport={() => handleExportFlow(flow)}
-                      onDelete={() => deleteFlow.mutate({ id: flow.id })}
-                      isDuplicating={state.duplicatingFlowId === flow.id}
-                      executions={{
-                        total: Math.floor(Math.random() * 100),
-                        success: Math.floor(Math.random() * 80),
-                        failed: Math.floor(Math.random() * 20),
-                        lastRun: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
-                      }}
-                    />
-                  ))}
+                {/* Analytics Dashboard */}
+                {automationStats && (
+                  <AutomationStats stats={automationStats} period="today" />
+                )}
+                
+                {/* Flows Grid */}
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Fluxos de Automação</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredFlows.map(flow => (
+                      <FlowCardPro
+                        key={flow.id}
+                        flow={flow}
+                        type="visual"
+                        onClick={() => actions.setSelectedFlowId(flow.id)}
+                        onToggle={(isActive) => toggleFlow.mutate({ id: flow.id, isActive })}
+                        onDuplicate={() => handleDuplicateFlow(flow)}
+                        onExport={() => handleExportFlow(flow)}
+                        onDelete={() => deleteFlow.mutate({ id: flow.id })}
+                        isDuplicating={state.duplicatingFlowId === flow.id}
+                        executions={{
+                          total: Math.floor(Math.random() * 100),
+                          success: Math.floor(Math.random() * 80),
+                          failed: Math.floor(Math.random() * 20),
+                          lastRun: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
