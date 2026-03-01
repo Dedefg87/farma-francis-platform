@@ -418,9 +418,10 @@ export const executionsRouter = router({
 
       return { success: true, deleted: executionIds.length };
     }),
-});
 
-  /** * Get analytics data for dashboard charts */
+  /**
+   * Get analytics data for dashboard charts
+   */
   getAnalytics: protectedProcedure
     .input(z.object({
       period: z.enum(['7d', '30d', '90d']).default('7d'),
