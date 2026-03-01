@@ -567,7 +567,6 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
-  }
 
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
