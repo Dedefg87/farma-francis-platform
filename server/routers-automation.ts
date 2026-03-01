@@ -2,7 +2,8 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { executeAutomationWithSSE } from "./automation-sse";
 import { getDb } from "./db";
-import { flowExecutions, visualFlows } from "@/drizzle/schema_executions";
+import { flowExecutions } from "../drizzle/schema_executions";
+import { visualFlows } from "../drizzle/schema";
 import { and, gte, lte, sql, eq } from "drizzle-orm";
 
 export const automationRouter = router({
