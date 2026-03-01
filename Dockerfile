@@ -30,7 +30,7 @@ WORKDIR /app
 # Install runtime dependencies only
 RUN apk add --no-cache curl ca-certificates
 
-# Install pnpm for migrations
+# Install pnpm for potential manual migrations
 RUN npm install -g pnpm@10
 
 # Copy package files
@@ -43,20 +43,21 @@ RUN pnpm install --frozen-lockfile --prod
 # Copy built files from build stage
 COPY --from=build /app/dist ./dist
 
-# Copy drizzle config for migrations
+# Copy drizzle config for potential migrations
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
 
 # Set environment
 ENV NODE_ENV=production
-ENV PORT=3000
+# Note: PORT will be provided by Railway
 
-# Expose port
+# Expose port (Railway will map this)
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+# Health check - more lenient for slower startups
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
+  CMD curl -f http://localhost:${PORT:-3000}/api/health || exit 1
 
-# Run migrations and start server
-CMD ["sh", "-c", "pnpm run db:push && node dist/index.js"]
+# Start server - Railway provides PORT env var
+# Note: Migrations should be run separately or handled by Railway
+CMD ["node", "dist/index.js"]
