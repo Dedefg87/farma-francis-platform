@@ -57,7 +57,7 @@ export function TagsManager({ conversationId, open, onClose }: TagsManagerProps)
     removeTagMutation.mutate({ conversationId, tagId });
   };
 
-  const conversationTagIds = conversationTags?.map((t) => t.id) || [];
+  const conversationTagIds = conversationTags?.map((t: { id: number }) => t.id) || [];
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -72,7 +72,7 @@ export function TagsManager({ conversationId, open, onClose }: TagsManagerProps)
             <h4 className="text-sm font-medium mb-2">Tags Aplicadas</h4>
             <div className="flex flex-wrap gap-2">
               {conversationTags && conversationTags.length > 0 ? (
-                conversationTags.map((tag) => (
+                conversationTags.map((tag: { id: number; name: string; color: string }) => (
                   <span
                     key={tag.id}
                     className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-white"

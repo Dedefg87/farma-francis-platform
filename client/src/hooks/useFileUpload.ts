@@ -6,7 +6,7 @@ interface UseFileUploadOptions {
   onError?: (error: string) => void;
 }
 
-interface UseFileUploadReturn {
+export interface UseFileUploadReturn {
   selectedFile: File | null;
   filePreview: string | null;
   selectFile: (file: File) => void;

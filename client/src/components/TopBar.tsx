@@ -97,7 +97,7 @@ export function TopBar() {
             >
               <Avatar className="h-10 w-10">
                 <AvatarFallback className="bg-[#3FA9D4] text-white">
-                  {user ? getInitials(user.name) : "U"}
+                  {user ? getInitials(user.name || "User") : "U"}
                 </AvatarFallback>
               </Avatar>
             </Button>
