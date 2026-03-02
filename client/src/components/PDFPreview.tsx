@@ -38,6 +38,7 @@ export function PDFPreview({
   messageId,
   fileType,
 }: PDFPreviewProps) {
+  console.log("[PDFPreview] Render - open:", open, "url:", url?.substring(0, 50), "fileType:", fileType);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
