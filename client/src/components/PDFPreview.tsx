@@ -14,6 +14,7 @@ interface PDFPreviewProps {
   url: string;
   fileName?: string;
   messageId?: number;
+  fileType?: string;
 }
 
 function getMimeType(
@@ -35,6 +36,7 @@ export function PDFPreview({
   url,
   fileName,
   messageId,
+  fileType,
 }: PDFPreviewProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,14 +126,14 @@ export function PDFPreview({
   // Verificar se é um documento que pode ser visualizado
   const canPreview = useMemo(() => {
     if (!finalUrl) return false;
-    const mimeType = getMimeType(url, undefined);
+    const mimeType = getMimeType(url, fileType);
     // PDFs e imagens podem ser visualizados
     return (
       mimeType === "application/pdf" ||
       mimeType.startsWith("image/") ||
       mimeType.startsWith("video/")
     );
-  }, [finalUrl, url]);
+  }, [finalUrl, url, fileType]);
 
   const handleDownload = () => {
     if (!finalUrl) return;

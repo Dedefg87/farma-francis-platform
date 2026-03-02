@@ -150,6 +150,7 @@ export default function AgentMessages() {
     url: string | null;
     fileName?: string;
     messageId?: number;
+    fileType?: string;
   }>({ open: false, url: null });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -663,6 +664,7 @@ export default function AgentMessages() {
         url={pdfPreview.url || ""}
         fileName={pdfPreview.fileName}
         messageId={pdfPreview.messageId}
+        fileType={pdfPreview.fileType}
       />
 
       <AgentTopBar />
@@ -1010,13 +1012,15 @@ export default function AgentMessages() {
                                     console.log(
                                       "[PDF] Click on preview area:",
                                       msg.id,
-                                      msg.fileName
+                                      msg.fileName,
+                                      msg.fileType
                                     );
                                     setPdfPreview({
                                       open: true,
                                       url: msg.fileUrl,
                                       fileName: msg.fileName || undefined,
                                       messageId: msg.id,
+                                      fileType: msg.fileType || undefined,
                                     });
                                   }}
                                 >
@@ -1050,13 +1054,15 @@ export default function AgentMessages() {
                                       console.log(
                                         "[PDF] Click on Ampliar button:",
                                         msg.id,
-                                        msg.fileName
+                                        msg.fileName,
+                                        msg.fileType
                                       );
                                       setPdfPreview({
                                         open: true,
                                         url: msg.fileUrl,
                                         fileName: msg.fileName || undefined,
                                         messageId: msg.id,
+                                        fileType: msg.fileType || undefined,
                                       });
                                     }}
                                     className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
@@ -1079,6 +1085,7 @@ export default function AgentMessages() {
                                     url: msg.fileUrl,
                                     fileName: msg.fileName || undefined,
                                     messageId: msg.id,
+                                    fileType: msg.fileType || undefined,
                                   });
                                 }}
                                 className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
