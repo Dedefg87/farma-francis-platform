@@ -39,21 +39,19 @@ async function downloadMediaAsBase64(
     // WhatsApp URLs expire quickly - download immediately with retry
     let lastError: Error | null = null;
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        console.log(`[Media Download] Attempt ${attempt}/3...`);
+        console.log(`[Media Download] Attempt ${attempt}/2...`);
 
         const response = await fetch(mediaUrl, {
           method: "GET",
-          // Important headers for WhatsApp/Meta URLs
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Accept: "image/webp,image/apng,image/*,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            Accept: "*/*",
           },
-          // Follow redirects
           redirect: "follow",
+          signal: AbortSignal.timeout(8000),
         });
 
         if (!response.ok) {
@@ -118,9 +116,9 @@ async function downloadMediaAsBase64(
           lastError.message
         );
 
-        if (attempt < 3) {
-          // Wait before retry (exponential backoff)
-          const delay = attempt * 1000;
+        if (attempt < 2) {
+          // Wait before retry (shorter delay)
+          const delay = 500;
           console.log(`[Media Download] Retrying in ${delay}ms...`);
           await new Promise(r => setTimeout(r, delay));
         }

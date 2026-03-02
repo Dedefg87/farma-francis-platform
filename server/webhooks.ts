@@ -122,8 +122,8 @@ async function downloadAndSaveMedia(
   mimeType: string | null,
   fromNumber: string
 ): Promise<{ base64Data: string; dataUrl: string } | null> {
-  const maxRetries = 3;
-  const initialDelay = 500;
+  const maxRetries = 2;
+  const initialDelay = 300;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -133,7 +133,7 @@ async function downloadAndSaveMedia(
 
       // Try direct download first
       let response = await fetch(mediaUrl, {
-        signal: AbortSignal.timeout(15000), // 15 second timeout
+        signal: AbortSignal.timeout(8000), // 8 second timeout
       });
 
       // If direct URL fails, try again after a short delay
@@ -167,7 +167,7 @@ async function downloadAndSaveMedia(
                 apikey: evoConfig.apiKey,
                 "Content-Type": "application/json",
               },
-              signal: AbortSignal.timeout(15000),
+              signal: AbortSignal.timeout(8000),
             });
 
             if (evoResponse.ok) {
