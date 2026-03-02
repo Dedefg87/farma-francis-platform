@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
@@ -172,8 +178,13 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Connect to SSE endpoint - cookie is sent automatically
-        eventSource = new EventSource("/api/events");
+        // Get auth token from localStorage or session
+        const token =
+          localStorage.getItem("token") || sessionStorage.getItem("token");
+        const eventsUrl = token ? `/api/events?token=${token}` : "/api/events";
+
+        // Connect to SSE endpoint with token
+        eventSource = new EventSource(eventsUrl);
 
         eventSource.onopen = () => {
           console.log("[AgentSSE] Connected");
@@ -181,7 +192,7 @@ export default function AgentMessages() {
           reconnectAttempt = 0;
         };
 
-        eventSource.onmessage = (event) => {
+        eventSource.onmessage = event => {
           try {
             const data = JSON.parse(event.data);
             console.log("[AgentSSE] Event received:", data);
