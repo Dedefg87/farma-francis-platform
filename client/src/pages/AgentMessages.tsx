@@ -26,16 +26,19 @@ function getImageSrc(
  * Extrai o MIME type real de um arquivo.
  * Prioriza o MIME type do data URL (mais confiável) sobre o fileType do banco.
  */
-function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
+function getMimeType(
+  fileUrl: string | null | undefined,
+  fileType: string | null | undefined
+): string {
   // Se tem data URL, extrair MIME type dele (mais confiável)
-  if (fileUrl?.startsWith('data:')) {
+  if (fileUrl?.startsWith("data:")) {
     const mimeMatch = fileUrl.match(/^data:([^;]+);/);
     if (mimeMatch && mimeMatch[1]) {
       return mimeMatch[1];
     }
   }
   // Fallback para o fileType do banco
-  return fileType || '';
+  return fileType || "";
 }
 
 function handleImageClick(url: string | null | undefined, messageId?: number) {
@@ -152,6 +155,7 @@ export default function AgentMessages() {
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousMessagesCountRef = useRef<number>(0);
+  const previousConversationsRef = useRef<number[]>([]);
   const { playNotificationSound } = useNotificationSound();
 
   // Atualizar localStorage quando ordenação mudar
@@ -385,6 +389,37 @@ export default function AgentMessages() {
     previousMessagesCountRef.current = currentCount;
   }, [messages, notificationsMuted, playNotificationSound]);
 
+  // Detectar novas conversas com mensagens não lidas
+  useEffect(() => {
+    if (!conversations || conversations.length === 0) {
+      previousConversationsRef.current = conversations?.map(c => c.id) || [];
+      return;
+    }
+
+    const currentConversationIds = conversations.map(c => c.id);
+    const previousConversationIds = previousConversationsRef.current;
+
+    // Verificar se há novas conversas
+    const newConversationIds = currentConversationIds.filter(
+      id => !previousConversationIds.includes(id)
+    );
+
+    // Se há novas conversas, verificar se têm mensagens não lidas
+    if (newConversationIds.length > 0 && !notificationsMuted) {
+      const newConversations = conversations.filter(
+        c => newConversationIds.includes(c.id) && (c.unreadCount || 0) > 0
+      );
+
+      if (newConversations.length > 0) {
+        console.log("[AgentMessages] Nova conversa detectada, tocando som");
+        playNotificationSound();
+      }
+    }
+
+    // Atualizar referência
+    previousConversationsRef.current = currentConversationIds;
+  }, [conversations, notificationsMuted, playNotificationSound]);
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -406,16 +441,16 @@ export default function AgentMessages() {
       reader.readAsDataURL(file);
     } else if (file.type.startsWith("video/")) {
       // Criar thumbnail para vídeos
-      const video = document.createElement('video');
+      const video = document.createElement("video");
       video.src = URL.createObjectURL(file);
       video.currentTime = 1;
       video.onloadeddata = () => {
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.width = 160;
         canvas.height = 90;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
-        setFilePreview(canvas.toDataURL('image/jpeg'));
+        setFilePreview(canvas.toDataURL("image/jpeg"));
         URL.revokeObjectURL(video.src);
       };
     } else {
@@ -846,7 +881,9 @@ export default function AgentMessages() {
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
-                            {getMimeType(msg.fileUrl, msg.fileType).startsWith("image/") ? (
+                            {getMimeType(msg.fileUrl, msg.fileType).startsWith(
+                              "image/"
+                            ) ? (
                               <img
                                 src={getImageSrc(msg.fileUrl, msg.id)}
                                 alt={msg.fileName || "Imagem"}
@@ -862,23 +899,29 @@ export default function AgentMessages() {
                                   el.alt = "Imagem indisponível";
                                 }}
                               />
-                            ) : getMimeType(msg.fileUrl, msg.fileType).startsWith("video/") ? (
+                            ) : getMimeType(
+                                msg.fileUrl,
+                                msg.fileType
+                              ).startsWith("video/") ? (
                               <video
                                 src={getImageSrc(msg.fileUrl, msg.id)}
                                 controls
                                 className="max-w-full rounded-lg max-h-64"
                               />
-                            ) : getMimeType(msg.fileUrl, msg.fileType) === "application/pdf" ? (
+                            ) : getMimeType(msg.fileUrl, msg.fileType) ===
+                              "application/pdf" ? (
                               // PDF - mostrar preview inline
                               <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
-                                <div 
+                                <div
                                   className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={() => setPdfPreview({
-                                    open: true,
-                                    url: msg.fileUrl,
-                                    fileName: msg.fileName || undefined,
-                                    messageId: msg.id
-                                  })}
+                                  onClick={() =>
+                                    setPdfPreview({
+                                      open: true,
+                                      url: msg.fileUrl,
+                                      fileName: msg.fileName || undefined,
+                                      messageId: msg.id,
+                                    })
+                                  }
                                 >
                                   <iframe
                                     src={getImageSrc(msg.fileUrl, msg.id)}
@@ -888,18 +931,32 @@ export default function AgentMessages() {
                                 </div>
                                 <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
                                   <div className="flex items-center gap-2">
-                                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    <svg
+                                      className="w-4 h-4 text-red-500"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                      />
                                     </svg>
-                                    <span className="text-xs font-medium truncate max-w-[100px]">{msg.fileName || "PDF"}</span>
+                                    <span className="text-xs font-medium truncate max-w-[100px]">
+                                      {msg.fileName || "PDF"}
+                                    </span>
                                   </div>
                                   <button
-                                    onClick={() => setPdfPreview({
-                                      open: true,
-                                      url: msg.fileUrl,
-                                      fileName: msg.fileName || undefined,
-                                      messageId: msg.id
-                                    })}
+                                    onClick={() =>
+                                      setPdfPreview({
+                                        open: true,
+                                        url: msg.fileUrl,
+                                        fileName: msg.fileName || undefined,
+                                        messageId: msg.id,
+                                      })
+                                    }
                                     className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                                   >
                                     Ampliar
@@ -908,12 +965,14 @@ export default function AgentMessages() {
                               </div>
                             ) : (
                               <div
-                                onClick={() => setPdfPreview({
-                                  open: true,
-                                  url: msg.fileUrl,
-                                  fileName: msg.fileName || undefined,
-                                  messageId: msg.id
-                                })}
+                                onClick={() =>
+                                  setPdfPreview({
+                                    open: true,
+                                    url: msg.fileUrl,
+                                    fileName: msg.fileName || undefined,
+                                    messageId: msg.id,
+                                  })
+                                }
                                 className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
                               >
                                 <svg
@@ -991,7 +1050,8 @@ export default function AgentMessages() {
                           {selectedFile.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {selectedFile.type || "Arquivo"} • {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                          {selectedFile.type || "Arquivo"} •{" "}
+                          {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                         </p>
                       </div>
                       <Button
@@ -1017,7 +1077,9 @@ export default function AgentMessages() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => document.getElementById("file-upload-agent")?.click()}
+                    onClick={() =>
+                      document.getElementById("file-upload-agent")?.click()
+                    }
                     title="Anexar arquivo (imagens, vídeos, documentos)"
                   >
                     <Paperclip className="w-4 h-4" />
@@ -1101,7 +1163,9 @@ export default function AgentMessages() {
                     className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
                   >
                     <div className="flex items-center gap-3">
-                      {getMimeType(item.fileUrl, item.fileType).startsWith("image/") && item.fileUrl ? (
+                      {getMimeType(item.fileUrl, item.fileType).startsWith(
+                        "image/"
+                      ) && item.fileUrl ? (
                         <img
                           src={item.fileUrl}
                           alt={item.fileName || "midia"}
@@ -1291,8 +1355,8 @@ export default function AgentMessages() {
       {/* PDF Preview Modal */}
       <PDFPreview
         open={pdfPreview.open}
-        onOpenChange={(open) => setPdfPreview({ ...pdfPreview, open })}
-        url={pdfPreview.url || ''}
+        onOpenChange={open => setPdfPreview({ ...pdfPreview, open })}
+        url={pdfPreview.url || ""}
         fileName={pdfPreview.fileName}
         messageId={pdfPreview.messageId}
       />
