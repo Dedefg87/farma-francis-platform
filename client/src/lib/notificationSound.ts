@@ -1,9 +1,32 @@
-// Base64 encoded notification sound (short "ding" sound)
-// This is a simple, royalty-free notification sound
-export const NOTIFICATION_SOUND_BASE64 = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNFCCtAAAAAAD/+1DEAAAFoANoAAAAACKgA1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/7UMQeAAi0A2gAAAAAAACAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/+1DEQAAAAAH/AAAAAAAANIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+// Sound types available
+export type SoundType = "ding" | "chime" | "bell" | "pop" | "none";
 
-export function createNotificationAudio(): HTMLAudioElement {
-  const audio = new Audio(NOTIFICATION_SOUND_BASE64);
-  audio.volume = 0.5;
-  return audio;
+export interface SoundOption {
+  id: SoundType;
+  name: string;
+  description: string;
+}
+
+export const SOUND_OPTIONS: SoundOption[] = [
+  { id: "ding", name: "Ding", description: "Som clássico de notificação" },
+  { id: "chime", name: "Chime", description: "Sino gentil" },
+  { id: "bell", name: "Bell", description: "Campainha" },
+  { id: "pop", name: "Pop", description: "Pop divertido" },
+  { id: "none", name: "Nenhum", description: "Sem som" },
+];
+
+// Get sound preference from localStorage
+export function getSoundPreference(): SoundType {
+  if (typeof window === "undefined") return "ding";
+  const saved = localStorage.getItem("notificationSound");
+  if (saved && SOUND_OPTIONS.some(s => s.id === saved)) {
+    return saved as SoundType;
+  }
+  return "ding";
+}
+
+// Save sound preference to localStorage
+export function setSoundPreference(sound: SoundType): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("notificationSound", sound);
 }
