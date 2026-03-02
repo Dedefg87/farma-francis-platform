@@ -115,6 +115,15 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      console.log(
+        "[getContactsByHour] Period:",
+        period,
+        "Start:",
+        start,
+        "End:",
+        end
+      );
+
       // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
       // naquele horario (dentro do periodo).
       const result = await db.execute(sql`
@@ -128,6 +137,8 @@ export const dashboardStatsRouter = router({
         GROUP BY HOUR(created_at)
         ORDER BY HOUR(created_at)
       `);
+
+      console.log("[getContactsByHour] Result:", result);
 
       const hourlyData = result as any[];
 
