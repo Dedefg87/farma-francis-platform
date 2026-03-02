@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
-import { NotificationSound } from "./NotificationSound";
+
 
 const navigationItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -88,9 +88,8 @@ export function TopBar() {
           })}
         </div>
 
-        {/* User Menu + Notification */}
+        {/* User Menu */}
         <div className="flex items-center gap-2">
-          <NotificationSound />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
