@@ -381,9 +381,31 @@ export async function getConversationHistory(
  * Find or create customer by phone number
  */
 function normalizePhone(value: string) {
+  // Remove all non-digits
   const digits = value.replace(/\D/g, "");
   if (!digits) return value;
-  return digits.startsWith("+") ? digits : `+${digits}`;
+
+  // Handle WhatsApp IDs that are too long - extract just the phone number
+  // WhatsApp IDs can be like: 55120363423395306073@c.us
+  let phone = digits;
+
+  // If it's a WhatsApp-style ID (very long number), extract just the phone part
+  if (digits.length > 20) {
+    // Try to extract phone from WhatsApp ID format: 5511XXXXXXXXX@c.us -> 5511XXXXXXXXX
+    const atIndex = value.indexOf("@");
+    if (atIndex > 0) {
+      const cleanNumber = value.substring(0, atIndex).replace(/\D/g, "");
+      if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
+        phone = cleanNumber;
+      }
+    }
+    // If still too long, just use the last 15 digits (typical phone)
+    if (phone.length > 15) {
+      phone = phone.slice(-15);
+    }
+  }
+
+  return phone.startsWith("+") ? phone : `+${phone}`;
 }
 
 export async function findOrCreateCustomerByPhone(
