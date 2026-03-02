@@ -210,6 +210,39 @@ async function startServer() {
     }
   });
 
+  // Endpoint to fix missing database columns
+  app.post("/api/db/fix-columns", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 5,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const results: string[] = [];
+
+      // Add is_test_mode column to visual_flows if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE visual_flows ADD COLUMN is_test_mode INT DEFAULT 0 NOT NULL`
+        );
+        results.push("Added is_test_mode column to visual_flows");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("is_test_mode column already exists");
+        } else {
+          results.push(`Error adding is_test_mode: ${e.message}`);
+        }
+      }
+
+      await pool.end();
+      res.json({ success: true, results });
+    } catch (error: any) {
+      console.error("[db/fix-columns] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Endpoint to migrate all old WhatsApp media URLs to base64
   app.post("/api/media/migrate", async (req, res) => {
     try {
@@ -281,14 +314,14 @@ async function startServer() {
     // Import cookie parser
     const { COOKIE_NAME } = await import("@shared/const");
     const cookies = req.cookies || {};
-    
+
     // Support: Authorization header, query param token, or session cookie
     const authHeader = req.headers.authorization;
     const queryToken = req.query.token as string | undefined;
     const sessionCookie = cookies[COOKIE_NAME];
-    
+
     let token: string | null = null;
-    
+
     if (authHeader?.startsWith("Bearer ")) {
       token = authHeader.substring(7);
     } else if (queryToken) {
@@ -296,7 +329,7 @@ async function startServer() {
     } else if (sessionCookie) {
       token = sessionCookie;
     }
-    
+
     if (!token) {
       return res.status(401).json({ error: "Unauthorized" });
     }
@@ -653,7 +686,7 @@ async function startServer() {
     // vite.ts imports devDependencies that are not available in production
     const vitePath = "./vite";
     const { setupVite } = await import(
-      /* webpackIgnore: true */ 
+      /* webpackIgnore: true */
       /* @vite-ignore */
       vitePath
     );
