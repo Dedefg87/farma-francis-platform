@@ -328,8 +328,9 @@ async function startServer() {
       res.setHeader("Access-Control-Allow-Credentials", "true");
     }
 
-    // Import cookie parser
+    // Import cookie parser and auth
     const { COOKIE_NAME } = await import("@shared/const");
+    const { verifyToken } = await import("../auth");
     const cookies = req.cookies || {};
 
     // Support: Authorization header, query param token, or session cookie
@@ -347,24 +348,52 @@ async function startServer() {
       token = sessionCookie;
     }
 
-    console.log("[SSE] Auth check - cookie:", sessionCookie ? "present" : "missing", "token:", token ? "present" : "missing");
+    console.log("[SSE] Auth check - cookie:", sessionCookie ? "present" : "missing", "token:", token ? `${token.substring(0, 30)}...` : "missing");
 
     if (!token) {
       console.log("[SSE] Unauthorized - no token found");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const jwt = await import("jsonwebtoken");
-    let decoded: { userId: number } | null = null;
-
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-        userId: number;
-      };
-      console.log("[SSE] Token verified for userId:", decoded.userId);
-    } catch (e) {
-      console.log("[SSE] Token verification failed:", e);
+    // Verify token using the same method as the rest of the app
+    const decoded = await verifyToken(token);
+    
+    if (!decoded) {
+      console.log("[SSE] Token verification failed - invalid token");
       return res.status(401).json({ error: "Invalid token" });
+    }
+
+    console.log("[SSE] Token decoded:", decoded);
+
+    // Get userId from token - could be userId or openId
+    let userId: string;
+    
+    if (decoded.userId) {
+      userId = String(decoded.userId);
+    } else if (decoded.openId) {
+      // Map openId to userId from database
+      try {
+        const { getDb } = await import("../db");
+        const { users } = await import("../../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        
+        const [user] = await db.select({ id: users.id }).from(users).where(eq(users.openId, decoded.openId));
+        
+        if (!user) {
+          console.log("[SSE] User not found for openId:", decoded.openId);
+          return res.status(401).json({ error: "User not found" });
+        }
+        
+        userId = String(user.id);
+        console.log("[SSE] Mapped openId to userId:", decoded.openId, "->", userId);
+      } catch (e) {
+        console.error("[SSE] Error mapping openId to userId:", e);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+    } else {
+      console.log("[SSE] Token has no userId or openId");
+      return res.status(401).json({ error: "Invalid token structure" });
     }
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -372,12 +401,11 @@ async function startServer() {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    console.log("[SSE] Client connected for userId:", decoded.userId);
-    sseManager.addClient(String(decoded.userId), res);
+    console.log("[SSE] Client connected for userId:", userId);
+    sseManager.addClient(userId, res);
 
     req.on("close", () => {
-      console.log("[SSE] Client disconnected for userId:", decoded?.userId);
-      // sseManager.addClient already registers a close handler for cleanup.
+      console.log("[SSE] Client disconnected for userId:", userId);
     });
   });
 
