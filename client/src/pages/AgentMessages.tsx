@@ -183,16 +183,29 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Get auth token from localStorage or session
-        const token =
-          localStorage.getItem("token") || sessionStorage.getItem("token");
-        const eventsUrl = token ? `/api/events?token=${token}` : "/api/events";
+        // Get token from cookie
+        const getCookie = (name: string) => {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop()?.split(";").shift();
+          return null;
+        };
 
-        // Connect to SSE endpoint with token
+        const token = getCookie("app_session_id");
+        console.log("[AgentSSE] Token from cookie:", token ? "found" : "not found");
+        
+        if (!token) {
+          console.error("[AgentSSE] No token found in cookie");
+          return;
+        }
+
+        const eventsUrl = `/api/events?token=${encodeURIComponent(token)}`;
+        console.log("[AgentSSE] Connecting to:", eventsUrl.substring(0, 50) + "...");
+
         eventSource = new EventSource(eventsUrl);
 
         eventSource.onopen = () => {
-          console.log("[AgentSSE] Connected");
+          console.log("[AgentSSE] Connected successfully");
           setIsConnected(true);
           reconnectAttempt = 0;
         };
@@ -217,8 +230,8 @@ export default function AgentMessages() {
           }
         };
 
-        eventSource.onerror = () => {
-          console.error("[AgentSSE] Connection error");
+        eventSource.onerror = (err) => {
+          console.error("[AgentSSE] Connection error:", err);
           setIsConnected(false);
           eventSource?.close();
 
@@ -226,6 +239,7 @@ export default function AgentMessages() {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
+            console.log("[AgentSSE] Reconnecting in", delay, "ms (attempt", reconnectAttempt + ")");
             connect();
           }, delay);
         };
