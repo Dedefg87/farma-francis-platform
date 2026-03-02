@@ -594,6 +594,40 @@ async function startServer() {
     }
   });
 
+  // FIX: Adicionar coluna last_signed_in na tabela users
+  app.get("/api/fix/add-last-signed-in", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Verificar se a coluna já existe
+      const columns = await db.execute(sql`SHOW COLUMNS FROM users LIKE 'last_signed_in'`);
+      
+      if (columns.length > 0) {
+        return res.json({
+          success: true,
+          message: "Coluna last_signed_in já existe",
+          exists: true,
+        });
+      }
+
+      // Adicionar a coluna
+      await db.execute(sql`ALTER TABLE users ADD COLUMN last_signed_in DATETIME NULL`);
+      
+      res.json({
+        success: true,
+        message: "Coluna last_signed_in adicionada com sucesso",
+        exists: false,
+      });
+    } catch (error) {
+      console.error("[Fix] Error adding last_signed_in column:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // EMERGENCY: Reset admin password
   app.get("/api/emergency/reset-admin-password", async (req, res) => {
     try {
