@@ -53,6 +53,7 @@ export const customers = mysqlTable("customers", {
   email: varchar("email", { length: 320 }),
   phone: varchar("phone", { length: 20 }),
   birthDate: date("birth_date"),
+  expectedDueDate: date("expected_due_date"), // Data prevista do parto (para módulo Chá de Bebê)
   healthTagsJson: text("health_tags_json"), // JSON array of sensitive health tags (admin-only)
   whatsappOptIn: int("whatsapp_opt_in").default(0).notNull(),
   whatsappOptInAt: timestamp("whatsapp_opt_in_at"),
@@ -1297,5 +1298,170 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
 
 export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
 export type InsertBroadcastMessage = typeof broadcastMessages.$inferInsert;
+
+/**
+ * ============================================================
+ * MÓDULO CHÁ DE BEBÊ FARMA FRANCIS
+ * Sistema de eventos virtuais para arrecadação de fraldas/presentes
+ * ============================================================
+ */
+
+/**
+ * Eventos Chá de Bebê - Pais criam eventos e recebem "Carteira Virtual"
+ */
+export const babyShowerEvents = mysqlTable("baby_shower_events", {
+  id: int("id").autoincrement().primaryKey(),
+  // Relacionamento com a mãe (customer)
+  motherCustomerId: int("mother_customer_id")
+    .references(() => customers.id)
+    .notNull(),
+  // Dados do Evento
+  eventCode: varchar("event_code", { length: 20 }).notNull().unique(), // Ex: "CHA202503001"
+  eventName: varchar("event_name", { length: 255 }).notNull(), // Ex: "Chá da Maria"
+  expectedDueDate: date("expected_due_date"), // Data prevista do parto
+  eventDate: date("event_date"), // Data do evento físico (se houver)
+  status: mysqlEnum("status", ["active", "closed", "cancelled"])
+    .default("active")
+    .notNull(),
+  // Carteira Virtual (saldo em valor monetário)
+  walletBalance: decimal("wallet_balance", { precision: 12, scale: 2 })
+    .default("0.00")
+    .notNull(),
+  // Contadores físicos (para controle de estoque)
+  totalDiapersCount: int("total_diapers_count").default(0), // Total fraldas em estoque virtual
+  availableDiapersCount: int("available_diapers_count").default(0), // Disponíveis para retirada
+  // Meta e estatísticas
+  targetAmount: decimal("target_amount", { precision: 12, scale: 2 }), // Meta de arrecadação
+  totalGuests: int("total_guests").default(0), // Total de convidados que compraram
+  // URLs de compartilhamento
+  publicLink: varchar("public_link", { length: 500 }), // Link para convidados comprarem
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  closedAt: timestamp("closed_at"),
+});
+
+export type BabyShowerEvent = typeof babyShowerEvents.$inferSelect;
+export type InsertBabyShowerEvent = typeof babyShowerEvents.$inferInsert;
+
+/**
+ * Cotas/Pacotes disponíveis para compra
+ */
+export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
+  id: int("id").autoincrement().primaryKey(),
+  eventId: int("event_id")
+    .references(() => babyShowerEvents.id, { onDelete: "cascade" })
+    .notNull(),
+  // Configuração da Cota
+  packageName: varchar("package_name", { length: 120 }).notNull(), // Ex: "Pacote Fraldas P"
+  description: text("description"),
+  // Tipo de presente
+  giftType: mysqlEnum("gift_type", ["diapers", "wipes", "money", "product"])
+    .default("diapers")
+    .notNull(),
+  // Quantidade representada (ex: 1 pacote = 20 fraldas)
+  quantityRepresented: int("quantity_represented").default(1),
+  sizeLabel: varchar("size_label", { length: 20 }), // Ex: "P", "M", "G", "GG"
+  // Valores
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  stockLimit: int("stock_limit"), // Limite de cotas deste tipo (null = ilimitado)
+  // Contadores
+  soldCount: int("sold_count").default(0),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type BabyShowerGiftPackage = typeof babyShowerGiftPackages.$inferSelect;
+export type InsertBabyShowerGiftPackage =
+  typeof babyShowerGiftPackages.$inferInsert;
+
+/**
+ * Compras/Cotas realizadas por convidados
+ */
+export const babyShowerPurchases = mysqlTable("baby_shower_purchases", {
+  id: int("id").autoincrement().primaryKey(),
+  eventId: int("event_id")
+    .references(() => babyShowerEvents.id, { onDelete: "cascade" })
+    .notNull(),
+  packageId: int("package_id")
+    .references(() => babyShowerGiftPackages.id)
+    .notNull(),
+  // Dados do convidado (lead no CRM)
+  guestCustomerId: int("guest_customer_id").references(() => customers.id), // Pode ser nulo se convidado não identificado
+  // Dados da compra
+  guestName: varchar("guest_name", { length: 255 }).notNull(),
+  guestPhone: varchar("guest_phone", { length: 20 }),
+  guestEmail: varchar("guest_email", { length: 320 }),
+  // Mensagem para o bebê (opcional)
+  messageToParents: text("message_to_parents"),
+  // Status do pagamento
+  paymentStatus: mysqlEnum("payment_status", [
+    "pending",
+    "paid",
+    "failed",
+    "refunded",
+  ])
+    .default("pending")
+    .notNull(),
+  amountPaid: decimal("amount_paid", { precision: 10, scale: 2 }).notNull(),
+  // Dados do pagamento
+  paymentMethod: varchar("payment_method", { length: 50 }), // pix, credit_card, etc
+  paymentReference: varchar("payment_reference", { length: 255 }), // ID da transação
+  paidAt: timestamp("paid_at"),
+  // Notificação enviada
+  notificationSent: int("notification_sent").default(0),
+  notificationSentAt: timestamp("notification_sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type BabyShowerPurchase = typeof babyShowerPurchases.$inferSelect;
+export type InsertBabyShowerPurchase = typeof babyShowerPurchases.$inferInsert;
+
+/**
+ * Retiradas de fraldas pelo caixa (estoque virtual → físico)
+ */
+export const babyShowerWithdrawals = mysqlTable("baby_shower_withdrawals", {
+  id: int("id").autoincrement().primaryKey(),
+  eventId: int("event_id")
+    .references(() => babyShowerEvents.id, { onDelete: "cascade" })
+    .notNull(),
+  // Tarefa relacionada no sistema (integração com crm_tasks)
+  relatedTaskId: int("related_task_id").references(() => crmTasks.id),
+  // Dados da retirada
+  withdrawalType: mysqlEnum("withdrawal_type", [
+    "diapers",
+    "wipes",
+    "money",
+  ])
+    .default("diapers")
+    .notNull(),
+  // Se for fraldas
+  diaperSize: varchar("diaper_size", { length: 20 }), // P, M, G, GG
+  quantity: int("quantity").notNull(),
+  // Acesso ao caixa
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  fulfilledAt: timestamp("fulfilled_at"),
+  // Status
+  status: mysqlEnum("status", [
+    "requested",
+    "preparing",
+    "ready",
+    "delivered",
+    "cancelled",
+  ])
+    .default("requested")
+    .notNull(),
+  // Quem atendeu
+  fulfilledBy: int("fulfilled_by").references(() => users.id),
+  // Método de entrega
+  deliveryMethod: mysqlEnum("delivery_method", ["pickup", "delivery"])
+    .default("pickup")
+    .notNull(),
+  notes: text("notes"),
+});
+
+export type BabyShowerWithdrawal = typeof babyShowerWithdrawals.$inferSelect;
+export type InsertBabyShowerWithdrawal =
+  typeof babyShowerWithdrawals.$inferInsert;
 
 export * from './schema_logs';

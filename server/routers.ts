@@ -36,6 +36,7 @@ import { telemetryRouter } from "./routers-telemetry";
 import { automationRouter } from "./routers-automation";
 import { surveyRouter } from "./routers-survey";
 import { broadcastRouter } from "./routers-broadcast";
+import { babyShowerRouter } from "./routers-baby-shower";
 
 export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -1131,6 +1132,8 @@ export const appRouter = router({
 
   // Automation SSE Integration
   automationSSE: automationRouter,
+  // Módulo Chá de Bebê
+  babyShower: babyShowerRouter,
 });
 
 export type AppRouter = typeof appRouter;
