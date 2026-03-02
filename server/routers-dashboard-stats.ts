@@ -110,52 +110,69 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      try {
+        const period = input?.period || "hoje";
+        const { start, end } = getDateRangeFromPeriod(period);
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
 
-      console.log(
-        "[getContactsByHour] Period:",
-        period,
-        "Start:",
-        start,
-        "End:",
-        end
-      );
+        console.log(
+          "[getContactsByHour] Period:",
+          period,
+          "Start:",
+          start,
+          "End:",
+          end
+        );
 
-      // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
-      // naquele horario (dentro do periodo).
-      const result = await db.execute(sql`
-        SELECT 
-          HOUR(created_at) as hour,
-          COUNT(DISTINCT conversation_id) as chats
-        FROM conversation_messages
-        WHERE sender_type = 'customer'
-          AND created_at >= ${start}
-          AND created_at <= ${end}
-        GROUP BY HOUR(created_at)
-        ORDER BY HOUR(created_at)
-      `);
+        // First, let's check if there's any data at all
+        const countCheck = await db.execute(sql`
+          SELECT COUNT(*) as total FROM conversation_messages WHERE sender_type = 'customer'
+        `);
+        console.log("[getContactsByHour] Total customer messages:", countCheck);
 
-      console.log("[getContactsByHour] Result:", result);
+        // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
+        // naquele horario (dentro do periodo).
+        const result = await db.execute(sql`
+          SELECT 
+            HOUR(created_at) as hour,
+            COUNT(DISTINCT conversation_id) as chats
+          FROM conversation_messages
+          WHERE sender_type = 'customer'
+            AND created_at >= ${start}
+            AND created_at <= ${end}
+          GROUP BY HOUR(created_at)
+          ORDER BY HOUR(created_at)
+        `);
 
-      const hourlyData = result as any[];
+        console.log("[getContactsByHour] Result:", result);
 
-      // Criar array com todas as 24 horas (00h-23h)
-      const allHours = Array.from({ length: 24 }, (_, i) => {
-        const hourStr = i.toString().padStart(2, "0");
-        const existingData = hourlyData.find((d: any) => Number(d.hour) === i);
+        const hourlyData = result as any[];
 
-        return {
-          hour: `${hourStr}h`,
-          chats: Number(existingData?.chats) || 0,
-          calls: 0,
-          abandoned: 0,
-        };
-      });
+        // Criar array com todas as 24 horas (00h-23h)
+        const allHours = Array.from({ length: 24 }, (_, i) => {
+          const hourStr = i.toString().padStart(2, "0");
+          const existingData = hourlyData.find(
+            (d: any) => Number(d.hour) === i
+          );
 
-      return allHours;
+          return {
+            hour: `${hourStr}h`,
+            chats: Number(existingData?.chats) || 0,
+            calls: 0,
+            abandoned: 0,
+          };
+        });
+
+        console.log(
+          "[getContactsByHour] Returning:",
+          JSON.stringify(allHours.slice(0, 5))
+        );
+        return allHours;
+      } catch (error) {
+        console.error("[getContactsByHour] Error:", error);
+        return [];
+      }
     }),
 
   // Estatísticas por agente
