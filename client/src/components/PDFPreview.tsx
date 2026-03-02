@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, ExternalLink, Loader2 } from "lucide-react";
+import { Download, ExternalLink, Loader2, FileText } from "lucide-react";
 
 interface PDFPreviewProps {
   open: boolean;
@@ -16,7 +16,26 @@ interface PDFPreviewProps {
   messageId?: number;
 }
 
-export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDFPreviewProps) {
+function getMimeType(
+  fileUrl: string | null | undefined,
+  fileType: string | null | undefined
+): string {
+  if (fileUrl?.startsWith("data:")) {
+    const mimeMatch = fileUrl.match(/^data:([^;]+);/);
+    if (mimeMatch && mimeMatch[1]) {
+      return mimeMatch[1];
+    }
+  }
+  return fileType || "";
+}
+
+export function PDFPreview({
+  open,
+  onOpenChange,
+  url,
+  fileName,
+  messageId,
+}: PDFPreviewProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,47 +56,47 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
 
     // Se tem messageId, usar endpoint de mídia (mais confiável)
     if (messageId) {
-      console.log('[PDFPreview] Usando endpoint de mídia:', messageId);
+      console.log("[PDFPreview] Usando endpoint de mídia:", messageId);
       setBlobUrl(null);
       setLoading(false);
       return;
     }
 
     // Se é data URL, converter para blob
-    if (url?.startsWith('data:')) {
-      console.log('[PDFPreview] Convertendo data URL para blob...');
+    if (url?.startsWith("data:")) {
+      console.log("[PDFPreview] Convertendo data URL para blob...");
       try {
         const match = url.match(/^data:([^;]+);base64,(.+)$/);
         if (match) {
           const mimeType = match[1];
           const base64Data = match[2];
-          
+
           // Fazer decode em chunks para evitar stack overflow
           const byteCharacters = atob(base64Data);
           const byteArray = new Uint8Array(byteCharacters.length);
           for (let i = 0; i < byteCharacters.length; i++) {
             byteArray[i] = byteCharacters.charCodeAt(i);
           }
-          
+
           const blob = new Blob([byteArray], { type: mimeType });
           const newBlobUrl = URL.createObjectURL(blob);
-          console.log('[PDFPreview] Blob URL criada:', newBlobUrl);
+          console.log("[PDFPreview] Blob URL criada:", newBlobUrl);
           setBlobUrl(newBlobUrl);
           setLoading(false);
         } else {
-          setError('Formato de data URL inválido');
+          setError("Formato de data URL inválido");
           setLoading(false);
         }
       } catch (e) {
-        console.error('[PDFPreview] Erro ao criar blob:', e);
-        setError('Erro ao processar documento');
+        console.error("[PDFPreview] Erro ao criar blob:", e);
+        setError("Erro ao processar documento");
         setLoading(false);
       }
     } else if (url) {
-      console.log('[PDFPreview] Usando URL direta:', url.substring(0, 100));
+      console.log("[PDFPreview] Usando URL direta:", url.substring(0, 100));
       setLoading(false);
     } else {
-      setError('URL não fornecida');
+      setError("URL não fornecida");
       setLoading(false);
     }
   }, [open, url, messageId]);
@@ -102,11 +121,23 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
     return url;
   }, [messageId, blobUrl, url]);
 
+  // Verificar se é um documento que pode ser visualizado
+  const canPreview = useMemo(() => {
+    if (!finalUrl) return false;
+    const mimeType = getMimeType(url, undefined);
+    // PDFs e imagens podem ser visualizados
+    return (
+      mimeType === "application/pdf" ||
+      mimeType.startsWith("image/") ||
+      mimeType.startsWith("video/")
+    );
+  }, [finalUrl, url]);
+
   const handleDownload = () => {
     if (!finalUrl) return;
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = finalUrl;
-    link.download = fileName || 'documento.pdf';
+    link.download = fileName || "documento";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -114,7 +145,7 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
 
   const handleOpenExternal = () => {
     if (!finalUrl) return;
-    window.open(finalUrl, '_blank');
+    window.open(finalUrl, "_blank");
   };
 
   return (
@@ -123,7 +154,7 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold truncate pr-4">
-              {fileName || "Documento PDF"}
+              {fileName || "Documento"}
             </DialogTitle>
             <div className="flex items-center gap-2">
               <Button
@@ -159,15 +190,34 @@ export function PDFPreview({ open, onOpenChange, url, fileName, messageId }: PDF
               <span className="text-red-500">❌</span>
               <span>{error}</span>
             </div>
+          ) : !canPreview ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4 p-8">
+              <FileText className="w-16 h-16 text-gray-400" />
+              <div className="text-center">
+                <p className="font-medium text-lg">
+                  Pré-visualização não disponível
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Este tipo de arquivo não pode ser visualizado no navegador
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Use o botão Baixar para salvar o arquivo
+                </p>
+              </div>
+              <Button onClick={handleDownload} className="gap-2 mt-4">
+                <Download className="w-4 h-4" />
+                Baixar {fileName || "arquivo"}
+              </Button>
+            </div>
           ) : finalUrl ? (
             <iframe
               key={finalUrl}
               src={finalUrl}
               className="w-full h-full"
               title={fileName || "PDF Preview"}
-              onError={(e) => {
-                console.error('[PDFPreview] Erro no iframe:', e);
-                setError('Erro ao carregar documento');
+              onError={e => {
+                console.error("[PDFPreview] Erro no iframe:", e);
+                setError("Erro ao carregar documento");
               }}
             />
           ) : (
