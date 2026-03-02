@@ -152,6 +152,9 @@ export default function AgentMessages() {
     messageId?: number;
     fileType?: string;
   }>({ open: false, url: null });
+  
+  // Prevenir fechamento imediato do modal
+  const pdfPreviewJustOpened = useRef(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -663,8 +666,13 @@ export default function AgentMessages() {
       <PDFPreview
         open={pdfPreview.open}
         onOpenChange={(open) => {
+          // Prevenir fechamento imediato após abrir
+          if (!open && pdfPreviewJustOpened.current) {
+            console.log("[PDFPreview] Preventing immediate close");
+            pdfPreviewJustOpened.current = false;
+            return;
+          }
           console.log("[PDFPreview] onOpenChange called with:", open);
-          console.log("[PDFPreview] Current state:", pdfPreview);
           setPdfPreview({ ...pdfPreview, open });
         }}
         url={pdfPreview.url || ""}
@@ -1022,6 +1030,7 @@ export default function AgentMessages() {
                                     console.log("[PDF] msg.fileUrl:", msg.fileUrl?.substring(0, 50));
                                     console.log("[PDF] msg.fileName:", msg.fileName);
                                     console.log("[PDF] msg.fileType:", msg.fileType);
+                                    pdfPreviewJustOpened.current = true;
                                     const newState = {
                                       open: true,
                                       url: msg.fileUrl,
@@ -1031,6 +1040,10 @@ export default function AgentMessages() {
                                     };
                                     console.log("[PDF] Setting new state:", newState);
                                     setPdfPreview(newState);
+                                    // Reset o flag após 100ms
+                                    setTimeout(() => {
+                                      pdfPreviewJustOpened.current = false;
+                                    }, 100);
                                     console.log("========== PDF CLICK END ==========");
                                   }}
                                 >
