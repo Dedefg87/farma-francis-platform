@@ -638,6 +638,18 @@ export default function AgentMessages() {
 
   return (
     <>
+      {/* PDF Preview Modal - deve estar no topo para z-index correto */}
+      <PDFPreview
+        open={pdfPreview.open}
+        onOpenChange={open => {
+          console.log("[PDFPreview] onOpenChange:", open);
+          setPdfPreview({ ...pdfPreview, open });
+        }}
+        url={pdfPreview.url || ""}
+        fileName={pdfPreview.fileName}
+        messageId={pdfPreview.messageId}
+      />
+      
       <AgentTopBar />
       <div className="h-[calc(100vh-64px)] bg-gray-50 flex">
         {/* Lista de Conversas */}
@@ -979,14 +991,15 @@ export default function AgentMessages() {
                               <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
                                 <div
                                   className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={() =>
+                                  onClick={() => {
+                                    console.log("[PDF] Click on preview area:", msg.id, msg.fileName);
                                     setPdfPreview({
                                       open: true,
                                       url: msg.fileUrl,
                                       fileName: msg.fileName || undefined,
                                       messageId: msg.id,
-                                    })
-                                  }
+                                    });
+                                  }}
                                 >
                                   <iframe
                                     src={getImageSrc(msg.fileUrl, msg.id)}
@@ -1014,14 +1027,15 @@ export default function AgentMessages() {
                                     </span>
                                   </div>
                                   <button
-                                    onClick={() =>
+                                    onClick={() => {
+                                      console.log("[PDF] Click on Ampliar button:", msg.id, msg.fileName);
                                       setPdfPreview({
                                         open: true,
                                         url: msg.fileUrl,
                                         fileName: msg.fileName || undefined,
                                         messageId: msg.id,
-                                      })
-                                    }
+                                      });
+                                    }}
                                     className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                                   >
                                     Ampliar
@@ -1030,14 +1044,15 @@ export default function AgentMessages() {
                               </div>
                             ) : (
                               <div
-                                onClick={() =>
+                                onClick={() => {
+                                  console.log("[File] Click on file:", msg.id, msg.fileName, msg.fileType);
                                   setPdfPreview({
                                     open: true,
                                     url: msg.fileUrl,
                                     fileName: msg.fileName || undefined,
                                     messageId: msg.id,
-                                  })
-                                }
+                                  });
+                                }}
                                 className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
                               >
                                 <svg
@@ -1416,15 +1431,6 @@ export default function AgentMessages() {
           customerPhone={crmCustomerPhone}
         />
       ) : null}
-
-      {/* PDF Preview Modal */}
-      <PDFPreview
-        open={pdfPreview.open}
-        onOpenChange={open => setPdfPreview({ ...pdfPreview, open })}
-        url={pdfPreview.url || ""}
-        fileName={pdfPreview.fileName}
-        messageId={pdfPreview.messageId}
-      />
     </>
   );
 }

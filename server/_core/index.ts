@@ -245,30 +245,6 @@ async function startServer() {
         results.push(`Error modifying phone column: ${e.message}`);
       }
 
-      // Also increase in received_messages table
-      try {
-        await pool.execute(
-          `ALTER TABLE received_messages MODIFY COLUMN from_number VARCHAR(100)`
-        );
-        results.push("Increased from_number column size to VARCHAR(100)");
-      } catch (e: any) {
-        results.push(`Error modifying from_number column: ${e.message}`);
-      }
-
-      // Also increase in conversations table
-      try {
-        await pool.execute(
-          `ALTER TABLE conversations MODIFY COLUMN from_number VARCHAR(100)`
-        );
-        results.push(
-          "Increased conversation from_number column size to VARCHAR(100)"
-        );
-      } catch (e: any) {
-        results.push(
-          `Error modifying conversations from_number column: ${e.message}`
-        );
-      }
-
       await pool.end();
       res.json({ success: true, results });
     } catch (error: any) {
