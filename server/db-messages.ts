@@ -673,7 +673,11 @@ export async function ingestInboundConversationMessage(message: {
     .limit(1);
 
   if (conversation?.assignedTo) {
-    sseManager.emitToUser(String(conversation.assignedTo), {
+    const agentUserId = String(conversation.assignedTo);
+    console.log(`[SSE] New message - emitting to agent userId=${agentUserId} for conversation=${conversationId}`);
+    console.log(`[SSE] Current connected users: ${sseManager.getConnectedUsers().join(", ")}`);
+    
+    sseManager.emitToUser(agentUserId, {
       type: EVENTS.MESSAGE_NEW,
       data: {
         conversationId,
@@ -684,6 +688,8 @@ export async function ingestInboundConversationMessage(message: {
       },
       timestamp: now.getTime(),
     });
+  } else {
+    console.log(`[SSE] No assignedTo for conversation=${conversationId}, skipping SSE emit`);
   }
 
   return { conversationId, customerId: customer.id };
