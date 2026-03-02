@@ -174,6 +174,11 @@ export default function AgentMessages() {
     console.log("[AgentMessages] Component mounted - PDFPreview version 2.0");
   }, []);
 
+  // DEBUG: Log pdfPreview state changes
+  useEffect(() => {
+    console.log("[PDFPreview] State changed:", pdfPreview);
+  }, [pdfPreview]);
+
   // === SSE Connection for Real-time Messages ===
   useEffect(() => {
     if (!user?.id) return;
@@ -1008,13 +1013,10 @@ export default function AgentMessages() {
                               <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
                                 <div
                                   className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={() => {
-                                    console.log(
-                                      "[PDF] Click on preview area:",
-                                      msg.id,
-                                      msg.fileName,
-                                      msg.fileType
-                                    );
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log("[PDF] Click on preview area:", msg.id, msg.fileName, msg.fileType);
                                     setPdfPreview({
                                       open: true,
                                       url: msg.fileUrl,
@@ -1022,6 +1024,7 @@ export default function AgentMessages() {
                                       messageId: msg.id,
                                       fileType: msg.fileType || undefined,
                                     });
+                                    console.log("[PDF] setPdfPreview called");
                                   }}
                                 >
                                   <iframe
