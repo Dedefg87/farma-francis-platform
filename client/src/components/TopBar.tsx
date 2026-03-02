@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
+import { NotificationSound } from "./NotificationSound";
 
 const navigationItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -34,25 +35,7 @@ const navigationItems = [
   { icon: Settings, label: "Configurações API", path: "/settings/api" },
 ];
 
-import { NotificationSound } from "./NotificationSound";
-
-// ... existing imports ...
-
 export function TopBar() {
-  // ... existing code ...
-
-  return (
-    <div className="h-16 border-b bg-white flex items-center justify-between px-4">
-      {/* ... existing content ... */}
-      
-      {/* Add notification sound button */}
-      <div className="flex items-center gap-2">
-        <NotificationSound />
-        {/* ... other buttons ... */}
-      </div>
-    </div>
-  );
-}
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const logoutMutation = trpc.auth.logout.useMutation();
@@ -83,7 +66,6 @@ export function TopBar() {
           {navigationItems.map(item => {
             const Icon = item.icon;
             const isActive = location === item.path;
-
             return (
               <Button
                 key={item.path}
@@ -106,31 +88,34 @@ export function TopBar() {
           })}
         </div>
 
-        {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-10 w-10 rounded-full p-0 hover:bg-gray-100"
-            >
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-[#3FA9D4] text-white">
-                  {user ? getInitials(user.name || "User") : "U"}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <div className="px-2 py-1.5">
-              <p className="text-sm font-medium">{user?.name}</p>
-              <p className="text-xs text-muted-foreground">{user?.email}</p>
-            </div>
-            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* User Menu + Notification */}
+        <div className="flex items-center gap-2">
+          <NotificationSound />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-10 w-10 rounded-full p-0 hover:bg-gray-100"
+              >
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-[#3FA9D4] text-white">
+                    {user ? getInitials(user.name || "User") : "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium">{user?.name}</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
+              </div>
+              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   );
