@@ -168,6 +168,11 @@ export default function AgentMessages() {
   const { playNotificationSound } = useNotificationSound();
   const queryClient = useQueryClient();
 
+  // DEBUG: Log component mount
+  useEffect(() => {
+    console.log("[AgentMessages] Component mounted - PDFPreview version 2.0");
+  }, []);
+
   // === SSE Connection for Real-time Messages ===
   useEffect(() => {
     if (!user?.id) return;
