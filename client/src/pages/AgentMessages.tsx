@@ -183,26 +183,11 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Get token from cookie
-        const getCookie = (name: string) => {
-          const value = `; ${document.cookie}`;
-          const parts = value.split(`; ${name}=`);
-          if (parts.length === 2) return parts.pop()?.split(";").shift();
-          return null;
-        };
+        // Use withCredentials to send cookies automatically
+        const eventsUrl = "/api/events";
+        console.log("[AgentSSE] Connecting to:", eventsUrl);
 
-        const token = getCookie("app_session_id");
-        console.log("[AgentSSE] Token from cookie:", token ? "found" : "not found");
-        
-        if (!token) {
-          console.error("[AgentSSE] No token found in cookie");
-          return;
-        }
-
-        const eventsUrl = `/api/events?token=${encodeURIComponent(token)}`;
-        console.log("[AgentSSE] Connecting to:", eventsUrl.substring(0, 50) + "...");
-
-        eventSource = new EventSource(eventsUrl);
+        eventSource = new EventSource(eventsUrl, { withCredentials: true });
 
         eventSource.onopen = () => {
           console.log("[AgentSSE] Connected successfully");
