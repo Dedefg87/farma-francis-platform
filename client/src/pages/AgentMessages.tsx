@@ -156,6 +156,7 @@ export default function AgentMessages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousMessagesCountRef = useRef<number>(0);
   const previousConversationsRef = useRef<number[]>([]);
+  const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
 
   // Atualizar localStorage quando ordenação mudar
@@ -393,31 +394,28 @@ export default function AgentMessages() {
   useEffect(() => {
     if (!conversations || conversations.length === 0) {
       previousConversationsRef.current = conversations?.map(c => c.id) || [];
+      previousTotalUnreadRef.current = 0;
       return;
     }
 
-    const currentConversationIds = conversations.map(c => c.id);
-    const previousConversationIds = previousConversationsRef.current;
-
-    // Verificar se há novas conversas
-    const newConversationIds = currentConversationIds.filter(
-      id => !previousConversationIds.includes(id)
+    // Calcular total de mensagens não lidas
+    const currentTotalUnread = conversations.reduce(
+      (sum, c) => sum + (c.unreadCount || 0),
+      0
     );
+    const previousTotalUnread = previousTotalUnreadRef.current;
 
-    // Se há novas conversas, verificar se têm mensagens não lidas
-    if (newConversationIds.length > 0 && !notificationsMuted) {
-      const newConversations = conversations.filter(
-        c => newConversationIds.includes(c.id) && (c.unreadCount || 0) > 0
+    // Se o número de não lidas aumentou, tocar som
+    if (currentTotalUnread > previousTotalUnread && !notificationsMuted) {
+      console.log(
+        `[AgentMessages] Novas mensagens não lidas: ${previousTotalUnread} -> ${currentTotalUnread}`
       );
-
-      if (newConversations.length > 0) {
-        console.log("[AgentMessages] Nova conversa detectada, tocando som");
-        playNotificationSound();
-      }
+      playNotificationSound();
     }
 
-    // Atualizar referência
-    previousConversationsRef.current = currentConversationIds;
+    // Atualizar referências
+    previousTotalUnreadRef.current = currentTotalUnread;
+    previousConversationsRef.current = conversations.map(c => c.id);
   }, [conversations, notificationsMuted, playNotificationSound]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
