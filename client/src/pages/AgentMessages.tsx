@@ -178,12 +178,27 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Get auth token from localStorage or session
-        const token =
-          localStorage.getItem("token") || sessionStorage.getItem("token");
-        const eventsUrl = token ? `/api/events?token=${token}` : "/api/events";
+        // Get token from cookie - parse all cookies
+        const cookies = document.cookie.split(";").reduce(
+          (acc, cookie) => {
+            const [key, ...rest] = cookie.trim().split("=");
+            acc[key] = rest.join("=");
+            return acc;
+          },
+          {} as Record<string, string>
+        );
 
-        // Connect to SSE endpoint with token
+        // Try different possible cookie names
+        const cookieName = Object.keys(cookies).find(
+          k =>
+            k.includes("manus") || k.includes("session") || k.includes("token")
+        );
+        const token = cookieName ? cookies[cookieName] : null;
+
+        const eventsUrl = token ? `/api/events?token=${token}` : "/api/events";
+        console.log("[AgentSSE] Using cookie:", cookieName, "URL:", eventsUrl);
+
+        // Connect to SSE endpoint
         eventSource = new EventSource(eventsUrl);
 
         eventSource.onopen = () => {
@@ -660,7 +675,7 @@ export default function AgentMessages() {
         fileName={pdfPreview.fileName}
         messageId={pdfPreview.messageId}
       />
-      
+
       <AgentTopBar />
       <div className="h-[calc(100vh-64px)] bg-gray-50 flex">
         {/* Lista de Conversas */}
@@ -1003,7 +1018,11 @@ export default function AgentMessages() {
                                 <div
                                   className="h-32 overflow-hidden cursor-pointer"
                                   onClick={() => {
-                                    console.log("[PDF] Click on preview area:", msg.id, msg.fileName);
+                                    console.log(
+                                      "[PDF] Click on preview area:",
+                                      msg.id,
+                                      msg.fileName
+                                    );
                                     setPdfPreview({
                                       open: true,
                                       url: msg.fileUrl,
@@ -1039,7 +1058,11 @@ export default function AgentMessages() {
                                   </div>
                                   <button
                                     onClick={() => {
-                                      console.log("[PDF] Click on Ampliar button:", msg.id, msg.fileName);
+                                      console.log(
+                                        "[PDF] Click on Ampliar button:",
+                                        msg.id,
+                                        msg.fileName
+                                      );
                                       setPdfPreview({
                                         open: true,
                                         url: msg.fileUrl,
@@ -1056,7 +1079,12 @@ export default function AgentMessages() {
                             ) : (
                               <div
                                 onClick={() => {
-                                  console.log("[File] Click on file:", msg.id, msg.fileName, msg.fileType);
+                                  console.log(
+                                    "[File] Click on file:",
+                                    msg.id,
+                                    msg.fileName,
+                                    msg.fileType
+                                  );
                                   setPdfPreview({
                                     open: true,
                                     url: msg.fileUrl,
