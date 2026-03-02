@@ -92,6 +92,18 @@ export function AutomationHeader({
             />
           </div>
 
+          {/* Export Button */}
+          {onExport && (
+            <Button
+              variant="outline"
+              onClick={onExport}
+              className="h-11"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Exportar Excel
+            </Button>
+          )}
+
           {/* Create Button with Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
