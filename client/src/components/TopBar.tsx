@@ -34,7 +34,25 @@ const navigationItems = [
   { icon: Settings, label: "Configurações API", path: "/settings/api" },
 ];
 
+import { NotificationSound } from "./NotificationSound";
+
+// ... existing imports ...
+
 export function TopBar() {
+  // ... existing code ...
+
+  return (
+    <div className="h-16 border-b bg-white flex items-center justify-between px-4">
+      {/* ... existing content ... */}
+      
+      {/* Add notification sound button */}
+      <div className="flex items-center gap-2">
+        <NotificationSound />
+        {/* ... other buttons ... */}
+      </div>
+    </div>
+  );
+}
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const logoutMutation = trpc.auth.logout.useMutation();
