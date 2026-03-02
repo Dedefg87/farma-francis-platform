@@ -501,16 +501,17 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   createdAt?: Date;
 }) {
-  console.log(
-    "[ingestInbound] Step A: Starting with fromNumber:",
-    message.fromNumber
-  );
-  console.error("[ingestInbound] === STEP A START ===");
-  const db = await getDb();
-  if (!db) {
-    console.error("[ingestInbound] Database not available!");
-    return null;
-  }
+  try {
+    console.log(
+      "[ingestInbound] Step A: Starting with fromNumber:",
+      message.fromNumber
+    );
+    console.error("[ingestInbound] === STEP A START ===");
+    const db = await getDb();
+    if (!db) {
+      console.error("[ingestInbound] Database not available!");
+      return null;
+    }
   console.log("[ingestInbound] Step B: DB connected");
 
   const customer = await findOrCreateCustomerByPhone(
@@ -672,8 +673,14 @@ export async function ingestInboundConversationMessage(message: {
     .where(eq(conversations.id, conversationId))
     .limit(1);
 
+  console.log(`[SSE] Conversation fetched: id=${conversationId}, assignedTo=${conversation?.assignedTo}, status=${conversation?.status}`);
+
   if (conversation?.assignedTo) {
-    sseManager.emitToUser(String(conversation.assignedTo), {
+    const agentUserId = String(conversation.assignedTo);
+    console.log(`[SSE] New message - emitting to agent userId=${agentUserId} for conversation=${conversationId}`);
+    console.log(`[SSE] Current connected users: ${sseManager.getConnectedUsers().join(", ")}`);
+    
+    sseManager.emitToUser(agentUserId, {
       type: EVENTS.MESSAGE_NEW,
       data: {
         conversationId,
@@ -684,9 +691,18 @@ export async function ingestInboundConversationMessage(message: {
       },
       timestamp: now.getTime(),
     });
+  } else {
+    console.log(`[SSE] No assignedTo for conversation=${conversationId}, skipping SSE emit`);
+    console.log(`[SSE] Conversation data:`, JSON.stringify(conversation));
   }
 
+  console.log(`[ingestInbound] SUCCESS - conversationId=${conversationId}, customerId=${customer.id}`);
   return { conversationId, customerId: customer.id };
+  } catch (error) {
+    console.error("[ingestInbound] ERROR:", error);
+    console.error("[ingestInbound] Stack:", error instanceof Error ? error.stack : "no stack");
+    return { conversationId: null, customerId: null };
+  }
 }
 
 /**

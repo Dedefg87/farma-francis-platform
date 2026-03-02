@@ -710,10 +710,13 @@ router.post("/evolution", async (req: Request, res: Response) => {
       );
     }
 
-    console.log(
-      "[Evolution Webhook] Calling processEvolutionWebhook with event:",
-      eventName
-    );
+    console.log("[Evolution Webhook] Calling processEvolutionWebhook with event:", eventName);
+    console.log("[Evolution Webhook] === FULL EVENT INFO ===");
+    console.log("[Evolution Webhook] Event:", eventName);
+    console.log("[Evolution Webhook] Body keys:", Object.keys(body || {}));
+    console.log("[Evolution Webhook] Has data:", !!body?.data);
+    console.log("[Evolution Webhook] Has message:", !!(body?.message || body?.data?.message));
+    console.log("[Evolution Webhook] =========================");
     res.status(200).send("EVENT_RECEIVED");
 
     console.log("[Evolution Webhook] Response sent, processing async...");

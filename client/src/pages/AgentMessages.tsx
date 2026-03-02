@@ -222,9 +222,7 @@ export default function AgentMessages() {
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
             console.log(
-              "[AgentSSE] Reconnecting in",
-              delay,
-              "ms (attempt",
+              "[AgentSSE] Reconnecting (attempt",
               reconnectAttempt + ")"
             );
             connect();
