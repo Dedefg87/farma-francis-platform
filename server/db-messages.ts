@@ -390,7 +390,7 @@ function normalizePhone(value: string) {
   let phone = digits;
 
   // If it's a WhatsApp-style ID (very long number), extract just the phone part
-  if (digits.length > 20) {
+  if (digits.length >= 20) {
     // Try to extract phone from WhatsApp ID format: 5511XXXXXXXXX@c.us -> 5511XXXXXXXXX
     const atIndex = value.indexOf("@");
     if (atIndex > 0) {

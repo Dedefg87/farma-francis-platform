@@ -183,28 +183,8 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Try to get token from cookie
-        const cookies = document.cookie.split(";").reduce(
-          (acc, cookie) => {
-            const [key, ...rest] = cookie.trim().split("=");
-            acc[key] = rest.join("=");
-            return acc;
-          },
-          {} as Record<string, string>
-        );
-
-        // Try different possible cookie names
-        const cookieName = Object.keys(cookies).find(
-          k =>
-            k.includes("manus") || k.includes("session") || k.includes("token")
-        );
-        const token = cookieName ? cookies[cookieName] : null;
-
-        const eventsUrl = token ? `/api/events?token=${token}` : "/api/events";
-        console.log("[AgentSSE] Using cookie:", cookieName, "URL:", eventsUrl);
-
-        // Connect to SSE endpoint with credentials
-        eventSource = new EventSource(eventsUrl, { withCredentials: true });
+        // withCredentials: true sends cookies automatically - no need to extract token manually
+        eventSource = new EventSource("/api/events", { withCredentials: true });
 
         eventSource.onopen = () => {
           console.log("[AgentSSE] Connected successfully");
