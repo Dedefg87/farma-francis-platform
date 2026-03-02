@@ -183,11 +183,26 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Use withCredentials to send cookies automatically
-        const eventsUrl = "/api/events";
-        console.log("[AgentSSE] Connecting to:", eventsUrl);
+        // Get token from cookie (now httpOnly: false)
+        const getCookie = (name: string) => {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop()?.split(";").shift();
+          return null;
+        };
 
-        eventSource = new EventSource(eventsUrl, { withCredentials: true });
+        const token = getCookie("app_session_id");
+        console.log("[AgentSSE] Token from cookie:", token ? `${token.substring(0, 20)}...` : "not found");
+
+        if (!token) {
+          console.error("[AgentSSE] No token found in cookie");
+          return;
+        }
+
+        const eventsUrl = `/api/events?token=${encodeURIComponent(token)}`;
+        console.log("[AgentSSE] Connecting to SSE...");
+
+        eventSource = new EventSource(eventsUrl);
 
         eventSource.onopen = () => {
           console.log("[AgentSSE] Connected successfully");
@@ -224,7 +239,7 @@ export default function AgentMessages() {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
-            console.log("[AgentSSE] Reconnecting in", delay, "ms (attempt", reconnectAttempt + ")");
+            console.log("[AgentSSE] Reconnecting (attempt", reconnectAttempt + ")");
             connect();
           }, delay);
         };
