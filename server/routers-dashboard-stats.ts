@@ -112,7 +112,7 @@ export const dashboardStatsRouter = router({
     .query(async ({ input }) => {
       try {
         const period = input?.period || "hoje";
-        const { start, end } = getDateRangeFromPeriod(period);
+        let { start, end } = getDateRangeFromPeriod(period);
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
@@ -125,11 +125,25 @@ export const dashboardStatsRouter = router({
           end
         );
 
-        // First, let's check if there's any data at all
+        // Check total customer messages in database
         const countCheck = await db.execute(sql`
           SELECT COUNT(*) as total FROM conversation_messages WHERE sender_type = 'customer'
         `);
         console.log("[getContactsByHour] Total customer messages:", countCheck);
+
+        // If no data for the period, try with last 30 days
+        const checkResult = countCheck as any[];
+        const hasData = checkResult[0]?.total > 0;
+
+        if (!hasData) {
+          // Use last 30 days as fallback
+          start = new Date();
+          start.setDate(start.getDate() - 30);
+          console.log(
+            "[getContactsByHour] No data found, using fallback start:",
+            start
+          );
+        }
 
         // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
         // naquele horario (dentro do periodo).
@@ -145,7 +159,10 @@ export const dashboardStatsRouter = router({
           ORDER BY HOUR(created_at)
         `);
 
-        console.log("[getContactsByHour] Result:", result);
+        console.log(
+          "[getContactsByHour] Result count:",
+          (result as any[]).length
+        );
 
         const hourlyData = result as any[];
 
@@ -164,14 +181,16 @@ export const dashboardStatsRouter = router({
           };
         });
 
-        console.log(
-          "[getContactsByHour] Returning:",
-          JSON.stringify(allHours.slice(0, 5))
-        );
         return allHours;
       } catch (error) {
         console.error("[getContactsByHour] Error:", error);
-        return [];
+        // Return empty 24-hour array on error
+        return Array.from({ length: 24 }, (_, i) => ({
+          hour: `${i.toString().padStart(2, "0")}h`,
+          chats: 0,
+          calls: 0,
+          abandoned: 0,
+        }));
       }
     }),
 
