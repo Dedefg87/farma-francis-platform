@@ -571,8 +571,17 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 
 /**
  * Evolution API Webhook (POST)
+ * Supports both /evolution and /evolution/:event (when webhook_by_events is true)
  */
 router.post("/evolution", async (req: Request, res: Response) => {
+  return handleEvolutionWebhook(req, res);
+});
+
+router.post("/evolution/:event", async (req: Request, res: Response) => {
+  return handleEvolutionWebhook(req, res);
+});
+
+async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
     console.log(
       "[Evolution Webhook] Received Evolution webhook call at",
@@ -1729,3 +1738,4 @@ async function validateInstagramSignature(
 }
 
 export default router;
+// Force rebuild Mon Mar  2 15:42:15 -03 2026
