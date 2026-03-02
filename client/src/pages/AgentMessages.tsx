@@ -166,17 +166,18 @@ export default function AgentMessages() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const userId = String(user.id);
     let eventSource: EventSource | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
     let reconnectAttempt = 0;
 
     const connect = () => {
       try {
-        eventSource = new EventSource(`/api/sse?userId=${userId}`);
+        // Connect to SSE endpoint - cookie is sent automatically
+        eventSource = new EventSource("/api/events");
 
         eventSource.onopen = () => {
-          console.log("[AgentSSE] Connected for user:", userId);
+          console.log("[AgentSSE] Connected");
+          setIsConnected(true);
           reconnectAttempt = 0;
         };
 
@@ -202,8 +203,8 @@ export default function AgentMessages() {
 
         eventSource.onerror = () => {
           console.error("[AgentSSE] Connection error");
-          eventSource?.close();
           setIsConnected(false);
+          eventSource?.close();
 
           // Reconnect with exponential backoff
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);

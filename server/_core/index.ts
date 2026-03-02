@@ -2,6 +2,7 @@ import "dotenv/config";
 console.log("[Server] Starting initialization...");
 
 import express from "express";
+import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -70,6 +71,7 @@ async function startServer() {
     })
   );
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(cookieParser());
 
   // Debug logging middleware
   try {
@@ -276,12 +278,29 @@ async function startServer() {
   });
 
   app.get("/api/events", async (req, res) => {
+    // Import cookie parser
+    const { COOKIE_NAME } = await import("@shared/const");
+    const cookies = req.cookies || {};
+    
+    // Support: Authorization header, query param token, or session cookie
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    const queryToken = req.query.token as string | undefined;
+    const sessionCookie = cookies[COOKIE_NAME];
+    
+    let token: string | null = null;
+    
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    } else if (queryToken) {
+      token = queryToken;
+    } else if (sessionCookie) {
+      token = sessionCookie;
+    }
+    
+    if (!token) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const token = authHeader.substring(7);
     const jwt = await import("jsonwebtoken");
     let decoded: { userId: number } | null = null;
 
