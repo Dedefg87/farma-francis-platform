@@ -321,6 +321,13 @@ async function startServer() {
   });
 
   app.get("/api/events", async (req, res) => {
+    // CORS headers for SSE with credentials
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+
     // Import cookie parser
     const { COOKIE_NAME } = await import("@shared/const");
     const cookies = req.cookies || {};
@@ -340,7 +347,10 @@ async function startServer() {
       token = sessionCookie;
     }
 
+    console.log("[SSE] Auth check - cookie:", sessionCookie ? "present" : "missing", "token:", token ? "present" : "missing");
+
     if (!token) {
+      console.log("[SSE] Unauthorized - no token found");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -351,7 +361,9 @@ async function startServer() {
       decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
         userId: number;
       };
-    } catch {
+      console.log("[SSE] Token verified for userId:", decoded.userId);
+    } catch (e) {
+      console.log("[SSE] Token verification failed:", e);
       return res.status(401).json({ error: "Invalid token" });
     }
 
@@ -360,9 +372,11 @@ async function startServer() {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
+    console.log("[SSE] Client connected for userId:", decoded.userId);
     sseManager.addClient(String(decoded.userId), res);
 
     req.on("close", () => {
+      console.log("[SSE] Client disconnected for userId:", decoded?.userId);
       // sseManager.addClient already registers a close handler for cleanup.
     });
   });

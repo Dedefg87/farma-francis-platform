@@ -168,6 +168,11 @@ export default function AgentMessages() {
   const { playNotificationSound } = useNotificationSound();
   const queryClient = useQueryClient();
 
+  // DEBUG: Log component mount
+  useEffect(() => {
+    console.log("[AgentMessages] Component mounted - PDFPreview version 2.0");
+  }, []);
+
   // === SSE Connection for Real-time Messages ===
   useEffect(() => {
     if (!user?.id) return;
@@ -178,7 +183,7 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // Get token from cookie - parse all cookies
+        // Try to get token from cookie
         const cookies = document.cookie.split(";").reduce(
           (acc, cookie) => {
             const [key, ...rest] = cookie.trim().split("=");
@@ -198,11 +203,11 @@ export default function AgentMessages() {
         const eventsUrl = token ? `/api/events?token=${token}` : "/api/events";
         console.log("[AgentSSE] Using cookie:", cookieName, "URL:", eventsUrl);
 
-        // Connect to SSE endpoint
-        eventSource = new EventSource(eventsUrl);
+        // Connect to SSE endpoint with credentials
+        eventSource = new EventSource(eventsUrl, { withCredentials: true });
 
         eventSource.onopen = () => {
-          console.log("[AgentSSE] Connected");
+          console.log("[AgentSSE] Connected successfully");
           setIsConnected(true);
           reconnectAttempt = 0;
         };
@@ -227,8 +232,8 @@ export default function AgentMessages() {
           }
         };
 
-        eventSource.onerror = () => {
-          console.error("[AgentSSE] Connection error");
+        eventSource.onerror = err => {
+          console.error("[AgentSSE] Connection error:", err);
           setIsConnected(false);
           eventSource?.close();
 
@@ -236,6 +241,12 @@ export default function AgentMessages() {
           const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
+            console.log(
+              "[AgentSSE] Reconnecting in",
+              delay,
+              "ms (attempt",
+              reconnectAttempt + ")"
+            );
             connect();
           }, delay);
         };
