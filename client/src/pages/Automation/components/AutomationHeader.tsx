@@ -16,6 +16,7 @@ import {
   Upload,
   Zap,
   ChevronDown,
+  Download,
 } from "lucide-react";
 
 interface AutomationHeaderProps {
@@ -24,6 +25,7 @@ interface AutomationHeaderProps {
   onCreateSimple?: () => void;
   onImport?: () => void;
   onUseTemplate?: () => void;
+  onExport?: () => void;
   totalFlows: number;
   activeFlows: number;
 }
@@ -34,6 +36,7 @@ export function AutomationHeader({
   onCreateSimple,
   onImport,
   onUseTemplate,
+  onExport,
   totalFlows,
   activeFlows,
 }: AutomationHeaderProps) {
