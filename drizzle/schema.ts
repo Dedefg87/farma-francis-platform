@@ -1297,3 +1297,5 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
 
 export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
 export type InsertBroadcastMessage = typeof broadcastMessages.$inferInsert;
+
+export * from './schema_logs';

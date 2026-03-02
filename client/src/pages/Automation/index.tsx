@@ -29,6 +29,7 @@ import { AutomationHeader } from "./components/AutomationHeader";
 import { AutomationEmptyState } from "./components/AutomationEmptyState";
 import { AutomationStats } from "./components/AutomationStats";
 import { TemplateCard } from "./components/TemplateCard";
+import { exportFlowsToExcel } from "@/lib/exportExcel";
 import { ImportDialog } from "./components/ImportDialog";
 import { CreateDialog } from "./components/CreateDialog";
 import { FlowEditor } from "./components/FlowEditor";
@@ -267,6 +268,16 @@ export default function Automation() {
     toast.success("Fluxo exportado!");
   }, []);
 
+  const handleExportExcel = useCallback(() => {
+    if (!visualFlows || visualFlows.length === 0) {
+      toast.error("Nenhum fluxo para exportar");
+      return;
+    }
+
+    exportFlowsToExcel(visualFlows);
+    toast.success(`${visualFlows.length} fluxos exportados para Excel!`);
+  }, [visualFlows]);
+
   const selectedFlow = visualFlows?.find(f => f.id === state.selectedFlowId);
 
   // Filtrar fluxos por busca
@@ -290,6 +301,7 @@ export default function Automation() {
           onCreateFlow={() => actions.setIsCreating(true)}
           onImport={() => actions.setIsImporting(true)}
           onUseTemplate={() => {}}
+          onExport={handleExportExcel}
           totalFlows={visualFlows?.length || 0}
           activeFlows={activeFlowsCount}
         />
