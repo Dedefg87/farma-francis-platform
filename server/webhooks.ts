@@ -740,7 +740,7 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
     console.error("[Evolution Webhook] Handler error:", error);
     res.status(500).send("Internal server error");
   }
-});
+}
 
 /**
  * Process WhatsApp webhook payload
