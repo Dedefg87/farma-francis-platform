@@ -288,35 +288,17 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       response_format,
     } = params;
 
-    // STRIP ALL IMAGES from messages BEFORE creating payload
-    // This prevents "Cannot read image.png" errors
-    const processedMessages = messages.map(msg => {
-      if (Array.isArray(msg.content)) {
-        const hasImages = msg.content.some(
-          (part: any) => part?.type === "image_url"
-        );
-        if (hasImages) {
-          console.log(
-            "[invokeLLM] Found images in message - STRIPPING ALL to prevent API error"
-          );
-          return {
-            ...msg,
-            content: msg.content.filter((part: any) => {
-              if (typeof part === "string") return true;
-              return part?.type !== "image_url";
-            }),
-          };
-        }
-      }
-      return msg;
-    });
-
     const payload: Record<string, unknown> = {
       model: "gemini-2.0-flash-preview-05-20",
-      messages: processedMessages.map(normalizeMessage),
+      messages: messages.map(normalizeMessage),
     };
 
-    const hasImage = false; // Always false - we strip all images
+    const hasImage = messages.some(msg => {
+      if (Array.isArray(msg.content)) {
+        return msg.content.some((part: any) => part?.type === "image_url");
+      }
+      return false;
+    });
 
     if (tools && tools.length > 0) {
       payload.tools = tools;

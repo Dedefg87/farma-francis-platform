@@ -78,6 +78,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
+import { SoundSelector } from "@/components/SoundSelector";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -379,6 +380,16 @@ export default function Messages() {
             Central de mensagens WhatsApp e Instagram
           </p>
         </div>
+
+        {/* Sound Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Configurações</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SoundSelector />
+          </CardContent>
+        </Card>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

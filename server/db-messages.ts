@@ -39,21 +39,19 @@ async function downloadMediaAsBase64(
     // WhatsApp URLs expire quickly - download immediately with retry
     let lastError: Error | null = null;
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        console.log(`[Media Download] Attempt ${attempt}/3...`);
+        console.log(`[Media Download] Attempt ${attempt}/2...`);
 
         const response = await fetch(mediaUrl, {
           method: "GET",
-          // Important headers for WhatsApp/Meta URLs
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Accept: "image/webp,image/apng,image/*,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            Accept: "*/*",
           },
-          // Follow redirects
           redirect: "follow",
+          signal: AbortSignal.timeout(8000),
         });
 
         if (!response.ok) {
@@ -118,9 +116,9 @@ async function downloadMediaAsBase64(
           lastError.message
         );
 
-        if (attempt < 3) {
-          // Wait before retry (exponential backoff)
-          const delay = attempt * 1000;
+        if (attempt < 2) {
+          // Wait before retry (shorter delay)
+          const delay = 500;
           console.log(`[Media Download] Retrying in ${delay}ms...`);
           await new Promise(r => setTimeout(r, delay));
         }
@@ -152,7 +150,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       SELECT 
         u.id AS userId,
         COUNT(c.id) AS loadCount,
-        MAX(u.last_signed_in) AS lastSignedIn
+        MAX(u.lastSignedIn) AS lastSignedIn
       FROM users u
       LEFT JOIN agent_pauses p
         ON p.agent_id = u.id AND p.status = 'active'
@@ -225,7 +223,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       u.id AS userId,
       u.role AS role,
       COUNT(c.id) AS loadCount,
-      MAX(u.last_signed_in) AS lastSignedIn
+      MAX(u.lastSignedIn) AS lastSignedIn
     FROM users u
     LEFT JOIN agent_pauses p
       ON p.agent_id = u.id AND p.status = 'active'
@@ -383,9 +381,31 @@ export async function getConversationHistory(
  * Find or create customer by phone number
  */
 function normalizePhone(value: string) {
+  // Remove all non-digits
   const digits = value.replace(/\D/g, "");
   if (!digits) return value;
-  return digits.startsWith("+") ? digits : `+${digits}`;
+
+  // Handle WhatsApp IDs that are too long - extract just the phone number
+  // WhatsApp IDs can be like: 55120363423395306073@c.us
+  let phone = digits;
+
+  // If it's a WhatsApp-style ID (very long number), extract just the phone part
+  if (digits.length >= 20) {
+    // Try to extract phone from WhatsApp ID format: 5511XXXXXXXXX@c.us -> 5511XXXXXXXXX
+    const atIndex = value.indexOf("@");
+    if (atIndex > 0) {
+      const cleanNumber = value.substring(0, atIndex).replace(/\D/g, "");
+      if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
+        phone = cleanNumber;
+      }
+    }
+    // If still too long, just use the last 15 digits (typical phone)
+    if (phone.length > 15) {
+      phone = phone.slice(-15);
+    }
+  }
+
+  return phone.startsWith("+") ? phone : `+${phone}`;
 }
 
 export async function findOrCreateCustomerByPhone(
@@ -481,16 +501,17 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   createdAt?: Date;
 }) {
-  console.log(
-    "[ingestInbound] Step A: Starting with fromNumber:",
-    message.fromNumber
-  );
-  console.error("[ingestInbound] === STEP A START ===");
-  const db = await getDb();
-  if (!db) {
-    console.error("[ingestInbound] Database not available!");
-    return null;
-  }
+  try {
+    console.log(
+      "[ingestInbound] Step A: Starting with fromNumber:",
+      message.fromNumber
+    );
+    console.error("[ingestInbound] === STEP A START ===");
+    const db = await getDb();
+    if (!db) {
+      console.error("[ingestInbound] Database not available!");
+      return null;
+    }
   console.log("[ingestInbound] Step B: DB connected");
 
   const customer = await findOrCreateCustomerByPhone(
@@ -652,8 +673,14 @@ export async function ingestInboundConversationMessage(message: {
     .where(eq(conversations.id, conversationId))
     .limit(1);
 
+  console.log(`[SSE] Conversation fetched: id=${conversationId}, assignedTo=${conversation?.assignedTo}, status=${conversation?.status}`);
+
   if (conversation?.assignedTo) {
-    sseManager.emitToUser(String(conversation.assignedTo), {
+    const agentUserId = String(conversation.assignedTo);
+    console.log(`[SSE] New message - emitting to agent userId=${agentUserId} for conversation=${conversationId}`);
+    console.log(`[SSE] Current connected users: ${sseManager.getConnectedUsers().join(", ")}`);
+    
+    sseManager.emitToUser(agentUserId, {
       type: EVENTS.MESSAGE_NEW,
       data: {
         conversationId,
@@ -664,9 +691,18 @@ export async function ingestInboundConversationMessage(message: {
       },
       timestamp: now.getTime(),
     });
+  } else {
+    console.log(`[SSE] No assignedTo for conversation=${conversationId}, skipping SSE emit`);
+    console.log(`[SSE] Conversation data:`, JSON.stringify(conversation));
   }
 
+  console.log(`[ingestInbound] SUCCESS - conversationId=${conversationId}, customerId=${customer.id}`);
   return { conversationId, customerId: customer.id };
+  } catch (error) {
+    console.error("[ingestInbound] ERROR:", error);
+    console.error("[ingestInbound] Stack:", error instanceof Error ? error.stack : "no stack");
+    return { conversationId: null, customerId: null };
+  }
 }
 
 /**

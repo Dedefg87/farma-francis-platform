@@ -965,30 +965,18 @@ async function callAIProvider(options: {
   const provider = AI_INTEGRATION_CONFIG.providers.openai;
 
   // Strip any image content from messages to prevent errors
-  const messages =
-    options.messages?.map(msg => {
-      if (Array.isArray(msg.content)) {
-        return {
-          ...msg,
-          content: msg.content.filter((part: any) => {
-            if (typeof part === "string") return true;
-            return part?.type !== "image_url";
-          }),
-        };
-      }
-      return msg;
-    }) || [];
+  const messages = options.messages || [];
 
-  // Check if there were images and log
-  const hadImages = options.messages?.some(msg => {
+  // Check if there are images in messages
+  const hasImages = messages.some(msg => {
     if (Array.isArray(msg.content)) {
       return msg.content.some((part: any) => part?.type === "image_url");
     }
     return false;
   });
 
-  if (hadImages) {
-    console.log("[callAIProvider] Images detected and stripped from message");
+  if (hasImages) {
+    console.log("[callAIProvider] Images detected in message");
   }
 
   try {

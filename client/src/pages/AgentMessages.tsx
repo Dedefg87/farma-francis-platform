@@ -1,10 +1,17 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQueryClient } from "@tanstack/react-query";
 
 function getImageSrc(
   url: string | null | undefined,
@@ -143,7 +150,11 @@ export default function AgentMessages() {
     url: string | null;
     fileName?: string;
     messageId?: number;
+    fileType?: string;
   }>({ open: false, url: null });
+  
+  // Prevenir fechamento imediato do modal
+  const pdfPreviewJustOpened = useRef(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -153,11 +164,91 @@ export default function AgentMessages() {
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousMessagesCountRef = useRef<number>(0);
   const previousConversationsRef = useRef<number[]>([]);
   const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
+  const queryClient = useQueryClient();
+
+  // DEBUG: Log component mount
+  useEffect(() => {
+    console.log("[AgentMessages] Component mounted - PDFPreview version 2.0");
+  }, []);
+
+  // DEBUG: Log pdfPreview state changes
+  useEffect(() => {
+    console.log("[PDFPreview] State changed:", pdfPreview);
+  }, [pdfPreview]);
+
+  // === SSE Connection for Real-time Messages ===
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let reconnectAttempt = 0;
+
+    const connect = () => {
+      try {
+        // withCredentials: true sends cookies automatically - no need to extract token manually
+        eventSource = new EventSource("/api/events", { withCredentials: true });
+
+        eventSource.onopen = () => {
+          console.log("[AgentSSE] Connected successfully");
+          setIsConnected(true);
+          reconnectAttempt = 0;
+        };
+
+        eventSource.onmessage = event => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log("[AgentSSE] Event received:", data);
+
+            if (data.type === "message:new" || data.type === "MESSAGE_NEW") {
+              // Play notification sound if not muted
+              if (!notificationsMuted) {
+                playNotificationSound();
+              }
+
+              // Invalidate queries to refresh data
+              queryClient.invalidateQueries({ queryKey: ["conversations"] });
+              queryClient.invalidateQueries({ queryKey: ["messages"] });
+            }
+          } catch (e) {
+            console.error("[AgentSSE] Parse error:", e);
+          }
+        };
+
+        eventSource.onerror = err => {
+          console.error("[AgentSSE] Connection error:", err);
+          setIsConnected(false);
+          eventSource?.close();
+
+          // Reconnect with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
+          reconnectTimeout = setTimeout(() => {
+            reconnectAttempt++;
+            console.log(
+              "[AgentSSE] Reconnecting (attempt",
+              reconnectAttempt + ")"
+            );
+            connect();
+          }, delay);
+        };
+      } catch (e) {
+        console.error("[AgentSSE] Connection failed:", e);
+      }
+    };
+
+    connect();
+
+    return () => {
+      eventSource?.close();
+      clearTimeout(reconnectTimeout);
+    };
+  }, [user?.id, notificationsMuted, playNotificationSound, queryClient]);
 
   // Atualizar localStorage quando ordenação mudar
   useEffect(() => {
@@ -215,7 +306,7 @@ export default function AgentMessages() {
     isLoading: loadingConversations,
     refetch: refetchConversations,
   } = trpc.conversations.listActive.useQuery(undefined, {
-    refetchInterval: 2000, // Atualizar a cada 2 segundos
+    refetchInterval: 1000, // Atualizar a cada 1 segundo
   });
 
   const { data: loggedAgents } = trpc.conversations.loggedAgents.useQuery(
@@ -299,7 +390,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     {
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 1500 : false, // Atualizar mensagens a cada 1.5 segundos se conversa selecionada
+      refetchInterval: selectedConversationId ? 800 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
     }
   );
 
@@ -571,6 +662,25 @@ export default function AgentMessages() {
 
   return (
     <>
+      {/* PDF Preview Modal - deve estar no topo para z-index correto */}
+      <PDFPreview
+        open={pdfPreview.open}
+        onOpenChange={(open) => {
+          // Prevenir fechamento imediato após abrir
+          if (!open && pdfPreviewJustOpened.current) {
+            console.log("[PDFPreview] Preventing immediate close");
+            pdfPreviewJustOpened.current = false;
+            return;
+          }
+          console.log("[PDFPreview] onOpenChange called with:", open);
+          setPdfPreview({ ...pdfPreview, open });
+        }}
+        url={pdfPreview.url || ""}
+        fileName={pdfPreview.fileName}
+        messageId={pdfPreview.messageId}
+        fileType={pdfPreview.fileType}
+      />
+
       <AgentTopBar />
       <div className="h-[calc(100vh-64px)] bg-gray-50 flex">
         {/* Lista de Conversas */}
@@ -912,14 +1022,30 @@ export default function AgentMessages() {
                               <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
                                 <div
                                   className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={() =>
-                                    setPdfPreview({
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log("========== PDF CLICK START ==========");
+                                    console.log("[PDF] msg.id:", msg.id);
+                                    console.log("[PDF] msg.fileUrl:", msg.fileUrl?.substring(0, 50));
+                                    console.log("[PDF] msg.fileName:", msg.fileName);
+                                    console.log("[PDF] msg.fileType:", msg.fileType);
+                                    pdfPreviewJustOpened.current = true;
+                                    const newState = {
                                       open: true,
                                       url: msg.fileUrl,
                                       fileName: msg.fileName || undefined,
                                       messageId: msg.id,
-                                    })
-                                  }
+                                      fileType: msg.fileType || undefined,
+                                    };
+                                    console.log("[PDF] Setting new state:", newState);
+                                    setPdfPreview(newState);
+                                    // Reset o flag após 100ms
+                                    setTimeout(() => {
+                                      pdfPreviewJustOpened.current = false;
+                                    }, 100);
+                                    console.log("========== PDF CLICK END ==========");
+                                  }}
                                 >
                                   <iframe
                                     src={getImageSrc(msg.fileUrl, msg.id)}
@@ -947,14 +1073,21 @@ export default function AgentMessages() {
                                     </span>
                                   </div>
                                   <button
-                                    onClick={() =>
+                                    onClick={() => {
+                                      console.log(
+                                        "[PDF] Click on Ampliar button:",
+                                        msg.id,
+                                        msg.fileName,
+                                        msg.fileType
+                                      );
                                       setPdfPreview({
                                         open: true,
                                         url: msg.fileUrl,
                                         fileName: msg.fileName || undefined,
                                         messageId: msg.id,
-                                      })
-                                    }
+                                        fileType: msg.fileType || undefined,
+                                      });
+                                    }}
                                     className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
                                   >
                                     Ampliar
@@ -963,14 +1096,21 @@ export default function AgentMessages() {
                               </div>
                             ) : (
                               <div
-                                onClick={() =>
+                                onClick={() => {
+                                  console.log(
+                                    "[File] Click on file:",
+                                    msg.id,
+                                    msg.fileName,
+                                    msg.fileType
+                                  );
                                   setPdfPreview({
                                     open: true,
                                     url: msg.fileUrl,
                                     fileName: msg.fileName || undefined,
                                     messageId: msg.id,
-                                  })
-                                }
+                                    fileType: msg.fileType || undefined,
+                                  });
+                                }}
                                 className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
                               >
                                 <svg
@@ -1349,16 +1489,8 @@ export default function AgentMessages() {
           customerPhone={crmCustomerPhone}
         />
       ) : null}
-
-      {/* PDF Preview Modal */}
-      <PDFPreview
-        open={pdfPreview.open}
-        onOpenChange={open => setPdfPreview({ ...pdfPreview, open })}
-        url={pdfPreview.url || ""}
-        fileName={pdfPreview.fileName}
-        messageId={pdfPreview.messageId}
-      />
     </>
   );
 }
 // Build fix Sat Feb 28 11:21:28 -03 2026
+// Deploy refresh Mon Mar 2 08:05:00 -03 2026

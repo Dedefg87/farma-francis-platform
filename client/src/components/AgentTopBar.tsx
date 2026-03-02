@@ -1,37 +1,43 @@
-import { useLocation, Link } from 'wouter';
-import { MessageSquare, ListOrdered, LogOut, Bell, BellOff } from 'lucide-react';
-import { useAuth } from '@/_core/hooks/useAuth';
+import { useLocation, Link } from "wouter";
+import {
+  MessageSquare,
+  ListOrdered,
+  LogOut,
+  Bell,
+  BellOff,
+} from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { trpc } from '@/lib/trpc';
-import { useNotificationSound } from '@/hooks/useNotificationSound';
-import { useEffect, useRef, useState } from 'react';
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
+import { useNotificationSound } from "@/hooks/useNotificationSound";
+import { useEffect, useRef, useState } from "react";
 
 export default function AgentTopBar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { playNotificationSound } = useNotificationSound();
   const [notificationsMuted, setNotificationsMuted] = useState<boolean>(() => {
-    return localStorage.getItem('notificationsMuted') === 'true';
+    return localStorage.getItem("notificationsMuted") === "true";
   });
-  
+
   // Ref para rastrear mensagens anteriores
   const previousMessagesRef = useRef<Map<number, number>>(new Map());
 
   const tabs = [
     {
-      name: 'Filas',
-      path: '/agent/queues',
+      name: "Filas",
+      path: "/agent/queues",
       icon: ListOrdered,
     },
     {
-      name: 'Mensagens',
-      path: '/agent/messages',
+      name: "Mensagens",
+      path: "/agent/messages",
       icon: MessageSquare,
     },
   ];
@@ -40,7 +46,7 @@ export default function AgentTopBar() {
   const { data: conversations } = trpc.conversations.listActive.useQuery(
     undefined,
     {
-      refetchInterval: 2000, // Verificar a cada 2 segundos
+      refetchInterval: 1000, // Verificar a cada 1 segundo
       refetchIntervalInBackground: true, // Continuar verificando mesmo em background
     }
   );
@@ -51,7 +57,7 @@ export default function AgentTopBar() {
 
     let hasNewMessage = false;
 
-    conversations.forEach((conv) => {
+    conversations.forEach(conv => {
       const previousCount = previousMessagesRef.current.get(conv.id) || 0;
       const currentCount = conv.messageCount || conv.unreadCount || 0;
 
@@ -74,7 +80,7 @@ export default function AgentTopBar() {
   const toggleNotifications = () => {
     const newState = !notificationsMuted;
     setNotificationsMuted(newState);
-    localStorage.setItem('notificationsMuted', String(newState));
+    localStorage.setItem("notificationsMuted", String(newState));
   };
 
   return (
@@ -87,14 +93,16 @@ export default function AgentTopBar() {
               <span className="text-white font-bold text-sm">FF</span>
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-gray-900">Farma Francis</h1>
+              <h1 className="text-lg font-semibold text-gray-900">
+                Farma Francis
+              </h1>
               <p className="text-xs text-gray-500">Painel do Agente</p>
             </div>
           </div>
 
           {/* Tabs de Navegação */}
           <nav className="flex gap-1">
-            {tabs.map((tab) => {
+            {tabs.map(tab => {
               const Icon = tab.icon;
               const isActive = location === tab.path;
               return (
@@ -104,8 +112,8 @@ export default function AgentTopBar() {
                       flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
                       ${
                         isActive
-                          ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          ? "bg-blue-50 text-blue-600 border border-blue-200"
+                          : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       }
                     `}
                   >
@@ -124,8 +132,12 @@ export default function AgentTopBar() {
               variant="ghost"
               size="icon"
               onClick={toggleNotifications}
-              title={notificationsMuted ? 'Ativar notificações sonoras' : 'Desativar notificações sonoras'}
-              className={notificationsMuted ? 'text-gray-400' : 'text-blue-600'}
+              title={
+                notificationsMuted
+                  ? "Ativar notificações sonoras"
+                  : "Desativar notificações sonoras"
+              }
+              className={notificationsMuted ? "text-gray-400" : "text-blue-600"}
             >
               {notificationsMuted ? (
                 <BellOff className="w-5 h-5" />
@@ -141,7 +153,9 @@ export default function AgentTopBar() {
                   className="flex items-center gap-3 rounded-lg px-2 py-1 transition hover:bg-gray-50"
                 >
                   <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {user?.name}
+                    </p>
                     <p className="text-xs text-gray-500">Agente</p>
                   </div>
                   <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
@@ -155,7 +169,7 @@ export default function AgentTopBar() {
                 <DropdownMenuItem
                   onClick={async () => {
                     await logout();
-                    window.location.href = '/login';
+                    window.location.href = "/login";
                   }}
                   className="cursor-pointer"
                 >

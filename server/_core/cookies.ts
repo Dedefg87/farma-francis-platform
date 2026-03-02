@@ -40,7 +40,7 @@ export function getSessionCookieOptions(
   //       : undefined;
 
   return {
-    httpOnly: true,
+    httpOnly: false, // Allow JavaScript to read cookie for SSE authentication
     path: "/",
     sameSite: "lax",
     secure: isSecureRequest(req),

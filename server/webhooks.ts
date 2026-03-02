@@ -122,8 +122,8 @@ async function downloadAndSaveMedia(
   mimeType: string | null,
   fromNumber: string
 ): Promise<{ base64Data: string; dataUrl: string } | null> {
-  const maxRetries = 3;
-  const initialDelay = 500;
+  const maxRetries = 2;
+  const initialDelay = 300;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -133,7 +133,7 @@ async function downloadAndSaveMedia(
 
       // Try direct download first
       let response = await fetch(mediaUrl, {
-        signal: AbortSignal.timeout(15000), // 15 second timeout
+        signal: AbortSignal.timeout(8000), // 8 second timeout
       });
 
       // If direct URL fails, try again after a short delay
@@ -167,7 +167,7 @@ async function downloadAndSaveMedia(
                 apikey: evoConfig.apiKey,
                 "Content-Type": "application/json",
               },
-              signal: AbortSignal.timeout(15000),
+              signal: AbortSignal.timeout(8000),
             });
 
             if (evoResponse.ok) {
@@ -571,8 +571,17 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
 
 /**
  * Evolution API Webhook (POST)
+ * Supports both /evolution and /evolution/:event (when webhook_by_events is true)
  */
 router.post("/evolution", async (req: Request, res: Response) => {
+  return handleEvolutionWebhook(req, res);
+});
+
+router.post("/evolution/:event", async (req: Request, res: Response) => {
+  return handleEvolutionWebhook(req, res);
+});
+
+async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
     console.log(
       "[Evolution Webhook] Received Evolution webhook call at",
@@ -710,10 +719,13 @@ router.post("/evolution", async (req: Request, res: Response) => {
       );
     }
 
-    console.log(
-      "[Evolution Webhook] Calling processEvolutionWebhook with event:",
-      eventName
-    );
+    console.log("[Evolution Webhook] Calling processEvolutionWebhook with event:", eventName);
+    console.log("[Evolution Webhook] === FULL EVENT INFO ===");
+    console.log("[Evolution Webhook] Event:", eventName);
+    console.log("[Evolution Webhook] Body keys:", Object.keys(body || {}));
+    console.log("[Evolution Webhook] Has data:", !!body?.data);
+    console.log("[Evolution Webhook] Has message:", !!(body?.message || body?.data?.message));
+    console.log("[Evolution Webhook] =========================");
     res.status(200).send("EVENT_RECEIVED");
 
     console.log("[Evolution Webhook] Response sent, processing async...");
@@ -728,7 +740,7 @@ router.post("/evolution", async (req: Request, res: Response) => {
     console.error("[Evolution Webhook] Handler error:", error);
     res.status(500).send("Internal server error");
   }
-});
+}
 
 /**
  * Process WhatsApp webhook payload
@@ -1726,3 +1738,4 @@ async function validateInstagramSignature(
 }
 
 export default router;
+// Force rebuild Mon Mar  2 15:42:15 -03 2026

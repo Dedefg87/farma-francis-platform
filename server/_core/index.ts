@@ -2,6 +2,7 @@ import "dotenv/config";
 console.log("[Server] Starting initialization...");
 
 import express from "express";
+import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -70,6 +71,7 @@ async function startServer() {
     })
   );
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(cookieParser());
 
   // Debug logging middleware
   try {
@@ -208,6 +210,49 @@ async function startServer() {
     }
   });
 
+  // Endpoint to fix missing database columns
+  app.post("/api/db/fix-columns", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 5,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const results: string[] = [];
+
+      // Add is_test_mode column to visual_flows if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE visual_flows ADD COLUMN is_test_mode INT DEFAULT 0 NOT NULL`
+        );
+        results.push("Added is_test_mode column to visual_flows");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("is_test_mode column already exists");
+        } else {
+          results.push(`Error adding is_test_mode: ${e.message}`);
+        }
+      }
+
+      // Increase phone column size in customers table
+      try {
+        await pool.execute(
+          `ALTER TABLE customers MODIFY COLUMN phone VARCHAR(100)`
+        );
+        results.push("Increased phone column size to VARCHAR(100)");
+      } catch (e: any) {
+        results.push(`Error modifying phone column: ${e.message}`);
+      }
+
+      await pool.end();
+      res.json({ success: true, results });
+    } catch (error: any) {
+      console.error("[db/fix-columns] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Endpoint to migrate all old WhatsApp media URLs to base64
   app.post("/api/media/migrate", async (req, res) => {
     try {
@@ -276,21 +321,79 @@ async function startServer() {
   });
 
   app.get("/api/events", async (req, res) => {
+    // CORS headers for SSE with credentials
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+
+    // Import cookie parser and auth
+    const { COOKIE_NAME } = await import("@shared/const");
+    const { verifyToken } = await import("../auth");
+    const cookies = req.cookies || {};
+
+    // Support: Authorization header, query param token, or session cookie
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith("Bearer ")) {
+    const queryToken = req.query.token as string | undefined;
+    const sessionCookie = cookies[COOKIE_NAME];
+
+    let token: string | null = null;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    } else if (queryToken) {
+      token = queryToken;
+    } else if (sessionCookie) {
+      token = sessionCookie;
+    }
+
+    console.log("[SSE] Auth check - cookie:", sessionCookie ? "present" : "missing", "token:", token ? `${token.substring(0, 30)}...` : "missing");
+
+    if (!token) {
+      console.log("[SSE] Unauthorized - no token found");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const token = authHeader.substring(7);
-    const jwt = await import("jsonwebtoken");
-    let decoded: { userId: number } | null = null;
-
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
-        userId: number;
-      };
-    } catch {
+    // Verify token using the same method as the rest of the app
+    const decoded = await verifyToken(token);
+    
+    if (!decoded) {
+      console.log("[SSE] Token verification failed - invalid token");
       return res.status(401).json({ error: "Invalid token" });
+    }
+
+    console.log("[SSE] Token decoded:", decoded);
+
+    // Get userId from token - could be userId or openId
+    let userId: string;
+    
+    if (decoded.userId) {
+      userId = String(decoded.userId);
+    } else if (decoded.openId) {
+      // Map openId to userId from database
+      try {
+        const { getDb } = await import("../db");
+        const { users } = await import("../../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+        
+        const [user] = await db.select({ id: users.id }).from(users).where(eq(users.openId, decoded.openId));
+        
+        if (!user) {
+          console.log("[SSE] User not found for openId:", decoded.openId);
+          return res.status(401).json({ error: "User not found" });
+        }
+        
+        userId = String(user.id);
+        console.log("[SSE] Mapped openId to userId:", decoded.openId, "->", userId);
+      } catch (e) {
+        console.error("[SSE] Error mapping openId to userId:", e);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+    } else {
+      console.log("[SSE] Token has no userId or openId");
+      return res.status(401).json({ error: "Invalid token structure" });
     }
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -298,10 +401,11 @@ async function startServer() {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    sseManager.addClient(String(decoded.userId), res);
+    console.log("[SSE] Client connected for userId:", userId);
+    sseManager.addClient(userId, res);
 
     req.on("close", () => {
-      // sseManager.addClient already registers a close handler for cleanup.
+      console.log("[SSE] Client disconnected for userId:", userId);
     });
   });
 
@@ -490,6 +594,40 @@ async function startServer() {
     }
   });
 
+  // FIX: Adicionar coluna last_signed_in na tabela users
+  app.get("/api/fix/add-last-signed-in", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Verificar se a coluna já existe
+      const columns = await db.execute(sql`SHOW COLUMNS FROM users LIKE 'last_signed_in'`);
+      
+      if (columns.length > 0) {
+        return res.json({
+          success: true,
+          message: "Coluna last_signed_in já existe",
+          exists: true,
+        });
+      }
+
+      // Adicionar a coluna
+      await db.execute(sql`ALTER TABLE users ADD COLUMN last_signed_in DATETIME NULL`);
+      
+      res.json({
+        success: true,
+        message: "Coluna last_signed_in adicionada com sucesso",
+        exists: false,
+      });
+    } catch (error) {
+      console.error("[Fix] Error adding last_signed_in column:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // EMERGENCY: Reset admin password
   app.get("/api/emergency/reset-admin-password", async (req, res) => {
     try {
@@ -634,7 +772,7 @@ async function startServer() {
     // vite.ts imports devDependencies that are not available in production
     const vitePath = "./vite";
     const { setupVite } = await import(
-      /* webpackIgnore: true */ 
+      /* webpackIgnore: true */
       /* @vite-ignore */
       vitePath
     );
