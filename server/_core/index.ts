@@ -228,6 +228,40 @@ async function startServer() {
         );
         results.push("Added is_test_mode column to visual_flows");
       } catch (e: any) {
+        if (e.code === 'ER_DUP_FIELDNAME') {
+          results.push("is_test_mode column already exists");
+        } else {
+          results.push(`Error adding is_test_mode: ${e.message}`);
+        }
+      }
+
+      // Increase phone column size in customers table
+      try {
+        await pool.execute(
+          `ALTER TABLE customers MODIFY COLUMN phone VARCHAR(50)`
+        );
+        results.push("Increased phone column size to VARCHAR(50)");
+      } catch (e: any) {
+        results.push(`Error modifying phone column: ${e.message}`);
+      }
+
+      await pool.end();
+      res.json({ success: true, results });
+    } catch (error: any) {
+      console.error("[db/fix-columns] Error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+      const results: string[] = [];
+
+      // Add is_test_mode column to visual_flows if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE visual_flows ADD COLUMN is_test_mode INT DEFAULT 0 NOT NULL`
+        );
+        results.push("Added is_test_mode column to visual_flows");
+      } catch (e: any) {
         if (e.code === "ER_DUP_FIELDNAME") {
           results.push("is_test_mode column already exists");
         } else {
