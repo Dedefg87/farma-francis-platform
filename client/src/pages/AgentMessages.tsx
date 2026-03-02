@@ -662,8 +662,9 @@ export default function AgentMessages() {
       {/* PDF Preview Modal - deve estar no topo para z-index correto */}
       <PDFPreview
         open={pdfPreview.open}
-        onOpenChange={open => {
-          console.log("[PDFPreview] onOpenChange:", open);
+        onOpenChange={(open) => {
+          console.log("[PDFPreview] onOpenChange called with:", open);
+          console.log("[PDFPreview] Current state:", pdfPreview);
           setPdfPreview({ ...pdfPreview, open });
         }}
         url={pdfPreview.url || ""}
@@ -1016,15 +1017,21 @@ export default function AgentMessages() {
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    console.log("[PDF] Click on preview area:", msg.id, msg.fileName, msg.fileType);
-                                    setPdfPreview({
+                                    console.log("========== PDF CLICK START ==========");
+                                    console.log("[PDF] msg.id:", msg.id);
+                                    console.log("[PDF] msg.fileUrl:", msg.fileUrl?.substring(0, 50));
+                                    console.log("[PDF] msg.fileName:", msg.fileName);
+                                    console.log("[PDF] msg.fileType:", msg.fileType);
+                                    const newState = {
                                       open: true,
                                       url: msg.fileUrl,
                                       fileName: msg.fileName || undefined,
                                       messageId: msg.id,
                                       fileType: msg.fileType || undefined,
-                                    });
-                                    console.log("[PDF] setPdfPreview called");
+                                    };
+                                    console.log("[PDF] Setting new state:", newState);
+                                    setPdfPreview(newState);
+                                    console.log("========== PDF CLICK END ==========");
                                   }}
                                 >
                                   <iframe
