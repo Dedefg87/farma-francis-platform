@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useQueryClient } from "@tanstack/react-query";
 
 function getImageSrc(
   url: string | null | undefined,
@@ -153,11 +154,76 @@ export default function AgentMessages() {
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const previousMessagesCountRef = useRef<number>(0);
   const previousConversationsRef = useRef<number[]>([]);
   const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
+  const queryClient = useQueryClient();
+
+  // === SSE Connection for Real-time Messages ===
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const userId = String(user.id);
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let reconnectAttempt = 0;
+
+    const connect = () => {
+      try {
+        eventSource = new EventSource(`/api/sse?userId=${userId}`);
+
+        eventSource.onopen = () => {
+          console.log("[AgentSSE] Connected for user:", userId);
+          reconnectAttempt = 0;
+        };
+
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log("[AgentSSE] Event received:", data);
+
+            if (data.type === "message:new" || data.type === "MESSAGE_NEW") {
+              // Play notification sound if not muted
+              if (!notificationsMuted) {
+                playNotificationSound();
+              }
+
+              // Invalidate queries to refresh data
+              queryClient.invalidateQueries({ queryKey: ["conversations"] });
+              queryClient.invalidateQueries({ queryKey: ["messages"] });
+            }
+          } catch (e) {
+            console.error("[AgentSSE] Parse error:", e);
+          }
+        };
+
+        eventSource.onerror = () => {
+          console.error("[AgentSSE] Connection error");
+          eventSource?.close();
+          setIsConnected(false);
+
+          // Reconnect with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
+          reconnectTimeout = setTimeout(() => {
+            reconnectAttempt++;
+            connect();
+          }, delay);
+        };
+      } catch (e) {
+        console.error("[AgentSSE] Connection failed:", e);
+      }
+    };
+
+    connect();
+
+    return () => {
+      eventSource?.close();
+      clearTimeout(reconnectTimeout);
+    };
+  }, [user?.id, notificationsMuted, playNotificationSound, queryClient]);
 
   // Atualizar localStorage quando ordenação mudar
   useEffect(() => {
