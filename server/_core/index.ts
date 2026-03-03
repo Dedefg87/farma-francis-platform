@@ -141,6 +141,35 @@ async function startServer() {
     }
   });
 
+  // Debug: list messages with media in conversation_messages
+  // IMPORTANT: Must come BEFORE /:messageId route
+  app.get("/api/media/debug-list", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, conversation_id, file_type, 
+         LENGTH(file_url) as file_size, 
+         LEFT(file_url, 50) as file_url_preview,
+         created_at
+         FROM conversation_messages 
+         WHERE file_url IS NOT NULL 
+         ORDER BY id DESC
+         LIMIT 20`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, rows });
+    } catch (error) {
+      console.error("[Media debug-list]", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {
@@ -208,33 +237,6 @@ async function startServer() {
 
   // Debug: list messages with base64 media (to test preview)
   // IMPORTANT: Must come BEFORE /:messageId route
-  app.get("/api/media/debug-list", async (req, res) => {
-    try {
-      const mysql = await import("mysql2/promise");
-      const pool = mysql.createPool({
-        connectionLimit: 1,
-        uri: process.env.DATABASE_URL,
-      });
-
-      const [rows]: any = await pool.execute(
-        `SELECT id, conversation_id, file_type, 
-         LENGTH(file_url) as file_size, 
-         LEFT(file_url, 50) as file_url_preview,
-         created_at
-         FROM conversation_messages 
-         WHERE file_url IS NOT NULL 
-         ORDER BY id DESC
-         LIMIT 20`
-      );
-
-      await pool.end();
-      res.json({ count: rows.length, rows });
-    } catch (error) {
-      console.error("[Media debug-list]", error);
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
   // Endpoint to fix missing database columns
   app.post("/api/db/fix-columns", async (req, res) => {
     try {
