@@ -115,6 +115,32 @@ async function startServer() {
     }
   });
 
+  // Debug: list old WhatsApp media URLs for migration planning
+  // IMPORTANT: This must come BEFORE the /:messageId route to avoid being captured
+  app.get("/api/media/inspect-old", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, file_url, file_type FROM conversation_messages 
+         WHERE file_url IS NOT NULL 
+         AND file_url LIKE '%whatsapp.net%'
+         AND file_url NOT LIKE 'data:%'
+         LIMIT 100`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, rows });
+    } catch (error) {
+      console.error("[Inspect Old]", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Media endpoint - serves images from conversation_messages table
   app.get("/api/media/:messageId", async (req, res) => {
     try {
@@ -180,32 +206,30 @@ async function startServer() {
     }
   });
 
-  // Debug: list old WhatsApp media URLs for migration planning
-  app.get("/api/media/inspect-old", async (req, res) => {
+  // Debug: list messages with base64 media (to test preview)
+  app.get("/api/media/with-base64", async (req, res) => {
     try {
-      const { getDb } = await import("../db");
-      const { conversationMessages } = await import("../../drizzle/schema");
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
 
-      const { sql } = await import("drizzle-orm");
-      const rows = await db
-        .select({
-          id: conversationMessages.id,
-          fileUrl: conversationMessages.fileUrl,
-          fileType: conversationMessages.fileType,
-        })
-        .from(conversationMessages)
-        .limit(100);
-
-      // Filter old WhatsApp URLs in memory (avoid dialect specifics)
-      const old = rows.filter(
-        (r: any) =>
-          typeof r.fileUrl === "string" && r.fileUrl.includes("whatsapp.net")
+      const [rows]: any = await pool.execute(
+        `SELECT id, file_type, 
+         LENGTH(file_url) as file_size, 
+         LEFT(file_url, 50) as file_url_preview
+         FROM conversation_messages 
+         WHERE file_url IS NOT NULL 
+         AND file_url LIKE 'data:%'
+         ORDER BY id DESC
+         LIMIT 20`
       );
-      res.json({ count: old.length, rows: old });
+
+      await pool.end();
+      res.json({ count: rows.length, rows });
     } catch (error) {
-      console.error("[Inspect Old]", error);
+      console.error("[Media with base64]", error);
       res.status(500).json({ error: String(error) });
     }
   });
