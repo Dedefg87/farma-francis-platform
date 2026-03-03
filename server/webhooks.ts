@@ -1119,6 +1119,8 @@ function parseEvolutionMessageContent(message: any) {
         message.imageMessage.url || message.imageMessage.mediaUrl || null,
       mimeType:
         message.imageMessage.mimetype || message.imageMessage.mimeType || null,
+      mediaKey: message.imageMessage.mediaKey || null,
+      directPath: message.imageMessage.directPath || null,
     };
   }
 
@@ -1131,6 +1133,8 @@ function parseEvolutionMessageContent(message: any) {
         message.videoMessage.url || message.videoMessage.mediaUrl || null,
       mimeType:
         message.videoMessage.mimetype || message.videoMessage.mimeType || null,
+      mediaKey: message.videoMessage.mediaKey || null,
+      directPath: message.videoMessage.directPath || null,
     };
   }
 
@@ -1145,6 +1149,8 @@ function parseEvolutionMessageContent(message: any) {
         message.documentMessage.mimetype ||
         message.documentMessage.mimeType ||
         null,
+      mediaKey: message.documentMessage.mediaKey || null,
+      directPath: message.documentMessage.directPath || null,
     };
   }
 
@@ -1159,6 +1165,8 @@ function parseEvolutionMessageContent(message: any) {
         message.audioMessage.mimetype ||
         message.audioMessage.mimeType ||
         "audio/ogg",
+      mediaKey: message.audioMessage.mediaKey || null,
+      directPath: message.audioMessage.directPath || null,
     };
   }
 
@@ -1393,6 +1401,8 @@ async function processEvolutionWebhook(body: any) {
         const caption = parsed.caption;
         const mediaUrl = parsed.mediaUrl;
         const mimeType = parsed.mimeType;
+        const mediaKey = parsed.mediaKey;
+        const directPath = parsed.directPath;
         console.log(
           "[Evolution Webhook] Step 12b: messageType=",
           messageType,
@@ -1401,7 +1411,9 @@ async function processEvolutionWebhook(body: any) {
           "mediaUrl=",
           mediaUrl ? mediaUrl.substring(0, 60) + "..." : null,
           "mimeType=",
-          mimeType
+          mimeType,
+          "mediaKey=",
+          mediaKey ? "present" : "missing"
         );
 
         // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
@@ -1430,7 +1442,9 @@ async function processEvolutionWebhook(body: any) {
           const mediaResult = await downloadAndSaveMedia(
             mediaUrl,
             mimeType,
-            fromNumber
+            fromNumber,
+            mediaKey,
+            directPath
           );
           if (mediaResult) {
             console.log(
