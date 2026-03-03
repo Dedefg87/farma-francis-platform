@@ -88,6 +88,28 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Debug: testar ingestInboundConversationMessage
+  app.post("/api/debug/test-ingest", async (req, res) => {
+    try {
+      const { ingestInboundConversationMessage } = await import("../db-messages");
+      const result = await ingestInboundConversationMessage({
+        fromNumber: "+5511999999999",
+        fromName: "Teste Debug",
+        content: "Mensagem de teste",
+        provider: "whatsapp",
+        messageType: "text",
+      });
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error("[Debug Test Ingest] Error:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: String(error),
+        stack: error instanceof Error ? error.stack : null
+      });
+    }
+  });
+
   // OpenClaw Bridge endpoint - receives tasks from OpenClaw via WS bridge
   app.post("/api/openclaw/tasks", async (req, res) => {
     try {
