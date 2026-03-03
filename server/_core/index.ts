@@ -143,23 +143,27 @@ async function startServer() {
   // Debug: testar Evolution API getBase64FromMediaMessage
   app.get("/api/debug/test-evolution-media", async (req, res) => {
     try {
-      const { getMediaBase64FromEvolution } = await import("../media-download");
-      
       // Get Evolution config first
-      const evoConfig = await getEvolutionConfig();
-      if (!evoConfig) {
-        return res.json({ error: "Evolution API not configured" });
-      }
-      
-      // Test with a sample message ID from WhatsApp
-      // Use the message ID from the most recent media message
       const mysql = await import("mysql2/promise");
       const pool = mysql.createPool({
         connectionLimit: 1,
         uri: process.env.DATABASE_URL,
       });
 
-      const [rows]: any = await pool.execute(
+      const [configRows]: any = await pool.execute(
+        "SELECT config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1"
+      );
+
+      if (!configRows || configRows.length === 0) {
+        await pool.end();
+        return res.json({ error: "Evolution API not configured" });
+      }
+
+      const config = typeof configRows[0].config === 'string' 
+        ? JSON.parse(configRows[0].config) 
+        : configRows[0].config;
+
+      const [msgRows]: any = await pool.execute(
         `SELECT id, created_at FROM conversation_messages 
          WHERE file_type IS NOT NULL 
          ORDER BY id DESC LIMIT 1`
@@ -168,11 +172,12 @@ async function startServer() {
 
       res.json({
         evoConfig: {
-          apiUrl: evoConfig.apiUrl,
-          instanceName: evoConfig.instanceName,
-          hasApiKey: !!evoConfig.apiKey
+          apiUrl: config.apiUrl,
+          instanceName: config.instanceName,
+          hasApiKey: !!(config.apiKey || config.accessToken)
         },
-        latestMediaMessage: rows[0] || null,
+        latestMediaMessage: msgRows[0] || null,
+        timestamp: new Date().toISOString(),
         note: "Need to pass WhatsApp message key to getBase64FromMediaMessage"
       });
     } catch (error) {
