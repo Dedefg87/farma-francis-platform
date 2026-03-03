@@ -125,13 +125,62 @@ async function downloadAndSaveMedia(
   const maxRetries = 2;
   const initialDelay = 300;
 
+  // PRIMEIRO: Tentar Evolution API se tiver mediaId na URL
+  if (mediaUrl.includes("whatsapp.net")) {
+    console.log("[Media] Trying Evolution API first for WhatsApp URL...");
+    const evoConfig = await getEvolutionConfig();
+    if (evoConfig) {
+      const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
+      if (mediaIdMatch) {
+        const mediaId = mediaIdMatch[1];
+        console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
+
+        try {
+          const mediaFetchUrl = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
+          const evoResponse = await fetch(mediaFetchUrl, {
+            method: "POST",
+            headers: {
+              apikey: evoConfig.apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              messageTimestamp: Math.floor(Date.now() / 1000),
+              key: {
+                remoteJid: fromNumber.includes("@") ? fromNumber : `${fromNumber}@s.whatsapp.net`,
+                fromMe: false,
+              },
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+
+          if (evoResponse.ok) {
+            const evoData = await evoResponse.json();
+            if (evoData?.base64) {
+              console.log("[Media] Got base64 from Evolution API, size:", evoData.base64.length);
+              const contentType = mimeType || "application/octet-stream";
+              const dataUrl = `data:${contentType};base64,${evoData.base64}`;
+              return { base64Data: evoData.base64, dataUrl };
+            } else {
+              console.warn("[Media] Evolution API response missing base64:", JSON.stringify(evoData).substring(0, 200));
+            }
+          } else {
+            const errorText = await evoResponse.text();
+            console.warn(`[Media] Evolution API fetch failed: ${evoResponse.status}`, errorText.substring(0, 200));
+          }
+        } catch (evoError) {
+          console.warn("[Media] Evolution API error:", evoError);
+        }
+      }
+    }
+  }
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(
         `[Media] Attempt ${attempt}/${maxRetries}: Downloading from ${mediaUrl.substring(0, 80)}...`
       );
 
-      // Try direct download first
+      // Try direct download
       let response = await fetch(mediaUrl, {
         signal: AbortSignal.timeout(8000), // 8 second timeout
       });
@@ -146,48 +195,6 @@ async function downloadAndSaveMedia(
             setTimeout(resolve, initialDelay * attempt)
           );
           continue;
-        }
-      }
-
-      // If direct URL fails, try Evolution API endpoint
-      if (!response.ok && mediaUrl.includes("whatsapp.net")) {
-        console.log("[Media] Direct download failed, trying Evolution API...");
-        const evoConfig = await getEvolutionConfig();
-        if (evoConfig) {
-          // Try to extract media ID from URL
-          const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
-          if (mediaIdMatch) {
-            const mediaId = mediaIdMatch[1];
-            console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
-
-            // Try the correct Evolution API endpoint
-            const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
-            const evoResponse = await fetch(mediaFetchUrl, {
-              headers: {
-                apikey: evoConfig.apiKey,
-                "Content-Type": "application/json",
-              },
-              signal: AbortSignal.timeout(8000),
-            });
-
-            if (evoResponse.ok) {
-              const evoData = await evoResponse.json();
-              if (evoData?.base64) {
-                console.log("[Media] Got base64 from Evolution API");
-                const contentType = mimeType || "application/octet-stream";
-                const dataUrl = `data:${contentType};base64,${evoData.base64}`;
-                return { base64Data: evoData.base64, dataUrl };
-              }
-            } else {
-              console.warn(
-                `[Media] Evolution API fetch failed: ${evoResponse.status}`
-              );
-            }
-          }
-        } else {
-          console.warn(
-            "[Media] No Evolution API config available for fallback"
-          );
         }
       }
 
