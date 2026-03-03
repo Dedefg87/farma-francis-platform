@@ -98,7 +98,7 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        "SELECT id, customer_name, status, last_message_at, created_at FROM conversations ORDER BY id DESC LIMIT 5"
+        "SELECT id, customer_name, status, last_message_at FROM conversations ORDER BY id DESC LIMIT 5"
       );
       await pool.end();
       
