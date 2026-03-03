@@ -111,6 +111,35 @@ async function startServer() {
     }
   });
 
+  // Debug: listar mensagens com mídia
+  app.get("/api/debug/media-messages", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, conversation_id, sender_type, 
+         LEFT(content, 100) as content_preview,
+         file_url IS NOT NULL as has_file_url,
+         LENGTH(file_url) as file_url_length,
+         LEFT(file_url, 50) as file_url_preview,
+         file_type, created_at
+         FROM conversation_messages 
+         ORDER BY id DESC
+         LIMIT 20`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, messages: rows });
+    } catch (error) {
+      console.error("[Debug Media Messages]", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Debug: testar ingestInboundConversationMessage
   app.post("/api/debug/test-ingest", async (req, res) => {
     try {
