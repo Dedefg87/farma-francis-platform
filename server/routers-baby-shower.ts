@@ -8,8 +8,66 @@ import {
   babyShowerWithdrawals,
   customers,
   crmTasks,
+  integrationSettings,
 } from "../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+
+// Função para enviar WhatsApp via Evolution API
+async function sendWhatsAppNotification(params: {
+  phone: string;
+  message: string;
+}): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const [config] = await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.integrationType, "evolution_api"))
+      .limit(1);
+
+    if (!config || !config.isActive) {
+      console.log("[BabyShower] Evolution API not configured");
+      return false;
+    }
+
+    const configData =
+      typeof config.config === "string"
+        ? JSON.parse(config.config)
+        : config.config;
+
+    const apiUrl = (configData.apiUrl as string)?.replace(/\/$/, "");
+    const apiKey =
+      (configData.apiKey as string) || (configData.accessToken as string);
+    const instanceName = configData.instanceName as string;
+
+    if (!apiUrl || !apiKey || !instanceName) {
+      console.log("[BabyShower] Evolution config incomplete");
+      return false;
+    }
+
+    const normalizedPhone = params.phone.replace(/\D/g, "");
+
+    const response = await fetch(
+      `${apiUrl}/message/sendText/${instanceName}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          number: normalizedPhone,
+          text: params.message,
+        }),
+      }
+    );
+
+    return response.ok;
+  } catch (error) {
+    console.error("[BabyShower] Error sending WhatsApp:", error);
+    return false;
+  }
+}
 
 const generateEventCode = () => {
   const date = new Date();
@@ -236,6 +294,8 @@ export const babyShowerRouter = router({
       if (input.paymentStatus === "paid") {
         const [pkg] = await db.select().from(babyShowerGiftPackages)
           .where(eq(babyShowerGiftPackages.id, purchase.packageId)).limit(1);
+        const [event] = await db.select().from(babyShowerEvents)
+          .where(eq(babyShowerEvents.id, purchase.eventId)).limit(1);
         
         await db.update(babyShowerGiftPackages).set({
           soldCount: sql`${babyShowerGiftPackages.soldCount} + 1`,
@@ -247,6 +307,27 @@ export const babyShowerRouter = router({
           totalDiapersCount: sql`${babyShowerEvents.totalDiapersCount} + ${pkg?.quantityRepresented || 1}`,
           availableDiapersCount: sql`${babyShowerEvents.availableDiapersCount} + ${pkg?.quantityRepresented || 1}`,
         }).where(eq(babyShowerEvents.id, purchase.eventId));
+
+        // Notificar mãe via WhatsApp
+        if (event) {
+          const [mother] = await db.select().from(customers)
+            .where(eq(customers.id, event.motherCustomerId)).limit(1);
+          
+          if (mother?.phone) {
+            const message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n${purchase.guestName} acabou de presentear seu bebê com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\nSua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
+            
+            await sendWhatsAppNotification({
+              phone: mother.phone,
+              message,
+            });
+
+            // Marcar notificação como enviada
+            await db.update(babyShowerPurchases).set({
+              notificationSent: 1,
+              notificationSentAt: new Date(),
+            }).where(eq(babyShowerPurchases.id, input.purchaseId));
+          }
+        }
       }
 
       return { success: true };

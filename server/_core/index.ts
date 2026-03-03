@@ -415,6 +415,9 @@ async function startServer() {
   // Webhook routes for WhatsApp and Instagram
   const webhookRouter = await import("../webhooks");
   app.use("/api/webhooks", webhookRouter.default);
+// Baby Shower webhook routes
+const babyShowerWebhookRouter = await import("../webhook-baby-shower");
+app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
   // Test Routes - Sistema de Teste de Fluxos
   // Safety: disabled by default in production.
