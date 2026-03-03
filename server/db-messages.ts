@@ -150,7 +150,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       SELECT 
         u.id AS userId,
         COUNT(c.id) AS loadCount,
-        MAX(u.last_signed_in) AS lastSignedIn
+        MAX(u.lastSignedIn) AS lastSignedIn
       FROM users u
       LEFT JOIN agent_pauses p
         ON p.agent_id = u.id AND p.status = 'active'
@@ -223,7 +223,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       u.id AS userId,
       u.role AS role,
       COUNT(c.id) AS loadCount,
-      MAX(u.last_signed_in) AS lastSignedIn
+      MAX(u.lastSignedIn) AS lastSignedIn
     FROM users u
     LEFT JOIN agent_pauses p
       ON p.agent_id = u.id AND p.status = 'active'
