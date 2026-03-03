@@ -142,8 +142,7 @@ async function startServer() {
   });
 
   // Debug: list messages with media in conversation_messages
-  // IMPORTANT: Must come BEFORE /:messageId route
-  app.get("/api/media/debug-list", async (req, res) => {
+  app.get("/api/debug/conversation-messages-with-media", async (req, res) => {
     try {
       const mysql = await import("mysql2/promise");
       const pool = mysql.createPool({
