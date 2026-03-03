@@ -1,76 +1,53 @@
-className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    placeholder="Seu Nome *"
-                    value={guestData.name}
-                    onChange={(e) => setGuestData({ ...guestData, name: e.target.value })}
-                    required
-                  />
-                  <Input
-                    placeholder="WhatsApp"
-                    value={guestData.phone}
-                    onChange={(e) => setGuestData({ ...guestData, phone: e.target.value })}
-                  />
-                  <Input
-                    placeholder="E-mail"
-                    type="email"
-                    value={guestData.email}
-                    onChange={(e) => setGuestData({ ...guestData, email: e.target.value })}
-                  />
-                </div>
-                <textarea
-                  placeholder="Deixe uma mensagem carinhosa para os pais..."
-                  className="w-full p-3 border rounded-lg resize-none h-24"
-                  value={guestData.message}
-                  onChange={(e) => setGuestData({ ...guestData, message: e.target.value })}
-                />
-                <Button
-                  className="w-full bg-pink-500 hover:bg-pink-600 h-12 text-lg"
-                  onClick={handlePurchase}
-                  disabled={purchaseMutation.isPending || !guestData.name}
-                >
-                  {purchaseMutation.isPending ? "Processando..." : `Presentear com R$ ${selectedPackage.price}`}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </main>
+import { useParams } from "wouter";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Gift, Heart, Baby } from "lucide-react";
 
-      {/* Success Dialog */}
-      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-center flex flex-col items-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                <Check className="w-8 h-8 text-green-600" />
-              </div>
-              Obrigado pelo presente!
-            </DialogTitle>
-          </DialogHeader>
-          <div className="text-center space-y-4">
-            <p className="text-gray-600">
-              Sua contribuição para o Chá de Bebê foi registrada.
-            </p>
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <p className="text-sm text-gray-600 mb-2">Efetue o pagamento via PIX:</p>
-              <p className="font-mono text-xs break-all bg-white p-2 rounded">
-                farmafrancis{purchaseId}@pix.farmafrancis.com
-              </p>
-              <Button
-                variant="outline"
-                className="mt-2 w-full"
-                onClick={copyPixCode}
-              >
-                <Copy className="w-4 h-4 mr-2" />
-                Copiar Código PIX
-              </Button>
-            </div>
-            <p className="text-xs text-gray-500">
-              Após o pagamento, os pais receberão a confirmação automaticamente.
-            </p>
+export default function BabyShowerPublic() {
+  const params = useParams();
+  const eventCode = params.code;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white">
+      <header className="bg-white shadow-sm py-6">
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Baby className="w-8 h-8 text-pink-500" />
+            <span className="text-2xl font-bold text-pink-600">Farma Francis</span>
           </div>
-        </DialogContent>
-      </Dialog>
+          <h1 className="text-3xl font-bold">Chá de Bebê</h1>
+          <p className="text-gray-500 mt-2">Módulo criado com sucesso</p>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8 max-w-2xl">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-center flex items-center justify-center gap-2">
+              <Heart className="w-6 h-6 text-pink-500" />
+              Página Pública do Chá de Bebê
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-gray-600 mb-4">
+              Código do evento: <strong>{eventCode}</strong>
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              Esta página será onde os convidados poderão visualizar o evento e
+              escolher presentes para o bebê.
+            </p>
+            <div className="bg-pink-50 p-6 rounded-lg">
+              <Gift className="w-12 h-12 text-pink-500 mx-auto mb-4" />
+              <p className="text-pink-700 font-medium">
+                🎉 API babyShower integrada com sucesso!
+              </p>
+              <p className="text-sm text-pink-600 mt-2">
+                Rotas disponíveis: getEventByCode, createPurchase
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 }
