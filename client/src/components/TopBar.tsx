@@ -1,27 +1,10 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import {
-  LayoutDashboard,
-  Users,
-  MessageSquare,
-  UsersRound,
-  FileText,
-  Mail,
-  Zap,
-  Settings,
-  LogOut,
-  Award,
-} from "lucide-react";
+import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, Settings, LogOut, Award, Gift } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
-
 
 const navigationItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -31,6 +14,7 @@ const navigationItems = [
   { icon: FileText, label: "Relatórios", path: "/reports" },
   { icon: Mail, label: "Mensagens", path: "/messages" },
   { icon: Zap, label: "Automação", path: "/automation" },
+  { icon: Gift, label: "Chá de Bebê", path: "/baby-shower" },
   { icon: Award, label: "Performance", path: "/agent-performance" },
   { icon: Settings, label: "Configurações API", path: "/settings/api" },
 ];
@@ -46,22 +30,14 @@ export function TopBar() {
   };
 
   const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map(n => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      {/* Single Row: Logo + Navigation + User Menu */}
       <div className="flex items-center justify-between px-6 py-3">
-        {/* Logo */}
         <img src="/logo.png" alt="Farma Francis" className="h-8" />
-
-        {/* Navigation Icons */}
+        
         <div className="flex items-center gap-2">
           {navigationItems.map(item => {
             const Icon = item.icon;
@@ -71,14 +47,11 @@ export function TopBar() {
                 key={item.path}
                 variant="ghost"
                 size="icon"
-                className={`
-                  relative h-10 w-10 rounded-full transition-all
-                  ${
-                    isActive
-                      ? "bg-[#3FA9D4] text-white hover:bg-[#3FA9D4]/90"
-                      : "text-gray-600 hover:text-white hover:bg-[#D32F2F]"
-                  }
-                `}
+                className={`relative h-10 w-10 rounded-full transition-all ${
+                  isActive
+                    ? "bg-[#3FA9D4] text-white hover:bg-[#3FA9D4]/90"
+                    : "text-gray-600 hover:text-white hover:bg-[#D32F2F]"
+                }`}
                 onClick={() => setLocation(item.path)}
                 title={item.label}
               >
@@ -88,14 +61,10 @@ export function TopBar() {
           })}
         </div>
 
-        {/* User Menu */}
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-10 w-10 rounded-full p-0 hover:bg-gray-100"
-              >
+              <Button variant="ghost" className="h-10 w-10 rounded-full p-0 hover:bg-gray-100">
                 <Avatar className="h-10 w-10">
                   <AvatarFallback className="bg-[#3FA9D4] text-white">
                     {user ? getInitials(user.name || "User") : "U"}
