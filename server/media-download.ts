@@ -39,6 +39,67 @@ async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
 }
 
 /**
+ * Get media as base64 from Evolution API using the message key
+ * This is the recommended way to get media from WhatsApp messages
+ */
+export async function getMediaBase64FromEvolution(
+  messageKey: { id: string; remoteJid?: string; fromMe?: boolean }
+): Promise<{ base64Data: string; dataUrl: string; mimeType: string } | null> {
+  try {
+    const evoConfig = await getEvolutionConfig();
+    if (!evoConfig) {
+      console.error("[Media] No Evolution config found");
+      return null;
+    }
+
+    console.log("[Media] Using getBase64FromMediaMessage for message:", messageKey.id);
+
+    const url = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': evoConfig.apiKey,
+      },
+      body: JSON.stringify({
+        message: {
+          key: messageKey,
+        },
+        convertToMp4: false,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[Media] getBase64FromMediaMessage failed:", response.status, response.statusText);
+      const errorText = await response.text();
+      console.error("[Media] Error response:", errorText.substring(0, 500));
+      return null;
+    }
+
+    const data = await response.json();
+    
+    // The response contains base64, mimetype, and filename
+    if (data.base64) {
+      const mimeType = data.mimetype || 'application/octet-stream';
+      const dataUrl = `data:${mimeType};base64,${data.base64}`;
+      console.log("[Media] Successfully got base64, size:", data.base64.length, "type:", mimeType);
+      return {
+        base64Data: data.base64,
+        dataUrl,
+        mimeType,
+      };
+    }
+
+    console.error("[Media] No base64 in response:", JSON.stringify(data).substring(0, 200));
+    return null;
+  } catch (error) {
+    console.error("[Media] Error in getMediaBase64FromEvolution:", error);
+    return null;
+  }
+}
+
+/**
  * Download and decrypt WhatsApp media using Evolution API
  */
 export async function downloadAndSaveMedia(
@@ -54,63 +115,6 @@ export async function downloadAndSaveMedia(
   console.log("[Media] fromNumber:", fromNumber);
   console.log("[Media] mediaKey:", mediaKey ? "present" : "missing");
   console.log("[Media] directPath:", directPath?.substring(0, 50));
-
-  // Extrair mediaId da URL
-  let mediaId: string | null = null;
-  if (mediaUrl) {
-    const match = mediaUrl.match(/\/([A-Za-z0-9_-]+)(\?|$)/);
-    if (match) {
-      mediaId = match[1];
-    }
-  }
-
-  // PRIMEIRO: Tentar Evolution API para obter mídia descriptografada
-  console.log("[Media] Trying Evolution API for decrypted media...");
-  const evoConfig = await getEvolutionConfig();
-  
-  if (evoConfig && mediaId) {
-    console.log(`[Media] mediaId: ${mediaId}`);
-    
-    try {
-      // Endpoint para obter mídia descriptografada
-      const endpoint = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
-      
-      console.log("[Media] Calling Evolution API:", endpoint);
-      
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          apikey: evoConfig.apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messageTimestamp: Math.floor(Date.now() / 1000),
-          key: {
-            remoteJid: fromNumber.includes("@") ? fromNumber : `${fromNumber}@s.whatsapp.net`,
-            fromMe: false,
-          },
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.base64) {
-          console.log("[Media] SUCCESS! Got base64 from Evolution API, size:", data.base64.length);
-          const contentType = mimeType || "application/octet-stream";
-          const dataUrl = `data:${contentType};base64,${data.base64}`;
-          return { base64Data: data.base64, dataUrl };
-        } else {
-          console.warn("[Media] Evolution API response missing base64");
-        }
-      } else {
-        const errorText = await response.text();
-        console.warn(`[Media] Evolution API failed: ${response.status}`, errorText.substring(0, 200));
-      }
-    } catch (error) {
-      console.warn("[Media] Evolution API error:", error);
-    }
-  }
 
   // FALLBACK: Download direto (provavelmente vai retornar dados criptografados)
   console.log("[Media] Falling back to direct download...");
