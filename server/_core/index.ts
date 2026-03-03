@@ -269,6 +269,20 @@ async function startServer() {
         results.push(`Error modifying phone column: ${e.message}`);
       }
 
+      // Add expected_due_date column to customers table
+      try {
+        await pool.execute(
+          `ALTER TABLE customers ADD COLUMN expected_due_date DATE`
+        );
+        results.push("Added expected_due_date column to customers");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("expected_due_date column already exists");
+        } else {
+          results.push(`Error adding expected_due_date: ${e.message}`);
+        }
+      }
+
       await pool.end();
       res.json({ success: true, results });
     } catch (error: any) {
@@ -372,7 +386,12 @@ async function startServer() {
       token = sessionCookie;
     }
 
-    console.log("[SSE] Auth check - cookie:", sessionCookie ? "present" : "missing", "token:", token ? `${token.substring(0, 30)}...` : "missing");
+    console.log(
+      "[SSE] Auth check - cookie:",
+      sessionCookie ? "present" : "missing",
+      "token:",
+      token ? `${token.substring(0, 30)}...` : "missing"
+    );
 
     if (!token) {
       console.log("[SSE] Unauthorized - no token found");
@@ -381,7 +400,7 @@ async function startServer() {
 
     // Verify token using the same method as the rest of the app
     const decoded = await verifyToken(token);
-    
+
     if (!decoded) {
       console.log("[SSE] Token verification failed - invalid token");
       return res.status(401).json({ error: "Invalid token" });
@@ -391,7 +410,7 @@ async function startServer() {
 
     // Get userId from token - could be userId or openId
     let userId: string;
-    
+
     if (decoded.userId) {
       userId = String(decoded.userId);
     } else if (decoded.openId) {
@@ -401,16 +420,24 @@ async function startServer() {
         const { users } = await import("../../drizzle/schema");
         const { eq } = await import("drizzle-orm");
         const db = await getDb();
-        
-        const [user] = await db.select({ id: users.id }).from(users).where(eq(users.openId, decoded.openId));
-        
+
+        const [user] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.openId, decoded.openId));
+
         if (!user) {
           console.log("[SSE] User not found for openId:", decoded.openId);
           return res.status(401).json({ error: "User not found" });
         }
-        
+
         userId = String(user.id);
-        console.log("[SSE] Mapped openId to userId:", decoded.openId, "->", userId);
+        console.log(
+          "[SSE] Mapped openId to userId:",
+          decoded.openId,
+          "->",
+          userId
+        );
       } catch (e) {
         console.error("[SSE] Error mapping openId to userId:", e);
         return res.status(500).json({ error: "Internal server error" });
@@ -439,9 +466,9 @@ async function startServer() {
   // Webhook routes for WhatsApp and Instagram
   const webhookRouter = await import("../webhooks");
   app.use("/api/webhooks", webhookRouter.default);
-// Baby Shower webhook routes
-const babyShowerWebhookRouter = await import("../webhook-baby-shower");
-app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
+  // Baby Shower webhook routes
+  const babyShowerWebhookRouter = await import("../webhook-baby-shower");
+  app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
   // Test Routes - Sistema de Teste de Fluxos
   // Safety: disabled by default in production.
@@ -631,8 +658,10 @@ app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
       }
 
       // Verificar se a coluna já existe
-      const columns = await db.execute(sql`SHOW COLUMNS FROM users LIKE 'last_signed_in'`);
-      
+      const columns = await db.execute(
+        sql`SHOW COLUMNS FROM users LIKE 'last_signed_in'`
+      );
+
       if (columns.length > 0) {
         return res.json({
           success: true,
@@ -642,8 +671,10 @@ app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
       }
 
       // Adicionar a coluna
-      await db.execute(sql`ALTER TABLE users ADD COLUMN last_signed_in DATETIME NULL`);
-      
+      await db.execute(
+        sql`ALTER TABLE users ADD COLUMN last_signed_in DATETIME NULL`
+      );
+
       res.json({
         success: true,
         message: "Coluna last_signed_in adicionada com sucesso",
@@ -668,13 +699,24 @@ app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
       // Colunas a verificar/adicionar
       const columnsToAdd = [
-        { name: "expected_due_date", sql: "ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL" },
-        { name: "health_tags_json", sql: "ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL" },
-        { name: "whatsapp_opt_in_at", sql: "ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL" },
+        {
+          name: "expected_due_date",
+          sql: "ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL",
+        },
+        {
+          name: "health_tags_json",
+          sql: "ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL",
+        },
+        {
+          name: "whatsapp_opt_in_at",
+          sql: "ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL",
+        },
       ];
 
       for (const col of columnsToAdd) {
-        const check = await db.execute(sql`SHOW COLUMNS FROM customers LIKE ${col.name}`);
+        const check = await db.execute(
+          sql`SHOW COLUMNS FROM customers LIKE ${col.name}`
+        );
         if (check.length === 0) {
           await db.execute(sql.raw(col.sql));
           results.push({ column: col.name, action: "added" });
@@ -707,15 +749,26 @@ app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
       // Colunas a adicionar: expected_due_date, health_tags_json, whatsapp_opt_in_at
       const columnsToAdd = [
-        { name: "expected_due_date", sql: sql`ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL` },
-        { name: "health_tags_json", sql: sql`ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL` },
-        { name: "whatsapp_opt_in_at", sql: sql`ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL` },
+        {
+          name: "expected_due_date",
+          sql: sql`ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL`,
+        },
+        {
+          name: "health_tags_json",
+          sql: sql`ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL`,
+        },
+        {
+          name: "whatsapp_opt_in_at",
+          sql: sql`ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL`,
+        },
       ];
 
       for (const col of columnsToAdd) {
         try {
           // Verificar se a coluna já existe
-          const check = await db.execute(sql`SHOW COLUMNS FROM customers LIKE ${col.name}`);
+          const check = await db.execute(
+            sql`SHOW COLUMNS FROM customers LIKE ${col.name}`
+          );
           if (check.length > 0) {
             results.push({ column: col.name, status: "already exists" });
           } else {
