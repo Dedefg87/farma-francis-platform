@@ -145,7 +145,14 @@ async function startServer() {
     try {
       const { getMediaBase64FromEvolution } = await import("../media-download");
       
-      // Test with a recent message
+      // Get Evolution config first
+      const evoConfig = await getEvolutionConfig();
+      if (!evoConfig) {
+        return res.json({ error: "Evolution API not configured" });
+      }
+      
+      // Test with a sample message ID from WhatsApp
+      // Use the message ID from the most recent media message
       const mysql = await import("mysql2/promise");
       const pool = mysql.createPool({
         connectionLimit: 1,
@@ -153,48 +160,48 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, raw_payload 
-         FROM conversation_messages 
+        `SELECT id, created_at FROM conversation_messages 
          WHERE file_type IS NOT NULL 
-         ORDER BY id DESC 
-         LIMIT 1`
+         ORDER BY id DESC LIMIT 1`
       );
       await pool.end();
 
-      if (rows.length === 0) {
-        return res.json({ error: "No media messages found" });
-      }
-
-      const msg = rows[0];
-      const rawPayload = typeof msg.raw_payload === 'string' ? JSON.parse(msg.raw_payload) : msg.raw_payload;
-      
-      // Get message key from raw_payload
-      const messageKey = rawPayload?.key || rawPayload?.data?.key;
-      
-      console.log("[Test Evolution Media] Testing message:", msg.id);
-      console.log("[Test Evolution Media] key:", JSON.stringify(messageKey));
-
-      // Try to get base64
-      const result = await getMediaBase64FromEvolution({
-        id: messageKey?.id || msg.id.toString(),
-        remoteJid: messageKey?.remoteJid,
-        fromMe: messageKey?.fromMe || false,
-      });
-
       res.json({
-        messageId: msg.id,
-        key: messageKey,
-        result: result ? { 
-          success: true, 
-          size: result.base64Data.length,
-          mimeType: result.mimeType 
-        } : { success: false }
+        evoConfig: {
+          apiUrl: evoConfig.apiUrl,
+          instanceName: evoConfig.instanceName,
+          hasApiKey: !!evoConfig.apiKey
+        },
+        latestMediaMessage: rows[0] || null,
+        note: "Need to pass WhatsApp message key to getBase64FromMediaMessage"
       });
     } catch (error) {
       console.error("[Test Evolution Media] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });
+  
+  async function getEvolutionConfig() {
+    const mysql = await import("mysql2/promise");
+    const pool = mysql.createPool({
+      connectionLimit: 1,
+      uri: process.env.DATABASE_URL,
+    });
+
+    const [rows]: any = await pool.execute(
+      "SELECT config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1"
+    );
+    await pool.end();
+
+    if (!rows || rows.length === 0) return null;
+    
+    const config = typeof rows[0].config === 'string' ? JSON.parse(rows[0].config) : rows[0].config;
+    return {
+      apiUrl: config.apiUrl,
+      apiKey: config.apiKey || config.accessToken,
+      instanceName: config.instanceName
+    };
+  }
 
   // Debug: testar ingestInboundConversationMessage
   app.post("/api/debug/test-ingest", async (req, res) => {
