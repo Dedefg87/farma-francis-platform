@@ -89,6 +89,30 @@ async function startServer() {
   });
 
   // Debug: testar ingestInboundConversationMessage
+  app.get("/api/debug/server-logs", async (req, res) => {
+    try {
+      // Retorna os últimos logs do servidor
+      const { db } = await import("../db");
+      const { sql } = await import("drizzle-orm");
+      
+      // Verifica se há erros recentes nas conversas
+      const recent = await db.execute(sql`
+        SELECT id, customer_name, status, last_message_at, created_at 
+        FROM conversations 
+        ORDER BY id DESC 
+        LIMIT 5
+      `);
+      
+      res.json({ 
+        recentConversations: recent,
+        serverTime: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: testar ingestInboundConversationMessage
   app.post("/api/debug/test-ingest", async (req, res) => {
     try {
       const { ingestInboundConversationMessage } = await import("../db-messages");
