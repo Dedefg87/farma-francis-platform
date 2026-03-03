@@ -150,7 +150,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       SELECT 
         u.id AS userId,
         COUNT(c.id) AS loadCount,
-        MAX(u.last_signed_in) AS lastSignedIn
+        MAX(u.lastSignedIn) AS lastSignedIn
       FROM users u
       LEFT JOIN agent_pauses p
         ON p.agent_id = u.id AND p.status = 'active'
@@ -223,7 +223,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       u.id AS userId,
       u.role AS role,
       COUNT(c.id) AS loadCount,
-      MAX(u.last_signed_in) AS lastSignedIn
+      MAX(u.lastSignedIn) AS lastSignedIn
     FROM users u
     LEFT JOIN agent_pauses p
       ON p.agent_id = u.id AND p.status = 'active'
@@ -418,9 +418,16 @@ export async function findOrCreateCustomerByPhone(
 
   const normalizedPhone = normalizePhone(phone);
 
-  // Try to find existing customer
+  // Selecionar apenas colunas que existem no banco (evitar erro de colunas faltantes)
   const existing = await db
-    .select()
+    .select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      status: customers.status,
+      photoUrl: customers.photoUrl,
+    })
     .from(customers)
     .where(eq(customers.phone, normalizedPhone))
     .limit(1);
@@ -442,7 +449,7 @@ export async function findOrCreateCustomerByPhone(
     return existing[0];
   }
 
-  // Create new customer
+  // Create new customer - apenas campos essenciais
   const result = await db.insert(customers).values({
     name: name || `Cliente ${phone}`,
     phone: normalizedPhone,
@@ -452,7 +459,14 @@ export async function findOrCreateCustomerByPhone(
 
   // Get the newly created customer
   const newCustomer = await db
-    .select()
+    .select({
+      id: customers.id,
+      name: customers.name,
+      email: customers.email,
+      phone: customers.phone,
+      status: customers.status,
+      photoUrl: customers.photoUrl,
+    })
     .from(customers)
     .where(eq(customers.phone, normalizedPhone))
     .limit(1);

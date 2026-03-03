@@ -8,6 +8,7 @@ import React, {
 import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,23 +49,6 @@ function getMimeType(
   return fileType || "";
 }
 
-function handleImageClick(url: string | null | undefined, messageId?: number) {
-  const src = getImageSrc(url, messageId);
-  if (!src) return;
-
-  if (src.startsWith("data:")) {
-    // Open data URL in a new window with HTML that displays the image
-    const win = window.open("", "_blank", "width=800,height=600");
-    if (win) {
-      win.document.write(
-        `<html><head><title>Imagem</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;"><img src="${src}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body></html>`
-      );
-      win.document.close();
-    }
-  } else {
-    window.open(src, "_blank");
-  }
-}
 import {
   MessageSquare,
   Clock,
@@ -152,6 +136,12 @@ export default function AgentMessages() {
     messageId?: number;
     fileType?: string;
   }>({ open: false, url: null });
+  
+  // Image Lightbox state
+  const [imageLightbox, setImageLightbox] = useState<{
+    open: boolean;
+    initialIndex: number;
+  }>({ open: false, initialIndex: 0 });
   
   // Prevenir fechamento imediato do modal
   const pdfPreviewJustOpened = useRef(false);
@@ -406,6 +396,18 @@ export default function AgentMessages() {
     return messages.filter(msg => msg.fileUrl);
   }, [messages]);
 
+  // Lista de imagens para o lightbox
+  const imageItems = useMemo(() => {
+    if (!messages) return [];
+    return messages
+      .filter(msg => msg.fileUrl && getMimeType(msg.fileUrl, msg.fileType).startsWith("image/"))
+      .map(msg => ({
+        id: msg.id,
+        fileUrl: msg.fileUrl!,
+        fileName: msg.fileName,
+      }));
+  }, [messages]);
+
   // Mutation para enviar mensagem
   const sendMessageMutation = trpc.messages.send.useMutation({
     onSuccess: () => {
@@ -508,6 +510,17 @@ export default function AgentMessages() {
     previousTotalUnreadRef.current = currentTotalUnread;
     previousConversationsRef.current = conversations.map(c => c.id);
   }, [conversations, notificationsMuted, playNotificationSound]);
+
+  // Função para abrir lightbox de imagens
+  const handleImageClick = useCallback(
+    (messageId: number) => {
+      const index = imageItems.findIndex((img) => img.id === messageId);
+      if (index >= 0) {
+        setImageLightbox({ open: true, initialIndex: index });
+      }
+    },
+    [imageItems]
+  );
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -995,10 +1008,8 @@ export default function AgentMessages() {
                               <img
                                 src={getImageSrc(msg.fileUrl, msg.id)}
                                 alt={msg.fileName || "Imagem"}
-                                className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
-                                onClick={() =>
-                                  handleImageClick(msg.fileUrl, msg.id)
-                                }
+                                className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => handleImageClick(msg.id)}
                                 onError={e => {
                                   const el =
                                     e.currentTarget as HTMLImageElement;
@@ -1489,6 +1500,14 @@ export default function AgentMessages() {
           customerPhone={crmCustomerPhone}
         />
       ) : null}
+
+      {/* Image Lightbox */}
+      <ImageLightbox
+        open={imageLightbox.open}
+        onOpenChange={(open) => setImageLightbox({ ...imageLightbox, open })}
+        images={imageItems}
+        initialIndex={imageLightbox.initialIndex}
+      />
     </>
   );
 }
