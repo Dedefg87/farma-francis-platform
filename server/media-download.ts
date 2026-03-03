@@ -33,6 +33,11 @@ async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
   const apiKey = configData.apiKey || configData.accessToken;
   const instanceName = configData.instanceName;
 
+  console.log("[Evolution Config] apiUrl:", apiUrl);
+  console.log("[Evolution Config] instanceName:", instanceName);
+  console.log("[Evolution Config] apiKey length:", apiKey?.length);
+  console.log("[Evolution Config] apiKey first 5 chars:", apiKey?.substring(0, 5));
+
   if (!apiUrl || !apiKey || !instanceName) return null;
 
   return { apiUrl, apiKey, instanceName };
