@@ -628,6 +628,46 @@ async function startServer() {
     }
   });
 
+  // FIX: Adicionar colunas faltantes na tabela customers
+  app.get("/api/fix/add-customer-columns", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: { column: string; status: string }[] = [];
+
+      // Colunas a adicionar: expected_due_date, health_tags_json, whatsapp_opt_in_at
+      const columnsToAdd = [
+        { name: "expected_due_date", sql: sql`ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL` },
+        { name: "health_tags_json", sql: sql`ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL` },
+        { name: "whatsapp_opt_in_at", sql: sql`ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL` },
+      ];
+
+      for (const col of columnsToAdd) {
+        try {
+          // Verificar se a coluna já existe
+          const check = await db.execute(sql`SHOW COLUMNS FROM customers LIKE ${col.name}`);
+          if (check.length > 0) {
+            results.push({ column: col.name, status: "already exists" });
+          } else {
+            await db.execute(col.sql);
+            results.push({ column: col.name, status: "added successfully" });
+          }
+        } catch (err) {
+          results.push({ column: col.name, status: `error: ${err}` });
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error("[Fix] Error adding customer columns:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // EMERGENCY: Reset admin password
   app.get("/api/emergency/reset-admin-password", async (req, res) => {
     try {
