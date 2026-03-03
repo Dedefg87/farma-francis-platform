@@ -91,20 +91,19 @@ async function startServer() {
   // Debug: testar ingestInboundConversationMessage
   app.get("/api/debug/server-logs", async (req, res) => {
     try {
-      // Retorna os últimos logs do servidor
-      const { db } = await import("../db");
-      const { sql } = await import("drizzle-orm");
-      
-      // Verifica se há erros recentes nas conversas
-      const recent = await db.execute(sql`
-        SELECT id, customer_name, status, last_message_at, created_at 
-        FROM conversations 
-        ORDER BY id DESC 
-        LIMIT 5
-      `);
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        "SELECT id, customer_name, status, last_message_at, created_at FROM conversations ORDER BY id DESC LIMIT 5"
+      );
+      await pool.end();
       
       res.json({ 
-        recentConversations: recent,
+        recentConversations: rows,
         serverTime: new Date().toISOString()
       });
     } catch (error) {
