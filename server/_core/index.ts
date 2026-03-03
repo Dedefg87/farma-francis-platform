@@ -207,7 +207,8 @@ async function startServer() {
   });
 
   // Debug: list messages with base64 media (to test preview)
-  app.get("/api/media/with-base64", async (req, res) => {
+  // IMPORTANT: Must come BEFORE /:messageId route
+  app.get("/api/media/debug-list", async (req, res) => {
     try {
       const mysql = await import("mysql2/promise");
       const pool = mysql.createPool({
@@ -216,12 +217,12 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, file_type, 
+        `SELECT id, conversation_id, file_type, 
          LENGTH(file_url) as file_size, 
-         LEFT(file_url, 50) as file_url_preview
+         LEFT(file_url, 50) as file_url_preview,
+         created_at
          FROM conversation_messages 
          WHERE file_url IS NOT NULL 
-         AND file_url LIKE 'data:%'
          ORDER BY id DESC
          LIMIT 20`
       );
@@ -229,7 +230,7 @@ async function startServer() {
       await pool.end();
       res.json({ count: rows.length, rows });
     } catch (error) {
-      console.error("[Media with base64]", error);
+      console.error("[Media debug-list]", error);
       res.status(500).json({ error: String(error) });
     }
   });
