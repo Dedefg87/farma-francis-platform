@@ -153,7 +153,7 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, external_message_id, raw_payload 
+        `SELECT id, raw_payload 
          FROM conversation_messages 
          WHERE file_type IS NOT NULL 
          ORDER BY id DESC 
@@ -168,19 +168,22 @@ async function startServer() {
       const msg = rows[0];
       const rawPayload = typeof msg.raw_payload === 'string' ? JSON.parse(msg.raw_payload) : msg.raw_payload;
       
+      // Get message key from raw_payload
+      const messageKey = rawPayload?.key || rawPayload?.data?.key;
+      
       console.log("[Test Evolution Media] Testing message:", msg.id);
-      console.log("[Test Evolution Media] external_message_id:", msg.external_message_id);
+      console.log("[Test Evolution Media] key:", JSON.stringify(messageKey));
 
       // Try to get base64
       const result = await getMediaBase64FromEvolution({
-        id: msg.external_message_id || msg.id.toString(),
-        remoteJid: rawPayload?.key?.remoteJid,
-        fromMe: false,
+        id: messageKey?.id || msg.id.toString(),
+        remoteJid: messageKey?.remoteJid,
+        fromMe: messageKey?.fromMe || false,
       });
 
       res.json({
         messageId: msg.id,
-        externalId: msg.external_message_id,
+        key: messageKey,
         result: result ? { 
           success: true, 
           size: result.base64Data.length,
