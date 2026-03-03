@@ -140,6 +140,59 @@ async function startServer() {
     }
   });
 
+  // Debug: testar Evolution API getBase64FromMediaMessage
+  app.get("/api/debug/test-evolution-media", async (req, res) => {
+    try {
+      const { getMediaBase64FromEvolution } = await import("../media-download");
+      
+      // Test with a recent message
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, external_message_id, raw_payload 
+         FROM conversation_messages 
+         WHERE file_type IS NOT NULL 
+         ORDER BY id DESC 
+         LIMIT 1`
+      );
+      await pool.end();
+
+      if (rows.length === 0) {
+        return res.json({ error: "No media messages found" });
+      }
+
+      const msg = rows[0];
+      const rawPayload = typeof msg.raw_payload === 'string' ? JSON.parse(msg.raw_payload) : msg.raw_payload;
+      
+      console.log("[Test Evolution Media] Testing message:", msg.id);
+      console.log("[Test Evolution Media] external_message_id:", msg.external_message_id);
+
+      // Try to get base64
+      const result = await getMediaBase64FromEvolution({
+        id: msg.external_message_id || msg.id.toString(),
+        remoteJid: rawPayload?.key?.remoteJid,
+        fromMe: false,
+      });
+
+      res.json({
+        messageId: msg.id,
+        externalId: msg.external_message_id,
+        result: result ? { 
+          success: true, 
+          size: result.base64Data.length,
+          mimeType: result.mimeType 
+        } : { success: false }
+      });
+    } catch (error) {
+      console.error("[Test Evolution Media] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Debug: testar ingestInboundConversationMessage
   app.post("/api/debug/test-ingest", async (req, res) => {
     try {
