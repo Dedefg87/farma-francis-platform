@@ -136,21 +136,15 @@ async function downloadAndSaveMedia(
         console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
 
         try {
-          const mediaFetchUrl = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
+          // Usar o endpoint fetchMedia que funciona com mediaId
+          const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
+          console.log("[Media] Calling Evolution API:", mediaFetchUrl);
           const evoResponse = await fetch(mediaFetchUrl, {
-            method: "POST",
+            method: "GET",
             headers: {
               apikey: evoConfig.apiKey,
-              "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              messageTimestamp: Math.floor(Date.now() / 1000),
-              key: {
-                remoteJid: fromNumber.includes("@") ? fromNumber : `${fromNumber}@s.whatsapp.net`,
-                fromMe: false,
-              },
-            }),
-            signal: AbortSignal.timeout(10000),
+            signal: AbortSignal.timeout(15000),
           });
 
           if (evoResponse.ok) {
