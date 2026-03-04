@@ -74,7 +74,12 @@ const generateEventCode = () => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const random = Math.floor(Math.random() * 999).toString().padStart(3, "0");
-  return `CHA${year}${month}${random}`;
+  const code = `CHA${year}${month}${random}`;
+  return code.trim();
+};
+
+const sanitizeUrl = (url: string): string => {
+  return url.replace(/\s+/g, '').replace(/\n/g, '').trim();
 };
 
 const createEventSchema = z.object({
@@ -121,7 +126,7 @@ export const babyShowerRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       const eventCode = generateEventCode();
-      const publicLink = `${process.env.FRONTEND_URL || "https://farmafrancis.com"}/cha-de-bebe/${eventCode}`;
+      const baseUrl = (process.env.FRONTEND_URL || "https://farmafrancis.com").toString().trim(); const publicLink = baseUrl + "/cha-de-bebe/" + eventCode;
 
       const [event] = await db.insert(babyShowerEvents).values({
         motherCustomerId: input.motherCustomerId,
