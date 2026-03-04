@@ -126,7 +126,7 @@ export const babyShowerRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       const eventCode = generateEventCode();
-      const baseUrl = (process.env.FRONTEND_URL || "https://farmafrancis.com").toString().trim(); const publicLink = baseUrl + "/cha-de-bebe/" + eventCode;
+      const publicLink = "https://farmafrancis.com/cha-de-bebe/" + eventCode;
 
       const [event] = await db.insert(babyShowerEvents).values({
         motherCustomerId: input.motherCustomerId,
