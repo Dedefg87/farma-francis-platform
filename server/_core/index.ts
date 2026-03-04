@@ -103,7 +103,7 @@ async function startServer() {
       );
       await pool.end();
 
-      const [rows1]: any = await pool.execute(
+      const [mediaRows]: any = await pool.execute(
         `SELECT id, conversation_id, file_type, 
          LENGTH(file_url) as file_size, 
          LEFT(file_url, 50) as file_url_preview,
@@ -115,7 +115,7 @@ async function startServer() {
       );
 
       await pool.end();
-      res.json({ count: rows.length, rows });
+      res.json({ count: rows1.length, rows: rows1 });
     } catch (error) {
       console.error("[Media debug-list]", error);
       res.status(500).json({ error: String(error) });
@@ -630,7 +630,8 @@ async function startServer() {
       }
 
       const { getDb } = await import("../db");
-      const { conversations, conversationMessages } = await import("../../drizzle/schema");
+      const { conversations, conversationMessages } =
+        await import("../../drizzle/schema");
       const { eq, and, isNull } = await import("drizzle-orm");
       const db = await getDb();
 
@@ -668,7 +669,10 @@ async function startServer() {
 
   // Endpoint REST público para dashboard (sem auth)
   app.get("/api/dashboard/stats", async (req, res) => {
-    console.log("[dashboard/stats] Endpoint called with period:", req.query.period);
+    console.log(
+      "[dashboard/stats] Endpoint called with period:",
+      req.query.period
+    );
     try {
       const period = (req.query.period as string) || "mes";
       const { getDb } = await import("../db");
@@ -688,8 +692,19 @@ async function startServer() {
         case "ontem":
           const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
-          start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-          end = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+          start = new Date(
+            yesterday.getFullYear(),
+            yesterday.getMonth(),
+            yesterday.getDate()
+          );
+          end = new Date(
+            yesterday.getFullYear(),
+            yesterday.getMonth(),
+            yesterday.getDate(),
+            23,
+            59,
+            59
+          );
           break;
         case "semana":
           start = new Date(now);
@@ -700,7 +715,8 @@ async function startServer() {
           start = new Date(now.getFullYear(), now.getMonth(), 1);
       }
 
-      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
+      const getRows = (result: any) =>
+        Array.isArray(result) ? result[0] : result;
 
       // Total de conversas
       const totalConvResult = await db.execute(sql`
@@ -742,7 +758,7 @@ async function startServer() {
         start,
         end,
         rawResult: result,
-        count: (result as any[]).length
+        count: (result as any[]).length,
       });
     } catch (error) {
       console.error("[debug/contacts-by-hour] Error:", error);
@@ -760,10 +776,15 @@ async function startServer() {
       }
 
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
 
       // Função auxiliar para extrair rows do resultado
-      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
+      const getRows = (result: any) =>
+        Array.isArray(result) ? result[0] : result;
 
       // Total de conversas
       const totalConvResult = await db.execute(sql`
@@ -838,8 +859,8 @@ async function startServer() {
           totalConv,
           todayConv,
           totalMsg,
-          uniqueCustomers
-        }
+          uniqueCustomers,
+        },
       });
     } catch (error) {
       console.error("[debug/dashboard] Error:", error);
