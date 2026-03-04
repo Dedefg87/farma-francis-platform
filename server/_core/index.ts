@@ -800,6 +800,91 @@ async function startServer() {
     }
   });
 
+  // Endpoint REST para marcar conversa como lida
+  app.post("/api/conversations/:id/mark-read", async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
+      const { getDb } = await import("../db");
+      const { conversations, conversationMessages } = await import("../../drizzle/schema");
+      const { eq, and, isNull } = await import("drizzle-orm");
+      const db = await getDb();
+
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      console.log(`[mark-read] Conversation ${conversationId}`);
+
+      // 1. Zerar unreadCount da conversa
+      await db
+        .update(conversations)
+        .set({ unreadCount: 0 })
+        .where(eq(conversations.id, conversationId));
+
+      // 2. Marcar todas mensagens do cliente como lidas
+      await db
+        .update(conversationMessages)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(conversationMessages.conversationId, conversationId),
+            eq(conversationMessages.senderType, "customer"),
+            isNull(conversationMessages.readAt)
+          )
+        );
+
+      console.log(`[mark-read] Success for conversation ${conversationId}`);
+      res.json({ success: true, conversationId });
+    } catch (error) {
+      console.error("[mark-read] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: Contatos por hora
+  app.get("/api/debug/contacts-by-hour", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+
+      // Testar query direta
+      const result = await db.execute(sql`
+        SELECT 
+          HOUR(created_at) as hour,
+          COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
+      `);
+
+      console.log("[debug/contacts-by-hour] Result:", result);
+
+      res.json({
+        start,
+        end,
+        rawResult: result,
+        count: (result as any[]).length
+      });
+    } catch (error) {
+      console.error("[debug/contacts-by-hour] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get("/api/debug/users", async (req, res) => {
     try {
       const { getDb } = await import("../db");

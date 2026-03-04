@@ -454,18 +454,8 @@ export default function AgentMessages() {
     },
   });
 
-  // Mutation para marcar conversa como lida
-  const markAsReadMutation = trpc.conversations.markConversationAsRead.useMutation({
-    onSuccess: () => {
-      console.log("[AgentMessages] Conversa marcada como lida");
-    },
-    onError: (error) => {
-      console.error("[AgentMessages] Erro ao marcar como lida:", error.message, error);
-    },
-  });
-
   // Função para selecionar conversa e marcar como lida
-  const handleSelectConversation = useCallback((conversationId: number) => {
+  const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
     setSelectedConversationId(conversationId);
 
@@ -480,9 +470,17 @@ export default function AgentMessages() {
       }
     );
 
-    // Chamar API para persistir no backend
-    markAsReadMutation.mutate({ conversationId });
-  }, [markAsReadMutation, queryClient]);
+    // Chamar endpoint REST direto
+    try {
+      await fetch(`/api/conversations/${conversationId}/mark-read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      console.log("[AgentMessages] Conversa marcada como lida");
+    } catch (error) {
+      console.error("[AgentMessages] Erro ao marcar como lida:", error);
+    }
+  }, [queryClient]);
 
   // Scroll automático para última mensagem
   useEffect(() => {
@@ -563,10 +561,13 @@ export default function AgentMessages() {
         }
       );
 
-      // Chamar API
-      markAsReadMutation.mutate({ conversationId: selectedConversationId });
+      // Chamar endpoint REST
+      fetch(`/api/conversations/${selectedConversationId}/mark-read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      }).catch(err => console.error("[AgentMessages] Erro auto-mark:", err));
     }
-  }, [conversations, selectedConversationId, markAsReadMutation, queryClient]);
+  }, [conversations, selectedConversationId, queryClient]);
 
   // Função para abrir lightbox de imagens
   const handleImageClick = useCallback(

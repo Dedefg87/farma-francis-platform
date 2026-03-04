@@ -128,7 +128,7 @@ export const dashboardStatsRouter = router({
         );
 
         // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
-        const result = await db.execute(sql`
+        const rawResult = await db.execute(sql`
           SELECT 
             HOUR(created_at) as hour,
             COUNT(DISTINCT conversation_id) as chats
@@ -140,14 +140,16 @@ export const dashboardStatsRouter = router({
           ORDER BY HOUR(created_at)
         `);
 
+        // O resultado vem como array: [dados, metadados]
+        // Pegamos apenas a primeira parte
+        const result = Array.isArray(rawResult) ? rawResult[0] as any[] : rawResult as any[];
+        
         console.log("[getContactsByHour] Result:", result);
-
-        const hourlyData = result as any[];
 
         // Criar array com todas as 24 horas (00h-23h)
         const allHours = Array.from({ length: 24 }, (_, i) => {
           const hourStr = i.toString().padStart(2, "0");
-          const existingData = hourlyData.find(
+          const existingData = result?.find(
             (d: any) => Number(d.hour) === i
           );
 
