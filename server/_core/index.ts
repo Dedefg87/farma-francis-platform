@@ -885,6 +885,103 @@ async function startServer() {
     }
   });
 
+  // Debug: Dashboard stats completo
+  app.get("/api/debug/dashboard", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // Função auxiliar para extrair rows do resultado
+      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
+
+      // Total de conversas
+      const totalConvResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversations
+      `);
+      const totalConv = getRows(totalConvResult);
+
+      // Conversas de hoje
+      const todayConvResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversations
+        WHERE opened_at >= ${startOfDay}
+      `);
+      const todayConv = getRows(todayConvResult);
+
+      // Mensagens
+      const totalMsgResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversation_messages
+      `);
+      const totalMsg = getRows(totalMsgResult);
+
+      // Mensagens por tipo
+      const msgByTypeResult = await db.execute(sql`
+        SELECT sender_type, COUNT(*) as count 
+        FROM conversation_messages 
+        GROUP BY sender_type
+      `);
+      const msgByType = getRows(msgByTypeResult);
+
+      // Clientes únicos
+      const uniqueCustomersResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT customer_phone) as count FROM conversations
+      `);
+      const uniqueCustomers = getRows(uniqueCustomersResult);
+
+      // Por canal
+      const byChannelResult = await db.execute(sql`
+        SELECT channel, COUNT(*) as count 
+        FROM conversations 
+        GROUP BY channel
+      `);
+      const byChannel = getRows(byChannelResult);
+
+      // Por status
+      const byStatusResult = await db.execute(sql`
+        SELECT status, COUNT(*) as count 
+        FROM conversations 
+        GROUP BY status
+      `);
+      const byStatus = getRows(byStatusResult);
+
+      // Por hora (últimos 7 dias)
+      const byHourResult = await db.execute(sql`
+        SELECT HOUR(created_at) as hour, COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
+      `);
+      const byHour = getRows(byHourResult);
+
+      res.json({
+        totalConversations: totalConv?.[0]?.count || 0,
+        todayConversations: todayConv?.[0]?.count || 0,
+        totalMessages: totalMsg?.[0]?.count || 0,
+        messagesByType: msgByType,
+        uniqueCustomers: uniqueCustomers?.[0]?.count || 0,
+        byChannel: byChannel,
+        byStatus: byStatus,
+        byHour: byHour,
+        _debug: {
+          totalConv,
+          todayConv,
+          totalMsg,
+          uniqueCustomers
+        }
+      });
+    } catch (error) {
+      console.error("[debug/dashboard] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get("/api/debug/users", async (req, res) => {
     try {
       const { getDb } = await import("../db");

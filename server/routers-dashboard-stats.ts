@@ -27,8 +27,10 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      console.log(`[getStats] Period: ${period}, Start: ${start}, End: ${end}`);
+
       // Total de atendimentos (conversas) no período
-      const [totalConversations] = await db
+      const totalConversations = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversations)
         .where(
@@ -38,8 +40,10 @@ export const dashboardStatsRouter = router({
           )
         );
 
+      console.log(`[getStats] totalConversations result:`, totalConversations);
+
       // Clientes únicos no período
-      const [uniqueCustomers] = await db
+      const uniqueCustomers = await db
         .select({
           count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
         })
@@ -52,7 +56,7 @@ export const dashboardStatsRouter = router({
         );
 
       // Mensagens enviadas (por agentes) no período
-      const [messagesSent] = await db
+      const messagesSent = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversationMessages)
         .where(
@@ -64,7 +68,7 @@ export const dashboardStatsRouter = router({
         );
 
       // Mensagens recebidas (de clientes) no período
-      const [messagesReceived] = await db
+      const messagesReceived = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversationMessages)
         .where(
@@ -76,28 +80,134 @@ export const dashboardStatsRouter = router({
         );
 
       // Total de agentes ativos
-      const [totalAgents] = await db
+      const totalAgents = await db
         .select({ count: sql<number>`count(*)` })
         .from(users)
         .where(eq(users.role, "user")); // Agentes têm role 'user'
 
+      // Extrair valores
+      const totalConvValue = totalConversations[0]?.count || 0;
+      const uniqueCustValue = uniqueCustomers[0]?.count || 0;
+      const msgSentValue = messagesSent[0]?.count || 0;
+      const msgRecValue = messagesReceived[0]?.count || 0;
+      const agentsValue = totalAgents[0]?.count || 0;
+
+      console.log(`[getStats] Values:`, {
+        totalConversations: totalConvValue,
+        uniqueCustomers: uniqueCustValue,
+        messagesSent: msgSentValue,
+        messagesReceived: msgRecValue,
+        totalAgents: agentsValue
+      });
+
       // Média de atendimentos por agente
-      const avgPerAgent =
-        totalAgents.count > 0
-          ? Math.round(totalConversations.count / totalAgents.count)
-          : 0;
+      const avgPerAgent = agentsValue > 0 ? Math.round(totalConvValue / agentsValue) : 0;
 
       // Tempo médio de atendimento (mock - será calculado depois)
       const avgHandlingTime = "00:14:32";
 
       return {
-        totalConversations: totalConversations.count,
-        uniqueCustomers: uniqueCustomers.count,
-        messagesSent: messagesSent.count,
-        messagesReceived: messagesReceived.count,
+        totalConversations: totalConvValue,
+        uniqueCustomers: uniqueCustValue,
+        messagesSent: msgSentValue,
+        messagesReceived: msgRecValue,
         avgPerAgent,
         avgHandlingTime,
       };
+    }),
+
+  // Atendimentos por canal
+  getConversationsByChannel: protectedProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("hoje"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "hoje";
+      const { start, end } = getDateRangeFromPeriod(period);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rawResult = await db.execute(sql`
+        SELECT 
+          channel,
+          COUNT(*) as count
+        FROM conversations
+        WHERE opened_at >= ${start}
+          AND opened_at <= ${end}
+        GROUP BY channel
+        ORDER BY count DESC
+      `);
+
+      const result = Array.isArray(rawResult) ? (rawResult[0] as any[]) : (rawResult as any[]);
+
+      // Cores para cada canal
+      const channelColors: Record<string, string> = {
+        whatsapp: "#25D366",
+        instagram: "#E4405F",
+        facebook: "#1877F2",
+        telegram: "#0088CC",
+        email: "#EA4335",
+        web: "#4285F4",
+      };
+
+      return result?.map((r: any) => ({
+        name: r.channel?.charAt(0).toUpperCase() + r.channel?.slice(1) || "Desconhecido",
+        value: Number(r.count) || 0,
+        color: channelColors[r.channel?.toLowerCase()] || "#6B7280",
+      })) || [];
+    }),
+
+  // Atendimentos por status
+  getConversationsByStatus: protectedProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("hoje"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "hoje";
+      const { start, end } = getDateRangeFromPeriod(period);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rawResult = await db.execute(sql`
+        SELECT 
+          status,
+          COUNT(*) as count
+        FROM conversations
+        WHERE opened_at >= ${start}
+          AND opened_at <= ${end}
+        GROUP BY status
+        ORDER BY count DESC
+      `);
+
+      const result = Array.isArray(rawResult) ? (rawResult[0] as any[]) : (rawResult as any[]);
+
+      const statusLabels: Record<string, string> = {
+        open: "Em aberto",
+        closed: "Encerrados",
+        pending: "Pendentes",
+        waiting: "Aguardando",
+      };
+
+      const statusColors: Record<string, string> = {
+        open: "#3B82F6",
+        closed: "#10B981",
+        pending: "#F59E0B",
+        waiting: "#8B5CF6",
+      };
+
+      return result?.map((r: any) => ({
+        name: statusLabels[r.status] || r.status || "Desconhecido",
+        value: Number(r.count) || 0,
+        color: statusColors[r.status] || "#6B7280",
+      })) || [];
     }),
 
   // Contatos por hora
