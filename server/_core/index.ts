@@ -885,6 +885,86 @@ async function startServer() {
     }
   });
 
+  // Debug: Dashboard stats completo
+  app.get("/api/debug/dashboard", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // Total de conversas
+      const [totalConv] = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversations
+      `);
+
+      // Conversas de hoje
+      const [todayConv] = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversations
+        WHERE opened_at >= ${startOfDay}
+      `);
+
+      // Mensagens
+      const [totalMsg] = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversation_messages
+      `);
+
+      // Mensagens por tipo
+      const [msgByType] = await db.execute(sql`
+        SELECT sender_type, COUNT(*) as count 
+        FROM conversation_messages 
+        GROUP BY sender_type
+      `);
+
+      // Clientes únicos
+      const [uniqueCustomers] = await db.execute(sql`
+        SELECT COUNT(DISTINCT customer_phone) as count FROM conversations
+      `);
+
+      // Por canal
+      const [byChannel] = await db.execute(sql`
+        SELECT channel, COUNT(*) as count 
+        FROM conversations 
+        GROUP BY channel
+      `);
+
+      // Por status
+      const [byStatus] = await db.execute(sql`
+        SELECT status, COUNT(*) as count 
+        FROM conversations 
+        GROUP BY status
+      `);
+
+      // Por hora (últimos 7 dias)
+      const [byHour] = await db.execute(sql`
+        SELECT HOUR(created_at) as hour, COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
+      `);
+
+      res.json({
+        totalConversations: (totalConv as any[])[0]?.[0]?.count || 0,
+        todayConversations: (todayConv as any[])[0]?.[0]?.count || 0,
+        totalMessages: (totalMsg as any[])[0]?.[0]?.count || 0,
+        messagesByType: (msgByType as any[])[0],
+        uniqueCustomers: (uniqueCustomers as any[])[0]?.[0]?.count || 0,
+        byChannel: (byChannel as any[])[0],
+        byStatus: (byStatus as any[])[0],
+        byHour: (byHour as any[])[0],
+      });
+    } catch (error) {
+      console.error("[debug/dashboard] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get("/api/debug/users", async (req, res) => {
     try {
       const { getDb } = await import("../db");
