@@ -800,6 +800,51 @@ async function startServer() {
     }
   });
 
+  // Endpoint REST para marcar conversa como lida
+  app.post("/api/conversations/:id/mark-read", async (req, res) => {
+    try {
+      const conversationId = parseInt(req.params.id);
+      if (isNaN(conversationId)) {
+        return res.status(400).json({ error: "Invalid conversation ID" });
+      }
+
+      const { getDb } = await import("../db");
+      const { conversations, conversationMessages } = await import("../../drizzle/schema");
+      const { eq, and, isNull } = await import("drizzle-orm");
+      const db = await getDb();
+
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      console.log(`[mark-read] Conversation ${conversationId}`);
+
+      // 1. Zerar unreadCount da conversa
+      await db
+        .update(conversations)
+        .set({ unreadCount: 0 })
+        .where(eq(conversations.id, conversationId));
+
+      // 2. Marcar todas mensagens do cliente como lidas
+      await db
+        .update(conversationMessages)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(conversationMessages.conversationId, conversationId),
+            eq(conversationMessages.senderType, "customer"),
+            isNull(conversationMessages.readAt)
+          )
+        );
+
+      console.log(`[mark-read] Success for conversation ${conversationId}`);
+      res.json({ success: true, conversationId });
+    } catch (error) {
+      console.error("[mark-read] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get("/api/debug/users", async (req, res) => {
     try {
       const { getDb } = await import("../db");
