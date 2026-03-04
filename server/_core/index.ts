@@ -1,4 +1,5 @@
 import "dotenv/config";
+// Force rebuild
 console.log("[Server] Starting initialization...");
 
 import express from "express";
