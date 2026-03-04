@@ -101,10 +101,10 @@ async function startServer() {
         "SELECT id, customer_name, status, last_message_at FROM conversations ORDER BY id DESC LIMIT 5"
       );
       await pool.end();
-      
-      res.json({ 
+
+      res.json({
         recentConversations: rows,
-        serverTime: new Date().toISOString()
+        serverTime: new Date().toISOString(),
       });
     } catch (error) {
       res.status(500).json({ error: String(error) });
@@ -159,7 +159,7 @@ async function startServer() {
 
       res.json({
         latestMediaMessage: rows[0] || null,
-        note: "Para ver o payload completo, precisaria da coluna raw_payload na tabela"
+        note: "Para ver o payload completo, precisaria da coluna raw_payload na tabela",
       });
     } catch (error) {
       res.status(500).json({ error: String(error) });
@@ -185,9 +185,10 @@ async function startServer() {
         return res.json({ error: "Evolution API not configured" });
       }
 
-      const config = typeof configRows[0].config === 'string' 
-        ? JSON.parse(configRows[0].config) 
-        : configRows[0].config;
+      const config =
+        typeof configRows[0].config === "string"
+          ? JSON.parse(configRows[0].config)
+          : configRows[0].config;
 
       const [msgRows]: any = await pool.execute(
         `SELECT id, created_at FROM conversation_messages 
@@ -200,18 +201,18 @@ async function startServer() {
         evoConfig: {
           apiUrl: config.apiUrl,
           instanceName: config.instanceName,
-          hasApiKey: !!(config.apiKey || config.accessToken)
+          hasApiKey: !!(config.apiKey || config.accessToken),
         },
         latestMediaMessage: msgRows[0] || null,
         timestamp: new Date().toISOString(),
-        note: "Need to pass WhatsApp message key to getBase64FromMediaMessage"
+        note: "Need to pass WhatsApp message key to getBase64FromMediaMessage",
       });
     } catch (error) {
       console.error("[Test Evolution Media] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });
-  
+
   async function getEvolutionConfig() {
     const mysql = await import("mysql2/promise");
     const pool = mysql.createPool({
@@ -225,19 +226,23 @@ async function startServer() {
     await pool.end();
 
     if (!rows || rows.length === 0) return null;
-    
-    const config = typeof rows[0].config === 'string' ? JSON.parse(rows[0].config) : rows[0].config;
+
+    const config =
+      typeof rows[0].config === "string"
+        ? JSON.parse(rows[0].config)
+        : rows[0].config;
     return {
       apiUrl: config.apiUrl,
       apiKey: config.apiKey || config.accessToken,
-      instanceName: config.instanceName
+      instanceName: config.instanceName,
     };
   }
 
   // Debug: testar ingestInboundConversationMessage
   app.post("/api/debug/test-ingest", async (req, res) => {
     try {
-      const { ingestInboundConversationMessage } = await import("../db-messages");
+      const { ingestInboundConversationMessage } =
+        await import("../db-messages");
       const result = await ingestInboundConversationMessage({
         fromNumber: "+5511999999999",
         fromName: "Teste Debug",
@@ -248,10 +253,10 @@ async function startServer() {
       res.json({ success: true, result });
     } catch (error) {
       console.error("[Debug Test Ingest] Error:", error);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         error: String(error),
-        stack: error instanceof Error ? error.stack : null
+        stack: error instanceof Error ? error.stack : null,
       });
     }
   });
@@ -424,7 +429,9 @@ async function startServer() {
               const mediaId = mediaIdMatch ? mediaIdMatch[1] : null;
 
               if (mediaId) {
-                console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
+                console.log(
+                  `[Media] Fetching media ${mediaId} from Evolution API`
+                );
 
                 // Try to get base64 from Evolution API
                 const mediaFetchUrl = `${apiUrl}/chat/fetchMedia/${mediaId}`;
@@ -439,7 +446,10 @@ async function startServer() {
                 if (evoResponse.ok) {
                   const evoData = await evoResponse.json();
                   if (evoData?.base64) {
-                    console.log("[Media] Got base64 from Evolution API, size:", evoData.base64.length);
+                    console.log(
+                      "[Media] Got base64 from Evolution API, size:",
+                      evoData.base64.length
+                    );
                     const mimeType = msg.file_type || "image/jpeg";
                     const buffer = Buffer.from(evoData.base64, "base64");
 
@@ -456,9 +466,15 @@ async function startServer() {
                         [dataUrl, messageId]
                       );
                       await pool2.end();
-                      console.log("[Media] Updated database with base64 for message", messageId);
+                      console.log(
+                        "[Media] Updated database with base64 for message",
+                        messageId
+                      );
                     } catch (updateErr) {
-                      console.error("[Media] Failed to update database:", updateErr);
+                      console.error(
+                        "[Media] Failed to update database:",
+                        updateErr
+                      );
                     }
 
                     res.setHeader("Content-Type", mimeType);
@@ -467,7 +483,10 @@ async function startServer() {
                     return res.send(buffer);
                   }
                 } else {
-                  console.warn("[Media] Evolution API fetch failed:", evoResponse.status);
+                  console.warn(
+                    "[Media] Evolution API fetch failed:",
+                    evoResponse.status
+                  );
                 }
               }
             }
@@ -561,6 +580,24 @@ async function startServer() {
           results.push("expected_due_date column already exists");
         } else {
           results.push(`Error adding expected_due_date: ${e.message}`);
+        }
+      }
+
+      // Add expected_due_date column to baby_shower_events table
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_events ADD COLUMN expected_due_date DATE`
+        );
+        results.push("Added expected_due_date column to baby_shower_events");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push(
+            "expected_due_date column already exists in baby_shower_events"
+          );
+        } else {
+          results.push(
+            `Error adding expected_due_date to baby_shower_events: ${e.message}`
+          );
         }
       }
 

@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect } from "react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -25,98 +24,109 @@ import {
   Legend,
 } from "recharts";
 
+interface DashboardStats {
+  totalConversations: number;
+  uniqueCustomers: number;
+  messagesSent: number;
+  messagesReceived: number;
+  byChannel: Array<{ channel: string; count: number }>;
+  byStatus: Array<{ status: string; count: number }>;
+  byHour: Array<{ hour: number; chats: number }>;
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"atendimentos" | "integracoes">(
     "atendimentos"
   );
   const [selectedQueue, setSelectedQueue] = useState("todas");
-  const [selectedPeriod, setSelectedPeriod] = useState("hoje");
+  const [selectedPeriod, setSelectedPeriod] = useState("mes");
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Buscar dados reais do backend com filtro de período
-  const {
-    data: stats,
-    isLoading: loadingStats,
-    refetch: refetchStats,
-  } = trpc.dashboardStats.getStats.useQuery({ period: selectedPeriod });
-  const { data: variations } = trpc.dashboardStats.getVariations.useQuery({
-    period: selectedPeriod,
-  });
-  const { data: contactsByHour } =
-    trpc.dashboardStats.getContactsByHour.useQuery({ period: selectedPeriod });
-  const { data: conversationsByQueue } =
-    trpc.dashboardStats.getConversationsByQueue.useQuery({
-      period: selectedPeriod,
-    });
-  const { data: agentStats, isLoading: loadingAgents } =
-    trpc.dashboardStats.getAgentStats.useQuery({ period: selectedPeriod });
-  const { data: conversationsByChannel } =
-    trpc.dashboardStats.getConversationsByChannel.useQuery({ period: selectedPeriod });
-  const { data: conversationsByStatus } =
-    trpc.dashboardStats.getConversationsByStatus.useQuery({ period: selectedPeriod });
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/dashboard/stats?period=${selectedPeriod}`);
+      const data = await res.json();
+      console.log("[Dashboard] Stats received:", data);
+      setStats(data);
+    } catch (error) {
+      console.error("[Dashboard] Error fetching stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, [selectedPeriod]);
 
   // Dados de métricas com valores reais
   const metricsData = {
     atendimentos: {
       value: stats?.totalConversations || 0,
-      change: variations?.conversations || 0,
-      trend:
-        (variations?.conversations || 0) >= 0
-          ? ("up" as const)
-          : ("down" as const),
+      change: 0,
+      trend: "up" as const,
     },
     clientesUnicos: {
       value: stats?.uniqueCustomers || 0,
-      change: variations?.customers || 0,
-      trend:
-        (variations?.customers || 0) >= 0 ? ("up" as const) : ("down" as const),
+      change: 0,
+      trend: "up" as const,
     },
     mensagensEnviadas: {
       value: stats?.messagesSent || 0,
-      change: variations?.messagesSent || 0,
-      trend:
-        (variations?.messagesSent || 0) >= 0
-          ? ("up" as const)
-          : ("down" as const),
+      change: 0,
+      trend: "up" as const,
     },
     mensagensRecebidas: {
       value: stats?.messagesReceived || 0,
-      change: variations?.messagesReceived || 0,
-      trend:
-        (variations?.messagesReceived || 0) >= 0
-          ? ("up" as const)
-          : ("down" as const),
+      change: 0,
+      trend: "up" as const,
     },
     mediaAtendPorAgente: {
-      value: stats?.avgPerAgent || 0,
-      change: variations?.avgPerAgent || 0,
-      trend:
-        (variations?.avgPerAgent || 0) >= 0
-          ? ("up" as const)
-          : ("down" as const),
+      value: 0,
+      change: 0,
+      trend: "up" as const,
     },
-    tma: stats?.avgHandlingTime || "00:00:00",
+    tma: "00:00:00",
   };
 
-  // Dados reais para gráfico de contatos por hora
-  const contatosPorHoraData =
-    contactsByHour?.map(h => ({
-      hora: h.hour,
-      chats: h.chats,
-      chamadas: h.calls,
-      abandonadas: h.abandoned,
-    })) || [];
+  // Dados para gráfico de contatos por hora
+  const contatosPorHoraData = stats?.byHour?.map((h: any) => ({
+    hora: h.hour,
+    chats: Number(h.chats) || 0,
+    chamadas: 0,
+    abandonadas: 0,
+  })) || [];
 
-  // Dados reais para gráfico de pizza (atendimentos por fila)
-  const atendimentosPorFilaData = conversationsByQueue || [];
+  // Dados de canal
+  const atendimentosPorCanalData = stats?.byChannel?.map((c: any) => ({
+    name: c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1) || "Desconhecido",
+    value: Number(c.count) || 0,
+    color: c.channel === "whatsapp" ? "#25D366" : c.channel === "instagram" ? "#E4405F" : "#6B7280",
+  })) || [];
 
-  // Dados reais de canal
-  const atendimentosPorCanalData = conversationsByChannel || [];
+  // Dados de status
+  const atendimentosPorStatusData = stats?.byStatus?.map((s: any) => {
+    const statusLabels: Record<string, string> = {
+      open: "Em aberto",
+      closed: "Encerrados",
+      pending: "Pendentes",
+    };
+    const statusColors: Record<string, string> = {
+      open: "#3B82F6",
+      closed: "#10B981",
+      pending: "#F59E0B",
+    };
+    return {
+      name: statusLabels[s.status] || s.status || "Desconhecido",
+      value: Number(s.count) || 0,
+      color: statusColors[s.status] || "#6B7280",
+    };
+  }) || [];
 
-  // Dados reais de status
-  const atendimentosPorStatusData = conversationsByStatus || [];
-
-  // Dados reais da tabela de agentes
-  const agentesData = agentStats || [];
+  // Dados da tabela de agentes (vazio por enquanto)
+  const agentesData: any[] = [];
 
   const renderMetricCard = (
     label: string,
@@ -242,12 +252,12 @@ export default function Dashboard() {
             </div>
 
             <Button
-              onClick={() => refetchStats()}
-              disabled={loadingStats}
+              onClick={() => fetchStats()}
+              disabled={loading}
               className="bg-[#1e1b4b] hover:bg-[#2d2a5b] text-white"
             >
               <RefreshCw
-                className={`w-4 h-4 mr-2 ${loadingStats ? "animate-spin" : ""}`}
+                className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
               />
               Atualizar
             </Button>
@@ -347,15 +357,15 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </Card>
 
-          {/* Gráfico de Atendimentos por Fila */}
+          {/* Gráfico de Atendimentos por Fila - substituído por Status */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Atendimentos por fila
+              Status dos Atendimentos
             </h3>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={atendimentosPorFilaData}
+                  data={atendimentosPorStatusData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -363,7 +373,7 @@ export default function Dashboard() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {atendimentosPorFilaData.map((entry, index) => (
+                  {atendimentosPorStatusData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={entry.color || "#4f46e5"}
