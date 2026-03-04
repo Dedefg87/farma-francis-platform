@@ -11,6 +11,7 @@ import {
   ingestInboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
+import { downloadAndSaveMedia, getMediaBase64FromEvolution } from "./media-download";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
@@ -112,165 +113,6 @@ async function getEvolutionConfig() {
     instanceName,
   };
 }
-
-/**
- * Download media from WhatsApp/Evolution and convert to base64
- * Returns base64 data URL that can be displayed directly
- */
-async function downloadAndSaveMedia(
-  mediaUrl: string,
-  mimeType: string | null,
-  fromNumber: string
-): Promise<{ base64Data: string; dataUrl: string } | null> {
-  const maxRetries = 2;
-  const initialDelay = 300;
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(
-        `[Media] Attempt ${attempt}/${maxRetries}: Downloading from ${mediaUrl.substring(0, 80)}...`
-      );
-
-      // Try direct download first
-      let response = await fetch(mediaUrl, {
-        signal: AbortSignal.timeout(8000), // 8 second timeout
-      });
-
-      // If direct URL fails, try again after a short delay
-      if (!response.ok) {
-        console.warn(
-          `[Media] Attempt ${attempt} failed with status ${response.status}, retrying...`
-        );
-        if (attempt < maxRetries) {
-          await new Promise(resolve =>
-            setTimeout(resolve, initialDelay * attempt)
-          );
-          continue;
-        }
-      }
-
-      // If direct URL fails, try Evolution API endpoint
-      if (!response.ok && mediaUrl.includes("whatsapp.net")) {
-        console.log("[Media] Direct download failed, trying Evolution API...");
-        const evoConfig = await getEvolutionConfig();
-        if (evoConfig) {
-          // Try to extract media ID from URL
-          const mediaIdMatch = mediaUrl.match(/\/([A-Za-z0-9_-]+)\?/);
-          if (mediaIdMatch) {
-            const mediaId = mediaIdMatch[1];
-            console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
-
-            // Try the correct Evolution API endpoint
-            const mediaFetchUrl = `${evoConfig.apiUrl}/chat/fetchMedia/${mediaId}`;
-            const evoResponse = await fetch(mediaFetchUrl, {
-              headers: {
-                apikey: evoConfig.apiKey,
-                "Content-Type": "application/json",
-              },
-              signal: AbortSignal.timeout(8000),
-            });
-
-            if (evoResponse.ok) {
-              const evoData = await evoResponse.json();
-              if (evoData?.base64) {
-                console.log("[Media] Got base64 from Evolution API");
-                const contentType = mimeType || "application/octet-stream";
-                const dataUrl = `data:${contentType};base64,${evoData.base64}`;
-                return { base64Data: evoData.base64, dataUrl };
-              }
-            } else {
-              console.warn(
-                `[Media] Evolution API fetch failed: ${evoResponse.status}`
-              );
-            }
-          }
-        } else {
-          console.warn(
-            "[Media] No Evolution API config available for fallback"
-          );
-        }
-      }
-
-      if (!response.ok) {
-        console.error(
-          `[Media] Failed to download after ${attempt} attempts:`,
-          response.status,
-          response.statusText
-        );
-        if (attempt < maxRetries) {
-          await new Promise(resolve =>
-            setTimeout(resolve, initialDelay * attempt)
-          );
-          continue;
-        }
-        return null;
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const base64 = buffer.toString("base64");
-
-      // Determine content type (prefer response header if available)
-      let contentType = mimeType || "application/octet-stream";
-      const headerCt = response.headers.get("content-type");
-      if (headerCt) {
-        contentType = headerCt.split(";")[0];
-      }
-
-      // If still no valid content type, try to detect from first bytes
-      if (!contentType || contentType === "application/octet-stream") {
-        if (buffer.length >= 2) {
-          // JPEG: FF D8
-          if (buffer[0] === 0xff && buffer[1] === 0xd8) {
-            contentType = "image/jpeg";
-          }
-          // PNG: 89 50
-          else if (buffer[0] === 0x89 && buffer[1] === 0x50) {
-            contentType = "image/png";
-          }
-          // GIF: 47 49 46
-          else if (
-            buffer[0] === 0x47 &&
-            buffer[1] === 0x49 &&
-            buffer[2] === 0x46
-          ) {
-            contentType = "image/gif";
-          }
-          // PDF: 25 50 44
-          else if (
-            buffer[0] === 0x25 &&
-            buffer[1] === 0x50 &&
-            buffer[2] === 0x44
-          ) {
-            contentType = "application/pdf";
-          }
-        }
-      }
-
-      const dataUrl = `data:${contentType};base64,${base64}`;
-
-      console.log(
-        "[Media] Downloaded successfully, size:",
-        buffer.length,
-        "content-type:",
-        contentType
-      );
-
-      return { base64Data: base64, dataUrl };
-    } catch (error) {
-      console.error(`[Media] Error on attempt ${attempt}:`, error);
-      if (attempt < maxRetries) {
-        await new Promise(resolve =>
-          setTimeout(resolve, initialDelay * attempt)
-        );
-      }
-    }
-  }
-
-  console.error("[Media] All download attempts failed");
-  return null;
-}
-
 /**
  * Evolution API payloads vary a lot. Try to extract the contact JID/phone
  * from multiple possible shapes.
@@ -1110,6 +952,10 @@ function parseEvolutionMessageContent(message: any) {
   }
 
   if (message.imageMessage) {
+    // Check if base64 is already provided by Evolution API (when Send Base64 is enabled)
+    if (message.imageMessage.base64) {
+      console.log("[Evolution Webhook] base64 already present in imageMessage, length:", message.imageMessage.base64.length);
+    }
     return {
       type: "image",
       text: null,
@@ -1118,6 +964,9 @@ function parseEvolutionMessageContent(message: any) {
         message.imageMessage.url || message.imageMessage.mediaUrl || null,
       mimeType:
         message.imageMessage.mimetype || message.imageMessage.mimeType || null,
+      mediaKey: message.imageMessage.mediaKey || null,
+      directPath: message.imageMessage.directPath || null,
+      base64: message.imageMessage.base64 || null,
     };
   }
 
@@ -1130,6 +979,8 @@ function parseEvolutionMessageContent(message: any) {
         message.videoMessage.url || message.videoMessage.mediaUrl || null,
       mimeType:
         message.videoMessage.mimetype || message.videoMessage.mimeType || null,
+      mediaKey: message.videoMessage.mediaKey || null,
+      directPath: message.videoMessage.directPath || null,
     };
   }
 
@@ -1144,6 +995,8 @@ function parseEvolutionMessageContent(message: any) {
         message.documentMessage.mimetype ||
         message.documentMessage.mimeType ||
         null,
+      mediaKey: message.documentMessage.mediaKey || null,
+      directPath: message.documentMessage.directPath || null,
     };
   }
 
@@ -1158,6 +1011,8 @@ function parseEvolutionMessageContent(message: any) {
         message.audioMessage.mimetype ||
         message.audioMessage.mimeType ||
         "audio/ogg",
+      mediaKey: message.audioMessage.mediaKey || null,
+      directPath: message.audioMessage.directPath || null,
     };
   }
 
@@ -1385,6 +1240,13 @@ async function processEvolutionWebhook(body: any) {
         }
 
         console.error("[Evolution Webhook] === STEP 12 START ===");
+        // Log completo da mensagem de mídia
+        if (messageContent?.imageMessage || messageContent?.videoMessage || messageContent?.documentMessage) {
+          console.log("[Evolution Webhook] === MEDIA MESSAGE PAYLOAD ===");
+          console.log(JSON.stringify(messageContent, null, 2).substring(0, 2000));
+          console.log("[Evolution Webhook] === END MEDIA PAYLOAD ===");
+        }
+        
         // Determinar tipo e conteúdo da mensagem (robusto)
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;
@@ -1392,6 +1254,8 @@ async function processEvolutionWebhook(body: any) {
         const caption = parsed.caption;
         const mediaUrl = parsed.mediaUrl;
         const mimeType = parsed.mimeType;
+        const mediaKey = parsed.mediaKey;
+        const directPath = parsed.directPath;
         console.log(
           "[Evolution Webhook] Step 12b: messageType=",
           messageType,
@@ -1400,7 +1264,9 @@ async function processEvolutionWebhook(body: any) {
           "mediaUrl=",
           mediaUrl ? mediaUrl.substring(0, 60) + "..." : null,
           "mimeType=",
-          mimeType
+          mimeType,
+          "mediaKey=",
+          mediaKey ? "present" : "missing"
         );
 
         // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
@@ -1414,38 +1280,53 @@ async function processEvolutionWebhook(body: any) {
         }
 
         // Download and save media to permanent storage if present
+        // Use Evolution API's getBase64FromMediaMessage endpoint for reliable media download
         let permanentMediaUrl = null;
-        if (
-          mediaUrl &&
-          ["image", "video", "audio", "document", "sticker"].includes(
-            messageType
-          )
+        let finalMimeType = mimeType;
+        
+        // First, check if base64 is already provided in the payload (when Send Base64 is enabled)
+        if (parsed.base64) {
+          console.log("[Evolution Webhook] Using base64 from payload (Send Base64 enabled), size:", parsed.base64.length);
+          const contentType = mimeType || "application/octet-stream";
+          permanentMediaUrl = `data:${contentType};base64,${parsed.base64}`;
+        }
+        // Otherwise, try Evolution API endpoint
+        else if (
+          ["image", "video", "audio", "document"].includes(messageType) &&
+          key?.id
         ) {
-          console.log(
-            "[Evolution Webhook] Downloading media:",
-            messageType,
-            mediaUrl.substring(0, 80)
-          );
-          const mediaResult = await downloadAndSaveMedia(
-            mediaUrl,
-            mimeType,
-            fromNumber
-          );
+          console.log("[Evolution Webhook] Downloading media using getBase64FromMediaMessage...");
+          
+          // Use the Evolution API endpoint to get base64 directly
+          const mediaResult = await getMediaBase64FromEvolution({
+            id: key.id,
+            remoteJid: remoteJid,
+            fromMe: fromMe,
+          });
+          
           if (mediaResult) {
             console.log(
-              "[Evolution Webhook] Media downloaded, size:",
+              "[Evolution Webhook] Media downloaded successfully, size:",
               mediaResult.base64Data.length
             );
-            // Store base64 in raw_payload for permanent access
             permanentMediaUrl = mediaResult.dataUrl;
-            console.log(
-              "[Evolution Webhook] permanentMediaUrl set, type:",
-              mediaResult.dataUrl.substring(0, 30)
-            );
+            finalMimeType = mediaResult.mimeType;
           } else {
             console.log(
-              "[Evolution Webhook] Media download failed, using original URL"
+              "[Evolution Webhook] getBase64FromMediaMessage failed, trying fallback..."
             );
+            // Fallback to old method
+            const fallbackResult = await downloadAndSaveMedia(
+              mediaUrl,
+              mimeType,
+              fromNumber,
+              mediaKey,
+              directPath
+            );
+            if (fallbackResult) {
+              permanentMediaUrl = fallbackResult.dataUrl;
+              console.log("[Evolution Webhook] Fallback download succeeded");
+            }
           }
         }
 
@@ -1476,7 +1357,7 @@ async function processEvolutionWebhook(body: any) {
             | "unknown",
           messageText,
           mediaUrl: permanentMediaUrl || mediaUrl,
-          mimeType,
+          mimeType: finalMimeType || mimeType,
           caption,
           timestamp: messageTimestamp,
           rawPayload: JSON.stringify({

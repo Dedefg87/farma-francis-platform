@@ -88,6 +88,174 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Debug: testar ingestInboundConversationMessage
+  app.get("/api/debug/server-logs", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        "SELECT id, customer_name, status, last_message_at FROM conversations ORDER BY id DESC LIMIT 5"
+      );
+      await pool.end();
+      
+      res.json({ 
+        recentConversations: rows,
+        serverTime: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: listar mensagens com mídia
+  app.get("/api/debug/media-messages", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, conversation_id, sender_type, 
+         LEFT(content, 100) as content_preview,
+         file_url IS NOT NULL as has_file_url,
+         LENGTH(file_url) as file_url_length,
+         LEFT(file_url, 50) as file_url_preview,
+         file_type, created_at
+         FROM conversation_messages 
+         ORDER BY id DESC
+         LIMIT 20`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, messages: rows });
+    } catch (error) {
+      console.error("[Debug Media Messages]", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: ver último payload de mídia recebido
+  app.get("/api/debug/last-media-payload", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Buscar última mensagem com mídia
+      const [rows]: any = await pool.execute(
+        `SELECT id, created_at FROM conversation_messages 
+         WHERE file_type IS NOT NULL 
+         ORDER BY id DESC LIMIT 1`
+      );
+      await pool.end();
+
+      res.json({
+        latestMediaMessage: rows[0] || null,
+        note: "Para ver o payload completo, precisaria da coluna raw_payload na tabela"
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: testar Evolution API getBase64FromMediaMessage
+  app.get("/api/debug/test-evolution-media", async (req, res) => {
+    try {
+      // Get Evolution config first
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [configRows]: any = await pool.execute(
+        "SELECT config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1"
+      );
+
+      if (!configRows || configRows.length === 0) {
+        await pool.end();
+        return res.json({ error: "Evolution API not configured" });
+      }
+
+      const config = typeof configRows[0].config === 'string' 
+        ? JSON.parse(configRows[0].config) 
+        : configRows[0].config;
+
+      const [msgRows]: any = await pool.execute(
+        `SELECT id, created_at FROM conversation_messages 
+         WHERE file_type IS NOT NULL 
+         ORDER BY id DESC LIMIT 1`
+      );
+      await pool.end();
+
+      res.json({
+        evoConfig: {
+          apiUrl: config.apiUrl,
+          instanceName: config.instanceName,
+          hasApiKey: !!(config.apiKey || config.accessToken)
+        },
+        latestMediaMessage: msgRows[0] || null,
+        timestamp: new Date().toISOString(),
+        note: "Need to pass WhatsApp message key to getBase64FromMediaMessage"
+      });
+    } catch (error) {
+      console.error("[Test Evolution Media] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+  
+  async function getEvolutionConfig() {
+    const mysql = await import("mysql2/promise");
+    const pool = mysql.createPool({
+      connectionLimit: 1,
+      uri: process.env.DATABASE_URL,
+    });
+
+    const [rows]: any = await pool.execute(
+      "SELECT config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1"
+    );
+    await pool.end();
+
+    if (!rows || rows.length === 0) return null;
+    
+    const config = typeof rows[0].config === 'string' ? JSON.parse(rows[0].config) : rows[0].config;
+    return {
+      apiUrl: config.apiUrl,
+      apiKey: config.apiKey || config.accessToken,
+      instanceName: config.instanceName
+    };
+  }
+
+  // Debug: testar ingestInboundConversationMessage
+  app.post("/api/debug/test-ingest", async (req, res) => {
+    try {
+      const { ingestInboundConversationMessage } = await import("../db-messages");
+      const result = await ingestInboundConversationMessage({
+        fromNumber: "+5511999999999",
+        fromName: "Teste Debug",
+        content: "Mensagem de teste",
+        provider: "whatsapp",
+        messageType: "text",
+      });
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error("[Debug Test Ingest] Error:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: String(error),
+        stack: error instanceof Error ? error.stack : null
+      });
+    }
+  });
+
   // OpenClaw Bridge endpoint - receives tasks from OpenClaw via WS bridge
   app.post("/api/openclaw/tasks", async (req, res) => {
     try {
@@ -1051,3 +1219,4 @@ async function startServer() {
 }
 
 startServer().catch(console.error);
+// rebuild Tue Mar  3 20:02:39 -03 2026
