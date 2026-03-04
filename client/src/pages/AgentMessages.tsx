@@ -71,6 +71,7 @@ import {
   FileText,
   X,
 } from "lucide-react";
+import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -1002,144 +1003,24 @@ export default function AgentMessages() {
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
-                            {getMimeType(msg.fileUrl, msg.fileType).startsWith(
-                              "image/"
-                            ) ? (
-                              <img
-                                src={getImageSrc(msg.fileUrl, msg.id)}
-                                alt={msg.fileName || "Imagem"}
-                                className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={() => handleImageClick(msg.id)}
-                                onError={e => {
-                                  const el =
-                                    e.currentTarget as HTMLImageElement;
-                                  el.src =
-                                    "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
-                                  el.alt = "Imagem indisponível";
-                                }}
-                              />
-                            ) : getMimeType(
-                                msg.fileUrl,
-                                msg.fileType
-                              ).startsWith("video/") ? (
-                              <video
-                                src={getImageSrc(msg.fileUrl, msg.id)}
-                                controls
-                                className="max-w-full rounded-lg max-h-64"
-                              />
-                            ) : getMimeType(msg.fileUrl, msg.fileType) ===
-                              "application/pdf" ? (
-                              // PDF - mostrar preview inline
-                              <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
-                                <div
-                                  className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    console.log("========== PDF CLICK START ==========");
-                                    console.log("[PDF] msg.id:", msg.id);
-                                    console.log("[PDF] msg.fileUrl:", msg.fileUrl?.substring(0, 50));
-                                    console.log("[PDF] msg.fileName:", msg.fileName);
-                                    console.log("[PDF] msg.fileType:", msg.fileType);
-                                    pdfPreviewJustOpened.current = true;
-                                    const newState = {
-                                      open: true,
-                                      url: msg.fileUrl,
-                                      fileName: msg.fileName || undefined,
-                                      messageId: msg.id,
-                                      fileType: msg.fileType || undefined,
-                                    };
-                                    console.log("[PDF] Setting new state:", newState);
-                                    setPdfPreview(newState);
-                                    // Reset o flag após 100ms
-                                    setTimeout(() => {
-                                      pdfPreviewJustOpened.current = false;
-                                    }, 100);
-                                    console.log("========== PDF CLICK END ==========");
-                                  }}
-                                >
-                                  <iframe
-                                    src={getImageSrc(msg.fileUrl, msg.id)}
-                                    className="w-full h-full pointer-events-none"
-                                    title={msg.fileName || "PDF"}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
-                                  <div className="flex items-center gap-2">
-                                    <svg
-                                      className="w-4 h-4 text-red-500"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                      />
-                                    </svg>
-                                    <span className="text-xs font-medium truncate max-w-[100px]">
-                                      {msg.fileName || "PDF"}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      console.log(
-                                        "[PDF] Click on Ampliar button:",
-                                        msg.id,
-                                        msg.fileName,
-                                        msg.fileType
-                                      );
-                                      setPdfPreview({
-                                        open: true,
-                                        url: msg.fileUrl,
-                                        fileName: msg.fileName || undefined,
-                                        messageId: msg.id,
-                                        fileType: msg.fileType || undefined,
-                                      });
-                                    }}
-                                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                                  >
-                                    Ampliar
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div
-                                onClick={() => {
-                                  console.log(
-                                    "[File] Click on file:",
-                                    msg.id,
-                                    msg.fileName,
-                                    msg.fileType
-                                  );
-                                  setPdfPreview({
-                                    open: true,
-                                    url: msg.fileUrl,
-                                    fileName: msg.fileName || undefined,
-                                    messageId: msg.id,
-                                    fileType: msg.fileType || undefined,
-                                  });
-                                }}
-                                className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
-                              >
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                  />
-                                </svg>
-                                {msg.fileName || "Arquivo"}
-                              </div>
-                            )}
+                            <MessageMedia
+                              fileUrl={msg.fileUrl}
+                              fileType={msg.fileType}
+                              fileName={msg.fileName}
+                              fileSize={msg.fileSize}
+                              messageId={msg.id}
+                              onImageClick={() => handleImageClick(msg.id)}
+                              onDocumentClick={() => {
+                                setPdfPreview({
+                                  open: true,
+                                  url: msg.fileUrl,
+                                  fileName: msg.fileName || undefined,
+                                  messageId: msg.id,
+                                  fileType: msg.fileType || undefined,
+                                });
+                              }}
+                              isAgent={msg.senderType === "agent"}
+                            />
                           </div>
                         )}
                         <span
