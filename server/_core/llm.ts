@@ -131,8 +131,8 @@ const normalizeContentPart = (
   }
 
   if (part.type === "image_url") {
-    // Images are stripped at invokeLLM entry, convert to placeholder text
-    return { type: "text", text: "[imagem]" };
+    // Pass through image_url for vision models that support it
+    return part;
   }
 
   if (part.type === "file_url") {
