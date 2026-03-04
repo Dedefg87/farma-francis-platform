@@ -845,6 +845,46 @@ async function startServer() {
     }
   });
 
+  // Debug: Contatos por hora
+  app.get("/api/debug/contacts-by-hour", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+
+      // Testar query direta
+      const result = await db.execute(sql`
+        SELECT 
+          HOUR(created_at) as hour,
+          COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
+      `);
+
+      console.log("[debug/contacts-by-hour] Result:", result);
+
+      res.json({
+        start,
+        end,
+        rawResult: result,
+        count: (result as any[]).length
+      });
+    } catch (error) {
+      console.error("[debug/contacts-by-hour] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   app.get("/api/debug/users", async (req, res) => {
     try {
       const { getDb } = await import("../db");
