@@ -882,6 +882,112 @@ async function startServer() {
     }
   });
 
+  // Endpoint REST público para dashboard (sem auth)
+  app.get("/api/dashboard/stats", async (req, res) => {
+    try {
+      const period = (req.query.period as string) || "mes";
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const now = new Date();
+      let start: Date;
+      let end = now;
+
+      switch (period) {
+        case "hoje":
+          start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          break;
+        case "ontem":
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+          end = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+          break;
+        case "semana":
+          start = new Date(now);
+          start.setDate(now.getDate() - now.getDay());
+          break;
+        case "mes":
+        default:
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
+
+      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
+
+      // Total de conversas
+      const totalConvResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversations
+        WHERE opened_at >= ${start} AND opened_at <= ${end}
+      `);
+      const totalConv = getRows(totalConvResult);
+
+      // Clientes únicos
+      const uniqueResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT customer_phone) as count FROM conversations
+        WHERE opened_at >= ${start} AND opened_at <= ${end}
+      `);
+      const unique = getRows(uniqueResult);
+
+      // Mensagens enviadas (agentes)
+      const sentResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversation_messages
+        WHERE sender_type = 'agent' AND created_at >= ${start} AND created_at <= ${end}
+      `);
+      const sent = getRows(sentResult);
+
+      // Mensagens recebidas (clientes)
+      const receivedResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversation_messages
+        WHERE sender_type = 'customer' AND created_at >= ${start} AND created_at <= ${end}
+      `);
+      const received = getRows(receivedResult);
+
+      // Por canal
+      const channelResult = await db.execute(sql`
+        SELECT channel, COUNT(*) as count FROM conversations
+        WHERE opened_at >= ${start} AND opened_at <= ${end}
+        GROUP BY channel ORDER BY count DESC
+      `);
+      const channels = getRows(channelResult);
+
+      // Por status
+      const statusResult = await db.execute(sql`
+        SELECT status, COUNT(*) as count FROM conversations
+        WHERE opened_at >= ${start} AND opened_at <= ${end}
+        GROUP BY status ORDER BY count DESC
+      `);
+      const statuses = getRows(statusResult);
+
+      // Por hora
+      const hourResult = await db.execute(sql`
+        SELECT HOUR(created_at) as hour, COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer' AND created_at >= ${start} AND created_at <= ${end}
+        GROUP BY HOUR(created_at) ORDER BY HOUR(created_at)
+      `);
+      const hours = getRows(hourResult);
+
+      res.json({
+        totalConversations: totalConv?.[0]?.count || 0,
+        uniqueCustomers: unique?.[0]?.count || 0,
+        messagesSent: sent?.[0]?.count || 0,
+        messagesReceived: received?.[0]?.count || 0,
+        byChannel: channels || [],
+        byStatus: statuses || [],
+        byHour: hours || [],
+        period,
+        start,
+        end
+      });
+    } catch (error) {
+      console.error("[dashboard/stats] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Debug: Contatos por hora
   app.get("/api/debug/contacts-by-hour", async (req, res) => {
     try {
