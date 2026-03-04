@@ -140,6 +140,32 @@ async function startServer() {
     }
   });
 
+  // Debug: ver último payload de mídia recebido
+  app.get("/api/debug/last-media-payload", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Buscar última mensagem com mídia
+      const [rows]: any = await pool.execute(
+        `SELECT id, created_at FROM conversation_messages 
+         WHERE file_type IS NOT NULL 
+         ORDER BY id DESC LIMIT 1`
+      );
+      await pool.end();
+
+      res.json({
+        latestMediaMessage: rows[0] || null,
+        note: "Para ver o payload completo, precisaria da coluna raw_payload na tabela"
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Debug: testar Evolution API getBase64FromMediaMessage
   app.get("/api/debug/test-evolution-media", async (req, res) => {
     try {

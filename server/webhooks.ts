@@ -952,6 +952,10 @@ function parseEvolutionMessageContent(message: any) {
   }
 
   if (message.imageMessage) {
+    // Check if base64 is already provided by Evolution API (when Send Base64 is enabled)
+    if (message.imageMessage.base64) {
+      console.log("[Evolution Webhook] base64 already present in imageMessage, length:", message.imageMessage.base64.length);
+    }
     return {
       type: "image",
       text: null,
@@ -962,6 +966,7 @@ function parseEvolutionMessageContent(message: any) {
         message.imageMessage.mimetype || message.imageMessage.mimeType || null,
       mediaKey: message.imageMessage.mediaKey || null,
       directPath: message.imageMessage.directPath || null,
+      base64: message.imageMessage.base64 || null,
     };
   }
 
@@ -1235,6 +1240,13 @@ async function processEvolutionWebhook(body: any) {
         }
 
         console.error("[Evolution Webhook] === STEP 12 START ===");
+        // Log completo da mensagem de mídia
+        if (messageContent?.imageMessage || messageContent?.videoMessage || messageContent?.documentMessage) {
+          console.log("[Evolution Webhook] === MEDIA MESSAGE PAYLOAD ===");
+          console.log(JSON.stringify(messageContent, null, 2).substring(0, 2000));
+          console.log("[Evolution Webhook] === END MEDIA PAYLOAD ===");
+        }
+        
         // Determinar tipo e conteúdo da mensagem (robusto)
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;
@@ -1271,7 +1283,15 @@ async function processEvolutionWebhook(body: any) {
         // Use Evolution API's getBase64FromMediaMessage endpoint for reliable media download
         let permanentMediaUrl = null;
         let finalMimeType = mimeType;
-        if (
+        
+        // First, check if base64 is already provided in the payload (when Send Base64 is enabled)
+        if (parsed.base64) {
+          console.log("[Evolution Webhook] Using base64 from payload (Send Base64 enabled), size:", parsed.base64.length);
+          const contentType = mimeType || "application/octet-stream";
+          permanentMediaUrl = `data:${contentType};base64,${parsed.base64}`;
+        }
+        // Otherwise, try Evolution API endpoint
+        else if (
           ["image", "video", "audio", "document"].includes(messageType) &&
           key?.id
         ) {
