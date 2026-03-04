@@ -884,6 +884,7 @@ async function startServer() {
 
   // Endpoint REST público para dashboard (sem auth)
   app.get("/api/dashboard/stats", async (req, res) => {
+    console.log("[dashboard/stats] Endpoint called with period:", req.query.period);
     try {
       const period = (req.query.period as string) || "mes";
       const { getDb } = await import("../db");
