@@ -27,8 +27,10 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      console.log(`[getStats] Period: ${period}, Start: ${start}, End: ${end}`);
+
       // Total de atendimentos (conversas) no período
-      const [totalConversations] = await db
+      const totalConversations = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversations)
         .where(
@@ -38,8 +40,10 @@ export const dashboardStatsRouter = router({
           )
         );
 
+      console.log(`[getStats] totalConversations result:`, totalConversations);
+
       // Clientes únicos no período
-      const [uniqueCustomers] = await db
+      const uniqueCustomers = await db
         .select({
           count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
         })
@@ -52,7 +56,7 @@ export const dashboardStatsRouter = router({
         );
 
       // Mensagens enviadas (por agentes) no período
-      const [messagesSent] = await db
+      const messagesSent = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversationMessages)
         .where(
@@ -64,7 +68,7 @@ export const dashboardStatsRouter = router({
         );
 
       // Mensagens recebidas (de clientes) no período
-      const [messagesReceived] = await db
+      const messagesReceived = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversationMessages)
         .where(
@@ -76,25 +80,37 @@ export const dashboardStatsRouter = router({
         );
 
       // Total de agentes ativos
-      const [totalAgents] = await db
+      const totalAgents = await db
         .select({ count: sql<number>`count(*)` })
         .from(users)
         .where(eq(users.role, "user")); // Agentes têm role 'user'
 
+      // Extrair valores
+      const totalConvValue = totalConversations[0]?.count || 0;
+      const uniqueCustValue = uniqueCustomers[0]?.count || 0;
+      const msgSentValue = messagesSent[0]?.count || 0;
+      const msgRecValue = messagesReceived[0]?.count || 0;
+      const agentsValue = totalAgents[0]?.count || 0;
+
+      console.log(`[getStats] Values:`, {
+        totalConversations: totalConvValue,
+        uniqueCustomers: uniqueCustValue,
+        messagesSent: msgSentValue,
+        messagesReceived: msgRecValue,
+        totalAgents: agentsValue
+      });
+
       // Média de atendimentos por agente
-      const avgPerAgent =
-        totalAgents.count > 0
-          ? Math.round(totalConversations.count / totalAgents.count)
-          : 0;
+      const avgPerAgent = agentsValue > 0 ? Math.round(totalConvValue / agentsValue) : 0;
 
       // Tempo médio de atendimento (mock - será calculado depois)
       const avgHandlingTime = "00:14:32";
 
       return {
-        totalConversations: totalConversations.count,
-        uniqueCustomers: uniqueCustomers.count,
-        messagesSent: messagesSent.count,
-        messagesReceived: messagesReceived.count,
+        totalConversations: totalConvValue,
+        uniqueCustomers: uniqueCustValue,
+        messagesSent: msgSentValue,
+        messagesReceived: msgRecValue,
         avgPerAgent,
         avgHandlingTime,
       };
