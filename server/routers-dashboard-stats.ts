@@ -100,6 +100,100 @@ export const dashboardStatsRouter = router({
       };
     }),
 
+  // Atendimentos por canal
+  getConversationsByChannel: protectedProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("hoje"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "hoje";
+      const { start, end } = getDateRangeFromPeriod(period);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rawResult = await db.execute(sql`
+        SELECT 
+          channel,
+          COUNT(*) as count
+        FROM conversations
+        WHERE opened_at >= ${start}
+          AND opened_at <= ${end}
+        GROUP BY channel
+        ORDER BY count DESC
+      `);
+
+      const result = Array.isArray(rawResult) ? (rawResult[0] as any[]) : (rawResult as any[]);
+
+      // Cores para cada canal
+      const channelColors: Record<string, string> = {
+        whatsapp: "#25D366",
+        instagram: "#E4405F",
+        facebook: "#1877F2",
+        telegram: "#0088CC",
+        email: "#EA4335",
+        web: "#4285F4",
+      };
+
+      return result?.map((r: any) => ({
+        name: r.channel?.charAt(0).toUpperCase() + r.channel?.slice(1) || "Desconhecido",
+        value: Number(r.count) || 0,
+        color: channelColors[r.channel?.toLowerCase()] || "#6B7280",
+      })) || [];
+    }),
+
+  // Atendimentos por status
+  getConversationsByStatus: protectedProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("hoje"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "hoje";
+      const { start, end } = getDateRangeFromPeriod(period);
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rawResult = await db.execute(sql`
+        SELECT 
+          status,
+          COUNT(*) as count
+        FROM conversations
+        WHERE opened_at >= ${start}
+          AND opened_at <= ${end}
+        GROUP BY status
+        ORDER BY count DESC
+      `);
+
+      const result = Array.isArray(rawResult) ? (rawResult[0] as any[]) : (rawResult as any[]);
+
+      const statusLabels: Record<string, string> = {
+        open: "Em aberto",
+        closed: "Encerrados",
+        pending: "Pendentes",
+        waiting: "Aguardando",
+      };
+
+      const statusColors: Record<string, string> = {
+        open: "#3B82F6",
+        closed: "#10B981",
+        pending: "#F59E0B",
+        waiting: "#8B5CF6",
+      };
+
+      return result?.map((r: any) => ({
+        name: statusLabels[r.status] || r.status || "Desconhecido",
+        value: Number(r.count) || 0,
+        color: statusColors[r.status] || "#6B7280",
+      })) || [];
+    }),
+
   // Contatos por hora
   getContactsByHour: protectedProcedure
     .input(

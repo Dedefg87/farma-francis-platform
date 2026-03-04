@@ -49,6 +49,10 @@ export default function Dashboard() {
     });
   const { data: agentStats, isLoading: loadingAgents } =
     trpc.dashboardStats.getAgentStats.useQuery({ period: selectedPeriod });
+  const { data: conversationsByChannel } =
+    trpc.dashboardStats.getConversationsByChannel.useQuery({ period: selectedPeriod });
+  const { data: conversationsByStatus } =
+    trpc.dashboardStats.getConversationsByStatus.useQuery({ period: selectedPeriod });
 
   // Dados de métricas com valores reais
   const metricsData = {
@@ -105,17 +109,11 @@ export default function Dashboard() {
   // Dados reais para gráfico de pizza (atendimentos por fila)
   const atendimentosPorFilaData = conversationsByQueue || [];
 
-  const atendimentosPorCanalData = [
-    { name: "WhatsApp", value: 100, color: "#4f46e5" },
-  ];
+  // Dados reais de canal
+  const atendimentosPorCanalData = conversationsByChannel || [];
 
-  const atendimentosPorURAData = [
-    { name: "Sem filtro", value: 100, color: "#4f46e5" },
-  ];
-
-  const atendimentosPorFechamentoData = [
-    { name: "Sem filtro", value: 100, color: "#4f46e5" },
-  ];
+  // Dados reais de status
+  const atendimentosPorStatusData = conversationsByStatus || [];
 
   // Dados reais da tabela de agentes
   const agentesData = agentStats || [];
@@ -406,15 +404,15 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </Card>
 
-          {/* Gráfico de Atendimentos por Filtro da URA */}
+          {/* Gráfico de Status dos Atendimentos */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Atend. por filtro da URA
+              Status dos Atendimentos
             </h3>
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={atendimentosPorURAData}
+                  data={atendimentosPorStatusData}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -422,7 +420,7 @@ export default function Dashboard() {
                   paddingAngle={5}
                   dataKey="value"
                 >
-                  {atendimentosPorURAData.map((entry, index) => (
+                  {atendimentosPorStatusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
