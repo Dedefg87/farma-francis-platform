@@ -569,7 +569,7 @@ async function startServer() {
   app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
   // Setup Routes - Criar tabelas de eventos
-  const setupMigrate = await import("../setup");
+  const setupMigrate = await import("../setup-migrate");
   app.use("/api/setup", setupMigrate.default);
 
   // Test Routes - Sistema de Teste de Fluxos
