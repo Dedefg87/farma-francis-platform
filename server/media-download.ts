@@ -59,7 +59,8 @@ export async function getMediaBase64FromEvolution(
 
     console.log("[Media] Using getBase64FromMediaMessage for message:", messageKey.id);
 
-    const url = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
+    const apiUrl = evoConfig.apiUrl.replace(/\/$/, '');
+    const url = `${apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
     
     const response = await fetch(url, {
       method: 'POST',
