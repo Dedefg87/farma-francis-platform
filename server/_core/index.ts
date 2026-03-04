@@ -389,12 +389,95 @@ async function startServer() {
         }
       }
 
-      // If it's a regular URL (not base64), it's likely an expired WhatsApp URL
-      // Return 404 instead of redirecting to a blocked/expired URL
+      // If it's a regular URL (not base64), try to fetch via Evolution API
       console.log(
-        "[Media] file_url is not a data URL, likely expired WhatsApp URL:",
+        "[Media] file_url is not a data URL, trying Evolution API fallback:",
         fileUrl.substring(0, 50)
       );
+
+      // Try to fetch media via Evolution API
+      try {
+        const { getDb } = await import("../db");
+        const { integrationSettings } = await import("../../drizzle/schema");
+        const { eq } = await import("drizzle-orm");
+        const db = await getDb();
+
+        if (db) {
+          const [config] = await db
+            .select()
+            .from(integrationSettings)
+            .where(eq(integrationSettings.integrationType, "evolution_api"))
+            .limit(1);
+
+          if (config && config.isActive) {
+            const configData =
+              typeof config.config === "string"
+                ? JSON.parse(config.config)
+                : config.config;
+            const apiUrl = configData.apiUrl?.replace(/\/$/, "");
+            const apiKey = configData.apiKey || configData.accessToken;
+            const instanceName = configData.instanceName;
+
+            if (apiUrl && apiKey && instanceName) {
+              // Extract media ID from URL
+              const mediaIdMatch = fileUrl.match(/\/([A-Za-z0-9_-]+)(\?|$)/);
+              const mediaId = mediaIdMatch ? mediaIdMatch[1] : null;
+
+              if (mediaId) {
+                console.log(`[Media] Fetching media ${mediaId} from Evolution API`);
+
+                // Try to get base64 from Evolution API
+                const mediaFetchUrl = `${apiUrl}/chat/fetchMedia/${mediaId}`;
+                const evoResponse = await fetch(mediaFetchUrl, {
+                  headers: {
+                    apikey: apiKey,
+                    "Content-Type": "application/json",
+                  },
+                  signal: AbortSignal.timeout(15000),
+                });
+
+                if (evoResponse.ok) {
+                  const evoData = await evoResponse.json();
+                  if (evoData?.base64) {
+                    console.log("[Media] Got base64 from Evolution API, size:", evoData.base64.length);
+                    const mimeType = msg.file_type || "image/jpeg";
+                    const buffer = Buffer.from(evoData.base64, "base64");
+
+                    // Update database with base64 for future requests
+                    const dataUrl = `data:${mimeType};base64,${evoData.base64}`;
+                    try {
+                      const mysql2 = await import("mysql2/promise");
+                      const pool2 = mysql2.createPool({
+                        connectionLimit: 1,
+                        uri: process.env.DATABASE_URL,
+                      });
+                      await pool2.execute(
+                        "UPDATE conversation_messages SET file_url = ? WHERE id = ?",
+                        [dataUrl, messageId]
+                      );
+                      await pool2.end();
+                      console.log("[Media] Updated database with base64 for message", messageId);
+                    } catch (updateErr) {
+                      console.error("[Media] Failed to update database:", updateErr);
+                    }
+
+                    res.setHeader("Content-Type", mimeType);
+                    res.setHeader("Content-Length", buffer.length);
+                    res.setHeader("Cache-Control", "public, max-age=31536000");
+                    return res.send(buffer);
+                  }
+                } else {
+                  console.warn("[Media] Evolution API fetch failed:", evoResponse.status);
+                }
+              }
+            }
+          }
+        }
+      } catch (evoErr) {
+        console.error("[Media] Error fetching from Evolution API:", evoErr);
+      }
+
+      // All fallbacks failed
       return res.status(404).json({ error: "Image not found or expired" });
     } catch (error) {
       console.error("[Media] Error serving media:", error);
