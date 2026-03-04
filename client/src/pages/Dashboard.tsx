@@ -45,7 +45,7 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/dashboard/stats?period=${selectedPeriod}`);
+      const res = await fetch(`/api/stats/dashboard?period=${selectedPeriod}`);
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
