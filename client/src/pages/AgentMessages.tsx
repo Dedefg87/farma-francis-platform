@@ -454,6 +454,36 @@ export default function AgentMessages() {
     },
   });
 
+  // Mutation para marcar conversa como lida
+  const markAsReadMutation = trpc.conversations.markConversationAsRead.useMutation({
+    onSuccess: () => {
+      console.log("[AgentMessages] Conversa marcada como lida");
+    },
+    onError: (error) => {
+      console.error("[AgentMessages] Erro ao marcar como lida:", error);
+    },
+  });
+
+  // Função para selecionar conversa e marcar como lida
+  const handleSelectConversation = useCallback((conversationId: number) => {
+    // Selecionar conversa visualmente
+    setSelectedConversationId(conversationId);
+
+    // Atualização otimista - zerar contador imediatamente na UI
+    queryClient.setQueryData(
+      ["trpc", "conversations", "listActive", { input: undefined }],
+      (old: any) => {
+        if (!old) return old;
+        return old.map((c: any) =>
+          c.id === conversationId ? { ...c, unreadCount: 0 } : c
+        );
+      }
+    );
+
+    // Chamar API para persistir no backend
+    markAsReadMutation.mutate({ conversationId });
+  }, [markAsReadMutation, queryClient]);
+
   // Scroll automático para última mensagem
   useEffect(() => {
     if (messages && messages.length > 0) {
@@ -511,6 +541,32 @@ export default function AgentMessages() {
     previousTotalUnreadRef.current = currentTotalUnread;
     previousConversationsRef.current = conversations.map(c => c.id);
   }, [conversations, notificationsMuted, playNotificationSound]);
+
+  // Auto-marcar como lida quando mensagem chega na conversa ativa
+  useEffect(() => {
+    if (!selectedConversationId || !conversations) return;
+
+    const activeConversation = conversations.find(c => c.id === selectedConversationId);
+    
+    // Se a conversa ativa tem mensagens não lidas, marcar como lida
+    if (activeConversation && activeConversation.unreadCount > 0) {
+      console.log(`[AgentMessages] Auto-marcing conversation ${selectedConversationId} as read`);
+      
+      // Atualização otimista
+      queryClient.setQueryData(
+        ["trpc", "conversations", "listActive", { input: undefined }],
+        (old: any) => {
+          if (!old) return old;
+          return old.map((c: any) =>
+            c.id === selectedConversationId ? { ...c, unreadCount: 0 } : c
+          );
+        }
+      );
+
+      // Chamar API
+      markAsReadMutation.mutate({ conversationId: selectedConversationId });
+    }
+  }, [conversations, selectedConversationId, markAsReadMutation, queryClient]);
 
   // Função para abrir lightbox de imagens
   const handleImageClick = useCallback(
@@ -814,11 +870,13 @@ export default function AgentMessages() {
               filteredConversations.map(conv => (
                 <button
                   key={conv.id}
-                  onClick={() => setSelectedConversationId(conv.id)}
+                  onClick={() => handleSelectConversation(conv.id)}
                   className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
                     selectedConversationId === conv.id
                       ? "bg-blue-50 border-l-4 border-l-blue-500"
-                      : ""
+                      : conv.unreadCount > 0 
+                        ? "bg-orange-50 border-l-4 border-l-orange-400"
+                        : ""
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -835,12 +893,12 @@ export default function AgentMessages() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold text-gray-900 truncate">
+                        <h3 className={`font-semibold truncate ${conv.unreadCount > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
                           {conv.customerName}
                         </h3>
                         {conv.unreadCount > 0 && (
-                          <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                            {conv.unreadCount}
+                          <span className="bg-red-500 text-white text-xs font-bold min-w-[20px] h-5 flex items-center justify-center px-1.5 rounded-full animate-pulse">
+                            {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                           </span>
                         )}
                       </div>

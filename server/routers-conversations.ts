@@ -1076,6 +1076,44 @@ export const internalMessagesRouter = router({
       return { success: true };
     }),
 
+  // Marcar conversa como lida (zerar contador de não lidas)
+  markConversationAsRead: protectedProcedure
+    .input(z.object({ conversationId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      console.log(`[markConversationAsRead] Conversation ${input.conversationId} by user ${ctx.user.id}`);
+
+      // 1. Zerar unreadCount da conversa
+      await db
+        .update(conversations)
+        .set({ unreadCount: 0 })
+        .where(eq(conversations.id, input.conversationId));
+
+      // 2. Marcar todas mensagens do cliente como lidas
+      await db
+        .update(conversationMessages)
+        .set({ readAt: new Date() })
+        .where(
+          and(
+            eq(conversationMessages.conversationId, input.conversationId),
+            eq(conversationMessages.senderType, "customer"),
+            isNull(conversationMessages.readAt)
+          )
+        );
+
+      // 3. Notificar via SSE para sincronizar outros clients
+      sseManager.emitToUser(String(ctx.user.id), {
+        type: EVENTS.CONVERSATION_READ,
+        data: { conversationId: input.conversationId }
+      });
+
+      console.log(`[markConversationAsRead] Success for conversation ${input.conversationId}`);
+
+      return { success: true };
+    }),
+
   // Contar mensagens não lidas
   countUnread: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
