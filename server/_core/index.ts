@@ -970,6 +970,27 @@ async function startServer() {
       `);
       const hours = getRows(hourResult);
 
+      // Estatísticas por agente
+      const agentStatsResult = await db.execute(sql`
+        SELECT 
+          u.id,
+          u.name,
+          u.avatar_url,
+          COUNT(DISTINCT c.id) as total_conversations,
+          COUNT(DISTINCT CASE WHEN c.status = 'closed' THEN c.id END) as closed_conversations,
+          COUNT(cm.id) as total_messages
+        FROM users u
+        LEFT JOIN conversations c ON c.assigned_user_id = u.id 
+          AND c.opened_at >= ${start} AND c.opened_at <= ${end}
+        LEFT JOIN conversation_messages cm ON cm.sender_id = u.id 
+          AND cm.sender_type = 'agent'
+          AND cm.created_at >= ${start} AND cm.created_at <= ${end}
+        WHERE u.role = 'user'
+        GROUP BY u.id, u.name, u.avatar_url
+        ORDER BY total_conversations DESC
+      `);
+      const agentStats = getRows(agentStatsResult);
+
       res.json({
         totalConversations: totalConv?.[0]?.count || 0,
         uniqueCustomers: unique?.[0]?.count || 0,
@@ -978,6 +999,7 @@ async function startServer() {
         byChannel: channels || [],
         byStatus: statuses || [],
         byHour: hours || [],
+        agentStats: agentStats || [],
         period,
         start,
         end

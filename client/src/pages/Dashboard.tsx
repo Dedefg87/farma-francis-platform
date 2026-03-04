@@ -32,6 +32,14 @@ interface DashboardStats {
   byChannel: Array<{ channel: string; count: number }>;
   byStatus: Array<{ status: string; count: number }>;
   byHour: Array<{ hour: number; chats: number }>;
+  agentStats: Array<{
+    id: number;
+    name: string;
+    avatar_url: string | null;
+    total_conversations: number;
+    closed_conversations: number;
+    total_messages: number;
+  }>;
 }
 
 export default function Dashboard() {
@@ -125,8 +133,18 @@ export default function Dashboard() {
     };
   }) || [];
 
-  // Dados da tabela de agentes (vazio por enquanto)
-  const agentesData: any[] = [];
+  // Dados da tabela de agentes
+  const agentesData = stats?.agentStats?.map(agent => ({
+    id: agent.id,
+    nome: agent.name,
+    avatar: agent.avatar_url,
+    atendimentos: Number(agent.total_conversations) || 0,
+    encerrados: Number(agent.closed_conversations) || 0,
+    mensagens: Number(agent.total_messages) || 0,
+    taxaConversao: agent.total_conversations > 0 
+      ? Math.round((Number(agent.closed_conversations) / Number(agent.total_conversations)) * 100) 
+      : 0,
+  })) || [];
 
   const renderMetricCard = (
     label: string,
