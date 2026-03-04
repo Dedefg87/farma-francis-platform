@@ -1,6 +1,7 @@
 import "dotenv/config";
 // Force rebuild
 console.log("[Server] Starting initialization...");
+console.log("[Deploy] Build-trigger: " + new Date().toISOString());
 
 import express from "express";
 import cookieParser from "cookie-parser";
