@@ -97,12 +97,12 @@ async function startServer() {
         uri: process.env.DATABASE_URL,
       });
 
-      const [rows]: any = await pool.execute(
+      const [rows1]: any = await pool.execute(
         "SELECT id, customer_name, status, last_message_at FROM conversations ORDER BY id DESC LIMIT 5"
       );
       await pool.end();
 
-      const [rows]: any = await pool.execute(
+      const [rows1]: any = await pool.execute(
         `SELECT id, conversation_id, file_type, 
          LENGTH(file_url) as file_size, 
          LEFT(file_url, 50) as file_url_preview,
@@ -137,7 +137,7 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid message ID" });
       }
 
-      const [rows]: any = await pool.execute(
+      const [rows1]: any = await pool.execute(
         "SELECT file_url, file_type FROM conversation_messages WHERE id = ?",
         [messageId]
       );
@@ -293,7 +293,7 @@ async function startServer() {
         uri: process.env.DATABASE_URL,
       });
 
-      const [rows]: any = await pool.execute(
+      const [rows1]: any = await pool.execute(
         `SELECT id, conversation_id, sender_type, 
          LEFT(content, 100) as content_preview,
          file_url IS NOT NULL as has_file_url,
@@ -398,7 +398,7 @@ async function startServer() {
       });
 
       // Get all messages with WhatsApp media URLs
-      const [rows]: any = await pool.execute(
+      const [rows1]: any = await pool.execute(
         `SELECT cm.id, cm.file_url, cm.file_type 
          FROM conversation_messages cm 
          WHERE cm.file_url IS NOT NULL 
