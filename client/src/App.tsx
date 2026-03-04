@@ -31,7 +31,7 @@ const QuickRepliesManagement = lazy(
   () => import("./pages/QuickRepliesManagement")
 );
 const Executions = lazy(() => import("./pages/Executions"));
-const BabyShowerEvents = lazy(() => import("./pages/BabyShowerEvents"));
+const BabyShowerEvents = lazy(() => import("./pages/BabyShowerSimple"));
 const BabyShowerPublic = lazy(() => import("./pages/BabyShowerPublic"));
 
 // Loading spinner component
