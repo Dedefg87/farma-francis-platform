@@ -29,14 +29,31 @@ async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
       ? JSON.parse(config.config)
       : config.config;
 
-  const apiUrl = configData.apiUrl as string | undefined;
-  const apiKey = configData.apiKey || configData.accessToken;
-  const instanceName = configData.instanceName;
+  const apiUrl = configData?.apiUrl || process.env.EVOLUTION_API_URL || "";
+  const apiKey =
+    configData?.apiKey ||
+    configData?.accessToken ||
+    process.env.EVOLUTION_API_KEY ||
+    "";
+  const instanceName =
+    configData?.instanceName || process.env.EVOLUTION_INSTANCE_NAME || "";
 
-  console.log("[Evolution Config] apiUrl:", apiUrl);
-  console.log("[Evolution Config] instanceName:", instanceName);
-  console.log("[Evolution Config] apiKey length:", apiKey?.length);
-  console.log("[Evolution Config] apiKey first 5 chars:", apiKey?.substring(0, 5));
+  console.log(
+    "[Evolution Config] apiUrl:",
+    apiUrl || "(from env: " + process.env.EVOLUTION_API_URL + ")"
+  );
+  console.log(
+    "[Evolution Config] instanceName:",
+    instanceName || "(from env: " + process.env.EVOLUTION_INSTANCE_NAME + ")"
+  );
+  console.log(
+    "[Evolution Config] apiKey length:",
+    apiKey?.length || "(from env)"
+  );
+  console.log(
+    "[Evolution Config] apiKey first 5 chars:",
+    apiKey?.substring ? apiKey.substring(0, 5) : "N/A"
+  );
 
   if (!apiUrl || !apiKey || !instanceName) return null;
 
@@ -47,9 +64,11 @@ async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
  * Get media as base64 from Evolution API using the message key
  * This is the recommended way to get media from WhatsApp messages
  */
-export async function getMediaBase64FromEvolution(
-  messageKey: { id: string; remoteJid?: string; fromMe?: boolean }
-): Promise<{ base64Data: string; dataUrl: string; mimeType: string } | null> {
+export async function getMediaBase64FromEvolution(messageKey: {
+  id: string;
+  remoteJid?: string;
+  fromMe?: boolean;
+}): Promise<{ base64Data: string; dataUrl: string; mimeType: string } | null> {
   try {
     const evoConfig = await getEvolutionConfig();
     if (!evoConfig) {
@@ -57,15 +76,18 @@ export async function getMediaBase64FromEvolution(
       return null;
     }
 
-    console.log("[Media] Using getBase64FromMediaMessage for message:", messageKey.id);
+    console.log(
+      "[Media] Using getBase64FromMediaMessage for message:",
+      messageKey.id
+    );
 
     const url = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
-    
+
     const response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'apikey': evoConfig.apiKey,
+        "Content-Type": "application/json",
+        apikey: evoConfig.apiKey,
       },
       body: JSON.stringify({
         message: {
@@ -76,19 +98,28 @@ export async function getMediaBase64FromEvolution(
     });
 
     if (!response.ok) {
-      console.error("[Media] getBase64FromMediaMessage failed:", response.status, response.statusText);
+      console.error(
+        "[Media] getBase64FromMediaMessage failed:",
+        response.status,
+        response.statusText
+      );
       const errorText = await response.text();
       console.error("[Media] Error response:", errorText.substring(0, 500));
       return null;
     }
 
     const data = await response.json();
-    
+
     // The response contains base64, mimetype, and filename
     if (data.base64) {
-      const mimeType = data.mimetype || 'application/octet-stream';
+      const mimeType = data.mimetype || "application/octet-stream";
       const dataUrl = `data:${mimeType};base64,${data.base64}`;
-      console.log("[Media] Successfully got base64, size:", data.base64.length, "type:", mimeType);
+      console.log(
+        "[Media] Successfully got base64, size:",
+        data.base64.length,
+        "type:",
+        mimeType
+      );
       return {
         base64Data: data.base64,
         dataUrl,
@@ -96,7 +127,10 @@ export async function getMediaBase64FromEvolution(
       };
     }
 
-    console.error("[Media] No base64 in response:", JSON.stringify(data).substring(0, 200));
+    console.error(
+      "[Media] No base64 in response:",
+      JSON.stringify(data).substring(0, 200)
+    );
     return null;
   } catch (error) {
     console.error("[Media] Error in getMediaBase64FromEvolution:", error);
@@ -123,7 +157,7 @@ export async function downloadAndSaveMedia(
 
   // FALLBACK: Download direto (provavelmente vai retornar dados criptografados)
   console.log("[Media] Falling back to direct download...");
-  
+
   try {
     const response = await fetch(mediaUrl, {
       signal: AbortSignal.timeout(10000),
@@ -136,26 +170,37 @@ export async function downloadAndSaveMedia(
 
     const buffer = Buffer.from(await response.arrayBuffer());
     const base64 = buffer.toString("base64");
-    
+
     console.log("[Media] Downloaded", buffer.length, "bytes");
-    console.log("[Media] First 8 bytes (hex):", buffer.slice(0, 8).toString('hex'));
-    
+    console.log(
+      "[Media] First 8 bytes (hex):",
+      buffer.slice(0, 8).toString("hex")
+    );
+
     // Detectar MIME type por magic bytes
     let contentType = mimeType || "application/octet-stream";
-    
-    const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-    const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
-    const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
-    
+
+    const isJpeg =
+      buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const isPng =
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47;
+    const isPdf =
+      buffer[0] === 0x25 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x44 &&
+      buffer[3] === 0x46;
+
     if (isJpeg) contentType = "image/jpeg";
     else if (isPng) contentType = "image/png";
     else if (isPdf) contentType = "application/pdf";
-    
+
     console.log("[Media] Detected MIME type:", contentType);
-    
+
     const dataUrl = `data:${contentType};base64,${base64}`;
     return { base64Data: base64, dataUrl };
-    
   } catch (error) {
     console.error("[Media] Direct download error:", error);
     return null;
