@@ -460,7 +460,7 @@ export default function AgentMessages() {
       console.log("[AgentMessages] Conversa marcada como lida");
     },
     onError: (error) => {
-      console.error("[AgentMessages] Erro ao marcar como lida:", error);
+      console.error("[AgentMessages] Erro ao marcar como lida:", error.message, error);
     },
   });
 
