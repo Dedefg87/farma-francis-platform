@@ -11,7 +11,10 @@ import {
   ingestInboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
-import { downloadAndSaveMedia, getMediaBase64FromEvolution } from "./media-download";
+import {
+  downloadAndSaveMedia,
+  getMediaBase64FromEvolution,
+} from "./media-download";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
@@ -561,12 +564,18 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
       );
     }
 
-    console.log("[Evolution Webhook] Calling processEvolutionWebhook with event:", eventName);
+    console.log(
+      "[Evolution Webhook] Calling processEvolutionWebhook with event:",
+      eventName
+    );
     console.log("[Evolution Webhook] === FULL EVENT INFO ===");
     console.log("[Evolution Webhook] Event:", eventName);
     console.log("[Evolution Webhook] Body keys:", Object.keys(body || {}));
     console.log("[Evolution Webhook] Has data:", !!body?.data);
-    console.log("[Evolution Webhook] Has message:", !!(body?.message || body?.data?.message));
+    console.log(
+      "[Evolution Webhook] Has message:",
+      !!(body?.message || body?.data?.message)
+    );
     console.log("[Evolution Webhook] =========================");
     res.status(200).send("EVENT_RECEIVED");
 
@@ -954,7 +963,10 @@ function parseEvolutionMessageContent(message: any) {
   if (message.imageMessage) {
     // Check if base64 is already provided by Evolution API (when Send Base64 is enabled)
     if (message.imageMessage.base64) {
-      console.log("[Evolution Webhook] base64 already present in imageMessage, length:", message.imageMessage.base64.length);
+      console.log(
+        "[Evolution Webhook] base64 already present in imageMessage, length:",
+        message.imageMessage.base64.length
+      );
     }
     return {
       type: "image",
@@ -1241,12 +1253,18 @@ async function processEvolutionWebhook(body: any) {
 
         console.error("[Evolution Webhook] === STEP 12 START ===");
         // Log completo da mensagem de mídia
-        if (messageContent?.imageMessage || messageContent?.videoMessage || messageContent?.documentMessage) {
+        if (
+          messageContent?.imageMessage ||
+          messageContent?.videoMessage ||
+          messageContent?.documentMessage
+        ) {
           console.log("[Evolution Webhook] === MEDIA MESSAGE PAYLOAD ===");
-          console.log(JSON.stringify(messageContent, null, 2).substring(0, 2000));
+          console.log(
+            JSON.stringify(messageContent, null, 2).substring(0, 2000)
+          );
           console.log("[Evolution Webhook] === END MEDIA PAYLOAD ===");
         }
-        
+
         // Determinar tipo e conteúdo da mensagem (robusto)
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;
@@ -1256,6 +1274,7 @@ async function processEvolutionWebhook(body: any) {
         const mimeType = parsed.mimeType;
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
+        const imageBase64 = parsed.base64;
         console.log(
           "[Evolution Webhook] Step 12b: messageType=",
           messageType,
@@ -1266,7 +1285,9 @@ async function processEvolutionWebhook(body: any) {
           "mimeType=",
           mimeType,
           "mediaKey=",
-          mediaKey ? "present" : "missing"
+          mediaKey ? "present" : "missing",
+          "imageBase64=",
+          imageBase64 ? "present (" + imageBase64.length + ")" : "missing"
         );
 
         // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
@@ -1283,27 +1304,32 @@ async function processEvolutionWebhook(body: any) {
         // Use Evolution API's getBase64FromMediaMessage endpoint for reliable media download
         let permanentMediaUrl = null;
         let finalMimeType = mimeType;
-        
+
         // First, check if base64 is already provided in the payload (when Send Base64 is enabled)
-        if (parsed.base64) {
-          console.log("[Evolution Webhook] Using base64 from payload (Send Base64 enabled), size:", parsed.base64.length);
+        if (imageBase64) {
+          console.log(
+            "[Evolution Webhook] Using base64 from payload (Send Base64 enabled), size:",
+            imageBase64.length
+          );
           const contentType = mimeType || "application/octet-stream";
-          permanentMediaUrl = `data:${contentType};base64,${parsed.base64}`;
+          permanentMediaUrl = `data:${contentType};base64,${imageBase64}`;
         }
         // Otherwise, try Evolution API endpoint
         else if (
           ["image", "video", "audio", "document"].includes(messageType) &&
           key?.id
         ) {
-          console.log("[Evolution Webhook] Downloading media using getBase64FromMediaMessage...");
-          
+          console.log(
+            "[Evolution Webhook] Downloading media using getBase64FromMediaMessage..."
+          );
+
           // Use the Evolution API endpoint to get base64 directly
           const mediaResult = await getMediaBase64FromEvolution({
             id: key.id,
             remoteJid: remoteJid,
             fromMe: fromMe,
           });
-          
+
           if (mediaResult) {
             console.log(
               "[Evolution Webhook] Media downloaded successfully, size:",
@@ -1313,7 +1339,9 @@ async function processEvolutionWebhook(body: any) {
             finalMimeType = mediaResult.mimeType;
           } else {
             console.log(
-              "[Evolution Webhook] getBase64FromMediaMessage failed, trying fallback..."
+              "[Evolution Webhook] getBase64FromMediaMessage failed, trying fallback...",
+              "mediaUrl:",
+              mediaUrl?.substring(0, 50)
             );
             // Fallback to old method
             const fallbackResult = await downloadAndSaveMedia(
@@ -1326,6 +1354,11 @@ async function processEvolutionWebhook(body: any) {
             if (fallbackResult) {
               permanentMediaUrl = fallbackResult.dataUrl;
               console.log("[Evolution Webhook] Fallback download succeeded");
+            } else {
+              console.log(
+                "[Evolution Webhook] Fallback download FAILED, using temporary URL"
+              );
+              permanentMediaUrl = mediaUrl;
             }
           }
         }
