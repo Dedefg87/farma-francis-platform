@@ -71,6 +71,7 @@ import {
   FileText,
   X,
 } from "lucide-react";
+import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -453,6 +454,36 @@ export default function AgentMessages() {
     },
   });
 
+  // Mutation para marcar conversa como lida
+  const markAsReadMutation = trpc.conversations.markConversationAsRead.useMutation({
+    onSuccess: () => {
+      console.log("[AgentMessages] Conversa marcada como lida");
+    },
+    onError: (error) => {
+      console.error("[AgentMessages] Erro ao marcar como lida:", error.message, error);
+    },
+  });
+
+  // Função para selecionar conversa e marcar como lida
+  const handleSelectConversation = useCallback((conversationId: number) => {
+    // Selecionar conversa visualmente
+    setSelectedConversationId(conversationId);
+
+    // Atualização otimista - zerar contador imediatamente na UI
+    queryClient.setQueryData(
+      ["trpc", "conversations", "listActive", { input: undefined }],
+      (old: any) => {
+        if (!old) return old;
+        return old.map((c: any) =>
+          c.id === conversationId ? { ...c, unreadCount: 0 } : c
+        );
+      }
+    );
+
+    // Chamar API para persistir no backend
+    markAsReadMutation.mutate({ conversationId });
+  }, [markAsReadMutation, queryClient]);
+
   // Scroll automático para última mensagem
   useEffect(() => {
     if (messages && messages.length > 0) {
@@ -510,6 +541,32 @@ export default function AgentMessages() {
     previousTotalUnreadRef.current = currentTotalUnread;
     previousConversationsRef.current = conversations.map(c => c.id);
   }, [conversations, notificationsMuted, playNotificationSound]);
+
+  // Auto-marcar como lida quando mensagem chega na conversa ativa
+  useEffect(() => {
+    if (!selectedConversationId || !conversations) return;
+
+    const activeConversation = conversations.find(c => c.id === selectedConversationId);
+    
+    // Se a conversa ativa tem mensagens não lidas, marcar como lida
+    if (activeConversation && activeConversation.unreadCount > 0) {
+      console.log(`[AgentMessages] Auto-marcing conversation ${selectedConversationId} as read`);
+      
+      // Atualização otimista
+      queryClient.setQueryData(
+        ["trpc", "conversations", "listActive", { input: undefined }],
+        (old: any) => {
+          if (!old) return old;
+          return old.map((c: any) =>
+            c.id === selectedConversationId ? { ...c, unreadCount: 0 } : c
+          );
+        }
+      );
+
+      // Chamar API
+      markAsReadMutation.mutate({ conversationId: selectedConversationId });
+    }
+  }, [conversations, selectedConversationId, markAsReadMutation, queryClient]);
 
   // Função para abrir lightbox de imagens
   const handleImageClick = useCallback(
@@ -813,11 +870,13 @@ export default function AgentMessages() {
               filteredConversations.map(conv => (
                 <button
                   key={conv.id}
-                  onClick={() => setSelectedConversationId(conv.id)}
+                  onClick={() => handleSelectConversation(conv.id)}
                   className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
                     selectedConversationId === conv.id
                       ? "bg-blue-50 border-l-4 border-l-blue-500"
-                      : ""
+                      : conv.unreadCount > 0 
+                        ? "bg-orange-50 border-l-4 border-l-orange-400"
+                        : ""
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -834,12 +893,12 @@ export default function AgentMessages() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <h3 className="font-semibold text-gray-900 truncate">
+                        <h3 className={`font-semibold truncate ${conv.unreadCount > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
                           {conv.customerName}
                         </h3>
                         {conv.unreadCount > 0 && (
-                          <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                            {conv.unreadCount}
+                          <span className="bg-red-500 text-white text-xs font-bold min-w-[20px] h-5 flex items-center justify-center px-1.5 rounded-full animate-pulse">
+                            {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                           </span>
                         )}
                       </div>
@@ -1002,144 +1061,24 @@ export default function AgentMessages() {
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
-                            {getMimeType(msg.fileUrl, msg.fileType).startsWith(
-                              "image/"
-                            ) ? (
-                              <img
-                                src={getImageSrc(msg.fileUrl, msg.id)}
-                                alt={msg.fileName || "Imagem"}
-                                className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                                onClick={() => handleImageClick(msg.id)}
-                                onError={e => {
-                                  const el =
-                                    e.currentTarget as HTMLImageElement;
-                                  el.src =
-                                    "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
-                                  el.alt = "Imagem indisponível";
-                                }}
-                              />
-                            ) : getMimeType(
-                                msg.fileUrl,
-                                msg.fileType
-                              ).startsWith("video/") ? (
-                              <video
-                                src={getImageSrc(msg.fileUrl, msg.id)}
-                                controls
-                                className="max-w-full rounded-lg max-h-64"
-                              />
-                            ) : getMimeType(msg.fileUrl, msg.fileType) ===
-                              "application/pdf" ? (
-                              // PDF - mostrar preview inline
-                              <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
-                                <div
-                                  className="h-32 overflow-hidden cursor-pointer"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    console.log("========== PDF CLICK START ==========");
-                                    console.log("[PDF] msg.id:", msg.id);
-                                    console.log("[PDF] msg.fileUrl:", msg.fileUrl?.substring(0, 50));
-                                    console.log("[PDF] msg.fileName:", msg.fileName);
-                                    console.log("[PDF] msg.fileType:", msg.fileType);
-                                    pdfPreviewJustOpened.current = true;
-                                    const newState = {
-                                      open: true,
-                                      url: msg.fileUrl,
-                                      fileName: msg.fileName || undefined,
-                                      messageId: msg.id,
-                                      fileType: msg.fileType || undefined,
-                                    };
-                                    console.log("[PDF] Setting new state:", newState);
-                                    setPdfPreview(newState);
-                                    // Reset o flag após 100ms
-                                    setTimeout(() => {
-                                      pdfPreviewJustOpened.current = false;
-                                    }, 100);
-                                    console.log("========== PDF CLICK END ==========");
-                                  }}
-                                >
-                                  <iframe
-                                    src={getImageSrc(msg.fileUrl, msg.id)}
-                                    className="w-full h-full pointer-events-none"
-                                    title={msg.fileName || "PDF"}
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between p-2 bg-gray-50 border-t">
-                                  <div className="flex items-center gap-2">
-                                    <svg
-                                      className="w-4 h-4 text-red-500"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                      />
-                                    </svg>
-                                    <span className="text-xs font-medium truncate max-w-[100px]">
-                                      {msg.fileName || "PDF"}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      console.log(
-                                        "[PDF] Click on Ampliar button:",
-                                        msg.id,
-                                        msg.fileName,
-                                        msg.fileType
-                                      );
-                                      setPdfPreview({
-                                        open: true,
-                                        url: msg.fileUrl,
-                                        fileName: msg.fileName || undefined,
-                                        messageId: msg.id,
-                                        fileType: msg.fileType || undefined,
-                                      });
-                                    }}
-                                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                                  >
-                                    Ampliar
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div
-                                onClick={() => {
-                                  console.log(
-                                    "[File] Click on file:",
-                                    msg.id,
-                                    msg.fileName,
-                                    msg.fileType
-                                  );
-                                  setPdfPreview({
-                                    open: true,
-                                    url: msg.fileUrl,
-                                    fileName: msg.fileName || undefined,
-                                    messageId: msg.id,
-                                    fileType: msg.fileType || undefined,
-                                  });
-                                }}
-                                className="flex items-center gap-2 text-xs underline cursor-pointer hover:opacity-80"
-                              >
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                  />
-                                </svg>
-                                {msg.fileName || "Arquivo"}
-                              </div>
-                            )}
+                            <MessageMedia
+                              fileUrl={msg.fileUrl}
+                              fileType={msg.fileType}
+                              fileName={msg.fileName}
+                              fileSize={msg.fileSize}
+                              messageId={msg.id}
+                              onImageClick={() => handleImageClick(msg.id)}
+                              onDocumentClick={() => {
+                                setPdfPreview({
+                                  open: true,
+                                  url: msg.fileUrl,
+                                  fileName: msg.fileName || undefined,
+                                  messageId: msg.id,
+                                  fileType: msg.fileType || undefined,
+                                });
+                              }}
+                              isAgent={msg.senderType === "agent"}
+                            />
                           </div>
                         )}
                         <span
@@ -1513,3 +1452,4 @@ export default function AgentMessages() {
 }
 // Build fix Sat Feb 28 11:21:28 -03 2026
 // Deploy refresh Mon Mar 2 08:05:00 -03 2026
+// Force rebuild Wed Mar  4 10:56:06 -03 2026

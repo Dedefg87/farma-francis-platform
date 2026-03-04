@@ -74,5 +74,6 @@ export const EVENTS = {
   MESSAGE_STATUS: "message:status",
   CONVERSATION_UPDATE: "conversation:update",
   CONVERSATION_NEW: "conversation:new",
+  CONVERSATION_READ: "conversation:read",
   AGENT_STATUS: "agent:status",
 } as const;

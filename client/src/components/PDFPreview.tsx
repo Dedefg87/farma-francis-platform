@@ -6,7 +6,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Download, ExternalLink, Loader2, FileText } from "lucide-react";
+import {
+  Download,
+  ExternalLink,
+  Loader2,
+  FileText,
+  FileSpreadsheet,
+  Presentation,
+  FileArchive,
+  FileCode,
+  File,
+  Music,
+  Film,
+  Image,
+  FileType,
+  Eye
+} from "lucide-react";
 
 interface PDFPreviewProps {
   open: boolean;
@@ -30,6 +45,167 @@ function getMimeType(
   return fileType || "";
 }
 
+/**
+ * Retorna informações do arquivo baseado no tipo
+ */
+function getFileInfo(mimeType: string, fileName: string | null): {
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+  label: string;
+  canPreview: boolean;
+} {
+  // Imagens
+  if (mimeType.startsWith("image/")) {
+    return {
+      icon: <Image className="w-16 h-16" />,
+      color: "text-pink-500",
+      bgColor: "bg-pink-100",
+      label: "Imagem",
+      canPreview: true,
+    };
+  }
+
+  // Vídeos
+  if (mimeType.startsWith("video/")) {
+    return {
+      icon: <Film className="w-16 h-16" />,
+      color: "text-purple-500",
+      bgColor: "bg-purple-100",
+      label: "Vídeo",
+      canPreview: true,
+    };
+  }
+
+  // Áudios
+  if (mimeType.startsWith("audio/")) {
+    return {
+      icon: <Music className="w-16 h-16" />,
+      color: "text-green-500",
+      bgColor: "bg-green-100",
+      label: "Áudio",
+      canPreview: true,
+    };
+  }
+
+  // PDF
+  if (mimeType === "application/pdf") {
+    return {
+      icon: <FileText className="w-16 h-16" />,
+      color: "text-red-500",
+      bgColor: "bg-red-100",
+      label: "PDF",
+      canPreview: true,
+    };
+  }
+
+  // Word
+  if (
+    mimeType === "application/msword" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    fileName?.endsWith(".doc") ||
+    fileName?.endsWith(".docx")
+  ) {
+    return {
+      icon: <FileText className="w-16 h-16" />,
+      color: "text-blue-600",
+      bgColor: "bg-blue-100",
+      label: "Word",
+      canPreview: false,
+    };
+  }
+
+  // Excel
+  if (
+    mimeType === "application/vnd.ms-excel" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    mimeType === "text/csv" ||
+    fileName?.endsWith(".xls") ||
+    fileName?.endsWith(".xlsx") ||
+    fileName?.endsWith(".csv")
+  ) {
+    return {
+      icon: <FileSpreadsheet className="w-16 h-16" />,
+      color: "text-green-600",
+      bgColor: "bg-green-100",
+      label: "Excel",
+      canPreview: false,
+    };
+  }
+
+  // PowerPoint
+  if (
+    mimeType === "application/vnd.ms-powerpoint" ||
+    mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+    fileName?.endsWith(".ppt") ||
+    fileName?.endsWith(".pptx")
+  ) {
+    return {
+      icon: <Presentation className="w-16 h-16" />,
+      color: "text-orange-500",
+      bgColor: "bg-orange-100",
+      label: "PowerPoint",
+      canPreview: false,
+    };
+  }
+
+  // Arquivos compactados
+  if (
+    mimeType === "application/zip" ||
+    mimeType === "application/x-rar-compressed" ||
+    mimeType === "application/x-7z-compressed" ||
+    fileName?.endsWith(".zip") ||
+    fileName?.endsWith(".rar") ||
+    fileName?.endsWith(".7z")
+  ) {
+    return {
+      icon: <FileArchive className="w-16 h-16" />,
+      color: "text-yellow-600",
+      bgColor: "bg-yellow-100",
+      label: "Compactado",
+      canPreview: false,
+    };
+  }
+
+  // Código
+  if (
+    mimeType === "application/json" ||
+    mimeType.startsWith("text/") ||
+    fileName?.endsWith(".json") ||
+    fileName?.endsWith(".js") ||
+    fileName?.endsWith(".html") ||
+    fileName?.endsWith(".css")
+  ) {
+    return {
+      icon: <FileCode className="w-16 h-16" />,
+      color: "text-indigo-500",
+      bgColor: "bg-indigo-100",
+      label: "Código",
+      canPreview: false,
+    };
+  }
+
+  // Padrão
+  return {
+    icon: <File className="w-16 h-16" />,
+    color: "text-gray-500",
+    bgColor: "bg-gray-100",
+    label: "Arquivo",
+    canPreview: false,
+  };
+}
+
+/**
+ * Formata tamanho do arquivo
+ */
+function formatFileSize(bytes: number | null | undefined): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 export function PDFPreview({
   open,
   onOpenChange,
@@ -42,6 +218,9 @@ export function PDFPreview({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const mimeType = getMimeType(url, fileType);
+  const fileInfo = getFileInfo(mimeType, fileName || null);
 
   // Criar URL final quando o modal abrir
   useEffect(() => {
@@ -124,18 +303,6 @@ export function PDFPreview({
     return url;
   }, [messageId, blobUrl, url]);
 
-  // Verificar se é um documento que pode ser visualizado
-  const canPreview = useMemo(() => {
-    if (!finalUrl) return false;
-    const mimeType = getMimeType(url, fileType);
-    // PDFs e imagens podem ser visualizados
-    return (
-      mimeType === "application/pdf" ||
-      mimeType.startsWith("image/") ||
-      mimeType.startsWith("video/")
-    );
-  }, [finalUrl, url, fileType]);
-
   const handleDownload = () => {
     if (!finalUrl) return;
     const link = document.createElement("a");
@@ -193,32 +360,47 @@ export function PDFPreview({
               <span className="text-red-500">❌</span>
               <span>{error}</span>
             </div>
-          ) : !canPreview ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4 p-8">
-              <FileText className="w-16 h-16 text-gray-400" />
-              <div className="text-center">
-                <p className="font-medium text-lg">
-                  Pré-visualização não disponível
-                </p>
+          ) : !fileInfo.canPreview ? (
+            // Interface para arquivos sem preview
+            <div className="flex flex-col items-center justify-center h-full gap-6 p-8">
+              <div className={`p-6 rounded-2xl ${fileInfo.bgColor}`}>
+                <div className={fileInfo.color}>{fileInfo.icon}</div>
+              </div>
+              <div className="text-center max-w-md">
+                <p className="font-semibold text-xl text-gray-700">{fileName || "Arquivo"}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Este tipo de arquivo não pode ser visualizado no navegador
+                  {fileInfo.label} • {formatFileSize(null)}
                 </p>
-                <p className="text-sm text-gray-400 mt-2">
-                  Use o botão Baixar para salvar o arquivo
+                <p className="text-sm text-gray-400 mt-4">
+                  Este tipo de arquivo não pode ser visualizado no navegador.
+                  <br />
+                  Use os botões abaixo para baixar ou abrir o arquivo.
                 </p>
               </div>
-              <Button onClick={handleDownload} className="gap-2 mt-4">
-                <Download className="w-4 h-4" />
-                Baixar {fileName || "arquivo"}
-              </Button>
+              <div className="flex items-center gap-3 mt-4">
+                <Button
+                  variant="outline"
+                  onClick={handleOpenExternal}
+                  className="gap-2"
+                  disabled={!finalUrl}
+                >
+                  <Eye className="w-4 h-4" />
+                  Abrir em nova aba
+                </Button>
+                <Button onClick={handleDownload} className="gap-2" disabled={!finalUrl}>
+                  <Download className="w-4 h-4" />
+                  Baixar arquivo
+                </Button>
+              </div>
             </div>
           ) : finalUrl ? (
+            // Preview para PDF, imagens e vídeos
             <iframe
               key={finalUrl}
               src={finalUrl}
               className="w-full h-full"
-              title={fileName || "PDF Preview"}
-              onError={e => {
+              title={fileName || "Preview"}
+              onError={(e) => {
                 console.error("[PDFPreview] Erro no iframe:", e);
                 setError("Erro ao carregar documento");
               }}
@@ -233,4 +415,3 @@ export function PDFPreview({
     </Dialog>
   );
 }
-// Force rebuild Mon Mar  2 18:36:57 -03 2026
