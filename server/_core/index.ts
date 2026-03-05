@@ -18,6 +18,11 @@ import { sseManager } from "./sse";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
+// Guard API routes to encourage JSON responses for dashboard stability
+app.use("/api", (req, res, next) => {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  next();
+});
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
 
