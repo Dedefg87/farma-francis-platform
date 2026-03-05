@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
+import { fetchJsonSafe } from "@/utils/http";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2 } from "lucide-react";
@@ -45,16 +46,14 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/stats/dashboard?period=${selectedPeriod}`);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const data = await fetchJsonSafe<DashboardStats>(
+        `/api/stats/dashboard?period=${selectedPeriod}`
+      );
       console.log("[Dashboard] Stats received:", data);
       setStats(data);
     } catch (err) {
       console.error("[Dashboard] Error fetching stats:", err);
-      setError(String(err));
+      setError((err as Error)?.message ?? "Erro ao carregar dados");
     } finally {
       setLoading(false);
     }
@@ -65,46 +64,61 @@ export default function Dashboard() {
   }, [selectedPeriod]);
 
   // Preparar dados para gráficos
-  const contatosPorHoraData = stats?.byHour?.map((h: any) => ({
-    hora: h.hour,
-    chats: Number(h.chats) || 0,
-  })) || [];
+  const contatosPorHoraData =
+    stats?.byHour?.map((h: any) => ({
+      hora: h.hour,
+      chats: Number(h.chats) || 0,
+    })) || [];
 
-  const atendimentosPorCanalData = stats?.byChannel?.map((c: any) => ({
-    name: c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1) || "Desconhecido",
-    value: Number(c.count) || 0,
-    color: c.channel === "whatsapp" ? "#25D366" : c.channel === "instagram" ? "#E4405F" : "#6B7280",
-  })) || [];
+  const atendimentosPorCanalData =
+    stats?.byChannel?.map((c: any) => ({
+      name:
+        c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1) ||
+        "Desconhecido",
+      value: Number(c.count) || 0,
+      color:
+        c.channel === "whatsapp"
+          ? "#25D366"
+          : c.channel === "instagram"
+            ? "#E4405F"
+            : "#6B7280",
+    })) || [];
 
-  const atendimentosPorStatusData = stats?.byStatus?.map((s: any) => {
-    const labels: Record<string, string> = {
-      open: "Em aberto",
-      closed: "Encerrados",
-      pending: "Pendentes",
-    };
-    const colors: Record<string, string> = {
-      open: "#3B82F6",
-      closed: "#10B981",
-      pending: "#F59E0B",
-    };
-    return {
-      name: labels[s.status] || s.status || "Desconhecido",
-      value: Number(s.count) || 0,
-      color: colors[s.status] || "#6B7280",
-    };
-  }) || [];
+  const atendimentosPorStatusData =
+    stats?.byStatus?.map((s: any) => {
+      const labels: Record<string, string> = {
+        open: "Em aberto",
+        closed: "Encerrados",
+        pending: "Pendentes",
+      };
+      const colors: Record<string, string> = {
+        open: "#3B82F6",
+        closed: "#10B981",
+        pending: "#F59E0B",
+      };
+      return {
+        name: labels[s.status] || s.status || "Desconhecido",
+        value: Number(s.count) || 0,
+        color: colors[s.status] || "#6B7280",
+      };
+    }) || [];
 
-  const agentesData = stats?.agentStats?.map((agent) => ({
-    id: agent.id,
-    nome: agent.name,
-    atendimentos: Number(agent.total_conversations) || 0,
-    encerrados: Number(agent.closed_conversations) || 0,
-    mensagens: Number(agent.total_messages) || 0,
-    taxaConversao:
-      agent.total_conversations > 0
-        ? Math.round((Number(agent.closed_conversations) / Number(agent.total_conversations)) * 100)
-        : 0,
-  })) || [];
+  const agentesData =
+    stats?.agentStats?.map(agent => ({
+      id: agent.id,
+      nome: agent.name,
+      atendimentos: Number(agent.total_conversations) || 0,
+      encerrados: Number(agent.closed_conversations) || 0,
+      mensagens: Number(agent.total_messages) || 0,
+      taxaConversao:
+        agent.total_conversations > 0
+          ? Math.round(
+              (Number(agent.closed_conversations) /
+                Number(agent.total_conversations)) *
+                100
+            )
+          : 0,
+    })) || [];
 
   return (
     <FarmaDashboardLayout>
@@ -118,7 +132,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <select
               value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
+              onChange={e => setSelectedPeriod(e.target.value)}
               className="border rounded-lg px-4 py-2"
             >
               <option value="hoje">Hoje</option>
@@ -127,7 +141,9 @@ export default function Dashboard() {
               <option value="mes">Este mês</option>
             </select>
             <Button onClick={fetchStats} disabled={loading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+              />
               Atualizar
             </Button>
           </div>
@@ -154,19 +170,27 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <Card className="p-6">
                 <p className="text-sm text-gray-500">Total de Atendimentos</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalConversations}</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {stats.totalConversations}
+                </p>
               </Card>
               <Card className="p-6">
                 <p className="text-sm text-gray-500">Clientes Únicos</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.uniqueCustomers}</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {stats.uniqueCustomers}
+                </p>
               </Card>
               <Card className="p-6">
                 <p className="text-sm text-gray-500">Mensagens Enviadas</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.messagesSent}</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {stats.messagesSent}
+                </p>
               </Card>
               <Card className="p-6">
                 <p className="text-sm text-gray-500">Mensagens Recebidas</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.messagesReceived}</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {stats.messagesReceived}
+                </p>
               </Card>
             </div>
 
@@ -174,7 +198,9 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               {/* Contatos por hora */}
               <Card className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Contatos por Hora</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Contatos por Hora
+                </h3>
                 {contatosPorHoraData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={contatosPorHoraData}>
@@ -186,13 +212,17 @@ export default function Dashboard() {
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p className="text-gray-400 text-center py-10">Sem dados para exibir</p>
+                  <p className="text-gray-400 text-center py-10">
+                    Sem dados para exibir
+                  </p>
                 )}
               </Card>
 
               {/* Por canal */}
               <Card className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Atendimentos por Canal</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Atendimentos por Canal
+                </h3>
                 {atendimentosPorCanalData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
@@ -213,7 +243,9 @@ export default function Dashboard() {
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p className="text-gray-400 text-center py-10">Sem dados para exibir</p>
+                  <p className="text-gray-400 text-center py-10">
+                    Sem dados para exibir
+                  </p>
                 )}
               </Card>
             </div>
@@ -222,7 +254,9 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Por status */}
               <Card className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Status dos Atendimentos</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Status dos Atendimentos
+                </h3>
                 {atendimentosPorStatusData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
@@ -243,38 +277,58 @@ export default function Dashboard() {
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p className="text-gray-400 text-center py-10">Sem dados para exibir</p>
+                  <p className="text-gray-400 text-center py-10">
+                    Sem dados para exibir
+                  </p>
                 )}
               </Card>
 
               {/* Tabela de agentes */}
               <Card className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Desempenho dos Agentes</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Desempenho dos Agentes
+                </h3>
                 {agentesData.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-left py-2 text-sm text-gray-500">Nome</th>
-                          <th className="text-center py-2 text-sm text-gray-500">Atendimentos</th>
-                          <th className="text-center py-2 text-sm text-gray-500">Encerrados</th>
-                          <th className="text-center py-2 text-sm text-gray-500">Taxa</th>
+                          <th className="text-left py-2 text-sm text-gray-500">
+                            Nome
+                          </th>
+                          <th className="text-center py-2 text-sm text-gray-500">
+                            Atendimentos
+                          </th>
+                          <th className="text-center py-2 text-sm text-gray-500">
+                            Encerrados
+                          </th>
+                          <th className="text-center py-2 text-sm text-gray-500">
+                            Taxa
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {agentesData.map((agent) => (
+                        {agentesData.map(agent => (
                           <tr key={agent.id} className="border-b">
                             <td className="py-2">{agent.nome}</td>
-                            <td className="text-center py-2">{agent.atendimentos}</td>
-                            <td className="text-center py-2">{agent.encerrados}</td>
-                            <td className="text-center py-2">{agent.taxaConversao}%</td>
+                            <td className="text-center py-2">
+                              {agent.atendimentos}
+                            </td>
+                            <td className="text-center py-2">
+                              {agent.encerrados}
+                            </td>
+                            <td className="text-center py-2">
+                              {agent.taxaConversao}%
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-400 text-center py-10">Sem dados para exibir</p>
+                  <p className="text-gray-400 text-center py-10">
+                    Sem dados para exibir
+                  </p>
                 )}
               </Card>
             </div>
