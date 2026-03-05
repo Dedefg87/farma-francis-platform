@@ -31,8 +31,9 @@ const QuickRepliesManagement = lazy(
   () => import("./pages/QuickRepliesManagement")
 );
 const Executions = lazy(() => import("./pages/Executions"));
-const BabyShowerEvents = lazy(() => import("./pages/BabyShowerSimple"));
-const BabyShowerPublic = lazy(() => import("./pages/BabyShowerPublic"));
+const BabyShowerCreate = lazy(() => import("./pages/baby-shower/CreateEvent"));
+const BabyShowerEventPage = lazy(() => import("./pages/baby-shower/EventPage"));
+const BabyShowerManage = lazy(() => import("./pages/baby-shower/ManageEvent"));
 
 // Loading spinner component
 function PageLoader() {
@@ -164,7 +165,7 @@ function Router() {
       </Route>
 
       {/* 404 */}
-      <Route path="/baby-shower"><AdminRoute><LazyPage component={BabyShowerEvents} /></AdminRoute></Route><Route path="/cha-de-bebe/:code"><LazyPage component={BabyShowerPublic} /></Route><Route path="/404" component={NotFound} />
+      <Route path="/baby-shower"><AdminRoute><LazyPage component={BabyShowerCreate} /></AdminRoute></Route><Route path="/baby-shower/manage/:id"><AdminRoute><LazyPage component={BabyShowerManage} /></AdminRoute></Route><Route path="/cha-de-bebe/:code"><LazyPage component={BabyShowerEventPage} /></Route><Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );

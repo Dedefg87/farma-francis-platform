@@ -14,6 +14,7 @@ export async function sendBabyShowerNotification(params: {
 }): Promise<boolean> {
   try {
     const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
     const [config] = await db
       .select()
       .from(integrationSettings)
@@ -87,6 +88,7 @@ export async function sendWithdrawalReadyNotification(params: {
 }): Promise<boolean> {
   try {
     const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
     const [config] = await db
       .select()
       .from(integrationSettings)

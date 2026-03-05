@@ -27,6 +27,7 @@ router.post("/payment", async (req: Request, res: Response) => {
     }
 
     const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
 
     // Extrair referência do pagamento
     const externalReference = data.external_reference || data.id || data.payment_id;
@@ -149,6 +150,7 @@ router.get("/payment-status/:reference", async (req: Request, res: Response) => 
   try {
     const { reference } = req.params;
     const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
 
     const [purchase] = await db
       .select({

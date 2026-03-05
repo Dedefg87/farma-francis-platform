@@ -76,7 +76,7 @@ export default function BabyShowerEvents() {
           </div></CardContent></Card>
           <Card><CardContent className="pt-6"><div className="flex items-center gap-3">
             <Wallet className="w-8 h-8 text-green-500" />
-            <div><p className="text-sm text-gray-600">Arrecadado</p><p className="text-2xl font-bold">R$ {events?.reduce((a, e) => a + parseFloat(e.event?.walletBalance || 0), 0).toFixed(2)}</p></div>
+            <div><p className="text-sm text-gray-600">Arrecadado</p><p className="text-2xl font-bold">R$ {events?.reduce((a, e) => a + parseFloat(e.event?.walletBalance ?? "0"), 0).toFixed(2)}</p></div>
           </div></CardContent></Card>
           <Card><CardContent className="pt-6"><div className="flex items-center gap-3">
             <Users className="w-8 h-8 text-purple-500" />

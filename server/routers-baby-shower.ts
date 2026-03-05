@@ -19,6 +19,11 @@ async function sendWhatsAppNotification(params: {
 }): Promise<boolean> {
   try {
     const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
+    if (!db) {
+      console.log("[BabyShower] Database not available");
+      return false;
+    }
     const [config] = await db
       .select()
       .from(integrationSettings)
@@ -125,6 +130,7 @@ export const babyShowerRouter = router({
     .input(createEventSchema)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const eventCode = generateEventCode();
       const publicLink = "https://farmafrancis.com/cha-de-bebe/" + eventCode;
 
@@ -150,6 +156,7 @@ export const babyShowerRouter = router({
     }))
     .query(async ({ input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       
       const baseQuery = db.select({
         event: babyShowerEvents,
@@ -190,6 +197,7 @@ export const babyShowerRouter = router({
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const [event] = await db.select({
         event: babyShowerEvents,
         motherName: customers.name,
@@ -221,6 +229,7 @@ export const babyShowerRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const updates: any = {};
       if (input.eventName) updates.eventName = input.eventName;
       if (input.expectedDueDate !== undefined) updates.expectedDueDate = input.expectedDueDate || null;
@@ -239,6 +248,7 @@ export const babyShowerRouter = router({
     .input(createPackageSchema)
     .mutation(async ({ input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const [pkg] = await db.insert(babyShowerGiftPackages).values({
         eventId: input.eventId,
         packageName: input.packageName,
@@ -256,11 +266,12 @@ export const babyShowerRouter = router({
     .input(createPurchaseSchema)
     .mutation(async ({ input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const [pkg] = await db.select().from(babyShowerGiftPackages)
         .where(eq(babyShowerGiftPackages.id, input.packageId)).limit(1);
 
       if (!pkg) throw new Error("Pacote não encontrado");
-      if (pkg.stockLimit && pkg.soldCount >= pkg.stockLimit) throw new Error("Cotas esgotadas");
+      if (pkg.stockLimit && (pkg.soldCount ?? 0) >= pkg.stockLimit) throw new Error("Cotas esgotadas");
 
       const [purchase] = await db.insert(babyShowerPurchases).values({
         eventId: input.eventId,
@@ -285,6 +296,7 @@ export const babyShowerRouter = router({
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const [purchase] = await db.select().from(babyShowerPurchases)
         .where(eq(babyShowerPurchases.id, input.purchaseId)).limit(1);
       if (!purchase) throw new Error("Compra não encontrada");
@@ -342,10 +354,11 @@ export const babyShowerRouter = router({
     .input(createWithdrawalSchema)
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
       const [event] = await db.select().from(babyShowerEvents)
         .where(eq(babyShowerEvents.id, input.eventId)).limit(1);
       if (!event) throw new Error("Evento não encontrado");
-      if (event.availableDiapersCount < input.quantity) throw new Error("Saldo insuficiente");
+      if ((event.availableDiapersCount ?? 0) < input.quantity) throw new Error("Saldo insuficiente");
 
       const [mother] = await db.select({ name: customers.name })
         .from(customers).where(eq(customers.id, event.motherCustomerId)).limit(1);
@@ -380,6 +393,7 @@ export const babyShowerRouter = router({
 
   getDashboardStats: protectedProcedure.query(async () => {
     const db = await getDb();
+    if (!db) { throw new Error("Database not available"); }
     const [activeEvents] = await db.select({ count: sql<number>`COUNT(*)` })
       .from(babyShowerEvents).where(eq(babyShowerEvents.status, "active"));
     const [totalSales] = await db.select({ total: sql<string>`COALESCE(SUM(${babyShowerPurchases.amountPaid}), 0)` })
