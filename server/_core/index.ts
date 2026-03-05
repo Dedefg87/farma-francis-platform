@@ -837,14 +837,70 @@ async function startServer() {
       `);
       const channels = getRows(channelResult);
 
+      // Por status
+      const statusResult = await db.execute(sql`
+        SELECT status, COUNT(*) as count FROM conversations
+        WHERE opened_at >= ${start} AND opened_at <= ${end}
+        GROUP BY status ORDER BY count DESC
+      `);
+      const statuses = getRows(statusResult);
+
+      // Por hora (últimos 30 dias para o gráfico)
+      const hourResult = await db.execute(sql`
+        SELECT HOUR(created_at) as hour, COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
+      `);
+      const hours = getRows(hourResult);
+
+      // Formatar por hora (todas as 24 horas)
+      const byHour = Array.from({ length: 24 }, (_, i) => {
+        const hourData = hours?.find((h: any) => Number(h.hour) === i);
+        return {
+          hour: i,
+          chats: Number(hourData?.chats) || 0
+        };
+      });
+
+      // Agentes (estatísticas)
+      const agentResult = await db.execute(sql`
+        SELECT 
+          u.id, u.name, 
+          COUNT(DISTINCT c.id) as total_conversations,
+          COUNT(DISTINCT CASE WHEN c.status = 'closed' THEN c.id END) as closed_conversations,
+          COUNT(cm.id) as total_messages
+        FROM users u
+        LEFT JOIN conversations c ON c.assigned_to = u.id
+        LEFT JOIN conversation_messages cm ON cm.conversation_id = c.id AND cm.sender_type = 'agent'
+        WHERE u.role = 'user'
+        GROUP BY u.id, u.name
+        ORDER BY total_conversations DESC
+        LIMIT 10
+      `);
+      const agents = getRows(agentResult);
+
       res.json({
-        start,
-        end,
-        rawResult: result,
-        count: (result as any[]).length,
+        totalConversations: Number(totalConv?.[0]?.count) || 0,
+        uniqueCustomers: Number(unique?.[0]?.count) || 0,
+        messagesSent: Number(sent?.[0]?.count) || 0,
+        messagesReceived: Number(received?.[0]?.count) || 0,
+        byChannel: channels || [],
+        byStatus: statuses || [],
+        byHour: byHour,
+        agentStats: (agents || []).map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          avatar_url: null,
+          total_conversations: Number(a.total_conversations) || 0,
+          closed_conversations: Number(a.closed_conversations) || 0,
+          total_messages: Number(a.total_messages) || 0
+        }))
       });
     } catch (error) {
-      console.error("[debug/contacts-by-hour] Error:", error);
+      console.error("[dashboard/stats] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });

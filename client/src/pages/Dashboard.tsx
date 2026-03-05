@@ -47,7 +47,7 @@ export default function Dashboard() {
     setError(null);
     try {
       const data = await fetchJsonSafe<DashboardStats>(
-        `/api/stats/dashboard?period=${selectedPeriod}`
+        `/api/dashboard/stats?period=${selectedPeriod}`
       );
       console.log("[Dashboard] Stats received:", data);
       setStats(data);
