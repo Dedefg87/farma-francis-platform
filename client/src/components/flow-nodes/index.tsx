@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Handle, Position, NodeProps, Node } from "@xyflow/react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 
