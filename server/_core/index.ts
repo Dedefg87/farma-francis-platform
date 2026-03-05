@@ -95,10 +95,81 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
+  // removed early 404 catch-all for /api to ensure defined routes
 
   // Diagnostic endpoint: ensure API returns JSON reliably for dashboard
   app.get("/api/dashboard-test", (_req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
+  });
+
+  // Stats dashboard: fetch real data from DB with safe fallback
+  app.get("/api/stats/dashboard", async (req, res) => {
+    try {
+      const period = (req.query.period as string) || "mes";
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 5,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Total conversations
+      const [rows1]: any = await pool.execute(
+        "SELECT COUNT(*) AS totalConversations FROM conversations"
+      );
+      const totalConversations = rows1?.[0]?.totalConversations ?? 0;
+
+      // Total messages
+      const [rows2]: any = await pool.execute(
+        "SELECT COUNT(*) AS totalMessages FROM conversation_messages"
+      );
+      const totalMessages = rows2?.[0]?.totalMessages ?? 0;
+
+      // Unique customers (best-effort via distinct customer_name)
+      const [rows3]: any = await pool.execute(
+        "SELECT COUNT(DISTINCT customer_name) AS uniqueCustomers FROM conversations"
+      );
+      const uniqueCustomers = rows3?.[0]?.uniqueCustomers ?? 0;
+
+      // Status breakdown
+      const [rowsStatus]: any = await pool.execute(
+        "SELECT status, COUNT(*) AS count FROM conversations GROUP BY status"
+      );
+      const byStatus = (rowsStatus || []).map((r: any) => ({
+        status: r.status,
+        count: r.count,
+      }));
+
+      // Hourly activity (from messages, if available)
+      let byHour: Array<{ hour: number; chats: number }> = [];
+      try {
+        const [rowsHour]: any = await pool.execute(
+          "SELECT HOUR(created_at) AS hour, COUNT(*) AS chats FROM conversation_messages GROUP BY hour"
+        );
+        byHour = (rowsHour || []).map((r: any) => ({
+          hour: r.hour,
+          chats: r.chats,
+        }));
+      } catch {
+        byHour = [];
+      }
+
+      const data = {
+        totalConversations,
+        uniqueCustomers,
+        messagesSent: totalMessages,
+        messagesReceived: totalMessages,
+        byChannel: [],
+        byStatus,
+        byHour,
+        agentStats: [],
+        timestamp: new Date().toISOString(),
+      };
+
+      await pool.end();
+      res.json(data);
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message ?? error });
+    }
   });
 
   // Debug: testar ingestInboundConversationMessage
@@ -1380,6 +1451,18 @@ async function startServer() {
       });
   });
 }
+
+// Global 404 for unknown routes (placed after all API routes are registered)
+// This is added inside the module's bootstrap, before starting the server
+// to ensure JSON responses for API paths while still serving non-API 404s.
+// Global API 404 catch-all after all routes
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) {
+    res.status(404).json({ error: "Not found", path: req.originalUrl });
+  } else {
+    next();
+  }
+});
 
 startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
