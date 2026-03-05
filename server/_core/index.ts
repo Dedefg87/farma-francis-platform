@@ -1,7 +1,7 @@
 import "dotenv/config";
-// Force rebuild
+// Force rebuild - BUILD TRIGGER: 2026-03-05-v3
 console.log("[Server] Starting initialization...");
-console.log("[Deploy] Build-trigger: " + new Date().toISOString());
+console.log("[Deploy] Build-trigger: " + new Date().toISOString() + " - v3");
 
 import express from "express";
 import cookieParser from "cookie-parser";

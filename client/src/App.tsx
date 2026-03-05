@@ -164,7 +164,7 @@ function Router() {
       </Route>
 
       {/* 404 */}
-      <Route path="/baby-shower"><AdminRoute><LazyPage component={BabyShowerEvents} /></AdminRoute></Route><Route path="/cha-de-bebe/:code"><LazyPage component={BabyShowerPublic} /></Route><Route path="/404" component={NotFound} />
+      <Route path="/baby-shower"><AdminRoute><LazyPage component={BabyShowerEvents} /></AdminRoute></Route><Route path="/cha-de-bebe/:slug"><LazyPage component={BabyShowerPublic} /></Route><Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
