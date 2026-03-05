@@ -8,6 +8,18 @@ interface EvolutionConfig {
   instanceName: string;
 }
 
+/**
+ * Normaliza URL da API removendo barra final.
+ * Isso previne o bug de dupla barra "//" que causa 404.
+ * 
+ * Exemplos:
+ * - "https://api.example.com/" → "https://api.example.com"
+ * - "https://api.example.com" → "https://api.example.com"
+ */
+export function normalizeApiUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
 async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
   const { getDb } = await import("./db");
   const { integrationSettings } = await import("../drizzle/schema");
@@ -29,7 +41,8 @@ async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
       ? JSON.parse(config.config)
       : config.config;
 
-  const apiUrl = configData?.apiUrl || process.env.EVOLUTION_API_URL || "";
+  // Normalizar apiUrl para remover barra final (previne bug //)
+  const apiUrl = normalizeApiUrl(configData?.apiUrl || process.env.EVOLUTION_API_URL || "");
   const apiKey =
     configData?.apiKey ||
     configData?.accessToken ||
@@ -81,9 +94,8 @@ export async function getMediaBase64FromEvolution(messageKey: {
       messageKey.id
     );
 
-    // Remove barra final para evitar //chat
-    const apiUrl = evoConfig.apiUrl.replace(/\/$/, '');
-    const url = `${apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
+    // URL já vem normalizada (sem barra final) do getEvolutionConfig()
+    const url = `${evoConfig.apiUrl}/chat/getBase64FromMediaMessage/${evoConfig.instanceName}`;
 
     const response = await fetch(url, {
       method: "POST",
