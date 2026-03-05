@@ -240,8 +240,17 @@ export const babyShowerRouter = router({
     if (!db) { throw new Error("Database not available"); }
       const updates: any = {};
       if (input.eventName) updates.eventName = input.eventName;
-      if (input.expectedDueDate !== undefined) updates.expectedDueDate = input.expectedDueDate || null;
-      if (input.eventDate !== undefined) updates.eventDate = input.eventDate || null;
+      // Tratar strings vazias como null para campos DATE
+      if (input.expectedDueDate !== undefined) {
+        updates.expectedDueDate = input.expectedDueDate && input.expectedDueDate.trim() !== '' 
+          ? input.expectedDueDate 
+          : null;
+      }
+      if (input.eventDate !== undefined) {
+        updates.eventDate = input.eventDate && input.eventDate.trim() !== '' 
+          ? input.eventDate 
+          : null;
+      }
       if (input.targetAmount !== undefined) updates.targetAmount = input.targetAmount?.toString() || null;
       if (input.status) {
         updates.status = input.status;
