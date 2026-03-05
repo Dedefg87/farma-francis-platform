@@ -1,7 +1,5 @@
 import "dotenv/config";
-// Force rebuild - BUILD TRIGGER: 2026-03-05-v3
 console.log("[Server] Starting initialization...");
-console.log("[Deploy] Build-trigger: " + new Date().toISOString() + " - v3");
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -42,12 +40,6 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
-  // Guard API routes to encourage JSON responses for dashboard stability
-  app.use("/api", (req, res, next) => {
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    next();
-  });
-  // (Guard moved to after app initialization in startServer)
 
   // Trust proxy headers (required for Railway, Render, and other proxies)
   app.set("trust proxy", 1);
@@ -95,82 +87,6 @@ async function startServer() {
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
-  // removed early 404 catch-all for /api to ensure defined routes
-
-  // Diagnostic endpoint: ensure API returns JSON reliably for dashboard
-  app.get("/api/dashboard-test", (_req, res) => {
-    res.json({ ok: true, time: new Date().toISOString() });
-  });
-
-  // Stats dashboard: fetch real data from DB with safe fallback
-  app.get("/api/stats/dashboard", async (req, res) => {
-    try {
-      const period = (req.query.period as string) || "mes";
-      const mysql = await import("mysql2/promise");
-      const pool = mysql.createPool({
-        connectionLimit: 5,
-        uri: process.env.DATABASE_URL,
-      });
-
-      // Total conversations
-      const [rows1]: any = await pool.execute(
-        "SELECT COUNT(*) AS totalConversations FROM conversations"
-      );
-      const totalConversations = rows1?.[0]?.totalConversations ?? 0;
-
-      // Total messages
-      const [rows2]: any = await pool.execute(
-        "SELECT COUNT(*) AS totalMessages FROM conversation_messages"
-      );
-      const totalMessages = rows2?.[0]?.totalMessages ?? 0;
-
-      // Unique customers (best-effort via distinct customer_name)
-      const [rows3]: any = await pool.execute(
-        "SELECT COUNT(DISTINCT customer_name) AS uniqueCustomers FROM conversations"
-      );
-      const uniqueCustomers = rows3?.[0]?.uniqueCustomers ?? 0;
-
-      // Status breakdown
-      const [rowsStatus]: any = await pool.execute(
-        "SELECT status, COUNT(*) AS count FROM conversations GROUP BY status"
-      );
-      const byStatus = (rowsStatus || []).map((r: any) => ({
-        status: r.status,
-        count: r.count,
-      }));
-
-      // Hourly activity (from messages, if available)
-      let byHour: Array<{ hour: number; chats: number }> = [];
-      try {
-        const [rowsHour]: any = await pool.execute(
-          "SELECT HOUR(created_at) AS hour, COUNT(*) AS chats FROM conversation_messages GROUP BY hour"
-        );
-        byHour = (rowsHour || []).map((r: any) => ({
-          hour: r.hour,
-          chats: r.chats,
-        }));
-      } catch {
-        byHour = [];
-      }
-
-      const data = {
-        totalConversations,
-        uniqueCustomers,
-        messagesSent: totalMessages,
-        messagesReceived: totalMessages,
-        byChannel: [],
-        byStatus,
-        byHour,
-        agentStats: [],
-        timestamp: new Date().toISOString(),
-      };
-
-      await pool.end();
-      res.json(data);
-    } catch (error: any) {
-      res.status(500).json({ error: error?.message ?? error });
-    }
-  });
 
   // Debug: testar ingestInboundConversationMessage
   app.get("/api/debug/server-logs", async (req, res) => {
@@ -181,12 +97,233 @@ async function startServer() {
         uri: process.env.DATABASE_URL,
       });
 
-      const [rows1]: any = await pool.execute(
+      const [rows]: any = await pool.execute(
         "SELECT id, customer_name, status, last_message_at FROM conversations ORDER BY id DESC LIMIT 5"
       );
       await pool.end();
 
-      const [mediaRows]: any = await pool.execute(
+      res.json({
+        recentConversations: rows,
+        serverTime: new Date().toISOString(),
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: listar mensagens com mídia
+  app.get("/api/debug/media-messages", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, conversation_id, sender_type, 
+         LEFT(content, 100) as content_preview,
+         file_url IS NOT NULL as has_file_url,
+         LENGTH(file_url) as file_url_length,
+         LEFT(file_url, 50) as file_url_preview,
+         file_type, created_at
+         FROM conversation_messages 
+         ORDER BY id DESC
+         LIMIT 20`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, messages: rows });
+    } catch (error) {
+      console.error("[Debug Media Messages]", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: ver último payload de mídia recebido
+  app.get("/api/debug/last-media-payload", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Buscar última mensagem com mídia
+      const [rows]: any = await pool.execute(
+        `SELECT id, created_at FROM conversation_messages 
+         WHERE file_type IS NOT NULL 
+         ORDER BY id DESC LIMIT 1`
+      );
+      await pool.end();
+
+      res.json({
+        latestMediaMessage: rows[0] || null,
+        note: "Para ver o payload completo, precisaria da coluna raw_payload na tabela",
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: testar Evolution API getBase64FromMediaMessage
+  app.get("/api/debug/test-evolution-media", async (req, res) => {
+    try {
+      // Get Evolution config first
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [configRows]: any = await pool.execute(
+        "SELECT config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1"
+      );
+
+      if (!configRows || configRows.length === 0) {
+        await pool.end();
+        return res.json({ error: "Evolution API not configured" });
+      }
+
+      const config =
+        typeof configRows[0].config === "string"
+          ? JSON.parse(configRows[0].config)
+          : configRows[0].config;
+
+      const [msgRows]: any = await pool.execute(
+        `SELECT id, created_at FROM conversation_messages 
+         WHERE file_type IS NOT NULL 
+         ORDER BY id DESC LIMIT 1`
+      );
+      await pool.end();
+
+      res.json({
+        evoConfig: {
+          apiUrl: config.apiUrl,
+          instanceName: config.instanceName,
+          hasApiKey: !!(config.apiKey || config.accessToken),
+        },
+        latestMediaMessage: msgRows[0] || null,
+        timestamp: new Date().toISOString(),
+        note: "Need to pass WhatsApp message key to getBase64FromMediaMessage",
+      });
+    } catch (error) {
+      console.error("[Test Evolution Media] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  async function getEvolutionConfig() {
+    const mysql = await import("mysql2/promise");
+    const pool = mysql.createPool({
+      connectionLimit: 1,
+      uri: process.env.DATABASE_URL,
+    });
+
+    const [rows]: any = await pool.execute(
+      "SELECT config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1"
+    );
+    await pool.end();
+
+    if (!rows || rows.length === 0) return null;
+
+    const config =
+      typeof rows[0].config === "string"
+        ? JSON.parse(rows[0].config)
+        : rows[0].config;
+    return {
+      apiUrl: config.apiUrl,
+      apiKey: config.apiKey || config.accessToken,
+      instanceName: config.instanceName,
+    };
+  }
+
+  // Debug: testar ingestInboundConversationMessage
+  app.post("/api/debug/test-ingest", async (req, res) => {
+    try {
+      const { ingestInboundConversationMessage } =
+        await import("../db-messages");
+      const result = await ingestInboundConversationMessage({
+        fromNumber: "+5511999999999",
+        fromName: "Teste Debug",
+        content: "Mensagem de teste",
+        provider: "whatsapp",
+        messageType: "text",
+      });
+      res.json({ success: true, result });
+    } catch (error) {
+      console.error("[Debug Test Ingest] Error:", error);
+      res.status(500).json({
+        success: false,
+        error: String(error),
+        stack: error instanceof Error ? error.stack : null,
+      });
+    }
+  });
+
+  // OpenClaw Bridge endpoint - receives tasks from OpenClaw via WS bridge
+  app.post("/api/openclaw/tasks", async (req, res) => {
+    try {
+      const { task, openclawTaskId } = req.body;
+
+      if (!task) {
+        return res.status(400).json({ error: "Task payload is required" });
+      }
+
+      console.log("[OpenClaw] Received task:", openclawTaskId, task);
+
+      // Here you can process the task as needed
+      // For now, just acknowledge and log
+      // TODO: Implement actual task processing logic
+
+      res.json({
+        success: true,
+        bridgeTaskId: `local-${Date.now()}`,
+        openclawTaskId,
+        message: "Task received",
+      });
+    } catch (error) {
+      console.error("[OpenClaw] Error processing task:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Debug: list old WhatsApp media URLs for migration planning
+  // IMPORTANT: This must come BEFORE the /:messageId route to avoid being captured
+  app.get("/api/media/inspect-old", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT id, file_url, file_type FROM conversation_messages 
+         WHERE file_url IS NOT NULL 
+         AND file_url LIKE '%whatsapp.net%'
+         AND file_url NOT LIKE 'data:%'
+         LIMIT 100`
+      );
+
+      await pool.end();
+      res.json({ count: rows.length, rows });
+    } catch (error) {
+      console.error("[Inspect Old]", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: list messages with media in conversation_messages
+  app.get("/api/debug/conversation-messages-with-media", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
         `SELECT id, conversation_id, file_type, 
          LENGTH(file_url) as file_size, 
          LEFT(file_url, 50) as file_url_preview,
@@ -198,7 +335,7 @@ async function startServer() {
       );
 
       await pool.end();
-      res.json({ count: rows1.length, rows: rows1 });
+      res.json({ count: rows.length, rows });
     } catch (error) {
       console.error("[Media debug-list]", error);
       res.status(500).json({ error: String(error) });
@@ -221,7 +358,7 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid message ID" });
       }
 
-      const [rows1]: any = await pool.execute(
+      const [rows]: any = await pool.execute(
         "SELECT file_url, file_type FROM conversation_messages WHERE id = ?",
         [messageId]
       );
@@ -377,7 +514,7 @@ async function startServer() {
         uri: process.env.DATABASE_URL,
       });
 
-      const [rows1]: any = await pool.execute(
+      const [rows]: any = await pool.execute(
         `SELECT id, conversation_id, sender_type, 
          LEFT(content, 100) as content_preview,
          file_url IS NOT NULL as has_file_url,
@@ -482,7 +619,7 @@ async function startServer() {
       });
 
       // Get all messages with WhatsApp media URLs
-      const [rows1]: any = await pool.execute(
+      const [rows]: any = await pool.execute(
         `SELECT cm.id, cm.file_url, cm.file_type 
          FROM conversation_messages cm 
          WHERE cm.file_url IS NOT NULL 
@@ -651,10 +788,6 @@ async function startServer() {
   const babyShowerWebhookRouter = await import("../webhook-baby-shower");
   app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
-  // Setup Routes - Criar tabelas de eventos
-  const setupMigrate = await import("../setup-migrate");
-  app.use("/api/setup", setupMigrate.default);
-
   // Test Routes - Sistema de Teste de Fluxos
   // Safety: disabled by default in production.
   const enableTestRoutes =
@@ -713,8 +846,7 @@ async function startServer() {
       }
 
       const { getDb } = await import("../db");
-      const { conversations, conversationMessages } =
-        await import("../../drizzle/schema");
+      const { conversations, conversationMessages } = await import("../../drizzle/schema");
       const { eq, and, isNull } = await import("drizzle-orm");
       const db = await getDb();
 
@@ -752,10 +884,6 @@ async function startServer() {
 
   // Endpoint REST público para dashboard (sem auth)
   app.get("/api/dashboard/stats", async (req, res) => {
-    console.log(
-      "[dashboard/stats] Endpoint called with period:",
-      req.query.period
-    );
     try {
       const period = (req.query.period as string) || "mes";
       const { getDb } = await import("../db");
@@ -775,19 +903,8 @@ async function startServer() {
         case "ontem":
           const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
-          start = new Date(
-            yesterday.getFullYear(),
-            yesterday.getMonth(),
-            yesterday.getDate()
-          );
-          end = new Date(
-            yesterday.getFullYear(),
-            yesterday.getMonth(),
-            yesterday.getDate(),
-            23,
-            59,
-            59
-          );
+          start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+          end = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
           break;
         case "semana":
           start = new Date(now);
@@ -798,8 +915,7 @@ async function startServer() {
           start = new Date(now.getFullYear(), now.getMonth(), 1);
       }
 
-      const getRows = (result: any) =>
-        Array.isArray(result) ? result[0] : result;
+      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
 
       // Total de conversas
       const totalConvResult = await db.execute(sql`
@@ -845,62 +961,69 @@ async function startServer() {
       `);
       const statuses = getRows(statusResult);
 
-      // Por hora (últimos 30 dias para o gráfico)
+      // Por hora
       const hourResult = await db.execute(sql`
         SELECT HOUR(created_at) as hour, COUNT(DISTINCT conversation_id) as chats
         FROM conversation_messages
-        WHERE sender_type = 'customer'
-          AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-        GROUP BY HOUR(created_at)
-        ORDER BY HOUR(created_at)
+        WHERE sender_type = 'customer' AND created_at >= ${start} AND created_at <= ${end}
+        GROUP BY HOUR(created_at) ORDER BY HOUR(created_at)
       `);
       const hours = getRows(hourResult);
 
-      // Formatar por hora (todas as 24 horas)
-      const byHour = Array.from({ length: 24 }, (_, i) => {
-        const hourData = hours?.find((h: any) => Number(h.hour) === i);
-        return {
-          hour: i,
-          chats: Number(hourData?.chats) || 0
-        };
-      });
-
-      // Agentes (estatísticas)
-      const agentResult = await db.execute(sql`
-        SELECT 
-          u.id, u.name, 
-          COUNT(DISTINCT c.id) as total_conversations,
-          COUNT(DISTINCT CASE WHEN c.status = 'closed' THEN c.id END) as closed_conversations,
-          COUNT(cm.id) as total_messages
-        FROM users u
-        LEFT JOIN conversations c ON c.assigned_to = u.id
-        LEFT JOIN conversation_messages cm ON cm.conversation_id = c.id AND cm.sender_type = 'agent'
-        WHERE u.role = 'user'
-        GROUP BY u.id, u.name
-        ORDER BY total_conversations DESC
-        LIMIT 10
-      `);
-      const agents = getRows(agentResult);
-
       res.json({
-        totalConversations: Number(totalConv?.[0]?.count) || 0,
-        uniqueCustomers: Number(unique?.[0]?.count) || 0,
-        messagesSent: Number(sent?.[0]?.count) || 0,
-        messagesReceived: Number(received?.[0]?.count) || 0,
+        totalConversations: totalConv?.[0]?.count || 0,
+        uniqueCustomers: unique?.[0]?.count || 0,
+        messagesSent: sent?.[0]?.count || 0,
+        messagesReceived: received?.[0]?.count || 0,
         byChannel: channels || [],
         byStatus: statuses || [],
-        byHour: byHour,
-        agentStats: (agents || []).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          avatar_url: null,
-          total_conversations: Number(a.total_conversations) || 0,
-          closed_conversations: Number(a.closed_conversations) || 0,
-          total_messages: Number(a.total_messages) || 0
-        }))
+        byHour: hours || [],
+        period,
+        start,
+        end
       });
     } catch (error) {
       console.error("[dashboard/stats] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: Contatos por hora
+  app.get("/api/debug/contacts-by-hour", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+
+      // Testar query direta
+      const result = await db.execute(sql`
+        SELECT 
+          HOUR(created_at) as hour,
+          COUNT(DISTINCT conversation_id) as chats
+        FROM conversation_messages
+        WHERE sender_type = 'customer'
+          AND created_at >= ${start}
+          AND created_at <= ${end}
+        GROUP BY HOUR(created_at)
+        ORDER BY HOUR(created_at)
+      `);
+
+      console.log("[debug/contacts-by-hour] Result:", result);
+
+      res.json({
+        start,
+        end,
+        rawResult: result,
+        count: (result as any[]).length
+      });
+    } catch (error) {
+      console.error("[debug/contacts-by-hour] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });
@@ -915,15 +1038,10 @@ async function startServer() {
       }
 
       const now = new Date();
-      const startOfDay = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate()
-      );
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       // Função auxiliar para extrair rows do resultado
-      const getRows = (result: any) =>
-        Array.isArray(result) ? result[0] : result;
+      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
 
       // Total de conversas
       const totalConvResult = await db.execute(sql`
@@ -998,8 +1116,8 @@ async function startServer() {
           totalConv,
           todayConv,
           totalMsg,
-          uniqueCustomers,
-        },
+          uniqueCustomers
+        }
       });
     } catch (error) {
       console.error("[debug/dashboard] Error:", error);
@@ -1508,18 +1626,5 @@ async function startServer() {
   });
 }
 
-// Global 404 for unknown routes (placed after all API routes are registered)
-// This is added inside the module's bootstrap, before starting the server
-// to ensure JSON responses for API paths while still serving non-API 404s.
-// Global API 404 catch-all after all routes
-app.use((req, res, next) => {
-  if (req.path.startsWith("/api")) {
-    res.status(404).json({ error: "Not found", path: req.originalUrl });
-  } else {
-    next();
-  }
-});
-
 startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
-// rebuild Thu Mar  5 14:56:52 -03 2026

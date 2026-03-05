@@ -1335,7 +1335,6 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
   totalGuests: int("total_guests").default(0), // Total de convidados que compraram
   // URLs de compartilhamento
   publicLink: varchar("public_link", { length: 500 }), // Link para convidados comprarem
-  slug: varchar("slug", { length: 100 }).unique(), // Slug para URL amigável
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -1466,43 +1465,3 @@ export type InsertBabyShowerWithdrawal =
   typeof babyShowerWithdrawals.$inferInsert;
 
 export * from './schema_logs';
-
-/**
- * Produtos do Evento Chá de Bebê
- * Produtos selecionados do catálogo para o evento
- */
-export const babyShowerEventProducts = mysqlTable("baby_shower_event_products", {
-  id: int("id").autoincrement().primaryKey(),
-  eventId: int("event_id")
-    .references(() => babyShowerEvents.id, { onDelete: "cascade" })
-    .notNull(),
-  // Produto do catálogo
-  productEan: varchar("product_ean", { length: 32 }).references(
-    () => pharmaProducts.ean,
-    { onDelete: "set null" }
-  ),
-  productName: varchar("product_name", { length: 255 }).notNull(),
-  quantity: int("quantity").notNull().default(1),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  // Status
-  status: mysqlEnum("status", ["available", "purchased", "reserved"])
-    .default("available")
-    .notNull(),
-  // Dados do comprador (convidado)
-  purchasedBy: varchar("purchased_by", { length: 255 }),
-  guestName: varchar("guest_name", { length: 255 }),
-  guestPhone: varchar("guest_phone", { length: 20 }),
-  guestEmail: varchar("guest_email", { length: 320 }),
-  // Mensagem para os pais
-  messageToParents: text("message_to_parents"),
-  // Notificação
-  notificationSent: int("notification_sent").default(0),
-  notificationSentAt: timestamp("notification_sent_at"),
-  // Timestamps
-  purchasedAt: timestamp("purchased_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
-
-export type BabyShowerEventProduct = typeof babyShowerEventProducts.$inferSelect;
-export type InsertBabyShowerEventProduct = typeof babyShowerEventProducts.$inferInsert;
