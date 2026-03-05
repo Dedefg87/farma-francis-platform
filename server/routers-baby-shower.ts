@@ -134,12 +134,20 @@ export const babyShowerRouter = router({
       const eventCode = generateEventCode();
       const publicLink = "https://farmafrancis.com/cha-de-bebe/" + eventCode;
 
+      // Validar e converter datas - string vazia deve ser null
+      const expectedDueDate = input.expectedDueDate && input.expectedDueDate.trim() !== '' 
+        ? input.expectedDueDate 
+        : null;
+      const eventDate = input.eventDate && input.eventDate.trim() !== '' 
+        ? input.eventDate 
+        : null;
+
       const [event] = await db.insert(babyShowerEvents).values({
         motherCustomerId: input.motherCustomerId,
         eventCode,
         eventName: input.eventName,
-        expectedDueDate: input.expectedDueDate || null,
-        eventDate: input.eventDate || null,
+        expectedDueDate,
+        eventDate,
         targetAmount: input.targetAmount?.toString() || null,
         publicLink,
       } as any);
