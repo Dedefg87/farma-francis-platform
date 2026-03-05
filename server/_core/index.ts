@@ -47,6 +47,7 @@ async function startServer() {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     next();
   });
+  // (Guard moved to after app initialization in startServer)
 
   // Trust proxy headers (required for Railway, Render, and other proxies)
   app.set("trust proxy", 1);
@@ -93,6 +94,11 @@ async function startServer() {
   // Basic health check for load balancers and uptime monitoring
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // Diagnostic endpoint: ensure API returns JSON reliably for dashboard
+  app.get("/api/dashboard-test", (_req, res) => {
+    res.json({ ok: true, time: new Date().toISOString() });
   });
 
   // Debug: testar ingestInboundConversationMessage
