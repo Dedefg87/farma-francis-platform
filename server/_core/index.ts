@@ -1600,6 +1600,61 @@ async function startServer() {
     }
   });
 
+  // UPLOAD: Upload image for baby shower products
+  app.post("/api/baby-shower/upload-image", async (req, res) => {
+    try {
+      const { image, filename } = req.body;
+      
+      if (!image) {
+        return res.status(400).json({ error: "Image data required" });
+      }
+
+      // Extrair base64 da string data:image/xxx;base64,yyy
+      const matches = image.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (!matches) {
+        return res.status(400).json({ error: "Invalid image format. Expected data:image/xxx;base64,..." });
+      }
+
+      const extension = matches[1];
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      // Gerar nome único para o arquivo
+      const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
+      
+      // Tentar usar storage do Forge se disponível
+      try {
+        const { storagePut } = await import("../storage");
+        const result = await storagePut(`baby-shower/${uniqueName}`, buffer, `image/${extension}`);
+        return res.json({ success: true, url: result.url });
+      } catch (storageError) {
+        // Se storage não disponível, usar Imgur API
+        console.log("[Upload] Storage not available, using Imgur fallback");
+        
+        // Fallback: Salvar como base64 no banco (não ideal, mas funciona)
+        // Ou usar Imgur API anônima
+        const imgurResponse = await fetch("https://api.imgur.com/3/image", {
+          method: "POST",
+          headers: {
+            "Authorization": "Client-ID 546c25a59c58ad7", // Client ID público para uploads anônimos
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: `image=${encodeURIComponent(base64Data)}&type=base64`,
+        });
+
+        const imgurData = await imgurResponse.json();
+        if (imgurData.success && imgurData.data?.link) {
+          return res.json({ success: true, url: imgurData.data.link });
+        }
+
+        throw new Error("Failed to upload image");
+      }
+    } catch (error) {
+      console.error("[Upload] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {

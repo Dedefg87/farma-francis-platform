@@ -19,8 +19,59 @@ export default function ManageEvent() {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [editingPackage, setEditingPackage] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string>("");
   
   const eventId = parseInt(id || "0");
+
+  // Upload de imagem
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo
+    if (!file.type.startsWith('image/')) {
+      toast.error("Selecione uma imagem válida");
+      return;
+    }
+
+    // Validar tamanho (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande. Máximo 5MB");
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      // Converter para base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64 = event.target?.result as string;
+        setImagePreview(base64);
+
+        // Enviar para o servidor
+        const response = await fetch('/api/baby-shower/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, filename: file.name }),
+        });
+
+        const data = await response.json();
+        if (data.success && data.url) {
+          setImageUrl(data.url);
+          toast.success("Imagem enviada!");
+        } else {
+          throw new Error(data.error || "Erro no upload");
+        }
+        setUploadingImage(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      toast.error("Erro ao enviar imagem");
+      setUploadingImage(false);
+    }
+  };
 
   const { data, refetch } = trpc.babyShower.getEventById.useQuery(
     { id: eventId },
@@ -353,9 +404,24 @@ export default function ManageEvent() {
                 <Input name="description" placeholder="Ex: 20 unidades tamanho P" />
               </div>
               <div>
-                <Label>URL da Imagem</Label>
-                <Input name="imageUrl" placeholder="https://exemplo.com/imagem.jpg" />
-                <p className="text-xs text-gray-500 mt-1">Cole a URL de uma imagem ou faça upload em um serviço como Imgur</p>
+                <Label>Imagem do Produto</Label>
+                <div className="flex gap-3 items-start">
+                  <div className="flex-1">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                    {uploadingImage && <p className="text-sm text-blue-500 mt-1">Enviando imagem...</p>}
+                  </div>
+                  {imagePreview && (
+                    <div className="w-16 h-16 rounded overflow-hidden bg-gray-100 flex-shrink-0">
+                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+                <Input type="hidden" name="imageUrl" value={imageUrl} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -375,7 +441,7 @@ export default function ManageEvent() {
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setShowAddProduct(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="flex-1 bg-pink-500 hover:bg-pink-600" disabled={createPackageMutation.isPending}>
+                <Button type="submit" className="flex-1 bg-pink-500 hover:bg-pink-600" disabled={createPackageMutation.isPending || uploadingImage}>
                   {createPackageMutation.isPending ? "Salvando..." : "Adicionar"}
                 </Button>
               </div>
@@ -399,13 +465,24 @@ export default function ManageEvent() {
                 <Input name="description" defaultValue={editingPackage?.description} />
               </div>
               <div>
-                <Label>URL da Imagem</Label>
-                <Input name="imageUrl" defaultValue={editingPackage?.imageUrl} placeholder="https://exemplo.com/imagem.jpg" />
-                {editingPackage?.imageUrl && (
-                  <div className="mt-2 w-20 h-20 bg-gray-100 rounded overflow-hidden">
-                    <img src={editingPackage.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                <Label>Imagem do Produto</Label>
+                <div className="flex gap-3 items-start">
+                  <div className="flex-1">
+                    <Input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                    {uploadingImage && <p className="text-sm text-blue-500 mt-1">Enviando imagem...</p>}
                   </div>
-                )}
+                  {(imagePreview || editingPackage?.imageUrl) && (
+                    <div className="w-16 h-16 rounded overflow-hidden bg-gray-100 flex-shrink-0">
+                      <img src={imagePreview || editingPackage?.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+                <Input type="hidden" name="imageUrl" value={imageUrl || editingPackage?.imageUrl || ""} />
               </div>
               <div>
                 <Label>Preco (R$) *</Label>
@@ -415,7 +492,7 @@ export default function ManageEvent() {
                 <Button type="button" variant="outline" className="flex-1" onClick={() => setEditingPackage(null)}>
                   Cancelar
                 </Button>
-                <Button type="submit" className="flex-1 bg-pink-500 hover:bg-pink-600" disabled={updatePackageMutation.isPending}>
+                <Button type="submit" className="flex-1 bg-pink-500 hover:bg-pink-600" disabled={updatePackageMutation.isPending || uploadingImage}>
                   {updatePackageMutation.isPending ? "Salvando..." : "Salvar"}
                 </Button>
               </div>
