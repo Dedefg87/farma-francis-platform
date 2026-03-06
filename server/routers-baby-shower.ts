@@ -132,7 +132,8 @@ export const babyShowerRouter = router({
       const db = await getDb();
     if (!db) { throw new Error("Database not available"); }
       const eventCode = generateEventCode();
-      const publicLink = "https://farmafrancis.netlify.app/cha-de-bebe/" + eventCode;
+      const baseUrl = process.env.PUBLIC_BASE_URL || "https://innovative-enjoyment-production-ed8f.up.railway.app";
+      const publicLink = `${baseUrl}/cha-de-bebe/${eventCode}`;
 
       // Validar e converter datas - string vazia deve ser null
       const expectedDueDate = input.expectedDueDate && input.expectedDueDate.trim() !== '' 
