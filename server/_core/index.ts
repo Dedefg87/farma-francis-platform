@@ -602,6 +602,62 @@ async function startServer() {
         }
       }
 
+      // ========================================
+      // BABY SHOWER TABLES FIX
+      // ========================================
+      
+      // Fix baby_shower_purchases table - add created_at if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_purchases ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
+        );
+        results.push("Added created_at column to baby_shower_purchases");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("created_at column already exists in baby_shower_purchases");
+        } else {
+          results.push(`Error adding created_at to baby_shower_purchases: ${e.message}`);
+        }
+      }
+
+      // Fix baby_shower_purchases - add notification_sent if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent INT DEFAULT 0`
+        );
+        results.push("Added notification_sent column to baby_shower_purchases");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("notification_sent column already exists in baby_shower_purchases");
+        } else {
+          results.push(`Error adding notification_sent: ${e.message}`);
+        }
+      }
+
+      // Fix baby_shower_purchases - add notification_sent_at if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent_at TIMESTAMP NULL`
+        );
+        results.push("Added notification_sent_at column to baby_shower_purchases");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("notification_sent_at column already exists in baby_shower_purchases");
+        } else {
+          results.push(`Error adding notification_sent_at: ${e.message}`);
+        }
+      }
+
+      // Fix baby_shower_purchases - modify package_id to NOT NULL
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_purchases MODIFY COLUMN package_id INT NOT NULL`
+        );
+        results.push("Modified package_id to NOT NULL in baby_shower_purchases");
+      } catch (e: any) {
+        results.push(`Error modifying package_id: ${e.message}`);
+      }
+
       await pool.end();
       res.json({ success: true, results });
     } catch (error: any) {
