@@ -3,7 +3,7 @@ import { getLoginUrl } from "@/const";
 import { Button } from "./ui/button";
 import { TopBar } from "./TopBar";
 
-export default function FarmaDashboardLayout({
+export function FarmaDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -57,3 +57,5 @@ export default function FarmaDashboardLayout({
     </div>
   );
 }
+
+export default FarmaDashboardLayout;
