@@ -10,6 +10,15 @@ export default function EventPage() {
 
   const { data: eventData, isLoading } = trpc.babyShower.getEventByCode.useQuery({ code: code || "" });
 
+  const createPurchaseMutation = trpc.babyShower.createPurchase.useMutation({
+    onSuccess: () => {
+      toast.success("Presente registrado!");
+    },
+    onError: (err) => {
+      toast.error("Erro ao registrar: " + err.message);
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-[#E8F4F8] to-[#F0E6F6]">
@@ -23,6 +32,15 @@ export default function EventPage() {
   const whatsappNumber = event?.whatsappNumber || "5531995657081";
 
   const handleWhatsAppRedirect = (pkg: any) => {
+    // Criar registro de compra automaticamente
+    createPurchaseMutation.mutate({
+      eventId: event?.id,
+      packageId: pkg.id,
+      guestName: "Convidado via WhatsApp", // Nome temporário
+      amountPaid: parseFloat(pkg.price || "0"),
+      paymentStatus: "pending",
+    });
+
     const messageText = `Olá! Gostaria de presentear com ${pkg.packageName}${pkg.description ? ` (${pkg.description})` : ''} da lista de chá de bebé da Farma Francis.`;
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(messageText)}`;
     window.open(whatsappUrl, '_blank');

@@ -104,6 +104,14 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const updatePurchaseMutation = trpc.babyShower.updatePurchase.useMutation({
+    onSuccess: () => {
+      toast.success("Compra atualizada!");
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const event = data?.event;
   const publicUrl = event?.publicLink || `${window.location.origin}/cha-de-bebe/${event?.eventCode}`;
 
