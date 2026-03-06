@@ -1323,6 +1323,8 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
   status: mysqlEnum("status", ["active", "closed", "cancelled"])
     .default("active")
     .notNull(),
+  // WhatsApp para contato (editável)
+  whatsappNumber: varchar("whatsapp_number", { length: 20 }), // Ex: "5531986337081"
   // Carteira Virtual (saldo em valor monetário)
   walletBalance: decimal("wallet_balance", { precision: 12, scale: 2 })
     .default("0.00")
@@ -1355,6 +1357,8 @@ export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
   // Configuração da Cota
   packageName: varchar("package_name", { length: 120 }).notNull(), // Ex: "Pacote Fraldas P"
   description: text("description"),
+  // Imagem do produto
+  imageUrl: varchar("image_url", { length: 500 }), // URL da imagem (upload ou externa)
   // Tipo de presente
   giftType: mysqlEnum("gift_type", ["diapers", "wipes", "money", "product"])
     .default("diapers")

@@ -202,6 +202,30 @@ export const babyShowerRouter = router({
         .offset(input.offset);
     }),
 
+  // Endpoint público - sem autenticação
+  getEventByCode: publicProcedure
+    .input(z.object({ code: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+      
+      const [event] = await db.select({
+        event: babyShowerEvents,
+        motherName: customers.name,
+      }).from(babyShowerEvents)
+        .leftJoin(customers, eq(babyShowerEvents.motherCustomerId, customers.id))
+        .where(eq(babyShowerEvents.eventCode, input.code))
+        .limit(1);
+
+      if (!event) throw new Error("Evento não encontrado");
+
+      const packages = await db.select().from(babyShowerGiftPackages)
+        .where(eq(babyShowerGiftPackages.eventId, event.event.id))
+        .where(eq(babyShowerGiftPackages.isActive, 1));
+
+      return { event: event.event, motherName: event.motherName, packages };
+    }),
+
   getEventById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
