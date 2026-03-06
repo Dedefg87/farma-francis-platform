@@ -117,8 +117,11 @@ export default function EventPage() {
         <header className="bg-white shadow-sm py-4 sticky top-0 z-50">
           <div className="container mx-auto px-4 flex items-center justify-between">
             <a href="#" className="flex items-center gap-2 no-underline">
-              <i className="fas fa-pills text-2xl text-[#7B68EE]"></i>
-              <span className="text-xl font-bold text-[#2D3748]">Farma Francis</span>
+              <img 
+                src="/logo-farma-francis.jpg" 
+                alt="Farma Francis" 
+                className="h-10 md:h-12 w-auto object-contain rounded"
+              />
             </a>
             <nav className="hidden md:flex items-center gap-6">
               <a href="#inicio" className="text-[#4A5568] hover:text-[#7B68EE] no-underline font-medium">Início</a>
@@ -261,9 +264,12 @@ export default function EventPage() {
         {/* Footer */}
         <footer className="bg-[#2D3748] text-white py-12" id="contato">
           <div className="container mx-auto px-4 text-center">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <i className="fas fa-pills text-2xl text-[#7B68EE]"></i>
-              <span className="text-xl font-bold">Farma Francis</span>
+            <div className="flex items-center justify-center mb-3">
+              <img 
+                src="/logo-farma-francis.jpg" 
+                alt="Farma Francis" 
+                className="h-14 w-auto object-contain rounded bg-white p-1"
+              />
             </div>
             <p className="text-[#A0AEC0] mb-6">Cuidando da sua família com amor e dedicação</p>
             <div className="flex justify-center gap-6 mb-6">
