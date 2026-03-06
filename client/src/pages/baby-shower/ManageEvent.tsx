@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { FarmaDashboardLayout } from "@/components/FarmaDashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2 } from "lucide-react";
+import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ManageEvent() {
