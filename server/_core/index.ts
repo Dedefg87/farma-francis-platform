@@ -1369,6 +1369,53 @@ async function startServer() {
     }
   });
 
+  // DIAGNOSTIC: Verificar estrutura das tabelas de baby shower
+  app.get("/api/fix/diagnose-baby-shower-tables", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: any = {};
+
+      // Verificar se as tabelas existem
+      const tables = await db.raw(`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = DATABASE() 
+        AND table_name LIKE 'baby_shower%'
+      `);
+      results.tables = tables;
+
+      // Verificar estrutura de cada tabela
+      for (const table of ['baby_shower_events', 'baby_shower_gift_packages', 'baby_shower_purchases', 'baby_shower_withdrawals']) {
+        try {
+          const columns = await db.raw(`DESCRIBE ${table}`);
+          results[`${table}_columns`] = columns;
+        } catch (e: any) {
+          results[`${table}_error`] = e.message;
+        }
+      }
+
+      // Testar query problemática
+      try {
+        const testQuery = await db.raw(`
+          SELECT id FROM baby_shower_purchases LIMIT 1
+        `);
+        results.test_query = "SUCCESS";
+        results.test_result = testQuery;
+      } catch (e: any) {
+        results.test_query = "FAILED";
+        results.test_error = e.message;
+      }
+
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
