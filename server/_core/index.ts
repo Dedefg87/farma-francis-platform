@@ -1449,6 +1449,65 @@ async function startServer() {
     }
   });
 
+  // FIX: Force recreate baby_shower_purchases table
+  app.post("/api/fix/force-baby-shower-tables", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: string[] = [];
+
+      // Verificar se tabela existe e dropar se necessário
+      try {
+        await db.raw(`DROP TABLE IF EXISTS baby_shower_purchases`);
+        results.push("Dropped baby_shower_purchases table");
+      } catch (e: any) {
+        results.push(`Error dropping table: ${e.message}`);
+      }
+
+      // Recriar tabela com estrutura correta
+      try {
+        await db.raw(`
+          CREATE TABLE baby_shower_purchases (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            event_id INT NOT NULL,
+            package_id INT NOT NULL,
+            guest_customer_id INT NULL,
+            guest_name VARCHAR(255) NOT NULL,
+            guest_phone VARCHAR(20) NULL,
+            guest_email VARCHAR(320) NULL,
+            message_to_parents TEXT NULL,
+            payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
+            amount_paid DECIMAL(10,2) NOT NULL,
+            payment_method VARCHAR(50) NULL,
+            payment_reference VARCHAR(255) NULL,
+            paid_at TIMESTAMP NULL,
+            notification_sent INT DEFAULT 0,
+            notification_sent_at TIMESTAMP NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE,
+            FOREIGN KEY (package_id) REFERENCES baby_shower_gift_packages(id),
+            FOREIGN KEY (guest_customer_id) REFERENCES customers(id) ON DELETE SET NULL
+          )
+        `);
+        results.push("Created baby_shower_purchases table with correct structure");
+      } catch (e: any) {
+        results.push(`Error creating table: ${e.message}`);
+      }
+
+      // Verificar estrutura final
+      const columns = await db.raw(`DESCRIBE baby_shower_purchases`);
+      results.push(`Table structure: ${JSON.stringify(columns)}`);
+
+      res.json({ success: true, results });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
