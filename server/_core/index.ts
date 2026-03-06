@@ -18,6 +18,7 @@ import { sseManager } from "./sse";
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
+import { runBabyShowerMigration } from "../baby-shower-migration";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -1585,6 +1586,7 @@ async function startServer() {
     // Run CRM migration on startup
     console.log("[Server] Running CRM migration...");
     await runCRMMigration();
+    await runBabyShowerMigration();
 
     // Start simple chatbot after server is running
     import("../chatbot")
