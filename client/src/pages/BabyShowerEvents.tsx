@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,10 +12,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Gift, Plus, Users, Wallet, Calendar, Package, ExternalLink } from "lucide-react";
+import { Gift, Plus, Users, Wallet, Calendar, Package, ExternalLink, Settings, Link } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BabyShowerEvents() {
+  const [, navigate] = useLocation();
   const [showCreate, setShowCreate] = useState(false);
   const [formData, setFormData] = useState({
     motherCustomerId: "",
@@ -64,7 +66,7 @@ export default function BabyShowerEvents() {
             </h1>
             <p className="text-gray-500 mt-2">Gerencie eventos de arrecadação</p>
           </div>
-          <Button className="bg-pink-500" onClick={() => setShowCreate(true)}>
+          <Button className="bg-pink-500" onClick={() => navigate("/baby-shower/create")}>
             <Plus className="w-4 h-4 mr-2" /> Novo Evento
           </Button>
         </div>
@@ -105,11 +107,20 @@ export default function BabyShowerEvents() {
                     <div className="flex gap-4 text-sm mt-1">
                       <span className="text-green-600">R$ {parseFloat(e.event.walletBalance || 0).toFixed(2)}</span>
                       <span className="text-blue-600">{e.event.totalGuests} convidados</span>
+                      <span className="text-purple-600">{e.event.status}</span>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => {navigator.clipboard.writeText(e.event.publicLink);toast.success("Link copiado!");}}>
-                    <ExternalLink className="w-4 h-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(e.event.publicLink || `${window.location.origin}/cha-de-bebe/${e.event.eventCode}`).then(() => toast.success("Link copiado!"))}>
+                      <Link className="w-4 h-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => window.open(`/cha-de-bebe/${e.event.eventCode}`, '_blank')}>
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                    <Button variant="default" size="sm" onClick={() => navigate(`/baby-shower/manage/${e.event.id}`)}>
+                      <Settings className="w-4 h-4 mr-1" /> Gerenciar
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
