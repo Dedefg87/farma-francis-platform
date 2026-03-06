@@ -48,7 +48,24 @@ export async function runBabyShowerMigration() {
     }
 
     // ==============================
-    // baby_shower_gift_packages table (NOME CORRIGIDO!)
+    // RENAME old table if exists
+    // ==============================
+    const oldPackagesTableExists = await db.raw(`
+      SELECT COUNT(*) as count FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = 'baby_shower_packages'
+    `);
+    
+    const oldPackagesExists = Array.isArray(oldPackagesTableExists) && 
+      oldPackagesTableExists.length > 0 && 
+      Number((oldPackagesTableExists[0] as any)?.count || 0) > 0;
+
+    if (oldPackagesExists) {
+      console.log("[Baby Shower Migration] Renaming baby_shower_packages to baby_shower_gift_packages");
+      await db.raw(`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
+    }
+
+    // ==============================
+    // baby_shower_gift_packages table
     // ==============================
     const packagesTableExists = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables
