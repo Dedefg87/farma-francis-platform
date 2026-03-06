@@ -36,7 +36,7 @@ export async function runBabyShowerMigration() {
           wallet_balance DECIMAL(10,2) DEFAULT 0.00,
           total_diapers_count INT DEFAULT 0,
           available_diapers_count INT DEFAULT 0,
-          target_amount DECIMAL(10,2) NULL,
+          target_amount DECIMAL(12,2) NULL,
           total_guests INT DEFAULT 0,
           public_link VARCHAR(500) NULL,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -48,7 +48,7 @@ export async function runBabyShowerMigration() {
     }
 
     // ==============================
-    // Check both old and new table names
+    // baby_shower_gift_packages table
     // ==============================
     const oldPackagesTableExists = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables
@@ -114,7 +114,7 @@ export async function runBabyShowerMigration() {
         CREATE TABLE baby_shower_purchases (
           id INT AUTO_INCREMENT PRIMARY KEY,
           event_id INT NOT NULL,
-          package_id INT NULL,
+          package_id INT NOT NULL,
           guest_customer_id INT NULL,
           guest_name VARCHAR(255) NOT NULL,
           guest_phone VARCHAR(20) NULL,
@@ -129,14 +129,14 @@ export async function runBabyShowerMigration() {
           notification_sent_at TIMESTAMP NULL,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE,
-          FOREIGN KEY (package_id) REFERENCES baby_shower_gift_packages(id) ON DELETE SET NULL,
+          FOREIGN KEY (package_id) REFERENCES baby_shower_gift_packages(id),
           FOREIGN KEY (guest_customer_id) REFERENCES customers(id) ON DELETE SET NULL
         )
       `);
     }
 
     // ==============================
-    // baby_shower_withdrawals table
+    // baby_shower_withdrawals table (CORRIGIDO PARA MATCH COM SCHEMA)
     // ==============================
     const withdrawalsTableExists = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables
@@ -154,17 +154,18 @@ export async function runBabyShowerMigration() {
           id INT AUTO_INCREMENT PRIMARY KEY,
           event_id INT NOT NULL,
           related_task_id INT NULL,
-          withdrawal_type ENUM('diapers', 'wipes', 'money') NOT NULL,
+          withdrawal_type ENUM('diapers', 'wipes', 'money') NOT NULL DEFAULT 'diapers',
           diaper_size VARCHAR(20) NULL,
           quantity INT NOT NULL,
+          requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          fulfilled_at TIMESTAMP NULL,
+          status ENUM('requested', 'preparing', 'ready', 'delivered', 'cancelled') NOT NULL DEFAULT 'requested',
+          fulfilled_by INT NULL,
           delivery_method ENUM('pickup', 'delivery') NOT NULL DEFAULT 'pickup',
-          delivery_address TEXT NULL,
-          delivery_status ENUM('pending', 'shipped', 'delivered') DEFAULT 'pending',
           notes TEXT NULL,
-          created_by_user_id INT NULL,
-          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE,
-          FOREIGN KEY (related_task_id) REFERENCES crm_tasks(id) ON DELETE SET NULL
+          FOREIGN KEY (related_task_id) REFERENCES crm_tasks(id) ON DELETE SET NULL,
+          FOREIGN KEY (fulfilled_by) REFERENCES users(id) ON DELETE SET NULL
         )
       `);
     }
