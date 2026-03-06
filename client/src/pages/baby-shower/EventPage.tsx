@@ -118,9 +118,9 @@ export default function EventPage() {
           <div className="container mx-auto px-4 flex items-center justify-between">
             <a href="#" className="flex items-center gap-2 no-underline">
               <img 
-                src="/logo-farma-francis.jpg" 
+                src="/farma-francis-logo.png" 
                 alt="Farma Francis" 
-                className="h-10 md:h-12 w-auto object-contain rounded"
+                className="h-10 md:h-12 w-auto object-contain"
               />
             </a>
             <nav className="hidden md:flex items-center gap-6">
@@ -266,9 +266,9 @@ export default function EventPage() {
           <div className="container mx-auto px-4 text-center">
             <div className="flex items-center justify-center mb-3">
               <img 
-                src="/logo-farma-francis.jpg" 
+                src="/farma-francis-logo.png" 
                 alt="Farma Francis" 
-                className="h-14 w-auto object-contain rounded bg-white p-1"
+                className="h-14 w-auto object-contain bg-white rounded p-1"
               />
             </div>
             <p className="text-[#A0AEC0] mb-6">Cuidando da sua família com amor e dedicação</p>
