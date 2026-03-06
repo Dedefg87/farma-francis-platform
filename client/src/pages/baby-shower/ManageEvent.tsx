@@ -175,23 +175,20 @@ export default function ManageEvent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm py-4">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <Baby className="w-6 h-6 text-pink-500" />
-              <span className="text-xl font-bold text-pink-600">Gerenciar Cha de Bebe</span>
-            </div>
+    <FarmaDashboardLayout>
+      <div className="max-w-5xl mx-auto">
+        {/* Header com botão voltar */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/baby-shower")}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <Baby className="w-6 h-6 text-pink-500" />
+            <span className="text-xl font-bold text-pink-600">Gerenciar Chá de Bebê</span>
           </div>
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-6 max-w-5xl">
+        <main>
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card>
@@ -508,7 +505,8 @@ export default function ManageEvent() {
             </form>
           </DialogContent>
         </Dialog>
-      </main>
-    </div>
+        </main>
+      </div>
+    </FarmaDashboardLayout>
   );
 }
