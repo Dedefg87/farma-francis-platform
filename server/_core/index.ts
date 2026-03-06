@@ -1508,6 +1508,57 @@ async function startServer() {
     }
   });
 
+  // FIX: Force recreate baby_shower_withdrawals table
+  app.post("/api/fix/force-baby-shower-withdrawals", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: string[] = [];
+
+      // Drop e recriar tabela
+      try {
+        await db.raw(`DROP TABLE IF EXISTS baby_shower_withdrawals`);
+        results.push("Dropped baby_shower_withdrawals table");
+      } catch (e: any) {
+        results.push(`Error dropping table: ${e.message}`);
+      }
+
+      // Recriar com estrutura correta (igual ao Drizzle schema)
+      try {
+        await db.raw(`
+          CREATE TABLE baby_shower_withdrawals (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            event_id INT NOT NULL,
+            related_task_id INT NULL,
+            withdrawal_type ENUM('diapers', 'wipes', 'money') NOT NULL DEFAULT 'diapers',
+            diaper_size VARCHAR(20) NULL,
+            quantity INT NOT NULL,
+            requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            fulfilled_at TIMESTAMP NULL,
+            status ENUM('requested', 'preparing', 'ready', 'delivered', 'cancelled') NOT NULL DEFAULT 'requested',
+            fulfilled_by INT NULL,
+            delivery_method ENUM('pickup', 'delivery') NOT NULL DEFAULT 'pickup',
+            notes TEXT NULL,
+            FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE,
+            FOREIGN KEY (related_task_id) REFERENCES crm_tasks(id) ON DELETE SET NULL,
+            FOREIGN KEY (fulfilled_by) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `);
+        results.push("Created baby_shower_withdrawals table with correct structure");
+      } catch (e: any) {
+        results.push(`Error creating table: ${e.message}`);
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
