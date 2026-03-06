@@ -649,14 +649,8 @@ async function startServer() {
       }
 
       // Fix baby_shower_purchases - modify package_id to NOT NULL
-      try {
-        await pool.execute(
-          `ALTER TABLE baby_shower_purchases MODIFY COLUMN package_id INT NOT NULL`
-        );
-        results.push("Modified package_id to NOT NULL in baby_shower_purchases");
-      } catch (e: any) {
-        results.push(`Error modifying package_id: ${e.message}`);
-      }
+      // Skip this - it conflicts with FK constraint SET NULL
+      // Instead, just check table structure
 
       await pool.end();
       res.json({ success: true, results });
