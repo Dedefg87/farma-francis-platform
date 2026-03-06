@@ -605,7 +605,7 @@ async function startServer() {
       // ========================================
       // BABY SHOWER TABLES FIX
       // ========================================
-      
+
       // Fix baby_shower_purchases table - add created_at if missing
       try {
         await pool.execute(
@@ -614,9 +614,13 @@ async function startServer() {
         results.push("Added created_at column to baby_shower_purchases");
       } catch (e: any) {
         if (e.code === "ER_DUP_FIELDNAME") {
-          results.push("created_at column already exists in baby_shower_purchases");
+          results.push(
+            "created_at column already exists in baby_shower_purchases"
+          );
         } else {
-          results.push(`Error adding created_at to baby_shower_purchases: ${e.message}`);
+          results.push(
+            `Error adding created_at to baby_shower_purchases: ${e.message}`
+          );
         }
       }
 
@@ -628,7 +632,9 @@ async function startServer() {
         results.push("Added notification_sent column to baby_shower_purchases");
       } catch (e: any) {
         if (e.code === "ER_DUP_FIELDNAME") {
-          results.push("notification_sent column already exists in baby_shower_purchases");
+          results.push(
+            "notification_sent column already exists in baby_shower_purchases"
+          );
         } else {
           results.push(`Error adding notification_sent: ${e.message}`);
         }
@@ -639,10 +645,14 @@ async function startServer() {
         await pool.execute(
           `ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent_at TIMESTAMP NULL`
         );
-        results.push("Added notification_sent_at column to baby_shower_purchases");
+        results.push(
+          "Added notification_sent_at column to baby_shower_purchases"
+        );
       } catch (e: any) {
         if (e.code === "ER_DUP_FIELDNAME") {
-          results.push("notification_sent_at column already exists in baby_shower_purchases");
+          results.push(
+            "notification_sent_at column already exists in baby_shower_purchases"
+          );
         } else {
           results.push(`Error adding notification_sent_at: ${e.message}`);
         }
@@ -897,7 +907,8 @@ async function startServer() {
       }
 
       const { getDb } = await import("../db");
-      const { conversations, conversationMessages } = await import("../../drizzle/schema");
+      const { conversations, conversationMessages } =
+        await import("../../drizzle/schema");
       const { eq, and, isNull } = await import("drizzle-orm");
       const db = await getDb();
 
@@ -954,8 +965,19 @@ async function startServer() {
         case "ontem":
           const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
-          start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-          end = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+          start = new Date(
+            yesterday.getFullYear(),
+            yesterday.getMonth(),
+            yesterday.getDate()
+          );
+          end = new Date(
+            yesterday.getFullYear(),
+            yesterday.getMonth(),
+            yesterday.getDate(),
+            23,
+            59,
+            59
+          );
           break;
         case "semana":
           start = new Date(now);
@@ -966,7 +988,8 @@ async function startServer() {
           start = new Date(now.getFullYear(), now.getMonth(), 1);
       }
 
-      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
+      const getRows = (result: any) =>
+        Array.isArray(result) ? result[0] : result;
 
       // Total de conversas
       const totalConvResult = await db.execute(sql`
@@ -1053,11 +1076,11 @@ async function startServer() {
           avatar_url: null,
           total_conversations: Number(a.total_conversations) || 0,
           closed_conversations: Number(a.closed_conversations) || 0,
-          total_messages: Number(a.total_messages) || 0
+          total_messages: Number(a.total_messages) || 0,
         })),
         period,
         start,
-        end
+        end,
       });
     } catch (error) {
       console.error("[dashboard/stats] Error:", error);
@@ -1097,7 +1120,7 @@ async function startServer() {
         start,
         end,
         rawResult: result,
-        count: (result as any[]).length
+        count: (result as any[]).length,
       });
     } catch (error) {
       console.error("[debug/contacts-by-hour] Error:", error);
@@ -1115,10 +1138,15 @@ async function startServer() {
       }
 
       const now = new Date();
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
 
       // Função auxiliar para extrair rows do resultado
-      const getRows = (result: any) => Array.isArray(result) ? result[0] : result;
+      const getRows = (result: any) =>
+        Array.isArray(result) ? result[0] : result;
 
       // Total de conversas
       const totalConvResult = await db.execute(sql`
@@ -1193,8 +1221,8 @@ async function startServer() {
           totalConv,
           todayConv,
           totalMsg,
-          uniqueCustomers
-        }
+          uniqueCustomers,
+        },
       });
     } catch (error) {
       console.error("[debug/dashboard] Error:", error);
@@ -1389,7 +1417,12 @@ async function startServer() {
       results.tables = tables;
 
       // Verificar estrutura de cada tabela
-      for (const table of ['baby_shower_events', 'baby_shower_gift_packages', 'baby_shower_purchases', 'baby_shower_withdrawals']) {
+      for (const table of [
+        "baby_shower_events",
+        "baby_shower_gift_packages",
+        "baby_shower_purchases",
+        "baby_shower_withdrawals",
+      ]) {
         try {
           const columns = await db.raw(`DESCRIBE ${table}`);
           results[`${table}_columns`] = columns;
@@ -1677,6 +1710,19 @@ async function startServer() {
   console.log(`[Server] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
 
   // Bind to all interfaces to be accessible from Railway's router
+  // Final API catch-all for unknown API routes (JSON only)
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api")) {
+      if (!res.headersSent) {
+        res.status(404).json({ error: "Not found", path: req.originalUrl });
+      } else {
+        next();
+      }
+    } else {
+      next();
+    }
+  });
+
   server.listen(port, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
