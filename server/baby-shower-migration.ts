@@ -48,35 +48,34 @@ export async function runBabyShowerMigration() {
     }
 
     // ==============================
-    // RENAME old table if exists
+    // Check both old and new table names
     // ==============================
     const oldPackagesTableExists = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_packages'
     `);
     
-    const oldPackagesExists = Array.isArray(oldPackagesTableExists) && 
-      oldPackagesTableExists.length > 0 && 
-      Number((oldPackagesTableExists[0] as any)?.count || 0) > 0;
-
-    if (oldPackagesExists) {
-      console.log("[Baby Shower Migration] Renaming baby_shower_packages to baby_shower_gift_packages");
-      await db.raw(`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
-    }
-
-    // ==============================
-    // baby_shower_gift_packages table
-    // ==============================
-    const packagesTableExists = await db.raw(`
+    const newPackagesTableExists = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_gift_packages'
     `);
     
-    const packagesExists = Array.isArray(packagesTableExists) && 
-      packagesTableExists.length > 0 && 
-      Number((packagesTableExists[0] as any)?.count || 0) > 0;
-    
-    if (!packagesExists) {
+    const oldExists = Array.isArray(oldPackagesTableExists) && 
+      oldPackagesTableExists.length > 0 && 
+      Number((oldPackagesTableExists[0] as any)?.count || 0) > 0;
+
+    const newExists = Array.isArray(newPackagesTableExists) && 
+      newPackagesTableExists.length > 0 && 
+      Number((newPackagesTableExists[0] as any)?.count || 0) > 0;
+
+    // RENAME only if old exists AND new does NOT exist
+    if (oldExists && !newExists) {
+      console.log("[Baby Shower Migration] Renaming baby_shower_packages to baby_shower_gift_packages");
+      await db.raw(`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
+    }
+
+    // CREATE only if neither exists
+    if (!oldExists && !newExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_gift_packages table");
       await db.raw(`
         CREATE TABLE baby_shower_gift_packages (
