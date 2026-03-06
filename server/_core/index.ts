@@ -1559,6 +1559,47 @@ async function startServer() {
     }
   });
 
+  // FIX: Add baby shower new columns (whatsapp_number, image_url)
+  app.post("/api/fix/add-baby-shower-columns", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: string[] = [];
+
+      // Add whatsapp_number to baby_shower_events
+      try {
+        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN whatsapp_number VARCHAR(20) NULL`);
+        results.push("Added whatsapp_number to baby_shower_events");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("whatsapp_number already exists in baby_shower_events");
+        } else {
+          results.push(`Error adding whatsapp_number: ${e.message}`);
+        }
+      }
+
+      // Add image_url to baby_shower_gift_packages
+      try {
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN image_url VARCHAR(500) NULL`);
+        results.push("Added image_url to baby_shower_gift_packages");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("image_url already exists in baby_shower_gift_packages");
+        } else {
+          results.push(`Error adding image_url: ${e.message}`);
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
