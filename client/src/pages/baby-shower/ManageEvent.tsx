@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -57,11 +57,11 @@ export default function ManageEvent() {
   const publicUrl = event?.publicLink || `${window.location.origin}/cha-de-bebe/${event?.eventCode}`;
 
   // Atualizar estado quando dados carregarem
-  useState(() => {
+  useEffect(() => {
     if (event?.whatsappNumber) {
       setWhatsappNumber(event.whatsappNumber);
     }
-  });
+  }, [event?.whatsappNumber]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(publicUrl);
