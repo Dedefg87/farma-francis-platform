@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft } from "lucide-react";
+import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ManageEvent() {
@@ -16,6 +16,9 @@ export default function ManageEvent() {
   const [, navigate] = useLocation();
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [editingPackage, setEditingPackage] = useState<any>(null);
+  const [imageUrl, setImageUrl] = useState("");
   
   const eventId = parseInt(id || "0");
 
@@ -33,14 +36,45 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const updateEventMutation = trpc.babyShower.updateEvent.useMutation({
+    onSuccess: () => {
+      toast.success("WhatsApp atualizado!");
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updatePackageMutation = trpc.babyShower.updatePackage.useMutation({
+    onSuccess: () => {
+      toast.success("Produto atualizado!");
+      setEditingPackage(null);
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const event = data?.event;
   const publicUrl = event?.publicLink || `${window.location.origin}/cha-de-bebe/${event?.eventCode}`;
+
+  // Atualizar estado quando dados carregarem
+  useState(() => {
+    if (event?.whatsappNumber) {
+      setWhatsappNumber(event.whatsappNumber);
+    }
+  });
 
   const copyLink = () => {
     navigator.clipboard.writeText(publicUrl);
     setCopied(true);
     toast.success("Link copiado!");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveWhatsapp = () => {
+    updateEventMutation.mutate({
+      id: eventId,
+      whatsappNumber: whatsappNumber || undefined,
+    });
   };
 
   const handleAddProduct = (e: React.FormEvent<HTMLFormElement>) => {
@@ -55,6 +89,20 @@ export default function ManageEvent() {
       price: parseFloat(formData.get("price") as string),
       quantityRepresented: parseInt(formData.get("quantity") as string) || 1,
       stockLimit: parseInt(formData.get("stock") as string) || undefined,
+      imageUrl: formData.get("imageUrl") as string || undefined,
+    });
+  };
+
+  const handleUpdateProduct = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    updatePackageMutation.mutate({
+      id: editingPackage.id,
+      packageName: formData.get("name") as string,
+      description: formData.get("description") as string,
+      price: parseFloat(formData.get("price") as string),
+      imageUrl: formData.get("imageUrl") as string || undefined,
     });
   };
 
@@ -151,6 +199,33 @@ export default function ManageEvent() {
           </CardContent>
         </Card>
 
+        {/* WhatsApp Configuration */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              WhatsApp para Contato
+            </CardTitle>
+            <CardDescription>Este número receberá as mensagens dos convidados</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input 
+                value={whatsappNumber} 
+                onChange={(e) => setWhatsappNumber(e.target.value)} 
+                placeholder="Ex: 5531986337081"
+                className="flex-1"
+              />
+              <Button onClick={handleSaveWhatsapp} disabled={updateEventMutation.isPending}>
+                {updateEventMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Digite o número com código do país (55) e DDD, sem espaços ou caracteres especiais.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Tabs */}
         <Tabs defaultValue="products" className="space-y-4">
           <TabsList>
@@ -177,14 +252,36 @@ export default function ManageEvent() {
                 ) : (
                   <div className="space-y-3">
                     {data.packages.map((pkg: any) => (
-                      <div key={pkg.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">{pkg.packageName}</p>
-                          <p className="text-sm text-gray-500">R$ {pkg.price}</p>
+                      <div key={pkg.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                        {/* Imagem do produto */}
+                        <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {pkg.imageUrl ? (
+                            <img src={pkg.imageUrl} alt={pkg.packageName} className="w-full h-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-6 h-6 text-gray-400" />
+                          )}
                         </div>
-                        <Badge variant={pkg.isActive ? "default" : "secondary"}>
-                          {pkg.isActive ? "Ativo" : "Inativo"}
-                        </Badge>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{pkg.packageName}</p>
+                          <p className="text-sm text-gray-500">R$ {pkg.price}</p>
+                          {pkg.imageUrl && (
+                            <p className="text-xs text-gray-400 truncate">{pkg.imageUrl.substring(0, 40)}...</p>
+                          )}
+                        </div>
+                        {/* Status e ações */}
+                        <div className="flex items-center gap-2">
+                          <Badge variant={pkg.isActive ? "default" : "secondary"}>
+                            {pkg.isActive ? "Ativo" : "Inativo"}
+                          </Badge>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => setEditingPackage(pkg)}
+                          >
+                            Editar
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -255,6 +352,11 @@ export default function ManageEvent() {
                 <Label>Descricao</Label>
                 <Input name="description" placeholder="Ex: 20 unidades tamanho P" />
               </div>
+              <div>
+                <Label>URL da Imagem</Label>
+                <Input name="imageUrl" placeholder="https://exemplo.com/imagem.jpg" />
+                <p className="text-xs text-gray-500 mt-1">Cole a URL de uma imagem ou faça upload em um serviço como Imgur</p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Preco (R$) *</Label>
@@ -275,6 +377,46 @@ export default function ManageEvent() {
                 </Button>
                 <Button type="submit" className="flex-1 bg-pink-500 hover:bg-pink-600" disabled={createPackageMutation.isPending}>
                   {createPackageMutation.isPending ? "Salvando..." : "Adicionar"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Edit Product */}
+        <Dialog open={!!editingPackage} onOpenChange={() => setEditingPackage(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Produto</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleUpdateProduct} className="space-y-4 pt-4">
+              <div>
+                <Label>Nome do Produto *</Label>
+                <Input name="name" defaultValue={editingPackage?.packageName} required />
+              </div>
+              <div>
+                <Label>Descricao</Label>
+                <Input name="description" defaultValue={editingPackage?.description} />
+              </div>
+              <div>
+                <Label>URL da Imagem</Label>
+                <Input name="imageUrl" defaultValue={editingPackage?.imageUrl} placeholder="https://exemplo.com/imagem.jpg" />
+                {editingPackage?.imageUrl && (
+                  <div className="mt-2 w-20 h-20 bg-gray-100 rounded overflow-hidden">
+                    <img src={editingPackage.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+              <div>
+                <Label>Preco (R$) *</Label>
+                <Input name="price" type="number" step="0.01" defaultValue={editingPackage?.price} required />
+              </div>
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" className="flex-1" onClick={() => setEditingPackage(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="flex-1 bg-pink-500 hover:bg-pink-600" disabled={updatePackageMutation.isPending}>
+                  {updatePackageMutation.isPending ? "Salvando..." : "Salvar"}
                 </Button>
               </div>
             </form>

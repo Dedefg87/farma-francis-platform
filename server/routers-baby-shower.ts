@@ -104,6 +104,7 @@ const createPackageSchema = z.object({
   sizeLabel: z.string().optional(),
   price: z.number().positive(),
   stockLimit: z.number().optional(),
+  imageUrl: z.string().optional(),
 });
 
 const createPurchaseSchema = z.object({
@@ -259,6 +260,7 @@ export const babyShowerRouter = router({
       eventDate: z.string().optional(),
       targetAmount: z.number().optional(),
       status: z.enum(["active", "closed", "cancelled"]).optional(),
+      whatsappNumber: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -281,6 +283,7 @@ export const babyShowerRouter = router({
         updates.status = input.status;
         if (input.status === "closed") updates.closedAt = new Date();
       }
+      if (input.whatsappNumber !== undefined) updates.whatsappNumber = input.whatsappNumber || null;
 
       await db.update(babyShowerEvents).set(updates).where(eq(babyShowerEvents.id, input.id));
       return { success: true };
@@ -300,8 +303,32 @@ export const babyShowerRouter = router({
         sizeLabel: input.sizeLabel || null,
         price: input.price.toString(),
         stockLimit: input.stockLimit || null,
+        imageUrl: input.imageUrl || null,
       } as any);
       return { success: true, packageId: Number(pkg.insertId) };
+    }),
+
+  updatePackage: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      packageName: z.string().optional(),
+      description: z.string().optional(),
+      price: z.number().optional(),
+      imageUrl: z.string().optional(),
+      isActive: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+      const updates: any = {};
+      if (input.packageName) updates.packageName = input.packageName;
+      if (input.description !== undefined) updates.description = input.description || null;
+      if (input.price !== undefined) updates.price = input.price.toString();
+      if (input.imageUrl !== undefined) updates.imageUrl = input.imageUrl || null;
+      if (input.isActive !== undefined) updates.isActive = input.isActive;
+      
+      await db.update(babyShowerGiftPackages).set(updates).where(eq(babyShowerGiftPackages.id, input.id));
+      return { success: true };
     }),
 
   createPurchase: publicProcedure
