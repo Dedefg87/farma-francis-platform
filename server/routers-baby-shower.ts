@@ -216,12 +216,12 @@ export const babyShowerRouter = router({
       if (!event) throw new Error("Evento não encontrado");
 
       const packages = await db.select().from(babyShowerGiftPackages)
-        .where(eq(babyShowerGiftPackages.eventId as any, input.id));
+        .where(eq(babyShowerGiftPackages.eventId, input.id));
       const purchases = await db.select().from(babyShowerPurchases)
-        .where(eq(babyShowerPurchases.eventId as any, input.id))
+        .where(eq(babyShowerPurchases.eventId, input.id))
         .orderBy(desc(babyShowerPurchases.createdAt));
       const withdrawals = await db.select().from(babyShowerWithdrawals)
-        .where(eq(babyShowerWithdrawals.eventId as any, input.id));
+        .where(eq(babyShowerWithdrawals.eventId, input.id));
 
       return { ...event, packages, purchases, withdrawals };
     }),
