@@ -68,13 +68,11 @@ export async function runBabyShowerMigration() {
       newPackagesTableExists.length > 0 && 
       Number((newPackagesTableExists[0] as any)?.count || 0) > 0;
 
-    // RENAME only if old exists AND new does NOT exist
     if (oldExists && !newExists) {
       console.log("[Baby Shower Migration] Renaming baby_shower_packages to baby_shower_gift_packages");
       await db.raw(`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
     }
 
-    // CREATE only if neither exists
     if (!oldExists && !newExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_gift_packages table");
       await db.raw(`
@@ -133,10 +131,38 @@ export async function runBabyShowerMigration() {
           FOREIGN KEY (guest_customer_id) REFERENCES customers(id) ON DELETE SET NULL
         )
       `);
+    } else {
+      // Tabela existe - verificar e adicionar colunas faltantes
+      console.log("[Baby Shower Migration] Checking baby_shower_purchases columns...");
+      
+      const columns = await db.raw(`
+        SELECT COLUMN_NAME FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'baby_shower_purchases'
+      `);
+      
+      const columnNames = Array.isArray(columns) 
+        ? columns.map((c: any) => c.COLUMN_NAME) 
+        : [];
+
+      // Adicionar colunas que faltam
+      if (!columnNames.includes('created_at')) {
+        console.log("[Baby Shower Migration] Adding created_at column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      }
+      
+      if (!columnNames.includes('notification_sent')) {
+        console.log("[Baby Shower Migration] Adding notification_sent column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent INT DEFAULT 0`);
+      }
+      
+      if (!columnNames.includes('notification_sent_at')) {
+        console.log("[Baby Shower Migration] Adding notification_sent_at column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent_at TIMESTAMP NULL`);
+      }
     }
 
     // ==============================
-    // baby_shower_withdrawals table (CORRIGIDO PARA MATCH COM SCHEMA)
+    // baby_shower_withdrawals table
     // ==============================
     const withdrawalsTableExists = await db.raw(`
       SELECT COUNT(*) as count FROM information_schema.tables
