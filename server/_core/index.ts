@@ -1675,14 +1675,26 @@ async function startServer() {
       const mysql = await import("mysql2/promise");
       const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
       
-      const [rows]: any = await pool.execute(
-        "SELECT id, customer_id, channel, direction, content, created_at FROM messages WHERE direction = 'inbound' ORDER BY created_at DESC LIMIT 20"
+      // Mensagens da tabela messages
+      const [messages]: any = await pool.execute(
+        "SELECT id, channel, direction, content, created_at FROM messages ORDER BY created_at DESC LIMIT 10"
+      );
+
+      // Mensagens da tabela received_messages
+      const [receivedMessages]: any = await pool.execute(
+        "SELECT id, phone_number, content, created_at FROM received_messages ORDER BY created_at DESC LIMIT 10"
+      );
+
+      // Mensagens da tabela conversation_messages
+      const [conversationMessages]: any = await pool.execute(
+        "SELECT id, conversation_id, sender_type, content, created_at FROM conversation_messages ORDER BY created_at DESC LIMIT 10"
       );
 
       await pool.end();
       res.json({ 
-        total: rows.length,
-        messages: rows
+        messages: messages,
+        receivedMessages: receivedMessages,
+        conversationMessages: conversationMessages
       });
     } catch (error) {
       res.status(500).json({ error: String(error) });
