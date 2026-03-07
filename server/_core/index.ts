@@ -1659,18 +1659,44 @@ async function startServer() {
       }
 
       // Gerar nome único para o arquivo
-      const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExtension}`;
+      const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       
-      // Tentar usar storage do Forge se disponível
+      // Prioridade 1: Cloudinary (se configurado)
+      if (process.env.CLOUDINARY_CLOUD_NAME) {
+        try {
+          const { v2: cloudinary } = await import('cloudinary');
+          cloudinary.config({
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            api_key: process.env.CLOUDINARY_API_KEY,
+            api_secret: process.env.CLOUDINARY_API_SECRET,
+          });
+          
+          const base64Optimized = optimizedBuffer.toString('base64');
+          const dataUri = `data:image/${finalExtension};base64,${base64Optimized}`;
+          
+          const result = await cloudinary.uploader.upload(dataUri, {
+            folder: 'baby-shower',
+            public_id: uniqueName,
+            resource_type: 'image',
+          });
+          
+          console.log("[Upload] Cloudinary success:", result.secure_url);
+          return res.json({ success: true, url: result.secure_url });
+        } catch (cloudinaryError: any) {
+          console.error("[Upload] Cloudinary error:", cloudinaryError.message);
+        }
+      }
+      
+      // Prioridade 2: Storage do Forge (se configurado)
       try {
         const { storagePut } = await import("../storage");
-        const result = await storagePut(`baby-shower/${uniqueName}`, optimizedBuffer, `image/${finalExtension}`);
+        const result = await storagePut(`baby-shower/${uniqueName}.${finalExtension}`, optimizedBuffer, `image/${finalExtension}`);
         console.log("[Upload] Storage success:", result.url);
         return res.json({ success: true, url: result.url });
       } catch (storageError: any) {
         console.log("[Upload] Storage error:", storageError.message);
         
-        // Fallback: Usar Imgur API
+        // Prioridade 3: Imgur API
         try {
           const base64Optimized = optimizedBuffer.toString('base64');
           const imgurResponse = await fetch("https://api.imgur.com/3/image", {
@@ -1683,18 +1709,17 @@ async function startServer() {
           });
 
           const imgurData = await imgurResponse.json();
-          console.log("[Upload] Imgur response:", JSON.stringify(imgurData).substring(0, 200));
           
           if (imgurData.success && imgurData.data?.link) {
             console.log("[Upload] Imgur success:", imgurData.data.link);
             return res.json({ success: true, url: imgurData.data.link });
           }
           
-          throw new Error(`Imgur upload failed: ${JSON.stringify(imgurData)}`);
+          throw new Error(`Imgur failed: ${JSON.stringify(imgurData)}`);
         } catch (imgurError: any) {
           console.error("[Upload] Imgur error:", imgurError.message);
           
-          // Último fallback: retornar base64 como data URL (funciona para imagens pequenas)
+          // Último fallback: base64 data URL
           const dataUrl = `data:image/${finalExtension};base64,${optimizedBuffer.toString('base64')}`;
           console.log("[Upload] Using base64 fallback, size:", dataUrl.length);
           return res.json({ success: true, url: dataUrl, fallback: true });
