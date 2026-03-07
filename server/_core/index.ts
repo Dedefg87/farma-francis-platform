@@ -1861,8 +1861,8 @@ async function startServer() {
   // PUBLIC: Update gift package (including image)
   app.put("/api/baby-shower/update-package/:id", async (req, res) => {
     try {
-      const { getDbRaw } = await import("../db");
-      const db = await getDbRaw();
+      const { getDb } = await import("../db");
+      const db = await getDb();
       if (!db) {
         return res.status(500).json({ error: "Database not available" });
       }
@@ -1911,12 +1911,11 @@ async function startServer() {
         return res.status(400).json({ error: "No fields to update" });
       }
 
-      updates.push("updated_at = NOW()");
       values.push(packageId);
 
       const query = `UPDATE baby_shower_gift_packages SET ${updates.join(", ")} WHERE id = ?`;
       
-      await db.raw(query, values);
+      await db.execute(sql.raw(query, values));
 
       res.json({ 
         success: true, 

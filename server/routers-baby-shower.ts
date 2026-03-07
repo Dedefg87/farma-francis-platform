@@ -10,7 +10,7 @@ import {
   crmTasks,
   integrationSettings,
 } from "../drizzle/schema";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, SQL } from "drizzle-orm";
 
 // Função para enviar WhatsApp via Evolution API
 async function sendWhatsAppNotification(params: {
@@ -223,8 +223,10 @@ export const babyShowerRouter = router({
       if (!event) throw new Error("Evento não encontrado");
 
       const packages = await db.select().from(babyShowerGiftPackages)
-        .where(eq(babyShowerGiftPackages.eventId, event.event.id))
-        .where(eq(babyShowerGiftPackages.isActive, 1));
+        .where(and(
+          eq(babyShowerGiftPackages.eventId, event.event.id),
+          eq(babyShowerGiftPackages.isActive, 1)
+        ));
 
       return { event: event.event, motherName: event.motherName, packages };
     }),
@@ -324,14 +326,39 @@ export const babyShowerRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) { throw new Error("Database not available"); }
-      const updates: any = {};
-      if (input.packageName) updates.packageName = input.packageName;
-      if (input.description !== undefined) updates.description = input.description || null;
-      if (input.price !== undefined) updates.price = input.price.toString();
-      if (input.imageUrl !== undefined) updates.imageUrl = input.imageUrl || null;
-      if (input.isActive !== undefined) updates.isActive = input.isActive;
       
-      await db.update(babyShowerGiftPackages).set(updates).where(eq(babyShowerGiftPackages.id, input.id));
+      // Build update using Drizzle's SQL template
+      const conditions: SQL[] = [];
+      
+      if (input.packageName) {
+        conditions.push(sql`package_name = ${input.packageName}`);
+      }
+      if (input.description !== undefined) {
+        conditions.push(sql`description = ${input.description || null}`);
+      }
+      if (input.price !== undefined) {
+        conditions.push(sql`price = ${input.price.toFixed(2)}`);
+      }
+      if (input.imageUrl !== undefined) {
+        conditions.push(sql`image_url = ${input.imageUrl || null}`);
+      }
+      if (input.isActive !== undefined) {
+        conditions.push(sql`is_active = ${input.isActive}`);
+      }
+      
+      if (conditions.length === 0) {
+        return { success: true };
+      }
+      
+      // Join conditions with comma
+      const setClause = sql.join(conditions, sql`, `);
+      
+      await db.execute(sql`
+        UPDATE baby_shower_gift_packages 
+        SET ${setClause}
+        WHERE id = ${input.id}
+      `);
+      
       return { success: true };
     }),
 
