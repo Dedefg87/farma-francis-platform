@@ -313,7 +313,8 @@ export const conversationsRouter = router({
     }),
 
   // Listar conversas ativas do agente (inclui todas - open E assigned - para fila)
-  // Usuários normais só veem suas conversas, admins veem todas
+  // Usuários normais veem suas conversas atribuídas + conversas na fila (open sem assignedTo)
+  // Admins veem todas
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -322,16 +323,25 @@ export const conversationsRouter = router({
     const userRole = ctx.user.role;
     
     // Build where clause
-    const statusCondition = or(
-      eq(conversations.status, "assigned"),
-      eq(conversations.status, "open")
-    );
-    
-    // Regular users only see their assigned conversations
-    // Admins see all conversations
+    // Admin: todas as conversas com status 'assigned' ou 'open'
+    // Usuário normal: conversas atribuídas a ele OU conversas na fila (status='open' e assignedTo=null)
     const whereCondition = userRole === 'admin' 
-      ? statusCondition 
-      : and(statusCondition, eq(conversations.assignedTo, userId));
+      ? or(
+          eq(conversations.status, "assigned"),
+          eq(conversations.status, "open")
+        )
+      : or(
+          // Conversas atribuídas ao usuário
+          and(
+            eq(conversations.status, "assigned"),
+            eq(conversations.assignedTo, userId)
+          ),
+          // Conversas na fila (status=open, sem assignedTo)
+          and(
+            eq(conversations.status, "open"),
+            isNull(conversations.assignedTo)
+          )
+        );
     
     const agentConversations = await db
       .select({
