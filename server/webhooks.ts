@@ -428,8 +428,25 @@ router.post("/evolution/:event", async (req: Request, res: Response) => {
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
+    // RESPOSTA IMEDIATA - não bloquear o Evolution
+    res.status(200).send("EVENT_RECEIVED");
+
+    // Processar em background (não usar await para não bloquear)
+    setImmediate(() => {
+      processEvolutionWebhookAsync(req).catch((err) => {
+        console.error("[Evolution Webhook] Background processing error:", err);
+      });
+    });
+  } catch (error) {
+    console.error("[Evolution Webhook] Handler error:", error);
+    // Já enviamos 200, então só logamos o erro
+  }
+}
+
+async function processEvolutionWebhookAsync(req: Request) {
+  try {
     console.log(
-      "[Evolution Webhook] Received Evolution webhook call at",
+      "[Evolution Webhook] Processing webhook at",
       new Date().toISOString()
     );
     console.log(
@@ -450,17 +467,6 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
     console.log(
       "[Evolution Webhook] Body:",
       JSON.stringify(req.body).substring(0, 1000)
-    );
-    console.log("[Evolution Webhook] Method:", req.method);
-    console.log("[Evolution Webhook] URL:", req.originalUrl);
-    console.log(
-      "[Evolution Webhook] Headers:",
-      JSON.stringify(req.headers).substring(0, 500)
-    );
-    console.log("[Evolution Webhook] Body type:", typeof req.body);
-    console.log(
-      "[Evolution Webhook] Body:",
-      JSON.stringify(req.body).substring(0, 500)
     );
 
     const body = req.body;
@@ -577,19 +583,12 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
       !!(body?.message || body?.data?.message)
     );
     console.log("[Evolution Webhook] =========================");
-    res.status(200).send("EVENT_RECEIVED");
 
-    console.log("[Evolution Webhook] Response sent, processing async...");
-    processEvolutionWebhook({ ...body, event: eventName })
-      .then(() => {
-        console.log("[Evolution Webhook] processEvolutionWebhook completed");
-      })
-      .catch(error => {
-        console.error("[Evolution Webhook] Processing error:", error);
-      });
+    // Processar evento
+    await processEvolutionWebhook({ ...body, event: eventName });
+    console.log("[Evolution Webhook] processEvolutionWebhook completed");
   } catch (error) {
-    console.error("[Evolution Webhook] Handler error:", error);
-    res.status(500).send("Internal server error");
+    console.error("[Evolution Webhook] Processing error:", error);
   }
 }
 
