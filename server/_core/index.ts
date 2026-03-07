@@ -1636,7 +1636,7 @@ async function startServer() {
 
       // Otimizar imagem com sharp - redimensionar para 800px e comprimir
       let optimizedBuffer: Buffer;
-      let finalExtension = 'webp'; // WebP é mais leve e eficiente
+      let finalExtension = 'webp';
       
       try {
         const sharp = (await import('sharp')).default;
@@ -1651,9 +1651,9 @@ async function startServer() {
           })
           .toBuffer();
         
-        console.log(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes (${Math.round((1 - optimizedBuffer.length / originalBuffer.length) * 100)}% reduction)`);
-      } catch (sharpError) {
-        console.log("[Upload] Sharp not available, using original image");
+        console.log(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes`);
+      } catch (sharpError: any) {
+        console.log("[Upload] Sharp error, using original:", sharpError.message);
         optimizedBuffer = originalBuffer;
         finalExtension = extension;
       }
@@ -1665,29 +1665,42 @@ async function startServer() {
       try {
         const { storagePut } = await import("../storage");
         const result = await storagePut(`baby-shower/${uniqueName}`, optimizedBuffer, `image/${finalExtension}`);
+        console.log("[Upload] Storage success:", result.url);
         return res.json({ success: true, url: result.url });
-      } catch (storageError) {
-        // Se storage não disponível, usar Imgur API
-        console.log("[Upload] Storage not available, using Imgur fallback");
+      } catch (storageError: any) {
+        console.log("[Upload] Storage error:", storageError.message);
         
-        const base64Optimized = optimizedBuffer.toString('base64');
-        const imgurResponse = await fetch("https://api.imgur.com/3/image", {
-          method: "POST",
-          headers: {
-            "Authorization": "Client-ID 546c25a59c58ad7",
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: `image=${encodeURIComponent(base64Optimized)}&type=base64`,
-        });
+        // Fallback: Usar Imgur API
+        try {
+          const base64Optimized = optimizedBuffer.toString('base64');
+          const imgurResponse = await fetch("https://api.imgur.com/3/image", {
+            method: "POST",
+            headers: {
+              "Authorization": "Client-ID 546c25a59c58ad7",
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `image=${encodeURIComponent(base64Optimized)}&type=base64`,
+          });
 
-        const imgurData = await imgurResponse.json();
-        if (imgurData.success && imgurData.data?.link) {
-          return res.json({ success: true, url: imgurData.data.link });
+          const imgurData = await imgurResponse.json();
+          console.log("[Upload] Imgur response:", JSON.stringify(imgurData).substring(0, 200));
+          
+          if (imgurData.success && imgurData.data?.link) {
+            console.log("[Upload] Imgur success:", imgurData.data.link);
+            return res.json({ success: true, url: imgurData.data.link });
+          }
+          
+          throw new Error(`Imgur upload failed: ${JSON.stringify(imgurData)}`);
+        } catch (imgurError: any) {
+          console.error("[Upload] Imgur error:", imgurError.message);
+          
+          // Último fallback: retornar base64 como data URL (funciona para imagens pequenas)
+          const dataUrl = `data:image/${finalExtension};base64,${optimizedBuffer.toString('base64')}`;
+          console.log("[Upload] Using base64 fallback, size:", dataUrl.length);
+          return res.json({ success: true, url: dataUrl, fallback: true });
         }
-
-        throw new Error("Failed to upload image");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Upload] Error:", error);
       res.status(500).json({ error: String(error) });
     }
