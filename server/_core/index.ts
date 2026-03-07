@@ -1632,29 +1632,52 @@ async function startServer() {
 
       const extension = matches[1];
       const base64Data = matches[2];
-      const buffer = Buffer.from(base64Data, 'base64');
+      const originalBuffer = Buffer.from(base64Data, 'base64');
+
+      // Otimizar imagem com sharp - redimensionar para 800px e comprimir
+      let optimizedBuffer: Buffer;
+      let finalExtension = 'webp'; // WebP é mais leve e eficiente
+      
+      try {
+        const sharp = (await import('sharp')).default;
+        optimizedBuffer = await sharp(originalBuffer)
+          .resize(800, 800, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+          .webp({ 
+            quality: 80,
+            effort: 4 
+          })
+          .toBuffer();
+        
+        console.log(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes (${Math.round((1 - optimizedBuffer.length / originalBuffer.length) * 100)}% reduction)`);
+      } catch (sharpError) {
+        console.log("[Upload] Sharp not available, using original image");
+        optimizedBuffer = originalBuffer;
+        finalExtension = extension;
+      }
 
       // Gerar nome único para o arquivo
-      const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
+      const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}.${finalExtension}`;
       
       // Tentar usar storage do Forge se disponível
       try {
         const { storagePut } = await import("../storage");
-        const result = await storagePut(`baby-shower/${uniqueName}`, buffer, `image/${extension}`);
+        const result = await storagePut(`baby-shower/${uniqueName}`, optimizedBuffer, `image/${finalExtension}`);
         return res.json({ success: true, url: result.url });
       } catch (storageError) {
         // Se storage não disponível, usar Imgur API
         console.log("[Upload] Storage not available, using Imgur fallback");
         
-        // Fallback: Salvar como base64 no banco (não ideal, mas funciona)
-        // Ou usar Imgur API anônima
+        const base64Optimized = optimizedBuffer.toString('base64');
         const imgurResponse = await fetch("https://api.imgur.com/3/image", {
           method: "POST",
           headers: {
-            "Authorization": "Client-ID 546c25a59c58ad7", // Client ID público para uploads anônimos
+            "Authorization": "Client-ID 546c25a59c58ad7",
             "Content-Type": "application/x-www-form-urlencoded",
           },
-          body: `image=${encodeURIComponent(base64Data)}&type=base64`,
+          body: `image=${encodeURIComponent(base64Optimized)}&type=base64`,
         });
 
         const imgurData = await imgurResponse.json();
