@@ -515,32 +515,39 @@ export async function ingestInboundConversationMessage(message: {
     }
   console.log("[ingestInbound] Step B: DB connected");
 
-  // Try to get profile picture from WhatsApp if needed
-  let profilePicture: string | null = null;
-  if (message.provider === "whatsapp") {
-    try {
-      const profile = await fetchEvolutionProfile(message.fromNumber);
-      if (profile?.profilePicture) {
-        profilePicture = profile.profilePicture;
-        console.log("[ingestInbound] Got profile picture for:", message.fromNumber);
-      }
-    } catch (err) {
-      console.log("[ingestInbound] Could not fetch profile picture:", err);
-    }
-  }
-
+  // Process message first - don't block on profile picture fetch
+  // We'll update the photo in background if available
   const customer = await findOrCreateCustomerByPhone(
     message.fromNumber,
-    message.fromName || undefined,
-    profilePicture
+    message.fromName || undefined
   );
   console.log(
     "[ingestInbound] Step C: Customer created/found:",
     customer?.id,
-    customer?.name,
-    "hasPhoto:",
-    !!customer?.photoUrl
+    customer?.name
   );
+  
+  // Fetch profile picture in background (non-blocking)
+  // This ensures messages are processed quickly without waiting for external API
+  if (message.provider === "whatsapp" && !customer?.photoUrl) {
+    setImmediate(async () => {
+      try {
+        const profile = await fetchEvolutionProfile(message.fromNumber);
+        if (profile?.profilePicture) {
+          const db = await getDb();
+          if (db) {
+            await db
+              .update(customers)
+              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
+              .where(eq(customers.id, customer.id));
+            console.log("[ingestInbound] Updated profile picture for customer:", customer.id);
+          }
+        }
+      } catch (err) {
+        console.log("[ingestInbound] Could not fetch profile picture:", err);
+      }
+    });
+  }
   const now = message.createdAt ?? new Date();
 
   // Equal-load distribution: pick the least loaded online agent (not paused)
