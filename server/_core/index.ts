@@ -1682,7 +1682,7 @@ async function startServer() {
 
       // Mensagens da tabela received_messages
       const [receivedMessages]: any = await pool.execute(
-        "SELECT id, phone_number, content, created_at FROM received_messages ORDER BY created_at DESC LIMIT 10"
+        "SELECT id, from_number, from_name, message_text, timestamp, processed, created_at FROM received_messages ORDER BY created_at DESC LIMIT 10"
       );
 
       // Mensagens da tabela conversation_messages
