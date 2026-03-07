@@ -662,6 +662,20 @@ async function startServer() {
       // Skip this - it conflicts with FK constraint SET NULL
       // Instead, just check table structure
 
+      // Add welcome_message column to baby_shower_events if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_events ADD COLUMN welcome_message TEXT`
+        );
+        results.push("Added welcome_message column to baby_shower_events");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("welcome_message column already exists in baby_shower_events");
+        } else {
+          results.push(`Error adding welcome_message: ${e.message}`);
+        }
+      }
+
       await pool.end();
       res.json({ success: true, results });
     } catch (error: any) {
