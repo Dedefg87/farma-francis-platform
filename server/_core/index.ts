@@ -1669,6 +1669,43 @@ async function startServer() {
     }
   });
 
+  // Debug: Ver últimas mensagens recebidas com timestamps
+  app.get("/api/debug/recent-messages", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const [rows]: any = await db.execute(sql`
+        SELECT 
+          id,
+          conversation_id,
+          sender_phone,
+          content,
+          created_at
+        FROM messages
+        WHERE sender_phone LIKE '%975613330%'
+        ORDER BY created_at DESC
+        LIMIT 10
+      `);
+
+      res.json({ 
+        total: rows.length,
+        messages: rows.map((r: any) => ({
+          id: r.id,
+          conversation_id: r.conversation_id,
+          sender_phone: r.sender_phone,
+          content: r.content?.substring(0, 50),
+          created_at: r.created_at
+        }))
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // PUBLIC: Add gift package to baby shower event (no auth required)
   app.post("/api/baby-shower/add-package", async (req, res) => {
     try {
