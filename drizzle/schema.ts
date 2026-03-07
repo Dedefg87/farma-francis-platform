@@ -1337,6 +1337,8 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
   totalGuests: int("total_guests").default(0), // Total de convidados que compraram
   // URLs de compartilhamento
   publicLink: varchar("public_link", { length: 500 }), // Link para convidados comprarem
+  // Mensagem personalizada para convidados
+  welcomeMessage: text("welcome_message"), // Mensagem carinhosa exibida na página pública
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),

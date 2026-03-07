@@ -93,6 +93,7 @@ const createEventSchema = z.object({
   expectedDueDate: z.string().optional(),
   eventDate: z.string().optional(),
   targetAmount: z.number().optional(),
+  welcomeMessage: z.string().optional(),
 });
 
 const createPackageSchema = z.object({
@@ -152,6 +153,7 @@ export const babyShowerRouter = router({
         eventDate,
         targetAmount: input.targetAmount?.toString() || null,
         publicLink,
+        welcomeMessage: input.welcomeMessage || null,
       } as any);
 
       return { success: true, eventId: Number(event.insertId), eventCode, publicLink };
@@ -261,6 +263,7 @@ export const babyShowerRouter = router({
       targetAmount: z.number().optional(),
       status: z.enum(["active", "closed", "cancelled"]).optional(),
       whatsappNumber: z.string().optional(),
+      welcomeMessage: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -284,6 +287,7 @@ export const babyShowerRouter = router({
         if (input.status === "closed") updates.closedAt = new Date();
       }
       if (input.whatsappNumber !== undefined) updates.whatsappNumber = input.whatsappNumber || null;
+      if (input.welcomeMessage !== undefined) updates.welcomeMessage = input.welcomeMessage || null;
 
       await db.update(babyShowerEvents).set(updates).where(eq(babyShowerEvents.id, input.id));
       return { success: true };

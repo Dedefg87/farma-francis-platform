@@ -6,10 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings } from "lucide-react";
+import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings, Heart } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ManageEvent() {
@@ -18,6 +19,7 @@ export default function ManageEvent() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [copied, setCopied] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [welcomeMessage, setWelcomeMessage] = useState("");
   const [editingPackage, setEditingPackage] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -121,7 +123,10 @@ export default function ManageEvent() {
     if (event?.whatsappNumber) {
       setWhatsappNumber(event.whatsappNumber);
     }
-  }, [event?.whatsappNumber]);
+    if (event?.welcomeMessage) {
+      setWelcomeMessage(event.welcomeMessage);
+    }
+  }, [event?.whatsappNumber, event?.welcomeMessage]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(publicUrl);
@@ -134,6 +139,13 @@ export default function ManageEvent() {
     updateEventMutation.mutate({
       id: eventId,
       whatsappNumber: whatsappNumber || undefined,
+    });
+  };
+
+  const handleSaveMessage = () => {
+    updateEventMutation.mutate({
+      id: eventId,
+      welcomeMessage: welcomeMessage || undefined,
     });
   };
 
@@ -280,6 +292,33 @@ export default function ManageEvent() {
             <p className="text-xs text-gray-500 mt-2">
               Digite o número com código do país (55) e DDD, sem espaços ou caracteres especiais.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Mensagem para Convidados */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Heart className="w-5 h-5 text-pink-500" />
+              Mensagem para Convidados
+            </CardTitle>
+            <CardDescription>Uma mensagem carinhosa que aparecerá no topo da página do evento</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Textarea 
+              value={welcomeMessage} 
+              onChange={(e) => setWelcomeMessage(e.target.value)} 
+              placeholder="Ex: Olá! Estamos muito felizes com a chegada do nosso bebê. Obrigado por fazer parte desse momento especial!"
+              className="min-h-[100px]"
+            />
+            <div className="flex justify-between items-center mt-3">
+              <p className="text-xs text-gray-500">
+                {welcomeMessage.length} caracteres
+              </p>
+              <Button onClick={handleSaveMessage} disabled={updateEventMutation.isPending}>
+                {updateEventMutation.isPending ? "Salvando..." : "Salvar Mensagem"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

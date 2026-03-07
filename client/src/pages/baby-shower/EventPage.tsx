@@ -170,10 +170,27 @@ export default function EventPage() {
             <h2 className="text-xl md:text-2xl text-[#7B68EE] font-medium mb-4">
               Presenteie com Amor e Praticidade
             </h2>
-            <p className="text-[#4A5568] max-w-2xl mx-auto mb-8 leading-relaxed">
-              Uma seleção especial de produtos para acolher o novo membro da família. 
-              Escolha seu presente e facilitamos a compra pelo WhatsApp!
-            </p>
+            
+            {/* Mensagem personalizada da mamãe */}
+            {event?.welcomeMessage && (
+              <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 max-w-2xl mx-auto mb-8 shadow-lg border-2 border-pink-100">
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  <Heart className="w-5 h-5 text-pink-400" />
+                  <span className="text-sm font-medium text-pink-500 uppercase tracking-wide">Mensagem da Mamãe</span>
+                  <Heart className="w-5 h-5 text-pink-400" />
+                </div>
+                <p className="text-[#4A5568] leading-relaxed text-lg italic text-center">
+                  "{event.welcomeMessage}"
+                </p>
+              </div>
+            )}
+            
+            {!event?.welcomeMessage && (
+              <p className="text-[#4A5568] max-w-2xl mx-auto mb-8 leading-relaxed">
+                Uma seleção especial de produtos para acolher o novo membro da família. 
+                Escolha seu presente e facilitamos a compra pelo WhatsApp!
+              </p>
+            )}
             {event?.expectedDueDate && (
               <p className="text-sm text-[#718096] mb-6">
                 Data prevista: {new Date(event.expectedDueDate).toLocaleDateString('pt-BR')}

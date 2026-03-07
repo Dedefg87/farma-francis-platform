@@ -76,6 +76,7 @@ export default function CreateEvent() {
       expectedDueDate: formData.expectedDueDate || undefined,
       eventDate: formData.eventDate || undefined,
       targetAmount: formData.targetAmount ? parseFloat(formData.targetAmount) : undefined,
+      welcomeMessage: formData.message || undefined,
     });
   };
 
