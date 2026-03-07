@@ -1701,6 +1701,41 @@ async function startServer() {
     }
   });
 
+  // Debug: Ver mensagens de um número específico
+  app.get("/api/debug/messages/:phone", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
+      const phone = req.params.phone.replace(/\D/g, '');
+      
+      // Buscar em received_messages
+      const [received]: any = await pool.execute(
+        `SELECT id, from_number, from_name, message_text, timestamp, created_at 
+         FROM received_messages 
+         WHERE from_number LIKE '%${phone}%' 
+         ORDER BY created_at DESC LIMIT 20`
+      );
+
+      // Buscar em conversation_messages via conversations
+      const [conversations]: any = await pool.execute(
+        `SELECT cm.id, c.phone_number, cm.sender_type, cm.content, cm.created_at 
+         FROM conversation_messages cm 
+         JOIN conversations c ON c.id = cm.conversation_id 
+         WHERE c.phone_number LIKE '%${phone}%' 
+         ORDER BY cm.created_at DESC LIMIT 20`
+      );
+
+      await pool.end();
+      res.json({ 
+        phone: phone,
+        receivedMessages: received,
+        conversationMessages: conversations
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // PUBLIC: Add gift package to baby shower event (no auth required)
   app.post("/api/baby-shower/add-package", async (req, res) => {
     try {
