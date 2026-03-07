@@ -154,17 +154,35 @@ async function downloadMediaAsBase64(
     return null;
   }
 }
+// Cache para evitar queries repetitivas de agent assignment
+const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
+const CACHE_TTL_MS = 30 * 1000; // 30 segundos
+
 async function pickLeastLoadedOnlineAgent(params: {
   provider: "whatsapp" | "instagram";
 }) {
   const db = await getDb();
   if (!db) return null;
 
+  // Check cache first
+  const cacheKey = params.provider;
+  const cached = agentAssignmentCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    console.log("[pickAgent] Using cached agent:", cached.agentId);
+    return cached.agentId ? { userId: cached.agentId, loadCount: 0, lastSignedIn: null } : null;
+  }
+
   // Prefer agents with an active SSE connection (actually online in the UI)
   const connected = sseManager
     .getConnectedUsers()
     .map(id => Number(id))
     .filter(id => Number.isFinite(id) && id > 0);
+
+  if (connected.length === 0) {
+    // Cache the null result too
+    agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+    return null;
+  }
 
   if (connected.length > 0) {
     const rows = (await db.execute(sql`
@@ -193,7 +211,12 @@ async function pickLeastLoadedOnlineAgent(params: {
       const minLoad = Number(rows[0]?.loadCount ?? 0);
       const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
       const chosenId = Number(minRows[0]?.userId);
-      if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
+      if (!Number.isFinite(chosenId) || chosenId <= 0) {
+        agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+        return null;
+      }
+      // Cache the result
+      agentAssignmentCache.set(cacheKey, { agentId: chosenId, timestamp: Date.now() });
       return {
         userId: chosenId,
         candidates: rows.length,
@@ -203,72 +226,14 @@ async function pickLeastLoadedOnlineAgent(params: {
     }
   }
 
-  const rows = (await db.execute(sql`
-    SELECT 
-      a.user_id AS userId,
-      COUNT(c.id) AS loadCount,
-      MAX(a.last_activity) AS lastActivity
-    FROM agent_status a
-    INNER JOIN users u ON u.id = a.user_id
-    LEFT JOIN agent_pauses p
-      ON p.agent_id = a.user_id AND p.status = 'active'
-    LEFT JOIN conversations c
-      ON c.assigned_to = a.user_id
-     AND c.status IN ('open','assigned')
-     AND c.channel = a.channel
-    WHERE a.channel = ${params.provider}
-      AND a.status = 'online'
-      AND u.role = 'user'
-      AND p.id IS NULL
-    GROUP BY a.user_id
-    ORDER BY loadCount ASC, lastActivity DESC
-  `)) as any[];
-
-  if (Array.isArray(rows) && rows.length > 0) {
-    const minLoad = Number(rows[0]?.loadCount ?? 0);
-    const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
-    const chosenId = Number(minRows[0]?.userId);
-    if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
-
-    return {
-      userId: chosenId,
-      candidates: rows.length,
-      minLoad,
-      source: "agent_status",
-    };
-  }
-
-  // Final fallback: distribute across all users (admin or user role) even if status is not set
-  const anyRows = (await db.execute(sql`
-    SELECT 
-      u.id AS userId,
-      u.role AS role,
-      COUNT(c.id) AS loadCount,
-      MAX(u.lastSignedIn) AS lastSignedIn
-    FROM users u
-    LEFT JOIN agent_pauses p
-      ON p.agent_id = u.id AND p.status = 'active'
-    LEFT JOIN conversations c
-      ON c.assigned_to = u.id
-     AND c.status IN ('open','assigned')
-     AND c.channel = ${params.provider}
-    WHERE (u.role = 'user' OR u.role = 'admin')
-      AND p.id IS NULL
-    GROUP BY u.id
-    ORDER BY loadCount ASC, lastSignedIn DESC
-    LIMIT 1
-  `)) as any[];
-
-  if (!Array.isArray(anyRows) || anyRows.length === 0) return null;
-  const chosenId = Number(anyRows[0]?.userId);
-  if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
-  return {
-    userId: chosenId,
-    candidates: 1,
-    minLoad: Number(anyRows[0]?.loadCount ?? 0),
-    source: "any_user",
-  };
+  // No connected agents - cache null result
+  agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+  return null;
 }
+
+// ========================================
+// INGESTION FUNCTIONS
+// ========================================
 
 /**
  * Get all received messages with optional filters
