@@ -313,9 +313,26 @@ export const conversationsRouter = router({
     }),
 
   // Listar conversas ativas do agente (inclui todas - open E assigned - para fila)
+  // Usuários normais só veem suas conversas, admins veem todas
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    
+    const userId = ctx.user.id;
+    const userRole = ctx.user.role;
+    
+    // Build where clause
+    const statusCondition = or(
+      eq(conversations.status, "assigned"),
+      eq(conversations.status, "open")
+    );
+    
+    // Regular users only see their assigned conversations
+    // Admins see all conversations
+    const whereCondition = userRole === 'admin' 
+      ? statusCondition 
+      : and(statusCondition, eq(conversations.assignedTo, userId));
+    
     const agentConversations = await db
       .select({
         id: conversations.id,
@@ -345,12 +362,7 @@ export const conversationsRouter = router({
       })
       .from(conversations)
       .leftJoin(customers, eq(conversations.customerId, customers.id))
-      .where(
-        or(
-          eq(conversations.status, "assigned"),
-          eq(conversations.status, "open")
-        )
-      )
+      .where(whereCondition)
       .orderBy(desc(conversations.lastMessageAt));
 
     const normalizePhone = (value?: string | null) => {
