@@ -13,7 +13,7 @@ export default function BabyShowerEvents() {
 
   const { data, isLoading } = trpc.babyShower.listEvents.useQuery({ limit: 50 });
 
-  const events = data?.events || [];
+  const events = data || [];
 
   return (
     <FarmaDashboardLayout title="Chá de Bebê">
