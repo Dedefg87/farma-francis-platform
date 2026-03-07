@@ -1360,7 +1360,7 @@ export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
   packageName: varchar("package_name", { length: 120 }).notNull(), // Ex: "Pacote Fraldas P"
   description: text("description"),
   // Imagem do produto
-  imageUrl: varchar("image_url", { length: 500 }), // URL da imagem (upload ou externa)
+  imageUrl: text("image_url"), // URL da imagem (upload ou externa, pode ser base64)
   // Tipo de presente
   giftType: mysqlEnum("gift_type", ["diapers", "wipes", "money", "product"])
     .default("diapers")

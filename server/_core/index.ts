@@ -1951,6 +1951,27 @@ async function startServer() {
     }
   });
 
+  // FIX: Alterar image_url de VARCHAR(500) para TEXT
+  app.post("/api/fix/alter-image-url-to-text", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      await db.execute(sql`
+        ALTER TABLE baby_shower_gift_packages 
+        MODIFY COLUMN image_url TEXT
+      `);
+
+      res.json({ success: true, message: "image_url column changed to TEXT" });
+    } catch (error) {
+      console.error("[fix/alter-image-url-to-text] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
