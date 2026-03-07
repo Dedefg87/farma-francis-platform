@@ -1676,7 +1676,7 @@ async function startServer() {
       const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
       
       const [rows]: any = await pool.execute(
-        "SELECT id, customer_id, channel, direction, content, created_at FROM messages ORDER BY created_at DESC LIMIT 10"
+        "SELECT id, customer_id, channel, direction, content, created_at FROM messages WHERE direction = 'inbound' ORDER BY created_at DESC LIMIT 20"
       );
 
       await pool.end();
