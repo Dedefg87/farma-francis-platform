@@ -476,6 +476,37 @@ export const babyShowerRouter = router({
       averageTicket: parseFloat(avgTicket?.avg || "0"),
     };
   }),
+
+  deleteEvent: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+
+      // Verificar se o evento existe
+      const [event] = await db.select().from(babyShowerEvents)
+        .where(eq(babyShowerEvents.id, input.id)).limit(1);
+
+      if (!event) throw new Error("Evento não encontrado");
+
+      // Deletar compras relacionadas
+      await db.delete(babyShowerPurchases)
+        .where(eq(babyShowerPurchases.eventId, input.id));
+
+      // Deletar pacotes de presentes relacionados
+      await db.delete(babyShowerGiftPackages)
+        .where(eq(babyShowerGiftPackages.eventId, input.id));
+
+      // Deletar retiradas relacionadas
+      await db.delete(babyShowerWithdrawals)
+        .where(eq(babyShowerWithdrawals.eventId, input.id));
+
+      // Deletar o evento
+      await db.delete(babyShowerEvents)
+        .where(eq(babyShowerEvents.id, input.id));
+
+      return { success: true };
+    }),
 });
 // Force rebuild 1772749799
 // Build: 1772751251

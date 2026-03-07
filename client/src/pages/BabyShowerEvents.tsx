@@ -1,19 +1,34 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { trpcClient } from "@/lib/trpc";
 import { FarmaDashboardLayout } from "@/components/FarmaDashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Gift, Plus, Users, Wallet, Calendar, Package, ExternalLink, Settings, Link } from "lucide-react";
+import { Gift, Plus, Users, Wallet, Calendar, Package, ExternalLink, Settings, Link, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function BabyShowerEvents() {
   const [, navigate] = useLocation();
 
-  const { data, isLoading } = trpc.babyShower.listEvents.useQuery({ limit: 50 });
+  const { data, isLoading, refetch } = trpc.babyShower.listEvents.useQuery({ limit: 50 });
 
   const events = data || [];
+
+  const handleDeleteEvent = async (eventId: number, eventName: string) => {
+    if (!confirm(`Tem certeza que deseja apagar o evento "${eventName}"?\n\nEsta ação não pode ser desfeita e irá remover todos os dados relacionados (pacotes, compras, retiradas).`)) {
+      return;
+    }
+
+    try {
+      await trpcClient.babyShower.deleteEvent.mutate({ id: eventId });
+      toast.success("Evento apagado com sucesso!");
+      refetch();
+    } catch (error: any) {
+      toast.error(`Erro ao apagar evento: ${error.message || "Erro desconhecido"}`);
+    }
+  };
 
   return (
     <FarmaDashboardLayout title="Chá de Bebê">
@@ -125,6 +140,9 @@ export default function BabyShowerEvents() {
                       </Button>
                       <Button variant="default" size="sm" onClick={() => navigate(`/baby-shower/manage/${e.event.id}`)}>
                         <Settings className="w-4 h-4 mr-1" /> Gerenciar
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteEvent(e.event.id, e.event.eventName)}>
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
