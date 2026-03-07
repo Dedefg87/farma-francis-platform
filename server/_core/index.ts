@@ -1713,6 +1713,29 @@ async function startServer() {
     }
   });
 
+  // PUBLIC: List baby shower events (no auth required)
+  app.get("/api/baby-shower/list-events", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const [events]: any = await db.execute(sql`
+        SELECT id, event_code, event_name, status, created_at 
+        FROM baby_shower_events 
+        ORDER BY created_at DESC 
+        LIMIT 20
+      `);
+
+      res.json({ success: true, events });
+    } catch (error) {
+      console.error("[baby-shower/list-events] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
