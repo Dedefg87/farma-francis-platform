@@ -1678,28 +1678,13 @@ async function startServer() {
         return res.status(500).json({ error: "Database not available" });
       }
 
-      const [rows]: any = await db.execute(sql`
-        SELECT 
-          id,
-          conversation_id,
-          sender_phone,
-          content,
-          created_at
-        FROM messages
-        WHERE sender_phone LIKE '%975613330%'
-        ORDER BY created_at DESC
-        LIMIT 10
-      `);
+      const [rows]: any = await db.execute(
+        sql`SELECT id, conversation_id, sender_phone, content, created_at FROM messages ORDER BY created_at DESC LIMIT 10`
+      );
 
       res.json({ 
         total: rows.length,
-        messages: rows.map((r: any) => ({
-          id: r.id,
-          conversation_id: r.conversation_id,
-          sender_phone: r.sender_phone,
-          content: r.content?.substring(0, 50),
-          created_at: r.created_at
-        }))
+        messages: rows
       });
     } catch (error) {
       res.status(500).json({ error: String(error) });
