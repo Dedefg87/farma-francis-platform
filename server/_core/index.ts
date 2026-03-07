@@ -1672,16 +1672,14 @@ async function startServer() {
   // Debug: Ver últimas mensagens recebidas com timestamps
   app.get("/api/debug/recent-messages", async (req, res) => {
     try {
-      const { getDb } = await import("../db");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      const [rows]: any = await db.execute(
-        sql`SELECT id, conversation_id, sender_phone, content, created_at FROM messages ORDER BY created_at DESC LIMIT 10`
+      const mysql = await import("mysql2/promise");
+      const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
+      
+      const [rows]: any = await pool.execute(
+        "SELECT id, conversation_id, sender_phone, content, created_at FROM messages ORDER BY created_at DESC LIMIT 10"
       );
 
+      await pool.end();
       res.json({ 
         total: rows.length,
         messages: rows
