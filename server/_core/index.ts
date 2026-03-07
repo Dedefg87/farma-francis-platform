@@ -1858,6 +1858,76 @@ async function startServer() {
     }
   });
 
+  // PUBLIC: Update gift package (including image)
+  app.put("/api/baby-shower/update-package/:id", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const packageId = parseInt(req.params.id);
+      const { name, description, price, imageUrl, stockLimit, size, isActive } = req.body;
+
+      if (!packageId) {
+        return res.status(400).json({ error: "Package ID is required" });
+      }
+
+      // Build update query dynamically
+      const updates: string[] = [];
+      const values: any[] = [];
+
+      if (name !== undefined) {
+        updates.push("package_name = ?");
+        values.push(name);
+      }
+      if (description !== undefined) {
+        updates.push("description = ?");
+        values.push(description);
+      }
+      if (price !== undefined) {
+        updates.push("price = ?");
+        values.push(price);
+      }
+      if (imageUrl !== undefined) {
+        updates.push("image_url = ?");
+        values.push(imageUrl);
+      }
+      if (stockLimit !== undefined) {
+        updates.push("stock_limit = ?");
+        values.push(stockLimit);
+      }
+      if (size !== undefined) {
+        updates.push("size_label = ?");
+        values.push(size);
+      }
+      if (isActive !== undefined) {
+        updates.push("is_active = ?");
+        values.push(isActive ? 1 : 0);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
+
+      updates.push("updated_at = NOW()");
+      values.push(packageId);
+
+      const query = `UPDATE baby_shower_gift_packages SET ${updates.join(", ")} WHERE id = ?`;
+      
+      await db.execute(sql.raw(query, values));
+
+      res.json({ 
+        success: true, 
+        message: `Package ${packageId} updated` 
+      });
+    } catch (error) {
+      console.error("[baby-shower/update-package] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // PUBLIC: List baby shower events (no auth required)
   app.get("/api/baby-shower/list-events", async (req, res) => {
     try {
