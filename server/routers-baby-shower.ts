@@ -10,7 +10,7 @@ import {
   crmTasks,
   integrationSettings,
 } from "../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 
 // Função para enviar WhatsApp via Evolution API
 async function sendWhatsAppNotification(params: {
@@ -489,17 +489,26 @@ export const babyShowerRouter = router({
 
       if (!event) throw new Error("Evento não encontrado");
 
-      // Deletar compras relacionadas
-      await db.delete(babyShowerPurchases)
-        .where(eq(babyShowerPurchases.eventId, input.id));
-
-      // Deletar pacotes de presentes relacionados
-      await db.delete(babyShowerGiftPackages)
+      // Pegar IDs dos packages do evento
+      const packages = await db.select({ id: babyShowerGiftPackages.id })
+        .from(babyShowerGiftPackages)
         .where(eq(babyShowerGiftPackages.eventId, input.id));
+
+      const packageIds = packages.map((p) => p.id);
+
+      // Deletar compras que referenciam os packages
+      if (packageIds.length > 0) {
+        await db.delete(babyShowerPurchases)
+          .where(inArray(babyShowerPurchases.packageId, packageIds));
+      }
 
       // Deletar retiradas relacionadas
       await db.delete(babyShowerWithdrawals)
         .where(eq(babyShowerWithdrawals.eventId, input.id));
+
+      // Deletar pacotes de presentes
+      await db.delete(babyShowerGiftPackages)
+        .where(eq(babyShowerGiftPackages.eventId, input.id));
 
       // Deletar o evento
       await db.delete(babyShowerEvents)
