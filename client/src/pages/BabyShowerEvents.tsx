@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { trpcClient } from "@/lib/trpc";
 import { FarmaDashboardLayout } from "@/components/FarmaDashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,21 +12,23 @@ export default function BabyShowerEvents() {
   const [, navigate] = useLocation();
 
   const { data, isLoading, refetch } = trpc.babyShower.listEvents.useQuery({ limit: 50 });
+  const deleteMutation = trpc.babyShower.deleteEvent.useMutation({
+    onSuccess: () => {
+      toast.success("Evento apagado com sucesso!");
+      refetch();
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao apagar evento: ${error.message || "Erro desconhecido"}`);
+    },
+  });
 
   const events = data || [];
 
-  const handleDeleteEvent = async (eventId: number, eventName: string) => {
+  const handleDeleteEvent = (eventId: number, eventName: string) => {
     if (!confirm(`Tem certeza que deseja apagar o evento "${eventName}"?\n\nEsta ação não pode ser desfeita e irá remover todos os dados relacionados (pacotes, compras, retiradas).`)) {
       return;
     }
-
-    try {
-      await trpcClient.babyShower.deleteEvent.mutate({ id: eventId });
-      toast.success("Evento apagado com sucesso!");
-      refetch();
-    } catch (error: any) {
-      toast.error(`Erro ao apagar evento: ${error.message || "Erro desconhecido"}`);
-    }
+    deleteMutation.mutate({ id: eventId });
   };
 
   return (
