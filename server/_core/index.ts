@@ -1669,6 +1669,50 @@ async function startServer() {
     }
   });
 
+  // PUBLIC: Add gift package to baby shower event (no auth required)
+  app.post("/api/baby-shower/add-package", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const { eventCode, name, description, giftType, size, price, imageUrl, quantity } = req.body;
+
+      if (!eventCode || !name || !price) {
+        return res.status(400).json({ error: "eventCode, name, and price are required" });
+      }
+
+      // Find event by code
+      const [event]: any = await db.execute(
+        sql`SELECT id FROM baby_shower_events WHERE event_code = ${eventCode}`
+      );
+
+      if (!event || event.length === 0) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const eventId = event[0].id;
+
+      // Insert package
+      const [result]: any = await db.execute(sql`
+        INSERT INTO baby_shower_gift_packages 
+        (event_id, name, description, gift_type, size, price, image_url, quantity, available_quantity, is_available, created_at)
+        VALUES (${eventId}, ${name}, ${description || null}, ${giftType || "diapers"}, ${size || null}, ${price}, ${imageUrl || null}, ${quantity || 1}, ${quantity || 1}, true, NOW())
+      `);
+
+      res.json({ 
+        success: true, 
+        packageId: result.insertId,
+        message: `Package "${name}" added to event ${eventCode}` 
+      });
+    } catch (error) {
+      console.error("[baby-shower/add-package] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
