@@ -7,7 +7,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
-import { sql } from "drizzle-orm";
+import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -1874,48 +1874,43 @@ async function startServer() {
         return res.status(400).json({ error: "Package ID is required" });
       }
 
-      // Build update query with prepared statement
-      const updates: string[] = [];
-      const values: any[] = [];
-
+      // Build SET clauses using Drizzle sql template
+      const setClauses: SQL[] = [];
+      
       if (name !== undefined) {
-        updates.push("package_name = ?");
-        values.push(name);
+        setClauses.push(sql`package_name = ${name}`);
       }
       if (description !== undefined) {
-        updates.push("description = ?");
-        values.push(description);
+        setClauses.push(sql`description = ${description}`);
       }
       if (price !== undefined) {
-        updates.push("price = ?");
-        values.push(price);
+        setClauses.push(sql`price = ${price}`);
       }
       if (imageUrl !== undefined) {
-        updates.push("image_url = ?");
-        values.push(imageUrl);
+        setClauses.push(sql`image_url = ${imageUrl}`);
       }
       if (stockLimit !== undefined) {
-        updates.push("stock_limit = ?");
-        values.push(stockLimit);
+        setClauses.push(sql`stock_limit = ${stockLimit}`);
       }
       if (size !== undefined) {
-        updates.push("size_label = ?");
-        values.push(size);
+        setClauses.push(sql`size_label = ${size}`);
       }
       if (isActive !== undefined) {
-        updates.push("is_active = ?");
-        values.push(isActive ? 1 : 0);
+        setClauses.push(sql`is_active = ${isActive ? 1 : 0}`);
       }
 
-      if (updates.length === 0) {
+      if (setClauses.length === 0) {
         return res.status(400).json({ error: "No fields to update" });
       }
 
-      values.push(packageId);
-
-      const query = `UPDATE baby_shower_gift_packages SET ${updates.join(", ")} WHERE id = ?`;
+      // Join all SET clauses
+      const setClause = sql.join(setClauses, sql`, `);
       
-      await db.execute(sql.raw(query, values));
+      await db.execute(sql`
+        UPDATE baby_shower_gift_packages 
+        SET ${setClause}
+        WHERE id = ${packageId}
+      `);
 
       res.json({ 
         success: true, 
