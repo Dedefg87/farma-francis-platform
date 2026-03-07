@@ -457,17 +457,18 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   createdAt?: Date;
 }) {
-  const db = await getDb();
-  if (!db) {
-    console.error("[ingestInbound] Database not available!");
-    return null;
-  }
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.error("[ingestInbound] Database not available!");
+      return null;
+    }
 
-  // Process message first - don't block on profile picture fetch
-  const customer = await findOrCreateCustomerByPhone(
-    message.fromNumber,
-    message.fromName || undefined
-  );
+    // Process message first - don't block on profile picture fetch
+    const customer = await findOrCreateCustomerByPhone(
+      message.fromNumber,
+      message.fromName || undefined
+    );
   
   // Fetch profile picture in background (non-blocking)
   if (message.provider === "whatsapp" && !customer?.photoUrl) {
