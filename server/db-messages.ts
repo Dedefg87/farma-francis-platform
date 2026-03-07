@@ -11,6 +11,7 @@ import {
 } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
+import { fetchEvolutionProfile } from "./messaging";
 
 /**
  * Download media from URL and convert to base64 Data URL
@@ -514,14 +515,31 @@ export async function ingestInboundConversationMessage(message: {
     }
   console.log("[ingestInbound] Step B: DB connected");
 
+  // Try to get profile picture from WhatsApp if needed
+  let profilePicture: string | null = null;
+  if (message.provider === "whatsapp") {
+    try {
+      const profile = await fetchEvolutionProfile(message.fromNumber);
+      if (profile?.profilePicture) {
+        profilePicture = profile.profilePicture;
+        console.log("[ingestInbound] Got profile picture for:", message.fromNumber);
+      }
+    } catch (err) {
+      console.log("[ingestInbound] Could not fetch profile picture:", err);
+    }
+  }
+
   const customer = await findOrCreateCustomerByPhone(
     message.fromNumber,
-    message.fromName || undefined
+    message.fromName || undefined,
+    profilePicture
   );
   console.log(
     "[ingestInbound] Step C: Customer created/found:",
     customer?.id,
-    customer?.name
+    customer?.name,
+    "hasPhoto:",
+    !!customer?.photoUrl
   );
   const now = message.createdAt ?? new Date();
 
