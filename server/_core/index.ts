@@ -47,9 +47,10 @@ async function startServer() {
 
   const server = createServer(app);
 
+  // Rate limiting aumentado para suportar alto volume de mensagens
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 100,
+    max: 1000, // Aumentado de 100 para 1000 req/min
     message: { error: "Too many requests, please try again later" },
     standardHeaders: true,
     legacyHeaders: false,
@@ -57,7 +58,7 @@ async function startServer() {
 
   const webhookLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 200,
+    max: 2000, // Aumentado de 200 para 2000 req/min
     message: { error: "Too many webhook requests" },
     standardHeaders: true,
     legacyHeaders: false,

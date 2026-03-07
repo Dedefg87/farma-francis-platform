@@ -23,7 +23,7 @@ export function getRateLimitKey(req: Request): string {
 // Stricter rate limiting for authenticated users (per user)
 export const authenticatedLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 60, // 60 requests per minute per authenticated user
+  max: 300, // 300 requests per minute per authenticated user (aumentado)
   keyGenerator: (req) => {
     const userId = (req as any).user?.id;
     return userId ? `auth:user:${userId}` : `ip:${req.ip}`;
@@ -39,7 +39,7 @@ export const authenticatedLimiter = rateLimit({
 // More permissive for public endpoints
 export const publicLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute per IP
+  max: 500, // 500 requests per minute per IP (aumentado)
   keyGenerator: (req) => {
     // Use forwarded IP for behind-proxy scenarios
     const forwarded = req.headers["x-forwarded-for"] as string | undefined;
@@ -56,7 +56,7 @@ export const publicLimiter = rateLimit({
 // Webhook endpoints - separate high limit
 export const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 300, // 300 requests per minute (for burst webhook traffic)
+  max: 2000, // 2000 requests per minute (aumentado para alto volume)
   keyGenerator: (req) => {
     // Identify by webhook signature if available, else by IP
     const sig = req.headers["x-hub-signature-256"] as string | undefined;
