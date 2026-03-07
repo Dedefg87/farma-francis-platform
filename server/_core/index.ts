@@ -1669,25 +1669,27 @@ async function startServer() {
     }
   });
 
-  // Debug: Ver últimas mensagens recebidas com timestamps
+  // Debug: Ver últimos mensagens recebidas com timestamps
   app.get("/api/debug/recent-messages", async (req, res) => {
     try {
       const mysql = await import("mysql2/promise");
       const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
       
+      const limit = parseInt(req.query.limit as string) || 10;
+      
       // Mensagens da tabela messages
       const [messages]: any = await pool.execute(
-        "SELECT id, channel, direction, content, created_at FROM messages ORDER BY created_at DESC LIMIT 10"
+        `SELECT id, channel, direction, content, created_at FROM messages ORDER BY created_at DESC LIMIT ${limit}`
       );
 
       // Mensagens da tabela received_messages
       const [receivedMessages]: any = await pool.execute(
-        "SELECT id, from_number, from_name, message_text, timestamp, processed, created_at FROM received_messages ORDER BY created_at DESC LIMIT 10"
+        `SELECT id, from_number, from_name, message_text, timestamp, processed, created_at FROM received_messages ORDER BY created_at DESC LIMIT ${limit}`
       );
 
       // Mensagens da tabela conversation_messages
       const [conversationMessages]: any = await pool.execute(
-        "SELECT id, conversation_id, sender_type, content, created_at FROM conversation_messages ORDER BY created_at DESC LIMIT 10"
+        `SELECT id, conversation_id, sender_type, content, created_at FROM conversation_messages ORDER BY created_at DESC LIMIT ${limit}`
       );
 
       await pool.end();
@@ -1713,7 +1715,7 @@ async function startServer() {
         `SELECT id, from_number, from_name, message_text, timestamp, created_at 
          FROM received_messages 
          WHERE from_number LIKE '%${phone}%' 
-         ORDER BY created_at DESC LIMIT 20`
+         ORDER BY created_at DESC LIMIT 50`
       );
 
       // Buscar em conversation_messages via conversations
@@ -1722,7 +1724,7 @@ async function startServer() {
          FROM conversation_messages cm 
          JOIN conversations c ON c.id = cm.conversation_id 
          WHERE c.phone_number LIKE '%${phone}%' 
-         ORDER BY cm.created_at DESC LIMIT 20`
+         ORDER BY cm.created_at DESC LIMIT 50`
       );
 
       await pool.end();
@@ -1734,6 +1736,20 @@ async function startServer() {
     } catch (error) {
       res.status(500).json({ error: String(error) });
     }
+  });
+
+  // Debug: Ver todos os webhooks recebidos recentemente
+  const recentWebhooks: any[] = [];
+  app.get("/api/debug/webhooks", (req, res) => {
+    res.json({ 
+      count: recentWebhooks.length,
+      last10: recentWebhooks.slice(-10).map(w => ({
+        time: w.time,
+        event: w.event,
+        from: w.from,
+        message: w.message?.substring(0, 50)
+      }))
+    });
   });
 
   // PUBLIC: Add gift package to baby shower event (no auth required)
