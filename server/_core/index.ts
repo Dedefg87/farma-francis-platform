@@ -1762,7 +1762,7 @@ async function startServer() {
         return res.status(500).json({ error: "Database not available" });
       }
 
-      const { eventCode, name, description, giftType, size, price, imageUrl, quantity } = req.body;
+      const { eventCode, name, description, giftType, size, price, imageUrl, stockLimit } = req.body;
 
       if (!eventCode || !name || !price) {
         return res.status(400).json({ error: "eventCode, name, and price are required" });
@@ -1779,11 +1779,11 @@ async function startServer() {
 
       const eventId = event[0].id;
 
-      // Insert package
+      // Insert package - using correct column names from schema
       const [result]: any = await db.execute(sql`
         INSERT INTO baby_shower_gift_packages 
-        (event_id, name, description, gift_type, size, price, image_url, quantity, available_quantity, is_available, created_at)
-        VALUES (${eventId}, ${name}, ${description || null}, ${giftType || "diapers"}, ${size || null}, ${price}, ${imageUrl || null}, ${quantity || 1}, ${quantity || 1}, true, NOW())
+        (event_id, package_name, description, gift_type, size_label, price, image_url, stock_limit, sold_count, is_active, created_at)
+        VALUES (${eventId}, ${name}, ${description || null}, ${giftType || "diapers"}, ${size || null}, ${price}, ${imageUrl || null}, ${stockLimit || null}, 0, 1, NOW())
       `);
 
       res.json({ 
