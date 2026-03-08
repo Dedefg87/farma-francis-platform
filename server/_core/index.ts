@@ -2433,6 +2433,36 @@ async function startServer() {
       }
     });
 
+    // Debug: verificar assignedAgentName
+    app.get("/api/debug/agent-names", async (req, res) => {
+      try {
+        const db = await getDb();
+        if (!db) {
+          return res.status(500).json({ error: "No DB" });
+        }
+        
+        const { conversations, users } = await import("../../drizzle/schema");
+        const { desc } = await import("drizzle-orm");
+        
+        const result = await db
+          .select({
+            id: conversations.id,
+            customerName: conversations.customerName,
+            status: conversations.status,
+            assignedTo: conversations.assignedTo,
+            assignedAgentName: users.name,
+          })
+          .from(conversations)
+          .leftJoin(users, eq(conversations.assignedTo, users.id))
+          .orderBy(desc(conversations.id))
+          .limit(10);
+        
+        res.json(result);
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
     console.log(`🚀 Server listening on port ${port}`);
   });
 }
