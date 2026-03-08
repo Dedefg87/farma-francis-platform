@@ -2324,10 +2324,46 @@ async function startServer() {
           return res.status(400).json({ error: "packageId and productName required" });
         }
 
-        const { fetchAndUpdateProductImage } = await import("../services/product-image-search");
-        const result = await fetchAndUpdateProductImage(packageId, productName);
+        // Search for images via Serper API
+        const SERPER_API_KEY = process.env.SERPER_API_KEY || "6abb2781d7edf99aa211c064912283e3c804e8c0";
+        const response = await fetch("https://google.serper.dev/images", {
+          method: "POST",
+          headers: {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            q: productName + " produto imagem oficial",
+            gl: "br",
+            hl: "pt-br",
+          }),
+        });
 
-        res.json(result);
+        if (!response.ok) {
+          return res.status(500).json({ error: "Failed to search images" });
+        }
+
+        const data = await response.json();
+        const images = data.images || [];
+        
+        if (images.length === 0) {
+          return res.json({ success: false, error: "No images found" });
+        }
+
+        // Get first image
+        const imageUrl = images[0].imageUrl || images[0].link;
+        
+        // Update in database
+        const db = await getDb();
+        if (db) {
+          await db.execute(sql`
+            UPDATE baby_shower_gift_packages 
+            SET image_url = ${imageUrl}
+            WHERE id = ${packageId}
+          `);
+        }
+
+        res.json({ success: true, imageUrl });
       } catch (error) {
         console.error("[AutoImage] Error:", error);
         res.status(500).json({ error: String(error) });
@@ -2339,9 +2375,47 @@ async function startServer() {
     // ========================================
     app.get("/api/system/health", async (req, res) => {
       try {
-        const { runHealthChecks } = await import("../services/health-monitor");
-        const health = await runHealthChecks();
-        res.json(health);
+        const checks = [];
+        
+        // Check API
+        const apiStart = Date.now();
+        checks.push({
+          service: "API",
+          status: "ok",
+          responseTime: Date.now() - apiStart,
+          message: "API responding"
+        });
+        
+        // Check Database
+        try {
+          const db = await getDb();
+          if (db) {
+            await db.execute(sql`SELECT 1`);
+            checks.push({
+              service: "Database",
+              status: "ok",
+              message: "Database connection OK"
+            });
+          } else {
+            checks.push({
+              service: "Database",
+              status: "error",
+              message: "Database not available"
+            });
+          }
+        } catch (dbError) {
+          checks.push({
+            service: "Database",
+            status: "error",
+            message: String(dbError)
+          });
+        }
+        
+        res.json({
+          lastCheck: new Date().toISOString(),
+          checks,
+          alerts: []
+        });
       } catch (error) {
         console.error("[HealthMonitor] Error:", error);
         res.status(500).json({ error: String(error) });
