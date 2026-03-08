@@ -11,6 +11,7 @@ import {
 } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
+import { fetchEvolutionProfile } from "./messaging";
 
 /**
  * Download media from URL and convert to base64 Data URL
@@ -25,47 +26,29 @@ async function downloadMediaAsBase64(
   mimeType: string | null
 ): Promise<string | null> {
   try {
-    console.log(
-      "[Media Download] Starting download:",
-      mediaUrl.substring(0, 100) + "..."
-    );
-
     // If already data URL, return as-is
     if (mediaUrl.startsWith("data:")) {
-      console.log("[Media Download] Already base64 data URL");
       return mediaUrl;
     }
 
-    // WhatsApp URLs expire quickly - download immediately with retry
-    let lastError: Error | null = null;
-
+    // WhatsApp URLs expire quickly - download immediately
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        console.log(`[Media Download] Attempt ${attempt}/2...`);
-
         const response = await fetch(mediaUrl, {
           method: "GET",
           headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             Accept: "*/*",
           },
           redirect: "follow",
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.timeout(5000),
         });
 
         if (!response.ok) {
-          console.warn(
-            `[Media Download] Attempt ${attempt} failed:`,
-            response.status,
-            response.statusText
-          );
           throw new Error(`HTTP ${response.status}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
-
-        // Check if we got actual data
         if (arrayBuffer.byteLength === 0) {
           throw new Error("Empty response");
         }
@@ -79,8 +62,6 @@ async function downloadMediaAsBase64(
         if (headerCt) {
           contentType = headerCt.split(";")[0];
         }
-
-        // Guess from URL if still unknown
         if (contentType === "application/octet-stream") {
           const ext = mediaUrl.split("?")[0].split(".").pop()?.toLowerCase();
           const mimeMap: Record<string, string> = {
@@ -100,12 +81,12 @@ async function downloadMediaAsBase64(
           }
         }
 
-        // Detect MIME type from magic bytes if still unknown or generic
-        if (contentType === "application/octet-stream" || buffer.length >= 4) {
+        // Detect MIME type from magic bytes
+        if (buffer.length >= 4) {
           const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
           const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
           const isGif = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38;
-          const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // %PDF
+          const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
           const isWebp = buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && 
                           buffer.length >= 12 && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
 
@@ -114,57 +95,50 @@ async function downloadMediaAsBase64(
           else if (isGif) contentType = "image/gif";
           else if (isPdf) contentType = "application/pdf";
           else if (isWebp) contentType = "image/webp";
-          
-          console.log("[Media Download] Magic bytes detection:", {
-            firstBytes: buffer.slice(0, 8).toString('hex'),
-            detected: contentType
-          });
         }
 
-        const dataUrl = `data:${contentType};base64,${base64}`;
-        console.log(
-          "[Media Download] Success! Size:",
-          Math.round(buffer.length / 1024),
-          "KB, Type:",
-          contentType
-        );
-
-        return dataUrl;
+        return `data:${contentType};base64,${base64}`;
       } catch (attemptError) {
-        lastError = attemptError as Error;
-        console.warn(
-          `[Media Download] Attempt ${attempt} error:`,
-          lastError.message
-        );
-
         if (attempt < 2) {
-          // Wait before retry (shorter delay)
-          const delay = 500;
-          console.log(`[Media Download] Retrying in ${delay}ms...`);
-          await new Promise(r => setTimeout(r, delay));
+          await new Promise(r => setTimeout(r, 500));
         }
       }
     }
 
-    // All attempts failed
-    console.error("[Media Download] All attempts failed:", lastError?.message);
     return null;
   } catch (error) {
-    console.error("[Media Download] Fatal error:", error);
     return null;
   }
 }
+
+// Cache para evitar queries repetitivas de agent assignment
+const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
+const CACHE_TTL_MS = 30 * 1000; // 30 segundos
+
 async function pickLeastLoadedOnlineAgent(params: {
   provider: "whatsapp" | "instagram";
 }) {
   const db = await getDb();
   if (!db) return null;
 
+  // Check cache first
+  const cacheKey = params.provider;
+  const cached = agentAssignmentCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
+    return cached.agentId ? { userId: cached.agentId, loadCount: 0, lastSignedIn: null } : null;
+  }
+
   // Prefer agents with an active SSE connection (actually online in the UI)
   const connected = sseManager
     .getConnectedUsers()
     .map(id => Number(id))
     .filter(id => Number.isFinite(id) && id > 0);
+
+  if (connected.length === 0) {
+    // Cache the null result too
+    agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+    return null;
+  }
 
   if (connected.length > 0) {
     const rows = (await db.execute(sql`
@@ -193,7 +167,12 @@ async function pickLeastLoadedOnlineAgent(params: {
       const minLoad = Number(rows[0]?.loadCount ?? 0);
       const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
       const chosenId = Number(minRows[0]?.userId);
-      if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
+      if (!Number.isFinite(chosenId) || chosenId <= 0) {
+        agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+        return null;
+      }
+      // Cache the result
+      agentAssignmentCache.set(cacheKey, { agentId: chosenId, timestamp: Date.now() });
       return {
         userId: chosenId,
         candidates: rows.length,
@@ -203,72 +182,14 @@ async function pickLeastLoadedOnlineAgent(params: {
     }
   }
 
-  const rows = (await db.execute(sql`
-    SELECT 
-      a.user_id AS userId,
-      COUNT(c.id) AS loadCount,
-      MAX(a.last_activity) AS lastActivity
-    FROM agent_status a
-    INNER JOIN users u ON u.id = a.user_id
-    LEFT JOIN agent_pauses p
-      ON p.agent_id = a.user_id AND p.status = 'active'
-    LEFT JOIN conversations c
-      ON c.assigned_to = a.user_id
-     AND c.status IN ('open','assigned')
-     AND c.channel = a.channel
-    WHERE a.channel = ${params.provider}
-      AND a.status = 'online'
-      AND u.role = 'user'
-      AND p.id IS NULL
-    GROUP BY a.user_id
-    ORDER BY loadCount ASC, lastActivity DESC
-  `)) as any[];
-
-  if (Array.isArray(rows) && rows.length > 0) {
-    const minLoad = Number(rows[0]?.loadCount ?? 0);
-    const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
-    const chosenId = Number(minRows[0]?.userId);
-    if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
-
-    return {
-      userId: chosenId,
-      candidates: rows.length,
-      minLoad,
-      source: "agent_status",
-    };
-  }
-
-  // Final fallback: distribute across all users (admin or user role) even if status is not set
-  const anyRows = (await db.execute(sql`
-    SELECT 
-      u.id AS userId,
-      u.role AS role,
-      COUNT(c.id) AS loadCount,
-      MAX(u.lastSignedIn) AS lastSignedIn
-    FROM users u
-    LEFT JOIN agent_pauses p
-      ON p.agent_id = u.id AND p.status = 'active'
-    LEFT JOIN conversations c
-      ON c.assigned_to = u.id
-     AND c.status IN ('open','assigned')
-     AND c.channel = ${params.provider}
-    WHERE (u.role = 'user' OR u.role = 'admin')
-      AND p.id IS NULL
-    GROUP BY u.id
-    ORDER BY loadCount ASC, lastSignedIn DESC
-    LIMIT 1
-  `)) as any[];
-
-  if (!Array.isArray(anyRows) || anyRows.length === 0) return null;
-  const chosenId = Number(anyRows[0]?.userId);
-  if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
-  return {
-    userId: chosenId,
-    candidates: 1,
-    minLoad: Number(anyRows[0]?.loadCount ?? 0),
-    source: "any_user",
-  };
+  // No connected agents - cache null result
+  agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+  return null;
 }
+
+// ========================================
+// INGESTION FUNCTIONS
+// ========================================
 
 /**
  * Get all received messages with optional filters
@@ -537,50 +458,50 @@ export async function ingestInboundConversationMessage(message: {
   createdAt?: Date;
 }) {
   try {
-    console.log(
-      "[ingestInbound] Step A: Starting with fromNumber:",
-      message.fromNumber
-    );
-    console.error("[ingestInbound] === STEP A START ===");
     const db = await getDb();
     if (!db) {
       console.error("[ingestInbound] Database not available!");
       return null;
     }
-  console.log("[ingestInbound] Step B: DB connected");
 
-  const customer = await findOrCreateCustomerByPhone(
-    message.fromNumber,
-    message.fromName || undefined
-  );
-  console.log(
-    "[ingestInbound] Step C: Customer created/found:",
-    customer?.id,
-    customer?.name
-  );
+    // Process message first - don't block on profile picture fetch
+    const customer = await findOrCreateCustomerByPhone(
+      message.fromNumber,
+      message.fromName || undefined
+    );
+  
+  // Fetch profile picture in background (non-blocking)
+  if (message.provider === "whatsapp" && !customer?.photoUrl) {
+    setImmediate(async () => {
+      try {
+        const profile = await fetchEvolutionProfile(message.fromNumber);
+        if (profile?.profilePicture) {
+          const db = await getDb();
+          if (db && customer?.id) {
+            await db
+              .update(customers)
+              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
+              .where(eq(customers.id, customer.id));
+          }
+        }
+      } catch (err) {
+        // Silently fail - photo is not critical
+      }
+    });
+  }
+  
   const now = message.createdAt ?? new Date();
 
-  // Equal-load distribution: pick the least loaded online agent (not paused)
-  console.error("[ingestInbound] === STEP D START - picking agent ===");
+  // Equal-load distribution: pick the least loaded online agent
   let picked = await pickLeastLoadedOnlineAgent({
     provider: message.provider,
   });
-  console.log("[ingestInbound] Step D: Picked agent:", picked);
 
   // NO FALLBACK: If no agent found, leave conversation in queue (open/unassigned)
-  // This ensures equal distribution - only assign when agent is actually online
-  if (!picked) {
-    console.log(
-      "[ingestInbound] Step D2: No agent online - conversation stays in queue"
-    );
-  }
-
   const assignedUserId =
     picked && Number.isFinite(picked.userId) && picked.userId > 0
       ? picked.userId
       : null;
-
-  console.log("[ingestInbound] Step D4: Final assignedUserId:", assignedUserId);
 
   const [defaultQueue] = await db
     .select()
@@ -606,42 +527,21 @@ export async function ingestInboundConversationMessage(message: {
     .limit(1);
 
   let conversationId = existingConversation?.id;
-  console.log(
-    "[ingestInbound] Step E: Existing conversation?",
-    existingConversation?.id,
-    "status:",
-    existingConversation?.status
-  );
 
   if (!conversationId) {
-    console.log(
-      "[ingestInbound] Step F: Creating NEW conversation for customer:",
-      customer.id
-    );
-    const insertData = {
+    // Create new conversation
+    await db.insert(conversations).values({
       customerId: customer.id,
       customerName: customer.name,
       customerPhone: customer.phone,
       channel: message.provider,
-      status: (assignedUserId ? "assigned" : "open") as
-        | "open"
-        | "assigned"
-        | "closed",
+      status: assignedUserId ? "assigned" : "open",
       assignedTo: assignedUserId,
       queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
       openedAt: now,
       lastMessageAt: now,
       unreadCount: 1,
-    };
-    console.log(
-      "[ingestInbound] Step G: Insert data:",
-      JSON.stringify(insertData)
-    );
-
-    await db.insert(conversations).values(insertData);
-    console.log(
-      "[ingestInbound] Step G2: Insert done, fetching new conversation"
-    );
+    });
 
     const [newConversation] = await db
       .select()
@@ -651,11 +551,8 @@ export async function ingestInboundConversationMessage(message: {
       .limit(1);
 
     conversationId = newConversation?.id;
-    console.log(
-      "[ingestInbound] Step H: Conversation created with ID:",
-      conversationId
-    );
   } else {
+    // Update existing conversation
     const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
     await db
       .update(conversations)
@@ -673,23 +570,18 @@ export async function ingestInboundConversationMessage(message: {
       .where(eq(conversations.id, conversationId));
   }
 
-  // Download media immediately if present (URLs from WhatsApp expire quickly!)
+  // Download media if present (URLs expire quickly)
   let fileUrlToSave = message.mediaUrl || null;
   if (fileUrlToSave && message.messageType !== "text") {
-    console.log("[ingestInbound] Downloading media file...");
     const base64Url = await downloadMediaAsBase64(
       fileUrlToSave,
       message.mimeType ?? null
     );
     if (base64Url) {
       fileUrlToSave = base64Url;
-      console.log("[ingestInbound] Media converted to base64 successfully");
-    } else {
-      console.warn(
-        "[ingestInbound] Failed to download media, keeping original URL"
-      );
     }
   }
+  
   await db.insert(conversationMessages).values({
     conversationId,
     senderId: null,
@@ -708,14 +600,10 @@ export async function ingestInboundConversationMessage(message: {
     .where(eq(conversations.id, conversationId))
     .limit(1);
 
-  console.log(`[SSE] Conversation fetched: id=${conversationId}, assignedTo=${conversation?.assignedTo}, status=${conversation?.status}`);
-
+  // Notify via SSE - notificar todos os agentes conectados
+  // Se tiver agente atribuído, notifica ele. Se não, notifica todos.
   if (conversation?.assignedTo) {
-    const agentUserId = String(conversation.assignedTo);
-    console.log(`[SSE] New message - emitting to agent userId=${agentUserId} for conversation=${conversationId}`);
-    console.log(`[SSE] Current connected users: ${sseManager.getConnectedUsers().join(", ")}`);
-    
-    sseManager.emitToUser(agentUserId, {
+    sseManager.emitToUser(String(conversation.assignedTo), {
       type: EVENTS.MESSAGE_NEW,
       data: {
         conversationId,
@@ -727,15 +615,23 @@ export async function ingestInboundConversationMessage(message: {
       timestamp: now.getTime(),
     });
   } else {
-    console.log(`[SSE] No assignedTo for conversation=${conversationId}, skipping SSE emit`);
-    console.log(`[SSE] Conversation data:`, JSON.stringify(conversation));
+    // Conversa na fila - notificar todos os agentes conectados
+    sseManager.emitToAll({
+      type: EVENTS.MESSAGE_NEW,
+      data: {
+        conversationId,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        content: buildInboundContent(message),
+        channel: message.provider,
+      },
+      timestamp: now.getTime(),
+    });
   }
 
-  console.log(`[ingestInbound] SUCCESS - conversationId=${conversationId}, customerId=${customer.id}`);
   return { conversationId, customerId: customer.id };
   } catch (error) {
     console.error("[ingestInbound] ERROR:", error);
-    console.error("[ingestInbound] Stack:", error instanceof Error ? error.stack : "no stack");
     return { conversationId: null, customerId: null };
   }
 }

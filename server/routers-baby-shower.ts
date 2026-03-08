@@ -10,7 +10,7 @@ import {
   crmTasks,
   integrationSettings,
 } from "../drizzle/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, SQL } from "drizzle-orm";
 
 // Função para enviar WhatsApp via Evolution API
 async function sendWhatsAppNotification(params: {
@@ -93,6 +93,7 @@ const createEventSchema = z.object({
   expectedDueDate: z.string().optional(),
   eventDate: z.string().optional(),
   targetAmount: z.number().optional(),
+  welcomeMessage: z.string().optional(),
 });
 
 const createPackageSchema = z.object({
@@ -104,6 +105,7 @@ const createPackageSchema = z.object({
   sizeLabel: z.string().optional(),
   price: z.number().positive(),
   stockLimit: z.number().optional(),
+  imageUrl: z.string().optional(),
 });
 
 const createPurchaseSchema = z.object({
@@ -132,7 +134,8 @@ export const babyShowerRouter = router({
       const db = await getDb();
     if (!db) { throw new Error("Database not available"); }
       const eventCode = generateEventCode();
-      const publicLink = "https://farmafrancis.netlify.app/cha-de-bebe/" + eventCode;
+      const baseUrl = process.env.PUBLIC_BASE_URL || "https://innovative-enjoyment-production-ed8f.up.railway.app";
+      const publicLink = `${baseUrl}/cha-de-bebe/${eventCode}`;
 
       // Validar e converter datas - string vazia deve ser null
       const expectedDueDate = input.expectedDueDate && input.expectedDueDate.trim() !== '' 
@@ -150,6 +153,7 @@ export const babyShowerRouter = router({
         eventDate,
         targetAmount: input.targetAmount?.toString() || null,
         publicLink,
+        welcomeMessage: input.welcomeMessage || null,
       } as any);
 
       return { success: true, eventId: Number(event.insertId), eventCode, publicLink };
@@ -201,6 +205,32 @@ export const babyShowerRouter = router({
         .offset(input.offset);
     }),
 
+  // Endpoint público - sem autenticação
+  getEventByCode: publicProcedure
+    .input(z.object({ code: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+      
+      const [event] = await db.select({
+        event: babyShowerEvents,
+        motherName: customers.name,
+      }).from(babyShowerEvents)
+        .leftJoin(customers, eq(babyShowerEvents.motherCustomerId, customers.id))
+        .where(eq(babyShowerEvents.eventCode, input.code))
+        .limit(1);
+
+      if (!event) throw new Error("Evento não encontrado");
+
+      const packages = await db.select().from(babyShowerGiftPackages)
+        .where(and(
+          eq(babyShowerGiftPackages.eventId, event.event.id),
+          eq(babyShowerGiftPackages.isActive, 1)
+        ));
+
+      return { event: event.event, motherName: event.motherName, packages };
+    }),
+
   getEventById: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
@@ -234,6 +264,8 @@ export const babyShowerRouter = router({
       eventDate: z.string().optional(),
       targetAmount: z.number().optional(),
       status: z.enum(["active", "closed", "cancelled"]).optional(),
+      whatsappNumber: z.string().optional(),
+      welcomeMessage: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -256,6 +288,8 @@ export const babyShowerRouter = router({
         updates.status = input.status;
         if (input.status === "closed") updates.closedAt = new Date();
       }
+      if (input.whatsappNumber !== undefined) updates.whatsappNumber = input.whatsappNumber || null;
+      if (input.welcomeMessage !== undefined) updates.welcomeMessage = input.welcomeMessage || null;
 
       await db.update(babyShowerEvents).set(updates).where(eq(babyShowerEvents.id, input.id));
       return { success: true };
@@ -275,8 +309,57 @@ export const babyShowerRouter = router({
         sizeLabel: input.sizeLabel || null,
         price: input.price.toString(),
         stockLimit: input.stockLimit || null,
+        imageUrl: input.imageUrl || null,
       } as any);
       return { success: true, packageId: Number(pkg.insertId) };
+    }),
+
+  updatePackage: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      packageName: z.string().optional(),
+      description: z.string().optional(),
+      price: z.number().optional(),
+      imageUrl: z.string().optional(),
+      isActive: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+      
+      // Build update using Drizzle's SQL template
+      const conditions: SQL[] = [];
+      
+      if (input.packageName) {
+        conditions.push(sql`package_name = ${input.packageName}`);
+      }
+      if (input.description !== undefined) {
+        conditions.push(sql`description = ${input.description || null}`);
+      }
+      if (input.price !== undefined) {
+        conditions.push(sql`price = ${input.price.toFixed(2)}`);
+      }
+      if (input.imageUrl !== undefined) {
+        conditions.push(sql`image_url = ${input.imageUrl || null}`);
+      }
+      if (input.isActive !== undefined) {
+        conditions.push(sql`is_active = ${input.isActive}`);
+      }
+      
+      if (conditions.length === 0) {
+        return { success: true };
+      }
+      
+      // Join conditions with comma
+      const setClause = sql.join(conditions, sql`, `);
+      
+      await db.execute(sql`
+        UPDATE baby_shower_gift_packages 
+        SET ${setClause}
+        WHERE id = ${input.id}
+      `);
+      
+      return { success: true };
     }),
 
   createPurchase: publicProcedure
@@ -424,6 +507,46 @@ export const babyShowerRouter = router({
       averageTicket: parseFloat(avgTicket?.avg || "0"),
     };
   }),
+
+  deleteEvent: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+
+      // Verificar se o evento existe
+      const [event] = await db.select().from(babyShowerEvents)
+        .where(eq(babyShowerEvents.id, input.id)).limit(1);
+
+      if (!event) throw new Error("Evento não encontrado");
+
+      // Pegar IDs dos packages do evento
+      const packages = await db.select({ id: babyShowerGiftPackages.id })
+        .from(babyShowerGiftPackages)
+        .where(eq(babyShowerGiftPackages.eventId, input.id));
+
+      const packageIds = packages.map((p) => p.id);
+
+      // Deletar compras que referenciam os packages
+      if (packageIds.length > 0) {
+        await db.delete(babyShowerPurchases)
+          .where(inArray(babyShowerPurchases.packageId, packageIds));
+      }
+
+      // Deletar retiradas relacionadas
+      await db.delete(babyShowerWithdrawals)
+        .where(eq(babyShowerWithdrawals.eventId, input.id));
+
+      // Deletar pacotes de presentes
+      await db.delete(babyShowerGiftPackages)
+        .where(eq(babyShowerGiftPackages.eventId, input.id));
+
+      // Deletar o evento
+      await db.delete(babyShowerEvents)
+        .where(eq(babyShowerEvents.id, input.id));
+
+      return { success: true };
+    }),
 });
 // Force rebuild 1772749799
 // Build: 1772751251

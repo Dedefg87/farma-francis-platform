@@ -428,90 +428,53 @@ router.post("/evolution/:event", async (req: Request, res: Response) => {
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
-    console.log(
-      "[Evolution Webhook] Received Evolution webhook call at",
-      new Date().toISOString()
-    );
-    console.log(
-      "==========================================[Evolution Webhook] =========================================="
-    );
-    console.log(
-      "[Evolution Webhook] NEW REQUEST RECEIVED at",
-      new Date().toISOString()
-    );
-    console.log("[Evolution Webhook] Method:", req.method);
-    console.log("[Evolution Webhook] URL:", req.originalUrl);
-    console.log("[Evolution Webhook] Query:", JSON.stringify(req.query));
-    console.log(
-      "[Evolution Webhook] Headers:",
-      JSON.stringify(req.headers).substring(0, 500)
-    );
-    console.log("[Evolution Webhook] Body type:", typeof req.body);
-    console.log(
-      "[Evolution Webhook] Body:",
-      JSON.stringify(req.body).substring(0, 1000)
-    );
-    console.log("[Evolution Webhook] Method:", req.method);
-    console.log("[Evolution Webhook] URL:", req.originalUrl);
-    console.log(
-      "[Evolution Webhook] Headers:",
-      JSON.stringify(req.headers).substring(0, 500)
-    );
-    console.log("[Evolution Webhook] Body type:", typeof req.body);
-    console.log(
-      "[Evolution Webhook] Body:",
-      JSON.stringify(req.body).substring(0, 500)
-    );
+    // RESPOSTA IMEDIATA - não bloquear o Evolution
+    res.status(200).send("EVENT_RECEIVED");
 
+    // Processar em background (não usar await para não bloquear)
+    setImmediate(() => {
+      processEvolutionWebhookAsync(req).catch((err) => {
+        console.error("[Evolution Webhook] Background processing error:", err);
+      });
+    });
+  } catch (error) {
+    console.error("[Evolution Webhook] Handler error:", error);
+    // Já enviamos 200, então só logamos o erro
+  }
+}
+
+async function processEvolutionWebhookAsync(req: Request) {
+  try {
     const body = req.body;
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
-    console.log("[Evolution Webhook] Received request from:", fullUrl);
-
-    // Verificar se body está vazio
     if (!body || Object.keys(body).length === 0) {
-      console.error(
-        "[Evolution Webhook] ERROR: Body is empty! Raw body might not be parsed."
-      );
-      // Tentar ler o raw body
-      const raw = (req as any).rawBody;
-      console.log(
-        "[Evolution Webhook] Raw body:",
-        raw ? raw.toString().substring(0, 500) : "undefined"
-      );
+      return;
     }
 
-    // Detectar evento (pode vir no body, na URL path, ou embutido na query `apikey` como: ?apikey=@KEY/messages-update)
+    // Detectar evento
     let eventName = body?.event || body?.data?.event;
-
-    // Extract event from query apikey suffix
     const queryApikeyRaw = (req.query["apikey"] as string | undefined) || "";
     const apikeyParts = queryApikeyRaw.split("/").filter(Boolean);
-    const eventFromQuery =
-      apikeyParts.length > 1 ? apikeyParts.slice(1).join("/") : "";
+    const eventFromQuery = apikeyParts.length > 1 ? apikeyParts.slice(1).join("/") : "";
     if (!eventName && eventFromQuery) {
       eventName = eventFromQuery;
-      console.log(
-        "[Evolution Webhook] Event extracted from query apikey:",
-        eventName
-      );
     }
     if (!eventName) {
       const urlParts = fullUrl.split("/evolution")[1] || "";
       const m = urlParts.match(/\/([a-z0-9_-]+)$/i);
       if (m?.[1]) {
         eventName = m[1];
-        console.log("[Evolution Webhook] Event extracted from URL:", eventName);
       }
     }
 
     const db = await getDb();
     if (!db) {
       console.error("[Evolution Webhook] Database not available");
-      return res.status(500).send("Database not available");
+      return;
     }
 
-    // Extrair apikey da URL (pode vir com ou sem @)
+    // Extrair apikey da URL
     const [configRow] = await db
       .select()
       .from(integrationSettings)
@@ -519,77 +482,25 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
       .limit(1);
 
     if (configRow) {
-      if (process.env.EVO_DEBUG_ENABLE === "1") {
-        console.log(
-          "[Evolution Webhook] EVO_DEBUG: Evolution webhook debug mode ON"
-        );
-      }
       const configData =
         typeof configRow.config === "string"
           ? JSON.parse(configRow.config)
           : configRow.config;
       const expectedApiKey = configData.apiKey || configData.accessToken;
 
-      // Buscar apikey na query string - pode ter formato: ?apikey=@Afrancis87/presence-update
       const queryApikey = queryApikeyRaw;
       const cleanApikey = queryApikey.split("/")[0].replace("@", "");
       const cleanExpected = expectedApiKey?.replace("@", "") || "";
 
-      console.log("[Evolution Webhook] Auth Check:", {
-        expectedHasValue: !!expectedApiKey,
-        providedHasValue: !!queryApikey,
-        cleanMatch: cleanApikey === cleanExpected,
-      });
-
-      if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected) {
-        console.error("[Evolution Webhook] Invalid API Key - REJECTING", {
-          provided: cleanApikey,
-          expected: cleanExpected,
-        });
-        // EVO_DEBUG: allow debugging in non-production only
-        if (process.env.EVO_DEBUG_ENABLE === "1" && !isProduction) {
-          console.log(
-            "[Evolution Webhook] EVO_DEBUG: auth mismatch detected (debug mode, non-prod)"
-          );
-        }
-        if (isProduction) {
-          return res.status(403).send("Invalid API key");
-        }
-      } else {
-        console.log("[Evolution Webhook] Auth passed");
+      if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected && isProduction) {
+        return;
       }
-    } else {
-      console.log(
-        "[Evolution Webhook] No integration settings found - skipping auth"
-      );
     }
 
-    console.log(
-      "[Evolution Webhook] Calling processEvolutionWebhook with event:",
-      eventName
-    );
-    console.log("[Evolution Webhook] === FULL EVENT INFO ===");
-    console.log("[Evolution Webhook] Event:", eventName);
-    console.log("[Evolution Webhook] Body keys:", Object.keys(body || {}));
-    console.log("[Evolution Webhook] Has data:", !!body?.data);
-    console.log(
-      "[Evolution Webhook] Has message:",
-      !!(body?.message || body?.data?.message)
-    );
-    console.log("[Evolution Webhook] =========================");
-    res.status(200).send("EVENT_RECEIVED");
-
-    console.log("[Evolution Webhook] Response sent, processing async...");
-    processEvolutionWebhook({ ...body, event: eventName })
-      .then(() => {
-        console.log("[Evolution Webhook] processEvolutionWebhook completed");
-      })
-      .catch(error => {
-        console.error("[Evolution Webhook] Processing error:", error);
-      });
+    // Processar evento
+    await processEvolutionWebhook({ ...body, event: eventName });
   } catch (error) {
-    console.error("[Evolution Webhook] Handler error:", error);
-    res.status(500).send("Internal server error");
+    console.error("[Evolution Webhook] Error:", error);
   }
 }
 
@@ -1053,219 +964,62 @@ function parseEvolutionMessageContent(message: any) {
 }
 
 async function processEvolutionWebhook(body: any) {
-  console.log("[Evolution Webhook] Starting processEvolutionWebhook");
-  console.log(
-    "[Evolution Webhook] Body:",
-    JSON.stringify(body).substring(0, 500)
-  );
-
   try {
     const db = await getDb();
     if (!db) {
-      console.error("[Evolution Webhook] Database not available");
       throw new Error("Database not available");
     }
 
-    // Normalizar nome do evento - pode vir de várias formas
+    // Normalizar nome do evento
     let eventName = body?.event || body?.data?.event || "";
+    if (!eventName && body?.key) eventName = "messages.upsert";
+    else if (!eventName && body?.remoteJid) eventName = "messages.upsert";
 
-    // Se o evento vier vazio mas houver dados, tentar detectar pelo conteúdo
-    if (!eventName && body?.key) {
-      eventName = "messages.upsert";
-    } else if (!eventName && body?.remoteJid) {
-      eventName = "messages.upsert";
-    }
+    if (!eventName) return;
 
-    console.log("[Evolution Webhook] Event name:", eventName);
-
-    if (!eventName) {
-      console.warn("[Evolution Webhook] No event name in payload");
-      console.warn(
-        "[Evolution Webhook] Payload:",
-        JSON.stringify(body).substring(0, 500)
-      );
-      return;
-    }
-
-    // Normalizar o nome do evento para consistência
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
-    console.log("[Evolution Webhook] Normalized event:", normalizedEvent);
 
-    // Verificar se é evento de contatos
-    if (
-      normalizedEvent.includes("contact") ||
-      normalizedEvent === "contacts_update"
-    ) {
-      console.log("[Evolution Webhook] Handling contacts event");
-
-      // Tentar extrair remoteJid de várias estruturas possíveis
-      let remoteJid =
-        body?.data?.remoteJid ||
-        body?.remoteJid ||
-        extractEvolutionRemoteJid(body);
-
-      // Se o body for um array, pegar o primeiro elemento
-      if (!remoteJid && Array.isArray(body)) {
-        remoteJid = body[0]?.remoteJid;
-      }
-
+    // Evento de contatos
+    if (normalizedEvent.includes("contact") || normalizedEvent === "contacts_update") {
+      let remoteJid = body?.data?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
+      if (!remoteJid && Array.isArray(body)) remoteJid = body[0]?.remoteJid;
+      
       const fromNumber = normalizeInboundNumber(remoteJid);
+      if (!fromNumber) return;
 
-      if (!fromNumber) {
-        console.warn("[Evolution Webhook] No phone number found for contact", {
-          remoteJid,
-          sender: body?.sender,
-          destination: body?.destination,
-          bodyKeys: Object.keys(body || {}),
-          bodyIsArray: Array.isArray(body),
-          sample: Array.isArray(body)
-            ? JSON.stringify(body[0]).substring(0, 200)
-            : "N/A",
-        });
-        return;
-      }
-
-      const pushName =
-        body?.data?.profileName ||
-        body?.profileName ||
-        body?.data?.name ||
-        body?.name ||
-        null;
-      console.log("[Evolution Webhook] Contact update:", {
-        fromNumber,
-        pushName,
-      });
-
-      const customer = await findOrCreateCustomerByPhone(fromNumber, pushName);
-      console.log(
-        "[Evolution Webhook] Customer processed:",
-        (customer as any)?.insertId || (customer as any)?.id || "existing"
-      );
+      const pushName = body?.data?.profileName || body?.profileName || body?.data?.name || body?.name || null;
+      await findOrCreateCustomerByPhone(fromNumber, pushName);
       return;
     }
 
-    // Verificar se é evento de mensagens
-    // IMPORTANTE: o Evolution pode enviar "chats_update" e outros eventos sem mensagem.
-    // Aqui processamos apenas eventos de mensagem (messages.upsert).
-    // Ignoramos messages.update pois é apenas status (READ, DELIVERY_ACK, etc)
-    if (
-      normalizedEvent === "messages_upsert" ||
-      normalizedEvent === "messages.upsert"
-    ) {
-      console.log("[Evolution Webhook] Handling messages.upsert event - START");
-
+    // Evento de mensagens
+    if (normalizedEvent === "messages_upsert" || normalizedEvent === "messages.upsert") {
       try {
-        console.log("[Evolution Webhook] Step 1: extracting data from body");
         const data = body?.data || body;
-        console.log("[Evolution Webhook] Step 2: data extracted");
-        console.log(
-          "[Evolution Webhook] Step 2b: data keys:",
-          JSON.stringify(Object.keys(data || {}))
-        );
-
         const messageData = data?.message || data?.messages?.[0] || body || {};
-        console.log(
-          "[Evolution Webhook] Step 3: messageData type:",
-          typeof messageData
-        );
-
         const key = data?.key || messageData?.key || {};
-        console.log("[Evolution Webhook] Step 4: key exists:", !!key);
-
         const messageContent = messageData?.message || messageData;
-        console.log(
-          "[Evolution Webhook] Step 5: messageContent type:",
-          typeof messageContent
-        );
 
-        const messageId =
-          key?.id || data?.id || messageData?.id || `evo-${Date.now()}`;
-        const remoteJid =
-          key?.remoteJid ||
-          data?.remoteJid ||
-          messageData?.remoteJid ||
-          body?.remoteJid ||
-          extractEvolutionRemoteJid(body);
-        const pushName =
-          data?.pushName ||
-          data?.senderName ||
-          messageData?.pushName ||
-          body?.pushName ||
-          body?.sender?.name ||
-          body?.sender?.pushName ||
-          body?.data?.sender?.name;
-        const fromMe =
-          key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
+        const messageId = key?.id || data?.id || messageData?.id || `evo-${Date.now()}`;
+        const remoteJid = key?.remoteJid || data?.remoteJid || messageData?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
+        const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName || body?.sender?.name || body?.sender?.pushName || body?.data?.sender?.name;
+        const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
 
-        console.log("[Evolution Webhook] Step 6: Extracted:", {
-          messageId,
-          remoteJid,
-          pushName,
-          fromMe,
-        });
+        // Ignorar eventos de envio
+        if (normalizedEvent.startsWith("send") || normalizedEvent.includes("send_message")) return;
+        if (!remoteJid) return;
 
-        console.error("[Evolution Webhook] === STEP 7 START ===");
-        console.log("[Evolution Webhook] Step 7: Checking send events");
-        // Ignore send/ack events (outbound)
-        if (
-          normalizedEvent.startsWith("send") ||
-          normalizedEvent.includes("send_message")
-        ) {
-          console.log("[Evolution Webhook] IGNORING: send event");
-          return;
-        }
-
-        console.error("[Evolution Webhook] === STEP 8 START ===");
-        console.log("[Evolution Webhook] Step 8: Checking remoteJid");
-        if (!remoteJid) {
-          console.warn("[Evolution Webhook] FAILED: No remoteJid");
-          return;
-        }
-
-        console.error("[Evolution Webhook] === STEP 9 START ===");
-        console.log("[Evolution Webhook] Step 9: Normalizing phone");
         const fromNumber = normalizeInboundNumber(remoteJid);
-        if (!fromNumber) {
-          console.warn("[Evolution Webhook] FAILED: Could not normalize phone");
-          return;
-        }
-        console.log("[Evolution Webhook] Step 9b: fromNumber=", fromNumber);
+        if (!fromNumber) return;
 
-        console.error("[Evolution Webhook] === STEP 10 START ===");
-        console.log("[Evolution Webhook] Step 10: Checking fromMe");
         // Ignorar mensagens do próprio bot
-        if (fromMe === true || fromMe === "true" || fromMe === 1) {
-          console.log("[Evolution Webhook] IGNORING: fromMe=true");
-          return;
-        }
+        if (fromMe === true || fromMe === "true" || fromMe === 1) return;
 
-        console.error("[Evolution Webhook] === STEP 11 START ===");
-        console.log("[Evolution Webhook] Step 11: Checking duplicate");
         // Verificar duplicata
-        const existing = await getReceivedMessageByExternalId(
-          messageId,
-          "whatsapp"
-        );
-        if (existing) {
-          console.log("[Evolution Webhook] IGNORING: Duplicate message");
-          return;
-        }
+        const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+        if (existing) return;
 
-        console.error("[Evolution Webhook] === STEP 12 START ===");
-        // Log completo da mensagem de mídia
-        if (
-          messageContent?.imageMessage ||
-          messageContent?.videoMessage ||
-          messageContent?.documentMessage
-        ) {
-          console.log("[Evolution Webhook] === MEDIA MESSAGE PAYLOAD ===");
-          console.log(
-            JSON.stringify(messageContent, null, 2).substring(0, 2000)
-          );
-          console.log("[Evolution Webhook] === END MEDIA PAYLOAD ===");
-        }
-
-        // Determinar tipo e conteúdo da mensagem (robusto)
+        // Determinar tipo e conteúdo da mensagem
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;
         const messageText = parsed.text;
@@ -1275,55 +1029,22 @@ async function processEvolutionWebhook(body: any) {
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
-        console.log(
-          "[Evolution Webhook] Step 12b: messageType=",
-          messageType,
-          "text=",
-          messageText,
-          "mediaUrl=",
-          mediaUrl ? mediaUrl.substring(0, 60) + "..." : null,
-          "mimeType=",
-          mimeType,
-          "mediaKey=",
-          mediaKey ? "present" : "missing",
-          "imageBase64=",
-          imageBase64 ? "present (" + imageBase64.length + ")" : "missing"
-        );
 
-        // Se nao tem conteudo real (ex: payload de update sem mensagem), ignorar para nao criar conversa fantasma
+        // Se não tem conteúdo real, ignorar
         const hasRealContent =
           Boolean(messageText && String(messageText).trim()) ||
           Boolean(caption && String(caption).trim()) ||
           Boolean(mediaUrl && String(mediaUrl).trim());
-        if (!hasRealContent && messageType === "unknown") {
-          console.log("[Evolution Webhook] IGNORING: No content");
-          return;
-        }
+        if (!hasRealContent && messageType === "unknown") return;
 
-        // Download and save media to permanent storage if present
-        // Use Evolution API's getBase64FromMediaMessage endpoint for reliable media download
+        // Download media if present
         let permanentMediaUrl = null;
         let finalMimeType = mimeType;
 
-        // First, check if base64 is already provided in the payload (when Send Base64 is enabled)
         if (imageBase64) {
-          console.log(
-            "[Evolution Webhook] Using base64 from payload (Send Base64 enabled), size:",
-            imageBase64.length
-          );
           const contentType = mimeType || "application/octet-stream";
           permanentMediaUrl = `data:${contentType};base64,${imageBase64}`;
-        }
-        // Otherwise, try Evolution API endpoint
-        else if (
-          ["image", "video", "audio", "document"].includes(messageType) &&
-          key?.id
-        ) {
-          console.log(
-            "[Evolution Webhook] Downloading media using getBase64FromMediaMessage..."
-          );
-
-          // Use the Evolution API endpoint to get base64 directly
+        } else if (["image", "video", "audio", "document"].includes(messageType) && key?.id) {
           const mediaResult = await getMediaBase64FromEvolution({
             id: key.id,
             remoteJid: remoteJid,
@@ -1331,45 +1052,19 @@ async function processEvolutionWebhook(body: any) {
           });
 
           if (mediaResult) {
-            console.log(
-              "[Evolution Webhook] Media downloaded successfully, size:",
-              mediaResult.base64Data.length
-            );
             permanentMediaUrl = mediaResult.dataUrl;
             finalMimeType = mediaResult.mimeType;
           } else {
-            console.log(
-              "[Evolution Webhook] getBase64FromMediaMessage failed, trying fallback...",
-              "mediaUrl:",
-              mediaUrl?.substring(0, 50)
-            );
-            // Fallback to old method
-            const fallbackResult = await downloadAndSaveMedia(
-              mediaUrl,
-              mimeType,
-              fromNumber,
-              mediaKey,
-              directPath
-            );
+            const fallbackResult = await downloadAndSaveMedia(mediaUrl, mimeType, fromNumber, mediaKey, directPath);
             if (fallbackResult) {
               permanentMediaUrl = fallbackResult.dataUrl;
-              console.log("[Evolution Webhook] Fallback download succeeded");
             } else {
-              console.log(
-                "[Evolution Webhook] Fallback download FAILED, using temporary URL"
-              );
               permanentMediaUrl = mediaUrl;
             }
           }
         }
 
-        console.log("[Evolution Webhook] Step 13: Saving to database");
-
-        const messageTimestamp =
-          data?.messageTimestamp ||
-          messageData?.timestamp ||
-          messageContent?.timestamp ||
-          Math.floor(Date.now() / 1000);
+        const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
 
         // Salvar mensagem no banco
         await db.insert(receivedMessages).values({
@@ -1377,51 +1072,20 @@ async function processEvolutionWebhook(body: any) {
           externalId: messageId,
           fromNumber,
           fromName: pushName || null,
-          messageType: messageType as
-            | "text"
-            | "image"
-            | "audio"
-            | "video"
-            | "document"
-            | "location"
-            | "contact"
-            | "sticker"
-            | "reaction"
-            | "unknown",
+          messageType: messageType as any,
           messageText,
           mediaUrl: permanentMediaUrl || mediaUrl,
           mimeType: finalMimeType || mimeType,
           caption,
           timestamp: messageTimestamp,
-          rawPayload: JSON.stringify({
-            ...body,
-            mediaDownloaded: !!permanentMediaUrl,
-            mediaSize: permanentMediaUrl ? permanentMediaUrl.length : 0,
-          }),
+          rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!permanentMediaUrl }),
           processed: 0,
         });
 
-        console.log("[Evolution Webhook] Step 14: Saved to receivedMessages");
-
-        // Check if this might be a survey response (single digit 1-5)
-        const isPossibleSurveyResponse =
-          messageType === "text" &&
-          messageText &&
-          /^\s*[1-5]\s*$/.test(messageText.trim());
+        // Check survey response
+        const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());
 
         if (!isPossibleSurveyResponse) {
-          console.log(
-            "[Evolution Webhook] Step 15: Calling ingestInboundConversationMessage"
-          );
-          console.log(
-            "[Evolution Webhook] mediaUrl being passed:",
-            permanentMediaUrl
-              ? "base64 data URL"
-              : mediaUrl
-                ? "original URL"
-                : "null"
-          );
-          // Ingerir na conversa apenas se não for resposta de pesquisa
           await ingestInboundConversationMessage({
             provider: "whatsapp",
             fromNumber,
@@ -1432,23 +1096,9 @@ async function processEvolutionWebhook(body: any) {
             mediaUrl: permanentMediaUrl || mediaUrl,
             mimeType,
           });
-          console.log(
-            "[Evolution Webhook] Step 16: ingestInboundConversationMessage DONE"
-          );
-        } else {
-          console.log("[Evolution Webhook] IGNORING: Survey response");
         }
-
-        console.log("[Evolution Webhook] SUCCESS: Webhook processed");
       } catch (msgError) {
-        console.error(
-          "[Evolution Webhook] ERROR in message processing:",
-          msgError
-        );
-        console.error(
-          "[Evolution Webhook] Error stack:",
-          msgError instanceof Error ? msgError.stack : "no stack"
-        );
+        console.error("[Evolution Webhook] Error:", msgError);
       }
       return;
     }

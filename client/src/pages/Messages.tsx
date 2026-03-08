@@ -73,15 +73,17 @@ import {
   ChevronRight,
   Building,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import { SoundSelector } from "@/components/SoundSelector";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [selectedConversation, setSelectedConversation] = useState<
     number | null
@@ -131,6 +133,61 @@ export default function Messages() {
         isProfileOpen,
     }
   );
+
+  // === SSE Connection for Real-time Messages ===
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+    let reconnectAttempt = 0;
+
+    const connect = () => {
+      try {
+        eventSource = new EventSource("/api/events", { withCredentials: true });
+
+        eventSource.onopen = () => {
+          console.log("[MessagesSSE] Connected successfully");
+          reconnectAttempt = 0;
+        };
+
+        eventSource.onmessage = event => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log("[MessagesSSE] Event received:", data);
+
+            if (data.type === "message:new" || data.type === "MESSAGE_NEW") {
+              // Invalidate queries to refresh data
+              queryClient.invalidateQueries({ queryKey: ["conversations"] });
+              queryClient.invalidateQueries({ queryKey: ["messages"] });
+            }
+          } catch (e) {
+            console.error("[MessagesSSE] Parse error:", e);
+          }
+        };
+
+        eventSource.onerror = err => {
+          console.error("[MessagesSSE] Connection error:", err);
+          eventSource?.close();
+
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
+          reconnectTimeout = setTimeout(() => {
+            reconnectAttempt++;
+            connect();
+          }, delay);
+        };
+      } catch (e) {
+        console.error("[MessagesSSE] Connection failed:", e);
+      }
+    };
+
+    connect();
+
+    return () => {
+      eventSource?.close();
+      clearTimeout(reconnectTimeout);
+    };
+  }, [user?.id, queryClient]);
 
   const filteredConversations =
     conversations?.filter(

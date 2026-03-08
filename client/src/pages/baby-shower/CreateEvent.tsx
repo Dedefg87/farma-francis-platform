@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { FarmaDashboardLayout } from "@/components/FarmaDashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,34 +76,32 @@ export default function CreateEvent() {
       expectedDueDate: formData.expectedDueDate || undefined,
       eventDate: formData.eventDate || undefined,
       targetAmount: formData.targetAmount ? parseFloat(formData.targetAmount) : undefined,
+      welcomeMessage: formData.message || undefined,
     });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white">
-      <header className="bg-white shadow-sm py-4">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <Baby className="w-6 h-6 text-pink-500" />
-              <span className="text-xl font-bold text-pink-600">Farma Francis</span>
-            </div>
+    <FarmaDashboardLayout>
+      <div className="max-w-xl mx-auto">
+        {/* Header com botão voltar */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/baby-shower")}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <Baby className="w-6 h-6 text-pink-500" />
+            <span className="text-xl font-bold text-pink-600">Criar Chá de Bebê</span>
           </div>
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-xl">
         <Card>
           <CardHeader className="text-center">
             <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Gift className="w-8 h-8 text-pink-600" />
             </div>
-            <CardTitle className="text-2xl">Criar Cha de Bebe</CardTitle>
+            <CardTitle className="text-2xl">Novo Evento</CardTitle>
             <CardDescription>
-              {step === 1 ? "Primeiro, vamos conhecer a mamae" : "Agora os detalhes do evento"}
+              {step === 1 ? "Primeiro, vamos conhecer a mamãe" : "Agora os detalhes do evento"}
             </CardDescription>
           </CardHeader>
 
@@ -110,7 +109,7 @@ export default function CreateEvent() {
             {step === 1 ? (
               <div className="space-y-4">
                 <div>
-                  <Label>Nome da Mamae *</Label>
+                  <Label>Nome da Mamãe *</Label>
                   <Input
                     placeholder="Ex: Maria Silva"
                     value={formData.motherName}
@@ -126,7 +125,7 @@ export default function CreateEvent() {
                   />
                 </div>
                 <Button className="w-full bg-pink-500 hover:bg-pink-600" onClick={handleNext}>
-                  Proximo <ChevronRight className="w-4 h-4 ml-2" />
+                  Próximo <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
             ) : (
@@ -134,7 +133,7 @@ export default function CreateEvent() {
                 <div>
                   <Label>Nome do Evento *</Label>
                   <Input
-                    placeholder="Ex: Cha da Maria"
+                    placeholder="Ex: Chá da Maria"
                     value={formData.eventName}
                     onChange={(e) => handleChange("eventName", e.target.value)}
                   />
@@ -158,7 +157,7 @@ export default function CreateEvent() {
                   </div>
                 </div>
                 <div>
-                  <Label>Meta de Arrecadacao (R$)</Label>
+                  <Label>Meta de Arrecadação (R$)</Label>
                   <Input
                     type="number"
                     placeholder="Ex: 500"
@@ -190,7 +189,7 @@ export default function CreateEvent() {
             )}
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </FarmaDashboardLayout>
   );
 }

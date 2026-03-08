@@ -7,7 +7,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
-import { sql } from "drizzle-orm";
+import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -47,9 +47,14 @@ async function startServer() {
 
   const server = createServer(app);
 
+  // Rate limiting aumentado para suportar alto volume de mensagens
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
+<<<<<<< HEAD
     max: 1000,
+=======
+    max: 1000, // Aumentado de 100 para 1000 req/min
+>>>>>>> 5d609ee0b6c27d924ae371da6752f7504588bb8b
     message: { error: "Too many requests, please try again later" },
     standardHeaders: true,
     legacyHeaders: false,
@@ -57,7 +62,7 @@ async function startServer() {
 
   const webhookLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 200,
+    max: 2000, // Aumentado de 200 para 2000 req/min
     message: { error: "Too many webhook requests" },
     standardHeaders: true,
     legacyHeaders: false,
@@ -241,6 +246,7 @@ async function startServer() {
 
   // Debug: testar ingestInboundConversationMessage
   app.post("/api/debug/test-ingest", async (req, res) => {
+    const t0 = Date.now();
     try {
       const { ingestInboundConversationMessage } =
         await import("../db-messages");
@@ -251,14 +257,42 @@ async function startServer() {
         provider: "whatsapp",
         messageType: "text",
       });
-      res.json({ success: true, result });
+      const t1 = Date.now();
+      const latency = t1 - t0;
+      res.json({ success: true, result, latency });
     } catch (error) {
+      const t1 = Date.now();
+      const latency = t1 - t0;
       console.error("[Debug Test Ingest] Error:", error);
       res.status(500).json({
         success: false,
         error: String(error),
+        latency,
         stack: error instanceof Error ? error.stack : null,
       });
+    }
+  });
+
+  // Debug: medir latência de ingestão via API
+  app.get("/api/debug/ingest-latency", async (_req, res) => {
+    const t0 = Date.now();
+    try {
+      const { ingestInboundConversationMessage } =
+        await import("../db-messages");
+      const result = await ingestInboundConversationMessage({
+        fromNumber: "+5511999999999",
+        fromName: "Latency Test",
+        content: "latency probe",
+        provider: "whatsapp",
+        messageType: "text",
+      });
+      const t1 = Date.now();
+      const latency = t1 - t0;
+      res.json({ success: true, latency, result });
+    } catch (error) {
+      const t1 = Date.now();
+      const latency = t1 - t0;
+      res.status(500).json({ success: false, latency, error: String(error) });
     }
   });
 
@@ -661,6 +695,20 @@ async function startServer() {
       // Fix baby_shower_purchases - modify package_id to NOT NULL
       // Skip this - it conflicts with FK constraint SET NULL
       // Instead, just check table structure
+
+      // Add welcome_message column to baby_shower_events if missing
+      try {
+        await pool.execute(
+          `ALTER TABLE baby_shower_events ADD COLUMN welcome_message TEXT`
+        );
+        results.push("Added welcome_message column to baby_shower_events");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("welcome_message column already exists in baby_shower_events");
+        } else {
+          results.push(`Error adding welcome_message: ${e.message}`);
+        }
+      }
 
       await pool.end();
       res.json({ success: true, results });
@@ -1449,6 +1497,508 @@ async function startServer() {
     }
   });
 
+  // FIX: Force recreate baby_shower_purchases table
+  app.post("/api/fix/force-baby-shower-tables", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: string[] = [];
+
+      // Verificar se tabela existe e dropar se necessário
+      try {
+        await db.raw(`DROP TABLE IF EXISTS baby_shower_purchases`);
+        results.push("Dropped baby_shower_purchases table");
+      } catch (e: any) {
+        results.push(`Error dropping table: ${e.message}`);
+      }
+
+      // Recriar tabela com estrutura correta
+      try {
+        await db.raw(`
+          CREATE TABLE baby_shower_purchases (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            event_id INT NOT NULL,
+            package_id INT NOT NULL,
+            guest_customer_id INT NULL,
+            guest_name VARCHAR(255) NOT NULL,
+            guest_phone VARCHAR(20) NULL,
+            guest_email VARCHAR(320) NULL,
+            message_to_parents TEXT NULL,
+            payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
+            amount_paid DECIMAL(10,2) NOT NULL,
+            payment_method VARCHAR(50) NULL,
+            payment_reference VARCHAR(255) NULL,
+            paid_at TIMESTAMP NULL,
+            notification_sent INT DEFAULT 0,
+            notification_sent_at TIMESTAMP NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE,
+            FOREIGN KEY (package_id) REFERENCES baby_shower_gift_packages(id),
+            FOREIGN KEY (guest_customer_id) REFERENCES customers(id) ON DELETE SET NULL
+          )
+        `);
+        results.push("Created baby_shower_purchases table with correct structure");
+      } catch (e: any) {
+        results.push(`Error creating table: ${e.message}`);
+      }
+
+      // Verificar estrutura final
+      const columns = await db.raw(`DESCRIBE baby_shower_purchases`);
+      results.push(`Table structure: ${JSON.stringify(columns)}`);
+
+      res.json({ success: true, results });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // FIX: Force recreate baby_shower_withdrawals table
+  app.post("/api/fix/force-baby-shower-withdrawals", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: string[] = [];
+
+      // Drop e recriar tabela
+      try {
+        await db.raw(`DROP TABLE IF EXISTS baby_shower_withdrawals`);
+        results.push("Dropped baby_shower_withdrawals table");
+      } catch (e: any) {
+        results.push(`Error dropping table: ${e.message}`);
+      }
+
+      // Recriar com estrutura correta (igual ao Drizzle schema)
+      try {
+        await db.raw(`
+          CREATE TABLE baby_shower_withdrawals (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            event_id INT NOT NULL,
+            related_task_id INT NULL,
+            withdrawal_type ENUM('diapers', 'wipes', 'money') NOT NULL DEFAULT 'diapers',
+            diaper_size VARCHAR(20) NULL,
+            quantity INT NOT NULL,
+            requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            fulfilled_at TIMESTAMP NULL,
+            status ENUM('requested', 'preparing', 'ready', 'delivered', 'cancelled') NOT NULL DEFAULT 'requested',
+            fulfilled_by INT NULL,
+            delivery_method ENUM('pickup', 'delivery') NOT NULL DEFAULT 'pickup',
+            notes TEXT NULL,
+            FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE,
+            FOREIGN KEY (related_task_id) REFERENCES crm_tasks(id) ON DELETE SET NULL,
+            FOREIGN KEY (fulfilled_by) REFERENCES users(id) ON DELETE SET NULL
+          )
+        `);
+        results.push("Created baby_shower_withdrawals table with correct structure");
+      } catch (e: any) {
+        results.push(`Error creating table: ${e.message}`);
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // FIX: Add baby shower new columns (whatsapp_number, image_url)
+  app.post("/api/fix/add-baby-shower-columns", async (req, res) => {
+    try {
+      const { getDbRaw } = await import("../db");
+      const db = await getDbRaw();
+      if (!db || !db.raw) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const results: string[] = [];
+
+      // Add whatsapp_number to baby_shower_events
+      try {
+        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN whatsapp_number VARCHAR(20) NULL`);
+        results.push("Added whatsapp_number to baby_shower_events");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("whatsapp_number already exists in baby_shower_events");
+        } else {
+          results.push(`Error adding whatsapp_number: ${e.message}`);
+        }
+      }
+
+      // Add image_url to baby_shower_gift_packages
+      try {
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN image_url VARCHAR(500) NULL`);
+        results.push("Added image_url to baby_shower_gift_packages");
+      } catch (e: any) {
+        if (e.code === "ER_DUP_FIELDNAME") {
+          results.push("image_url already exists in baby_shower_gift_packages");
+        } else {
+          results.push(`Error adding image_url: ${e.message}`);
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // UPLOAD: Upload image for baby shower products
+  app.post("/api/baby-shower/upload-image", async (req, res) => {
+    try {
+      const { image, filename } = req.body;
+      
+      if (!image) {
+        return res.status(400).json({ error: "Image data required" });
+      }
+
+      // Extrair base64 da string data:image/xxx;base64,yyy
+      const matches = image.match(/^data:image\/(\w+);base64,(.+)$/);
+      if (!matches) {
+        return res.status(400).json({ error: "Invalid image format. Expected data:image/xxx;base64,..." });
+      }
+
+      const extension = matches[1];
+      const base64Data = matches[2];
+      const originalBuffer = Buffer.from(base64Data, 'base64');
+
+      // Otimizar imagem com sharp - redimensionar para 800px e comprimir
+      let optimizedBuffer: Buffer;
+      let finalExtension = 'webp';
+      
+      try {
+        const sharp = (await import('sharp')).default;
+        optimizedBuffer = await sharp(originalBuffer)
+          .resize(800, 800, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+          .webp({ 
+            quality: 80,
+            effort: 4 
+          })
+          .toBuffer();
+        
+        console.log(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes`);
+      } catch (sharpError: any) {
+        console.log("[Upload] Sharp error, using original:", sharpError.message);
+        optimizedBuffer = originalBuffer;
+        finalExtension = extension;
+      }
+
+      // Gerar nome único para o arquivo
+      const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      
+      // Prioridade 1: Cloudinary (se configurado)
+      if (process.env.CLOUDINARY_CLOUD_NAME) {
+        try {
+          const { v2: cloudinary } = await import('cloudinary');
+          cloudinary.config({
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            api_key: process.env.CLOUDINARY_API_KEY,
+            api_secret: process.env.CLOUDINARY_API_SECRET,
+          });
+          
+          const base64Optimized = optimizedBuffer.toString('base64');
+          const dataUri = `data:image/${finalExtension};base64,${base64Optimized}`;
+          
+          const result = await cloudinary.uploader.upload(dataUri, {
+            folder: 'baby-shower',
+            public_id: uniqueName,
+            resource_type: 'image',
+          });
+          
+          console.log("[Upload] Cloudinary success:", result.secure_url);
+          return res.json({ success: true, url: result.secure_url });
+        } catch (cloudinaryError: any) {
+          console.error("[Upload] Cloudinary error:", cloudinaryError.message);
+        }
+      }
+      
+      // Prioridade 2: Storage do Forge (se configurado)
+      try {
+        const { storagePut } = await import("../storage");
+        const result = await storagePut(`baby-shower/${uniqueName}.${finalExtension}`, optimizedBuffer, `image/${finalExtension}`);
+        console.log("[Upload] Storage success:", result.url);
+        return res.json({ success: true, url: result.url });
+      } catch (storageError: any) {
+        console.log("[Upload] Storage error:", storageError.message);
+        
+        // Prioridade 3: Imgur API
+        try {
+          const base64Optimized = optimizedBuffer.toString('base64');
+          const imgurResponse = await fetch("https://api.imgur.com/3/image", {
+            method: "POST",
+            headers: {
+              "Authorization": "Client-ID 546c25a59c58ad7",
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: `image=${encodeURIComponent(base64Optimized)}&type=base64`,
+          });
+
+          const imgurData = await imgurResponse.json();
+          
+          if (imgurData.success && imgurData.data?.link) {
+            console.log("[Upload] Imgur success:", imgurData.data.link);
+            return res.json({ success: true, url: imgurData.data.link });
+          }
+          
+          throw new Error(`Imgur failed: ${JSON.stringify(imgurData)}`);
+        } catch (imgurError: any) {
+          console.error("[Upload] Imgur error:", imgurError.message);
+          
+          // Último fallback: base64 data URL
+          const dataUrl = `data:image/${finalExtension};base64,${optimizedBuffer.toString('base64')}`;
+          console.log("[Upload] Using base64 fallback, size:", dataUrl.length);
+          return res.json({ success: true, url: dataUrl, fallback: true });
+        }
+      }
+    } catch (error: any) {
+      console.error("[Upload] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: Ver últimos mensagens recebidas com timestamps
+  app.get("/api/debug/recent-messages", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
+      
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      // Mensagens da tabela messages
+      const [messages]: any = await pool.execute(
+        `SELECT id, channel, direction, content, created_at FROM messages ORDER BY created_at DESC LIMIT ${limit}`
+      );
+
+      // Mensagens da tabela received_messages
+      const [receivedMessages]: any = await pool.execute(
+        `SELECT id, from_number, from_name, message_text, timestamp, processed, created_at FROM received_messages ORDER BY created_at DESC LIMIT ${limit}`
+      );
+
+      // Mensagens da tabela conversation_messages
+      const [conversationMessages]: any = await pool.execute(
+        `SELECT id, conversation_id, sender_type, content, created_at FROM conversation_messages ORDER BY created_at DESC LIMIT ${limit}`
+      );
+
+      await pool.end();
+      res.json({ 
+        messages: messages,
+        receivedMessages: receivedMessages,
+        conversationMessages: conversationMessages
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: Ver mensagens de um número específico
+  app.get("/api/debug/messages/:phone", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
+      const phone = req.params.phone.replace(/\D/g, '');
+      
+      // Buscar em received_messages
+      const [received]: any = await pool.execute(
+        `SELECT id, from_number, from_name, message_text, timestamp, created_at 
+         FROM received_messages 
+         WHERE from_number LIKE '%${phone}%' 
+         ORDER BY created_at DESC LIMIT 50`
+      );
+
+      // Buscar em conversation_messages via conversations
+      const [conversations]: any = await pool.execute(
+        `SELECT cm.id, c.phone_number, cm.sender_type, cm.content, cm.created_at 
+         FROM conversation_messages cm 
+         JOIN conversations c ON c.id = cm.conversation_id 
+         WHERE c.phone_number LIKE '%${phone}%' 
+         ORDER BY cm.created_at DESC LIMIT 50`
+      );
+
+      await pool.end();
+      res.json({ 
+        phone: phone,
+        receivedMessages: received,
+        conversationMessages: conversations
+      });
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: Ver todos os webhooks recebidos recentemente
+  const recentWebhooks: any[] = [];
+  app.get("/api/debug/webhooks", (req, res) => {
+    res.json({ 
+      count: recentWebhooks.length,
+      last10: recentWebhooks.slice(-10).map(w => ({
+        time: w.time,
+        event: w.event,
+        from: w.from,
+        message: w.message?.substring(0, 50)
+      }))
+    });
+  });
+
+  // PUBLIC: Add gift package to baby shower event (no auth required)
+  app.post("/api/baby-shower/add-package", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const { eventCode, name, description, giftType, size, price, imageUrl, stockLimit } = req.body;
+
+      if (!eventCode || !name || !price) {
+        return res.status(400).json({ error: "eventCode, name, and price are required" });
+      }
+
+      // Find event by code
+      const [event]: any = await db.execute(
+        sql`SELECT id FROM baby_shower_events WHERE event_code = ${eventCode}`
+      );
+
+      if (!event || event.length === 0) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const eventId = event[0].id;
+
+      // Insert package - using correct column names from schema
+      const [result]: any = await db.execute(sql`
+        INSERT INTO baby_shower_gift_packages 
+        (event_id, package_name, description, gift_type, size_label, price, image_url, stock_limit, sold_count, is_active, created_at)
+        VALUES (${eventId}, ${name}, ${description || null}, ${giftType || "diapers"}, ${size || null}, ${price}, ${imageUrl || null}, ${stockLimit || null}, 0, 1, NOW())
+      `);
+
+      res.json({ 
+        success: true, 
+        packageId: result.insertId,
+        message: `Package "${name}" added to event ${eventCode}` 
+      });
+    } catch (error) {
+      console.error("[baby-shower/add-package] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // PUBLIC: Update gift package (including image)
+  app.put("/api/baby-shower/update-package/:id", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const packageId = parseInt(req.params.id);
+      const { name, description, price, imageUrl, stockLimit, size, isActive } = req.body;
+
+      if (!packageId) {
+        return res.status(400).json({ error: "Package ID is required" });
+      }
+
+      // Build SET clauses using Drizzle sql template
+      const setClauses: SQL[] = [];
+      
+      if (name !== undefined) {
+        setClauses.push(sql`package_name = ${name}`);
+      }
+      if (description !== undefined) {
+        setClauses.push(sql`description = ${description}`);
+      }
+      if (price !== undefined) {
+        setClauses.push(sql`price = ${price}`);
+      }
+      if (imageUrl !== undefined) {
+        setClauses.push(sql`image_url = ${imageUrl}`);
+      }
+      if (stockLimit !== undefined) {
+        setClauses.push(sql`stock_limit = ${stockLimit}`);
+      }
+      if (size !== undefined) {
+        setClauses.push(sql`size_label = ${size}`);
+      }
+      if (isActive !== undefined) {
+        setClauses.push(sql`is_active = ${isActive ? 1 : 0}`);
+      }
+
+      if (setClauses.length === 0) {
+        return res.status(400).json({ error: "No fields to update" });
+      }
+
+      // Join all SET clauses
+      const setClause = sql.join(setClauses, sql`, `);
+      
+      await db.execute(sql`
+        UPDATE baby_shower_gift_packages 
+        SET ${setClause}
+        WHERE id = ${packageId}
+      `);
+
+      res.json({ 
+        success: true, 
+        message: `Package ${packageId} updated` 
+      });
+    } catch (error) {
+      console.error("[baby-shower/update-package] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // PUBLIC: List baby shower events (no auth required)
+  app.get("/api/baby-shower/list-events", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const [events]: any = await db.execute(sql`
+        SELECT id, event_code, event_name, status, created_at 
+        FROM baby_shower_events 
+        ORDER BY created_at DESC 
+        LIMIT 20
+      `);
+
+      res.json({ success: true, events });
+    } catch (error) {
+      console.error("[baby-shower/list-events] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // FIX: Alterar image_url de VARCHAR(500) para TEXT
+  app.post("/api/fix/alter-image-url-to-text", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      await db.execute(sql`
+        ALTER TABLE baby_shower_gift_packages 
+        MODIFY COLUMN image_url TEXT
+      `);
+
+      res.json({ success: true, message: "image_url column changed to TEXT" });
+    } catch (error) {
+      console.error("[fix/alter-image-url-to-text] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
   app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
     try {
@@ -1794,6 +2344,129 @@ async function startServer() {
       .catch(error => {
         console.error("Failed to start flow engine:", error);
       });
+
+    // ========================================
+    // EVOLUTION 1: Auto Image Search for Products
+    // ========================================
+    app.post("/api/baby-shower/auto-image/:packageId", async (req, res) => {
+      try {
+        const packageId = parseInt(req.params.packageId);
+        const { productName } = req.body;
+
+        if (!packageId || !productName) {
+          return res.status(400).json({ error: "packageId and productName required" });
+        }
+
+        // Search for images via Serper API
+        const SERPER_API_KEY = process.env.SERPER_API_KEY || "6abb2781d7edf99aa211c064912283e3c804e8c0";
+        const response = await fetch("https://google.serper.dev/images", {
+          method: "POST",
+          headers: {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            q: productName + " produto imagem oficial",
+            gl: "br",
+            hl: "pt-br",
+          }),
+        });
+
+        if (!response.ok) {
+          return res.status(500).json({ error: "Failed to search images" });
+        }
+
+        const data = await response.json();
+        const images = data.images || [];
+        
+        if (images.length === 0) {
+          return res.json({ success: false, error: "No images found" });
+        }
+
+        // Get first image
+        const imageUrl = images[0].imageUrl || images[0].link;
+        
+        // Update in database
+        const db = await getDb();
+        if (db) {
+          await db.execute(sql`
+            UPDATE baby_shower_gift_packages 
+            SET image_url = ${imageUrl}
+            WHERE id = ${packageId}
+          `);
+        }
+
+        res.json({ success: true, imageUrl });
+      } catch (error) {
+        console.error("[AutoImage] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // ========================================
+    // EVOLUTION 2: System Health Monitor
+    // ========================================
+    app.get("/api/system/health", async (req, res) => {
+      try {
+        const checks = [];
+        
+        // Check API
+        const apiStart = Date.now();
+        checks.push({
+          service: "API",
+          status: "ok",
+          responseTime: Date.now() - apiStart,
+          message: "API responding"
+        });
+        
+        // Check Database
+        try {
+          const db = await getDb();
+          if (db) {
+            await db.execute(sql`SELECT 1`);
+            checks.push({
+              service: "Database",
+              status: "ok",
+              message: "Database connection OK"
+            });
+          } else {
+            checks.push({
+              service: "Database",
+              status: "error",
+              message: "Database not available"
+            });
+          }
+        } catch (dbError) {
+          checks.push({
+            service: "Database",
+            status: "error",
+            message: String(dbError)
+          });
+        }
+        
+        res.json({
+          lastCheck: new Date().toISOString(),
+          checks,
+          alerts: []
+        });
+      } catch (error) {
+        console.error("[HealthMonitor] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.get("/api/system/status", async (req, res) => {
+      try {
+        const { getSystemStatus } = await import("../services/health-monitor");
+        const status = getSystemStatus();
+        res.json(status);
+      } catch (error) {
+        console.error("[HealthMonitor] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    console.log(`🚀 Server listening on port ${port}`);
   });
 }
 
