@@ -2314,6 +2314,53 @@ async function startServer() {
   });
 }
 
+  // ========================================
+  // EVOLUTION 1: Auto Image Search for Products
+  // ========================================
+  app.post("/api/baby-shower/auto-image/:packageId", async (req, res) => {
+    try {
+      const packageId = parseInt(req.params.packageId);
+      const { productName } = req.body;
+
+      if (!packageId || !productName) {
+        return res.status(400).json({ error: "packageId and productName required" });
+      }
+
+      const { fetchAndUpdateProductImage } = await import("../services/product-image-search");
+      const result = await fetchAndUpdateProductImage(packageId, productName);
+
+      res.json(result);
+    } catch (error) {
+      console.error("[AutoImage] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // ========================================
+  // EVOLUTION 2: System Health Monitor
+  // ========================================
+  app.get("/api/system/health", async (req, res) => {
+    try {
+      const { runHealthChecks } = await import("../services/health-monitor");
+      const health = await runHealthChecks();
+      res.json(health);
+    } catch (error) {
+      console.error("[HealthMonitor] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  app.get("/api/system/status", async (req, res) => {
+    try {
+      const { getSystemStatus } = await import("../services/health-monitor");
+      const status = getSystemStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("[HealthMonitor] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
 startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
 // FORCE REBUILD: 1772736794
