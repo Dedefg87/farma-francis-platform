@@ -2441,25 +2441,26 @@ async function startServer() {
           return res.status(500).json({ error: "No DB" });
         }
         
-        const { conversations, users } = await import("../../drizzle/schema");
-        const { desc } = await import("drizzle-orm");
+        const schema = await import("../../drizzle/schema");
+        const drizzle = await import("drizzle-orm");
         
         const result = await db
           .select({
-            id: conversations.id,
-            customerName: conversations.customerName,
-            status: conversations.status,
-            assignedTo: conversations.assignedTo,
-            assignedAgentName: users.name,
+            id: schema.conversations.id,
+            customerName: schema.conversations.customerName,
+            status: schema.conversations.status,
+            assignedTo: schema.conversations.assignedTo,
+            assignedAgentName: schema.users.name,
           })
-          .from(conversations)
-          .leftJoin(users, eq(conversations.assignedTo, users.id))
-          .orderBy(desc(conversations.id))
+          .from(schema.conversations)
+          .leftJoin(schema.users, drizzle.eq(schema.conversations.assignedTo, schema.users.id))
+          .orderBy(drizzle.desc(schema.conversations.id))
           .limit(10);
         
         res.json(result);
       } catch (error) {
-        res.status(500).json({ error: String(error) });
+        console.error("[Debug Agent Names] Error:", error);
+        res.status(500).json({ error: String(error), stack: (error as Error).stack });
       }
     });
 
