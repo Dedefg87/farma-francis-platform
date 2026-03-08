@@ -2209,28 +2209,27 @@ async function startServer() {
   // Debug: verificar assignedAgentName (ANTES do serveStatic)
   app.get("/api/debug/agent-names", async (req, res) => {
     try {
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "No DB" });
-      }
-      
-      const schema = await import("../../drizzle/schema");
-      const drizzle = await import("drizzle-orm");
-      
-      const result = await db
-        .select({
-          id: schema.conversations.id,
-          customerName: schema.conversations.customerName,
-          status: schema.conversations.status,
-          assignedTo: schema.conversations.assignedTo,
-          assignedAgentName: schema.users.name,
-        })
-        .from(schema.conversations)
-        .leftJoin(schema.users, drizzle.eq(schema.conversations.assignedTo, schema.users.id))
-        .orderBy(drizzle.desc(schema.conversations.id))
-        .limit(10);
-      
-      res.json(result);
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          c.id, 
+          c.customer_name as customerName, 
+          c.status, 
+          c.assigned_to as assignedTo,
+          u.name as assignedAgentName
+        FROM conversations c
+        LEFT JOIN users u ON c.assigned_to = u.id
+        ORDER BY c.id DESC
+        LIMIT 10
+      `);
+      await pool.end();
+
+      res.json(rows);
     } catch (error) {
       console.error("[Debug Agent Names] Error:", error);
       res.status(500).json({ error: String(error), stack: (error as Error).stack });
