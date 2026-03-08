@@ -2205,6 +2205,38 @@ async function startServer() {
       createContext,
     })
   );
+
+  // Debug: verificar assignedAgentName (ANTES do serveStatic)
+  app.get("/api/debug/agent-names", async (req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "No DB" });
+      }
+      
+      const schema = await import("../../drizzle/schema");
+      const drizzle = await import("drizzle-orm");
+      
+      const result = await db
+        .select({
+          id: schema.conversations.id,
+          customerName: schema.conversations.customerName,
+          status: schema.conversations.status,
+          assignedTo: schema.conversations.assignedTo,
+          assignedAgentName: schema.users.name,
+        })
+        .from(schema.conversations)
+        .leftJoin(schema.users, drizzle.eq(schema.conversations.assignedTo, schema.users.id))
+        .orderBy(drizzle.desc(schema.conversations.id))
+        .limit(10);
+      
+      res.json(result);
+    } catch (error) {
+      console.error("[Debug Agent Names] Error:", error);
+      res.status(500).json({ error: String(error), stack: (error as Error).stack });
+    }
+  });
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     // Dynamic import - only loads vite in development
@@ -2430,37 +2462,6 @@ async function startServer() {
       } catch (error) {
         console.error("[HealthMonitor] Error:", error);
         res.status(500).json({ error: String(error) });
-      }
-    });
-
-    // Debug: verificar assignedAgentName
-    app.get("/api/debug/agent-names", async (req, res) => {
-      try {
-        const db = await getDb();
-        if (!db) {
-          return res.status(500).json({ error: "No DB" });
-        }
-        
-        const schema = await import("../../drizzle/schema");
-        const drizzle = await import("drizzle-orm");
-        
-        const result = await db
-          .select({
-            id: schema.conversations.id,
-            customerName: schema.conversations.customerName,
-            status: schema.conversations.status,
-            assignedTo: schema.conversations.assignedTo,
-            assignedAgentName: schema.users.name,
-          })
-          .from(schema.conversations)
-          .leftJoin(schema.users, drizzle.eq(schema.conversations.assignedTo, schema.users.id))
-          .orderBy(drizzle.desc(schema.conversations.id))
-          .limit(10);
-        
-        res.json(result);
-      } catch (error) {
-        console.error("[Debug Agent Names] Error:", error);
-        res.status(500).json({ error: String(error), stack: (error as Error).stack });
       }
     });
 
