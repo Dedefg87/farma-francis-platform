@@ -2206,6 +2206,36 @@ async function startServer() {
     })
   );
 
+  // Debug: testar listActive query
+  app.get("/api/debug/list-active-raw", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          c.id, 
+          c.customer_name as customerName, 
+          c.status, 
+          c.assigned_to as assignedTo,
+          u.name as assignedAgentName
+        FROM conversations c
+        LEFT JOIN users u ON c.assigned_to = u.id
+        WHERE c.status IN ('assigned', 'open')
+        ORDER BY c.last_message_at DESC
+        LIMIT 20
+      `);
+      await pool.end();
+
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // Debug: verificar assignedAgentName (ANTES do serveStatic)
   app.get("/api/debug/agent-names", async (req, res) => {
     try {
