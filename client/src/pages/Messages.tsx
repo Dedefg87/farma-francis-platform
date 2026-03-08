@@ -573,6 +573,13 @@ export default function Messages() {
                               {selectedConversationData?.customerPhone}
                             </span>
                           </div>
+                          {selectedConversationData?.assignedAgentName && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="text-xs text-green-600 font-medium">
+                                Atendente: {selectedConversationData.assignedAgentName}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Sheet

@@ -353,6 +353,7 @@ export const conversationsRouter = router({
         channel: conversations.channel,
         status: conversations.status,
         assignedTo: conversations.assignedTo,
+        assignedAgentName: users.name,
         openedAt: conversations.openedAt,
         lastMessageAt: conversations.lastMessageAt,
         lastMessage: sql<string>`(
@@ -372,6 +373,7 @@ export const conversationsRouter = router({
       })
       .from(conversations)
       .leftJoin(customers, eq(conversations.customerId, customers.id))
+      .leftJoin(users, eq(conversations.assignedTo, users.id))
       .where(whereCondition)
       .orderBy(desc(conversations.lastMessageAt));
 
