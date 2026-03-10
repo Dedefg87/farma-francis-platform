@@ -491,7 +491,8 @@ export const babyShowerRouter = router({
             .where(eq(customers.id, event.motherCustomerId)).limit(1);
           
           if (mother?.phone) {
-            const message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n${purchase.guestName} acabou de presentear seu bebê com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\nSua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
+            const babyNameText = event.babyName ? `, ${event.babyName}` : "";
+            const message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\nSua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
             
             await sendWhatsAppNotification({
               phone: mother.phone,

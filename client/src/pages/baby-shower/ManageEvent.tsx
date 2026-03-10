@@ -19,6 +19,7 @@ export default function ManageEvent() {
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [copied, setCopied] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [babyName, setBabyName] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
   const [editingPackage, setEditingPackage] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState("");
@@ -150,10 +151,13 @@ export default function ManageEvent() {
     if (event?.whatsappNumber) {
       setWhatsappNumber(event.whatsappNumber);
     }
+    if (event?.babyName) {
+      setBabyName(event.babyName);
+    }
     if (event?.welcomeMessage) {
       setWelcomeMessage(event.welcomeMessage);
     }
-  }, [event?.whatsappNumber, event?.welcomeMessage]);
+  }, [event?.whatsappNumber, event?.babyName, event?.welcomeMessage]);
   
   // Sincronizar localPackages com dados do servidor
   useEffect(() => {
@@ -173,6 +177,13 @@ export default function ManageEvent() {
     updateEventMutation.mutate({
       id: eventId,
       whatsappNumber: whatsappNumber || undefined,
+    });
+  };
+
+  const handleSaveBabyName = () => {
+    updateEventMutation.mutate({
+      id: eventId,
+      babyName: babyName || undefined,
     });
   };
 
@@ -372,6 +383,30 @@ export default function ManageEvent() {
             <p className="text-xs text-gray-500 mt-2">
               Digite o número com código do país (55) e DDD, sem espaços ou caracteres especiais.
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Nome do Bebê */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Baby className="w-5 h-5 text-pink-500" />
+              Nome do Bebê
+            </CardTitle>
+            <CardDescription>O nome do bebê aparecerá nas mensagens enviadas à farmácia</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Input 
+                value={babyName} 
+                onChange={(e) => setBabyName(e.target.value)} 
+                placeholder="Ex: Maria Clara"
+                className="flex-1"
+              />
+              <Button onClick={handleSaveBabyName} disabled={updateEventMutation.isPending}>
+                {updateEventMutation.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
