@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Baby, Gift, MessageCircle, Heart, Search, HandPointer, Star, Cloud } from "lucide-react";
+import { Loader2, Baby, Gift, MessageCircle, Heart, Search, HandPointer, Star, Cloud, X } from "lucide-react";
 import { toast } from "sonner";
 
 export default function EventPage() {
   const { code } = useParams();
   const [showSuccess, setShowSuccess] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ url: string; name: string } | null>(null);
 
   const { data: eventData, isLoading } = trpc.babyShower.getEventByCode.useQuery({ code: code || "" });
 
@@ -204,9 +205,12 @@ export default function EventPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
               {displayProducts.map((pkg: any) => (
                 <div key={pkg.id} className="product-card bg-white rounded-xl md:rounded-2xl overflow-hidden shadow-md md:shadow-lg">
-                  <div className="bg-gradient-to-br from-[#E8F4F8] to-[#F0E6F6] p-3 md:p-6 flex items-center justify-center aspect-square">
+                  <div
+                    className={`bg-gradient-to-br from-[#E8F4F8] to-[#F0E6F6] p-3 md:p-6 flex items-center justify-center aspect-square ${pkg.imageUrl ? 'cursor-pointer' : ''}`}
+                    onClick={() => pkg.imageUrl && setSelectedImage({ url: pkg.imageUrl, name: pkg.packageName })}
+                  >
                     {pkg.imageUrl ? (
-                      <img src={pkg.imageUrl} alt={pkg.packageName} className="w-14 h-14 md:w-20 md:h-20 object-contain" />
+                      <img src={pkg.imageUrl} alt={pkg.packageName} className="w-14 h-14 md:w-20 md:h-20 object-contain hover:scale-110 transition-transform" />
                     ) : (
                       <i className={`fas ${pkg.icon || 'fa-gift'} text-2xl md:text-5xl text-[#7B68EE]`}></i>
                     )}
@@ -274,6 +278,34 @@ export default function EventPage() {
           </div>
         </footer>
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-2xl w-full bg-white rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full p-2 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="bg-gradient-to-br from-[#E8F4F8] to-[#F0E6F6] p-6 md:p-10 flex items-center justify-center">
+              <img
+                src={selectedImage.url}
+                alt={selectedImage.name}
+                className="max-w-full max-h-[60vh] object-contain"
+              />
+            </div>
+            <div className="p-4 text-center bg-white">
+              <h3 className="font-semibold text-[#2D3748] text-base md:text-lg">{selectedImage.name}</h3>
+              <p className="text-sm text-[#718096] mt-1">Clique fora para fechar</p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
