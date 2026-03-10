@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Loader2, Baby, Gift, MessageCircle, Heart, Search, HandPointer, Star, Cloud, X } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
 export default function EventPage() {
   const { code } = useParams();
