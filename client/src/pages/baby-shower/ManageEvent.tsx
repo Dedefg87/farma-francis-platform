@@ -20,6 +20,7 @@ export default function ManageEvent() {
   const [copied, setCopied] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState("");
+  const [babyName, setBabyName] = useState("");
   const [editingPackage, setEditingPackage] = useState<any>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -153,7 +154,10 @@ export default function ManageEvent() {
     if (event?.welcomeMessage) {
       setWelcomeMessage(event.welcomeMessage);
     }
-  }, [event?.whatsappNumber, event?.welcomeMessage]);
+    if (event?.babyName) {
+      setBabyName(event.babyName);
+    }
+  }, [event?.whatsappNumber, event?.welcomeMessage, event?.babyName]);
   
   // Sincronizar localPackages com dados do servidor
   useEffect(() => {
@@ -180,6 +184,12 @@ export default function ManageEvent() {
     updateEventMutation.mutate({
       id: eventId,
       welcomeMessage: welcomeMessage || undefined,
+    });
+  };
+  const handleSaveBabyName = () => {
+    updateEventMutation.mutate({
+      id: eventId,
+      babyName: babyName || undefined,
     });
   };
 
@@ -401,6 +411,30 @@ export default function ManageEvent() {
             </div>
           </CardContent>
         </Card>
+
+      {/* Nome do Bebê */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Baby className="w-5 h-5 text-blue-500" />
+            Nome do Bebê
+          </CardTitle>
+          <CardDescription>Nome que aparecerá nas mensagens do WhatsApp (ex: "chá de fraldas do Benício")</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Input
+              value={babyName}
+              onChange={(e) => setBabyName(e.target.value)}
+              placeholder="Ex: Benício"
+              className="flex-1"
+            />
+            <Button onClick={handleSaveBabyName} disabled={updateEventMutation.isPending}>
+              {updateEventMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
         {/* Tabs */}
         <Tabs defaultValue="products" className="space-y-4">
