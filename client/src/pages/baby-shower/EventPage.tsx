@@ -41,7 +41,8 @@ export default function EventPage() {
       paymentStatus: "pending",
     });
 
-    const messageText = `Olá! Gostaria de presentear com ${pkg.packageName}${pkg.description ? ` (${pkg.description})` : ''} da lista de chá de bebé da Farma Francis.`;
+    const eventName = event?.eventName || "Chá de Bebê";
+    const messageText = `Olá! Gostaria de presentear com ${pkg.packageName}${pkg.description ? ` (${pkg.description})` : ''} da lista de chá de fraldas do ${eventName}.`;
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(messageText)}`;
     window.open(whatsappUrl, '_blank');
   };
