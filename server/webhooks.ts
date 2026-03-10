@@ -6,6 +6,7 @@ import {
   integrationSettings,
   conversations,
 } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
