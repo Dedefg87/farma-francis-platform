@@ -129,6 +129,14 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const confirmPaymentMutation = trpc.babyShower.confirmPayment.useMutation({
+    onSuccess: () => {
+      toast.success("Pagamento confirmado! Mensagem enviada aos pais.");
+      refetch();
+    },
+    onError: (err) => toast.error("Erro: " + err.message),
+  });
+
   const deletePackageMutation = trpc.babyShower.deletePackage.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
@@ -540,7 +548,7 @@ export default function ManageEvent() {
                 ) : (
                   <div className="space-y-3">
                     {data.purchases.map((p: any) => (
-                      <div key={p.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-2">
                         <div>
                           <p className="font-medium">{p.guestName}</p>
                           <p className="text-sm text-gray-500">R$ {p.amountPaid}</p>
@@ -548,9 +556,20 @@ export default function ManageEvent() {
                             <p className="text-xs text-gray-400 italic">"{p.messageToParents}"</p>
                           )}
                         </div>
-                        <Badge variant={p.paymentStatus === "paid" ? "default" : "outline"}>
-                          {p.paymentStatus === "paid" ? "Pago" : "Pendente"}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={p.paymentStatus === "paid" ? "default" : "outline"}>
+                            {p.paymentStatus === "paid" ? "Pago" : "Pendente"}
+                          </Badge>
+                          {p.paymentStatus === "pending" && (
+                            <Button
+                              size="sm"
+                              onClick={() => confirmPaymentMutation.mutate({ purchaseId: p.id, paymentStatus: "paid" })}
+                              disabled={confirmPaymentMutation.isPending}
+                            >
+                              Confirmar Pagamento
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
