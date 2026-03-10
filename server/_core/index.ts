@@ -2145,6 +2145,49 @@ async function startServer() {
     }
   });
 
+  // Update Evolution API settings
+  app.post("/api/settings/evolution", async (req, res) => {
+    try {
+      const { evolutionUrl, evolutionApiKey, evolutionInstance } = req.body;
+
+      if (!evolutionUrl || !evolutionApiKey || !evolutionInstance) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const config = JSON.stringify({
+        apiUrl: evolutionUrl.replace(/\/$/, ""),
+        apiKey: evolutionApiKey,
+        instanceName: evolutionInstance,
+      });
+
+      // Check if exists
+      const existing = await db.execute(
+        sql`SELECT id FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1`
+      );
+
+      if (existing.length > 0) {
+        await db.execute(
+          sql`UPDATE integration_settings SET config = ${config}, is_active = 1 WHERE integration_type = 'evolution_api'`
+        );
+      } else {
+        await db.execute(
+          sql`INSERT INTO integration_settings (integration_type, config, is_active) VALUES ('evolution_api', ${config}, 1)`
+        );
+      }
+
+      res.json({ success: true, message: "Evolution API settings updated", config: JSON.parse(config) });
+    } catch (error) {
+      console.error("[Settings] Error updating Evolution API:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // EMERGENCY: Reset admin password
   app.get("/api/emergency/reset-admin-password", async (req, res) => {
     try {
