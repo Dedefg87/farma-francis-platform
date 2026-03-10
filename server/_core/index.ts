@@ -2082,7 +2082,7 @@ async function startServer() {
       );
 
       if (check.length > 0) {
-        return res.json({ success: true, message: "Column already exists" });
+        return res.json({ success: true, message: "Column already exists", check: check });
       }
 
       // Add the column
@@ -2093,6 +2093,26 @@ async function startServer() {
       res.json({ success: true, message: "display_order column added successfully" });
     } catch (error) {
       console.error("[Fix] Error adding display_order column:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: Show table structure
+  app.get("/api/debug/table-structure", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      const columns = await db.execute(
+        sql`SHOW COLUMNS FROM baby_shower_gift_packages`
+      );
+
+      res.json({ columns });
+    } catch (error) {
+      console.error("[Debug] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });
