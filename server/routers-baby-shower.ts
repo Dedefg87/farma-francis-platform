@@ -226,7 +226,8 @@ export const babyShowerRouter = router({
         .where(and(
           eq(babyShowerGiftPackages.eventId, event.event.id),
           eq(babyShowerGiftPackages.isActive, 1)
-        ));
+        ))
+        .orderBy(sql`COALESCE(display_order, 0) ASC, id ASC`);
 
       return { event: event.event, motherName: event.motherName, packages };
     }),
@@ -246,7 +247,8 @@ export const babyShowerRouter = router({
       if (!event) throw new Error("Evento não encontrado");
 
       const packages = await db.select().from(babyShowerGiftPackages)
-        .where(eq(babyShowerGiftPackages.eventId, input.id));
+        .where(eq(babyShowerGiftPackages.eventId, input.id))
+        .orderBy(sql`COALESCE(display_order, 0) ASC, id ASC`);
       const purchases = await db.select().from(babyShowerPurchases)
         .where(eq(babyShowerPurchases.eventId, input.id))
         .orderBy(desc(babyShowerPurchases.createdAt));
@@ -358,6 +360,28 @@ export const babyShowerRouter = router({
         SET ${setClause}
         WHERE id = ${input.id}
       `);
+      
+      return { success: true };
+    }),
+
+  // Reordenar pacotes (drag-and-drop)
+  reorderPackages: protectedProcedure
+    .input(z.object({
+      eventId: z.number(),
+      packageIds: z.array(z.number()), // Nova ordem de IDs
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+      
+      // Atualizar a ordem de cada pacote
+      for (let i = 0; i < input.packageIds.length; i++) {
+        await db.execute(sql`
+          UPDATE baby_shower_gift_packages 
+          SET display_order = ${i}
+          WHERE id = ${input.packageIds[i]} AND event_id = ${input.eventId}
+        `);
+      }
       
       return { success: true };
     }),

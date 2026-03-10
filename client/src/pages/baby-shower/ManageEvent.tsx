@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { FarmaDashboardLayout } from "@/components/FarmaDashboardLayout";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings, Heart } from "lucide-react";
+import { Baby, Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings, Heart, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ManageEvent() {
@@ -24,6 +24,11 @@ export default function ManageEvent() {
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>("");
+  
+  // Drag-and-drop state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [localPackages, setLocalPackages] = useState<any[]>([]);
+  const dragNodeRef = useRef<HTMLDivElement | null>(null);
   
   const eventId = parseInt(id || "0");
 
@@ -115,6 +120,14 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const reorderPackagesMutation = trpc.babyShower.reorderPackages.useMutation({
+    onSuccess: () => {
+      toast.success("Ordem atualizada!");
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const event = data?.event;
   const publicUrl = event?.publicLink || `${window.location.origin}/cha-de-bebe/${event?.eventCode}`;
 
@@ -127,6 +140,13 @@ export default function ManageEvent() {
       setWelcomeMessage(event.welcomeMessage);
     }
   }, [event?.whatsappNumber, event?.welcomeMessage]);
+  
+  // Sincronizar localPackages com dados do servidor
+  useEffect(() => {
+    if (data?.packages) {
+      setLocalPackages(data.packages);
+    }
+  }, [data?.packages]);
 
   const copyLink = () => {
     navigator.clipboard.writeText(publicUrl);
@@ -175,6 +195,52 @@ export default function ManageEvent() {
       description: formData.get("description") as string,
       price: parseFloat(formData.get("price") as string),
       imageUrl: formData.get("imageUrl") as string || undefined,
+    });
+  };
+
+  // Drag-and-drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    // Add visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "0.5";
+    }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedIndex(null);
+    // Reset visual feedback
+    if (e.currentTarget instanceof HTMLElement) {
+      e.currentTarget.style.opacity = "1";
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDragEnter = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    // Reorder locally for visual feedback
+    const newPackages = [...localPackages];
+    const draggedItem = newPackages[draggedIndex];
+    newPackages.splice(draggedIndex, 1);
+    newPackages.splice(index, 0, draggedItem);
+    setLocalPackages(newPackages);
+    setDraggedIndex(index);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Save the new order to the server
+    const packageIds = localPackages.map(p => p.id);
+    reorderPackagesMutation.mutate({
+      eventId,
+      packageIds,
     });
   };
 
@@ -340,15 +406,32 @@ export default function ManageEvent() {
                 </Button>
               </CardHeader>
               <CardContent>
-                {!data.packages?.length ? (
+                {!localPackages?.length ? (
                   <div className="text-center py-8 text-gray-500">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Nenhum produto. Clique em "Add Produto" para adicionar.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {data.packages.map((pkg: any) => (
-                      <div key={pkg.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
+                      <GripVertical className="w-3 h-3" />
+                      Arraste os produtos para reordenar
+                    </p>
+                    {localPackages.map((pkg: any, index: number) => (
+                      <div 
+                        key={pkg.id} 
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={handleDragOver}
+                        onDragEnter={(e) => handleDragEnter(e, index)}
+                        onDrop={handleDrop}
+                        className={`flex items-center gap-4 p-3 bg-gray-50 rounded-lg cursor-move transition-all ${
+                          draggedIndex === index ? "border-2 border-pink-300 bg-pink-50" : "border-2 border-transparent"
+                        }`}
+                      >
+                        {/* Drag handle */}
+                        <GripVertical className="w-5 h-5 text-gray-400 flex-shrink-0" />
                         {/* Imagem do produto */}
                         <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                           {pkg.imageUrl ? (

@@ -1374,6 +1374,8 @@ export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
   // Contadores
   soldCount: int("sold_count").default(0),
   isActive: int("is_active").default(1).notNull(),
+  // Ordem de exibição (drag-and-drop)
+  displayOrder: int("display_order").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
