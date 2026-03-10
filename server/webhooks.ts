@@ -1073,58 +1073,42 @@ async function processEvolutionWebhook(body: any) {
         if (isSentByMe) {
           console.log("[Evolution Webhook] Syncing message sent from mobile:", messageId);
 
-          // Encontrar ou criar conversa com este número
-          const toNumber = fromNumber; // O número para quem enviamos
+          // IMPORTANTE: remoteJid contém o número do DESTINATÁRIO (cliente)
+          // quando fromMe=true, a mensagem foi enviada PARA remoteJid
+          const customerPhone = normalizeInboundNumber(remoteJid);
 
-          // Buscar conversa existente com este cliente
-          let conversation = await db.select()
-            .from(conversations)
-            .where(and(
-              eq(conversations.customerPhone, toNumber),
-              eq(conversations.status, "open")
-            ))
-            .limit(1);
+          if (customerPhone) {
+            try {
+              // Buscar conversa existente com este cliente (sem criar nova)
+              const [existingConv] = await db.select()
+                .from(conversations)
+                .where(and(
+                  eq(conversations.customerPhone, customerPhone),
+                  eq(conversations.status, "open")
+                ))
+                .limit(1);
 
-          let conversationId = conversation[0]?.id;
-
-          // Se não há conversa aberta, criar uma nova
-          if (!conversationId) {
-            // Buscar ou criar cliente
-            let customer = await db.select()
-              .from(customers)
-              .where(eq(customers.phone, toNumber))
-              .limit(1);
-
-            if (!customer.length) {
-              const [newCustomer] = await db.insert(customers).values({
-                name: pushName || toNumber,
-                phone: toNumber,
-              }).returning();
-              customer = [newCustomer];
+              if (existingConv) {
+                // Salvar mensagem na tabela messages
+                await db.insert(messages).values({
+                  ticketId: existingConv.id,
+                  senderType: "agent",
+                  senderId: null,
+                  content: messageText || caption || "",
+                  mediaUrl: permanentMediaUrl || mediaUrl,
+                  mediaType: messageType as any,
+                  externalId: messageId,
+                  createdAt: new Date(messageTimestamp * 1000),
+                });
+                console.log("[Evolution Webhook] Message synced to conversation:", existingConv.id);
+              } else {
+                console.log("[Evolution Webhook] No open conversation found for:", customerPhone);
+              }
+            } catch (syncError) {
+              console.error("[Evolution Webhook] Error syncing message:", syncError);
+              // Não interromper o fluxo principal
             }
-
-            const [newConv] = await db.insert(conversations).values({
-              customerId: customer[0].id,
-              customerPhone: toNumber,
-              channel: "whatsapp",
-              status: "open",
-            }).returning();
-            conversationId = newConv.id;
           }
-
-          // Salvar mensagem na tabela messages
-          await db.insert(messages).values({
-            ticketId: conversationId,
-            senderType: "agent",
-            senderId: null, // Não sabemos qual agente, mas foi enviado pelo celular
-            content: messageText || caption || "",
-            mediaUrl: permanentMediaUrl || mediaUrl,
-            mediaType: messageType as any,
-            externalId: messageId,
-            createdAt: new Date(messageTimestamp * 1000),
-          });
-
-          console.log("[Evolution Webhook] Message synced to conversation:", conversationId);
           return;
         }
 
