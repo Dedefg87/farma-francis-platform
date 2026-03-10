@@ -128,18 +128,7 @@ const createWithdrawalSchema = z.object({
   notes: z.string().optional(),
 });
 
-// Endpoint temporário para rodar migration
-  runMigration: publicProcedure
-    .query(async () => {
-      try {
-        const db = await getDb();
-        if (!db) throw new Error("Database not available");
-        await db.execute(sql`ALTER TABLE baby_shower_events ADD COLUMN IF NOT EXISTS baby_name VARCHAR(255)`);
-        return { success: true, message: "Migration executada com sucesso" };
-      } catch (e: any) {
-        return { success: false, error: e.message };
-      }
-    }),
+
   createEvent: protectedProcedure
     .input(createEventSchema)
     .mutation(async ({ ctx, input }) => {
