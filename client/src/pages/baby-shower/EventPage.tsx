@@ -45,7 +45,7 @@ export default function EventPage() {
     const babyName = event?.babyName;
     // Se tem nome do bebê, usar o nome; senão, usar o nome do evento
     const targetName = babyName || eventName;
-    const messageText = `Olá! Gostaria de presentear com ${pkg.packageName}${pkg.description ? ` (${pkg.description})` : ''} da lista de chá de fraldas do ${targetName}.`;
+    const messageText = `Olá! Gostaria de presentear com ${pkg.packageName}${pkg.description ? ` (Contém: ${pkg.description})` : ''} da lista de chá de fraldas do ${targetName}.`;
     const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(messageText)}`;
     window.open(whatsappUrl, '_blank');
   };
