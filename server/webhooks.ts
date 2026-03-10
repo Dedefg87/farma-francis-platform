@@ -1,10 +1,13 @@
 import { Router, Request, Response } from "express";
+import { eq, and } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   apiConfigurations,
   receivedMessages,
   integrationSettings,
   conversations,
+  customers,
+  messages,
 } from "../drizzle/schema";
 import {
   getReceivedMessageByExternalId,
@@ -15,7 +18,6 @@ import {
   downloadAndSaveMedia,
   getMediaBase64FromEvolution,
 } from "./media-download";
-import { eq } from "drizzle-orm";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
 
@@ -1012,8 +1014,9 @@ async function processEvolutionWebhook(body: any) {
         const fromNumber = normalizeInboundNumber(remoteJid);
         if (!fromNumber) return;
 
-        // Ignorar mensagens do próprio bot
-        if (fromMe === true || fromMe === "true" || fromMe === 1) return;
+        // Sincronizar mensagens enviadas pelo celular (fromMe === true)
+        // Não vamos ignorar, vamos salvar como mensagem do agente
+        const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
         // Verificar duplicata
         const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
@@ -1066,7 +1069,66 @@ async function processEvolutionWebhook(body: any) {
 
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
 
-        // Salvar mensagem no banco
+        // Se é mensagem enviada pelo agente (celular), salvar diretamente na tabela messages
+        if (isSentByMe) {
+          console.log("[Evolution Webhook] Syncing message sent from mobile:", messageId);
+
+          // Encontrar ou criar conversa com este número
+          const toNumber = fromNumber; // O número para quem enviamos
+
+          // Buscar conversa existente com este cliente
+          let conversation = await db.select()
+            .from(conversations)
+            .where(and(
+              eq(conversations.customerPhone, toNumber),
+              eq(conversations.status, "open")
+            ))
+            .limit(1);
+
+          let conversationId = conversation[0]?.id;
+
+          // Se não há conversa aberta, criar uma nova
+          if (!conversationId) {
+            // Buscar ou criar cliente
+            let customer = await db.select()
+              .from(customers)
+              .where(eq(customers.phone, toNumber))
+              .limit(1);
+
+            if (!customer.length) {
+              const [newCustomer] = await db.insert(customers).values({
+                name: pushName || toNumber,
+                phone: toNumber,
+              }).returning();
+              customer = [newCustomer];
+            }
+
+            const [newConv] = await db.insert(conversations).values({
+              customerId: customer[0].id,
+              customerPhone: toNumber,
+              channel: "whatsapp",
+              status: "open",
+            }).returning();
+            conversationId = newConv.id;
+          }
+
+          // Salvar mensagem na tabela messages
+          await db.insert(messages).values({
+            ticketId: conversationId,
+            senderType: "agent",
+            senderId: null, // Não sabemos qual agente, mas foi enviado pelo celular
+            content: messageText || caption || "",
+            mediaUrl: permanentMediaUrl || mediaUrl,
+            mediaType: messageType as any,
+            externalId: messageId,
+            createdAt: new Date(messageTimestamp * 1000),
+          });
+
+          console.log("[Evolution Webhook] Message synced to conversation:", conversationId);
+          return;
+        }
+
+        // Salvar mensagem recebida no banco
         await db.insert(receivedMessages).values({
           provider: "whatsapp",
           externalId: messageId,
