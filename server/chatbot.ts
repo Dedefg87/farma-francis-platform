@@ -148,6 +148,10 @@ export async function closeConversation(
         `Digite 1️⃣ Muito insatisfeito 😞`;
     } else if (closeReason === "orcamento") {
       closingMessage = `Agradecemos seu contato, e estaremos sempre à disposição. 😉`;
+    } else if (closeReason === "conversa_anterior") {
+      // Não enviar mensagem - apenas fechar o atendimento
+      console.log("[CHATBOT] Closing without message (conversa_anterior)");
+      return;
     } else {
       closingMessage = `Obrigado pelo contato! 😊`;
     }
