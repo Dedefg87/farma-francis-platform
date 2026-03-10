@@ -90,6 +90,7 @@ const sanitizeUrl = (url: string): string => {
 const createEventSchema = z.object({
   motherCustomerId: z.number(),
   eventName: z.string().min(3).max(255),
+  babyName: z.string().max(255).optional(),
   expectedDueDate: z.string().optional(),
   eventDate: z.string().optional(),
   targetAmount: z.number().optional(),
@@ -149,7 +150,7 @@ const createWithdrawalSchema = z.object({
         motherCustomerId: input.motherCustomerId,
         eventCode,
         eventName: input.eventName,
-      
+      babyName: input.babyName || null,
         expectedDueDate,
         eventDate,
         targetAmount: input.targetAmount?.toString() || null,
@@ -263,6 +264,7 @@ const createWithdrawalSchema = z.object({
     .input(z.object({
       id: z.number(),
       eventName: z.string().optional(),
+      babyName: z.string().optional(),
       expectedDueDate: z.string().optional(),
       eventDate: z.string().optional(),
       targetAmount: z.number().optional(),
@@ -275,6 +277,7 @@ const createWithdrawalSchema = z.object({
     if (!db) { throw new Error("Database not available"); }
       const updates: any = {};
       if (input.eventName) updates.eventName = input.eventName;
+      if (input.babyName !== undefined) updates.babyName = input.babyName || null;
       // Tratar strings vazias como null para campos DATE
       if (input.expectedDueDate !== undefined) {
         updates.expectedDueDate = input.expectedDueDate && input.expectedDueDate.trim() !== '' 
