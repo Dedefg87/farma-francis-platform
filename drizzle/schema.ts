@@ -1420,8 +1420,6 @@ export const babyShowerPurchases = mysqlTable("baby_shower_purchases", {
   // Notificação enviada
   notificationSent: int("notification_sent").default(0),
   notificationSentAt: timestamp("notification_sent_at"),
-  // Mensagem do convidado para os pais (após pagamento)
-  messageToParents: text("message_to_parents"),
   // Token único para confirmação de pagamento via link
   confirmationToken: varchar("confirmation_token", { length: 64 }).unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -12,68 +12,7 @@ import {
 } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray, SQL } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-
-// Função para enviar WhatsApp via Evolution API
-async function sendWhatsAppNotification(params: {
-  phone: string;
-  message: string;
-}): Promise<boolean> {
-  try {
-    const db = await getDb();
-    if (!db) { throw new Error("Database not available"); }
-    if (!db) {
-      console.log("[BabyShower] Database not available");
-      return false;
-    }
-    const [config] = await db
-      .select()
-      .from(integrationSettings)
-      .where(eq(integrationSettings.integrationType, "evolution_api"))
-      .limit(1);
-
-    if (!config || !config.isActive) {
-      console.log("[BabyShower] Evolution API not configured");
-      return false;
-    }
-
-    const configData =
-      typeof config.config === "string"
-        ? JSON.parse(config.config)
-        : config.config;
-
-    const apiUrl = (configData.apiUrl as string)?.replace(/\/$/, "");
-    const apiKey =
-      (configData.apiKey as string) || (configData.accessToken as string);
-    const instanceName = configData.instanceName as string;
-
-    if (!apiUrl || !apiKey || !instanceName) {
-      console.log("[BabyShower] Evolution config incomplete");
-      return false;
-    }
-
-    const normalizedPhone = params.phone.replace(/\D/g, "");
-
-    const response = await fetch(
-      `${apiUrl}/message/sendText/${instanceName}`,
-      {
-        method: "POST",
-        headers: {
-          apikey: apiKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          number: normalizedPhone,
-          text: params.message,
-        }),
-      }
-    );
-
-    return response.ok;
-  } catch (error) {
-    console.error("[BabyShower] Error sending WhatsApp:", error);
-    return false;
-  }
-}
+import { sendWhatsAppNotification } from "./services/whatsapp.js";
 
 const generateEventCode = () => {
   const date = new Date();
