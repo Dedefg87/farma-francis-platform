@@ -499,6 +499,16 @@ export const babyShowerRouter = router({
               message,
             });
 
+            // Enviar mensagem pessoal do convidado, se houver
+            if (purchase.messageToParents) {
+              const personalMessage = `💌 *Mensagem do Convidado*\n\nDe: ${purchase.guestName}\n\n"${purchase.messageToParents}"\n\n---\nPresente: ${pkg?.packageName || "Presente especial"}\n\nCom carinho, Chá de Bebê Farma Francis.`;
+              
+              await sendWhatsAppNotification({
+                phone: mother.phone,
+                message: personalMessage,
+              });
+            }
+
             // Marcar notificação como enviada
             await db.update(babyShowerPurchases).set({
               notificationSent: 1,

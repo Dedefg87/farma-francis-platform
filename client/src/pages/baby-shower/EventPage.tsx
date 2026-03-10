@@ -8,6 +8,10 @@ export default function EventPage() {
   const { code } = useParams();
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ url: string; name: string } | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [guestName, setGuestName] = useState("");
+  const [guestMessage, setGuestMessage] = useState("");
 
   const { data: eventData, isLoading } = trpc.babyShower.getEventByCode.useQuery({ code: code || "" });
 
@@ -33,21 +37,41 @@ export default function EventPage() {
   const whatsappNumber = event?.whatsappNumber || "5531995657081";
 
   const handleWhatsAppRedirect = (pkg: any) => {
+    setSelectedPackage(pkg);
+    setShowMessageModal(true);
+    // Limpar campos anteriores
+    setGuestName("");
+    setGuestMessage("");
+  };
+
+  const handleSubmitMessage = () => {
+    if (!guestName.trim()) {
+      toast.error("Digite seu nome");
+      return;
+    }
+    if (!selectedPackage) return;
+
     createPurchaseMutation.mutate({
       eventId: event?.id,
-      packageId: pkg.id,
-      guestName: "Convidado via WhatsApp",
-      amountPaid: parseFloat(pkg.price || "0"),
+      packageId: selectedPackage.id,
+      guestName: guestName.trim(),
+      amountPaid: parseFloat(selectedPackage.price || "0"),
       paymentStatus: "pending",
+      messageToParents: guestMessage.trim() || undefined,
+    }, {
+      onSuccess: () => {
+        setShowMessageModal(false);
+        setSelectedPackage(null);
+        // Abrir WhatsApp da farmácia
+        const eventName = event?.eventName || "Chá de Bebê";
+        const babyName = event?.babyName;
+        const targetName = babyName || eventName;
+        const messageText = `Olá! Gostaria de presentear com ${selectedPackage.packageName}${selectedPackage.description ? ` (Contém: ${selectedPackage.description})` : ''} da lista de chá de fraldas do ${targetName}.`;
+        const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(messageText)}`;
+        window.open(whatsappUrl, '_blank');
+        toast.success("Pedido enviado! Complete a compra no WhatsApp.");
+      },
     });
-
-    const eventName = event?.eventName || "Chá de Bebê";
-    const babyName = event?.babyName;
-    // Se tem nome do bebê, usar o nome; senão, usar o nome do evento
-    const targetName = babyName || eventName;
-    const messageText = `Olá! Gostaria de presentear com ${pkg.packageName}${pkg.description ? ` (Contém: ${pkg.description})` : ''} da lista de chá de fraldas do ${targetName}.`;
-    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(messageText)}`;
-    window.open(whatsappUrl, '_blank');
   };
 
   const defaultProducts = [
@@ -306,6 +330,61 @@ export default function EventPage() {
             <div className="p-4 text-center bg-white">
               <h3 className="font-semibold text-[#2D3748] text-base md:text-lg">{selectedImage.name}</h3>
               <p className="text-sm text-[#718096] mt-1">Clique fora para fechar</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Message to Parents Modal */}
+      {showMessageModal && selectedPackage && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-[#2D3748] mb-2 flex items-center gap-2">
+              <Heart className="w-5 h-5 text-pink-500" />
+              Mensagem para os pais
+            </h3>
+            <p className="text-sm text-[#718096] mb-4">
+              Deixe uma mensagem carinhosa para a mamãe e o papai. Ela será enviada após a confirmação do pagamento.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#4A5568] mb-1">Seu nome</label>
+                <input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Ex: Maria Silva"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7B68EE] focus:border-transparent"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-[#4A5568] mb-1">Mensagem (opcional)</label>
+                <textarea
+                  value={guestMessage}
+                  onChange={(e) => setGuestMessage(e.target.value)}
+                  placeholder="Ex: Que o bebê seja muito abençoado! Estamos felizes em participar desse momento especial."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7B68EE] focus:border-transparent min-h-[100px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowMessageModal(false)}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSubmitMessage}
+                disabled={createPurchaseMutation.isPending}
+                className="flex-1 bg-gradient-to-r from-[#7B68EE] to-[#9F7AEA] hover:from-[#6B5BC7] hover:to-[#8F6AE6] text-white"
+              >
+                {createPurchaseMutation.isPending ? "Enviando..." : "Enviar Presente"}
+              </Button>
             </div>
           </div>
         </div>
