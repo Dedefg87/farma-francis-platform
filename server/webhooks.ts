@@ -1,13 +1,10 @@
 import { Router, Request, Response } from "express";
-import { eq, and } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   apiConfigurations,
   receivedMessages,
   integrationSettings,
   conversations,
-  customers,
-  messages,
 } from "../drizzle/schema";
 import {
   getReceivedMessageByExternalId,
@@ -1014,9 +1011,12 @@ async function processEvolutionWebhook(body: any) {
         const fromNumber = normalizeInboundNumber(remoteJid);
         if (!fromNumber) return;
 
-        // Sincronizar mensagens enviadas pelo celular (fromMe === true)
-        // Não vamos ignorar, vamos salvar como mensagem do agente
+        // Ignorar mensagens do próprio bot (enviadas pelo celular ou pela plataforma)
         const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
+        if (isSentByMe) {
+          console.log("[Evolution Webhook] Ignoring message from me:", messageId);
+          return;
+        }
 
         // Verificar duplicata
         const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
@@ -1068,49 +1068,6 @@ async function processEvolutionWebhook(body: any) {
         }
 
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
-
-        // Se é mensagem enviada pelo agente (celular), salvar diretamente na tabela messages
-        if (isSentByMe) {
-          console.log("[Evolution Webhook] Syncing message sent from mobile:", messageId);
-
-          // IMPORTANTE: remoteJid contém o número do DESTINATÁRIO (cliente)
-          // quando fromMe=true, a mensagem foi enviada PARA remoteJid
-          const customerPhone = normalizeInboundNumber(remoteJid);
-
-          if (customerPhone) {
-            try {
-              // Buscar conversa existente com este cliente (sem criar nova)
-              const [existingConv] = await db.select()
-                .from(conversations)
-                .where(and(
-                  eq(conversations.customerPhone, customerPhone),
-                  eq(conversations.status, "open")
-                ))
-                .limit(1);
-
-              if (existingConv) {
-                // Salvar mensagem na tabela messages
-                await db.insert(messages).values({
-                  ticketId: existingConv.id,
-                  senderType: "agent",
-                  senderId: null,
-                  content: messageText || caption || "",
-                  mediaUrl: permanentMediaUrl || mediaUrl,
-                  mediaType: messageType as any,
-                  externalId: messageId,
-                  createdAt: new Date(messageTimestamp * 1000),
-                });
-                console.log("[Evolution Webhook] Message synced to conversation:", existingConv.id);
-              } else {
-                console.log("[Evolution Webhook] No open conversation found for:", customerPhone);
-              }
-            } catch (syncError) {
-              console.error("[Evolution Webhook] Error syncing message:", syncError);
-              // Não interromper o fluxo principal
-            }
-          }
-          return;
-        }
 
         // Salvar mensagem recebida no banco
         await db.insert(receivedMessages).values({
