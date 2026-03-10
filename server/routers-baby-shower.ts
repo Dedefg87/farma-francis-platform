@@ -10,7 +10,7 @@ import {
   crmTasks,
   integrationSettings,
 } from "../drizzle/schema";
-import { eq, and, desc, sql, inArray, SQL } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray, SQL } from "drizzle-orm";
 
 // Função para enviar WhatsApp via Evolution API
 async function sendWhatsAppNotification(params: {
@@ -227,7 +227,7 @@ export const babyShowerRouter = router({
           eq(babyShowerGiftPackages.eventId, event.event.id),
           eq(babyShowerGiftPackages.isActive, 1)
         ))
-        .orderBy(sql`COALESCE(display_order, 0) ASC, id ASC`);
+        .orderBy(asc(babyShowerGiftPackages.displayOrder), asc(babyShowerGiftPackages.id));
 
       return { event: event.event, motherName: event.motherName, packages };
     }),
@@ -248,7 +248,7 @@ export const babyShowerRouter = router({
 
       const packages = await db.select().from(babyShowerGiftPackages)
         .where(eq(babyShowerGiftPackages.eventId, input.id))
-        .orderBy(sql`COALESCE(display_order, 0) ASC, id ASC`);
+        .orderBy(asc(babyShowerGiftPackages.displayOrder), asc(babyShowerGiftPackages.id));
       const purchases = await db.select().from(babyShowerPurchases)
         .where(eq(babyShowerPurchases.eventId, input.id))
         .orderBy(desc(babyShowerPurchases.createdAt));
