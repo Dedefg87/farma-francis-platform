@@ -206,13 +206,13 @@ export default function EventPage() {
               {displayProducts.map((pkg: any) => (
                 <div key={pkg.id} className="product-card bg-white rounded-xl md:rounded-2xl overflow-hidden shadow-md md:shadow-lg">
                   <div
-                    className={`bg-gradient-to-br from-[#E8F4F8] to-[#F0E6F6] p-3 md:p-6 flex items-center justify-center aspect-square ${pkg.imageUrl ? 'cursor-pointer' : ''}`}
+                    className={`bg-gradient-to-br from-[#E8F4F8] to-[#F0E6F6] p-2 md:p-4 flex items-center justify-center aspect-square ${pkg.imageUrl ? 'cursor-pointer' : ''}`}
                     onClick={() => pkg.imageUrl && setSelectedImage({ url: pkg.imageUrl, name: pkg.packageName })}
                   >
                     {pkg.imageUrl ? (
-                      <img src={pkg.imageUrl} alt={pkg.packageName} className="w-14 h-14 md:w-20 md:h-20 object-contain hover:scale-110 transition-transform" />
+                      <img src={pkg.imageUrl} alt={pkg.packageName} className="w-full h-full object-contain hover:scale-105 transition-transform p-2" />
                     ) : (
-                      <i className={`fas ${pkg.icon || 'fa-gift'} text-2xl md:text-5xl text-[#7B68EE]`}></i>
+                      <i className={`fas ${pkg.icon || 'fa-gift'} text-3xl md:text-6xl text-[#7B68EE]`}></i>
                     )}
                   </div>
                   <div className="p-2 md:p-4 text-center">
