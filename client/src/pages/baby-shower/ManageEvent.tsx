@@ -128,6 +128,20 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const deletePackageMutation = trpc.babyShower.deletePackage.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const handleDeletePackage = (pkg: any) => {
+    if (confirm(`Tem certeza que deseja excluir "${pkg.packageName}"?`)) {
+      deletePackageMutation.mutate({ id: pkg.id });
+    }
+  };
+
   const event = data?.event;
   const publicUrl = event?.publicLink || `${window.location.origin}/cha-de-bebe/${event?.eventCode}`;
 
@@ -453,12 +467,21 @@ export default function ManageEvent() {
                           <Badge variant={pkg.isActive ? "default" : "secondary"}>
                             {pkg.isActive ? "Ativo" : "Inativo"}
                           </Badge>
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => setEditingPackage(pkg)}
                           >
                             Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => handleDeletePackage(pkg)}
+                            disabled={deletePackageMutation.isPending}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>

@@ -386,6 +386,38 @@ export const babyShowerRouter = router({
       return { success: true };
     }),
 
+  // Deletar pacote
+  deletePackage: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+
+      // Verificar se existem compras associadas
+      const purchases = await db.select().from(babyShowerPurchases)
+        .where(eq(babyShowerPurchases.packageId, input.id))
+        .limit(1);
+
+      if (purchases.length > 0) {
+        // Se houver compras, apenas desativar
+        await db.execute(sql`
+          UPDATE baby_shower_gift_packages 
+          SET is_active = 0
+          WHERE id = ${input.id}
+        `);
+        return { success: true, action: "deactivated", message: "Produto desativado (possui compras associadas)" };
+      }
+
+      // Se não houver compras, deletar permanentemente
+      await db.execute(sql`
+        DELETE FROM baby_shower_gift_packages 
+        WHERE id = ${input.id}
+      `);
+      return { success: true, action: "deleted", message: "Produto excluído com sucesso" };
+    }),
+
   createPurchase: publicProcedure
     .input(createPurchaseSchema)
     .mutation(async ({ input }) => {
