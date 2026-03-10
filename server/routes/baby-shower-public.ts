@@ -5,9 +5,9 @@ import {
   babyShowerEvents,
   babyShowerGiftPackages,
   customers,
-} from "../../drizzle/schema.js";
+} from "../drizzle/schema.js";
 import { eq } from "drizzle-orm";
-import { sendWhatsAppNotification } from "../../services/whatsapp.js";
+import { sendWhatsAppNotification } from "../services/whatsapp.js";
 import crypto from "node:crypto";
 
 export const babyShowerPublicRouter = Router();
