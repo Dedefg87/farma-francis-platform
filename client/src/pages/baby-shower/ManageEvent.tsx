@@ -556,18 +556,35 @@ export default function ManageEvent() {
                             <p className="text-xs text-gray-400 italic">"{p.messageToParents}"</p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant={p.paymentStatus === "paid" ? "default" : "outline"}>
                             {p.paymentStatus === "paid" ? "Pago" : "Pendente"}
                           </Badge>
                           {p.paymentStatus === "pending" && (
-                            <Button
-                              size="sm"
-                              onClick={() => confirmPaymentMutation.mutate({ purchaseId: p.id, paymentStatus: "paid" })}
-                              disabled={confirmPaymentMutation.isPending}
-                            >
-                              Confirmar Pagamento
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => confirmPaymentMutation.mutate({ purchaseId: p.id, paymentStatus: "paid" })}
+                                disabled={confirmPaymentMutation.isPending}
+                              >
+                                Confirmar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  if (p.confirmationToken) {
+                                    const link = `${window.location.origin}/api/confirm-payment/${p.confirmationToken}`;
+                                    navigator.clipboard.writeText(link);
+                                    toast.success("Link copiado!");
+                                  } else {
+                                    toast.error("Token não disponível");
+                                  }
+                                }}
+                              >
+                                Copiar Link
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>

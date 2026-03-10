@@ -11,6 +11,7 @@ import {
   integrationSettings,
 } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray, SQL } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 // Função para enviar WhatsApp via Evolution API
 async function sendWhatsAppNotification(params: {
@@ -433,6 +434,8 @@ export const babyShowerRouter = router({
       if (!pkg) throw new Error("Pacote não encontrado");
       if (pkg.stockLimit && (pkg.soldCount ?? 0) >= pkg.stockLimit) throw new Error("Cotas esgotadas");
 
+      const confirmationToken = crypto.randomBytes(32).toString("hex"); // Gera token seguro
+
       const [purchase] = await db.insert(babyShowerPurchases).values({
         eventId: input.eventId,
         packageId: input.packageId,
@@ -442,9 +445,10 @@ export const babyShowerRouter = router({
         messageToParents: input.messageToParents || null,
         amountPaid: input.amountPaid.toString(),
         paymentStatus: "pending",
+        confirmationToken,
       } as any);
 
-      return { success: true, purchaseId: Number(purchase.insertId) };
+      return { success: true, purchaseId: Number(purchase.insertId), confirmationToken };
     }),
 
   confirmPayment: protectedProcedure

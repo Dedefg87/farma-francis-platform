@@ -246,13 +246,13 @@ export async function runBabyShowerMigration() {
         await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent INT DEFAULT 0`);
       }
       
-      if (!columnNames.includes('notification_sent_at')) {
-        console.log("[Baby Shower Migration] Adding notification_sent_at column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent_at TIMESTAMP NULL`);
-      }
       if (!columnNames.includes('message_to_parents')) {
         console.log("[Baby Shower Migration] Adding message_to_parents column");
         await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN message_to_parents TEXT NULL`);
+      }
+      if (!columnNames.includes('confirmation_token')) {
+        console.log("[Baby Shower Migration] Adding confirmation_token column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN confirmation_token VARCHAR(64) UNIQUE NULL`);
       }
       if (!columnNames.includes('created_at')) {
         console.log("[Baby Shower Migration] Adding created_at column");

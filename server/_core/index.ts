@@ -10,6 +10,7 @@ import rateLimit from "express-rate-limit";
 import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
+import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
@@ -84,6 +85,9 @@ async function startServer() {
   }
 
   app.use("/api/", apiLimiter);
+
+  // Baby Shower Public Routes (confirmação de pagamento)
+  app.use("/api", babyShowerPublicRouter);
 
   // Basic health check for load balancers and uptime monitoring
   app.get("/api/health", (_req, res) => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Baby, Gift, MessageCircle, Heart, Search, HandPointer, Star, Cloud, X } from "lucide-react";
+import { Loader2, Baby, Gift, MessageCircle, Heart, Search, HandPointer, Star, Cloud, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +13,7 @@ export default function EventPage() {
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [guestName, setGuestName] = useState("");
   const [guestMessage, setGuestMessage] = useState("");
+  const [confirmationLink, setConfirmationLink] = useState<string | null>(null);
 
   const { data: eventData, isLoading } = trpc.babyShower.getEventByCode.useQuery({ code: code || "" });
 
@@ -60,9 +61,14 @@ export default function EventPage() {
       paymentStatus: "pending",
       messageToParents: guestMessage.trim() || undefined,
     }, {
-      onSuccess: () => {
+      onSuccess: (data) => {
         setShowMessageModal(false);
         setSelectedPackage(null);
+        // Gerar link de confirmação
+        if (data.confirmationToken) {
+          const confirmUrl = `${window.location.origin}/api/confirm-payment/${data.confirmationToken}`;
+          setConfirmationLink(confirmUrl);
+        }
         // Abrir WhatsApp da farmácia
         const eventName = event?.eventName || "Chá de Bebê";
         const babyName = event?.babyName;
@@ -72,6 +78,9 @@ export default function EventPage() {
         window.open(whatsappUrl, '_blank');
         toast.success("Pedido enviado! Complete a compra no WhatsApp.");
       },
+      onError: (err) => {
+        toast.error("Erro: " + err.message);
+      }
     });
   };
 
@@ -387,6 +396,44 @@ export default function EventPage() {
                 {createPurchaseMutation.isPending ? "Enviando..." : "Enviar Presente"}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Link Modal */}
+      {confirmationLink && (
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-[#2D3748] mb-2 flex items-center gap-2">
+              <Check className="w-5 h-5 text-green-500" />
+              Presente Registrado!
+            </h3>
+            <p className="text-sm text-[#718096] mb-4">
+              Seu pedido foi enviado para a farmácia. Após o pagamento, o atendente confirmará aqui.
+            </p>
+            <p className="text-sm text-[#4A5568] mb-3">
+              Ou use este link de confirmação (compartilhe com o atendente):
+            </p>
+            <div className="flex gap-2 mb-4">
+              <input
+                readOnly
+                value={confirmationLink}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded bg-gray-50 text-sm"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(confirmationLink!);
+                  toast.success("Link copiado!");
+                }}
+              >
+                Copiar
+              </Button>
+            </div>
+            <Button onClick={() => setConfirmationLink(null)} className="w-full">
+              Fechar
+            </Button>
           </div>
         </div>
       )}
