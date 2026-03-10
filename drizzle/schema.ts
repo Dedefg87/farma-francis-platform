@@ -1318,7 +1318,6 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
   // Dados do Evento
   eventCode: varchar("event_code", { length: 20 }).notNull().unique(), // Ex: "CHA202503001"
   eventName: varchar("event_name", { length: 255 }).notNull(), // Ex: "Chá da Maria"
-  babyName: varchar("baby_name", { length: 255 }), // Nome do bebê
   expectedDueDate: date("expected_due_date"), // Data prevista do parto
   eventDate: date("event_date"), // Data do evento físico (se houver)
   status: mysqlEnum("status", ["active", "closed", "cancelled"])

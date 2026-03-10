@@ -14,7 +14,6 @@ interface FormData {
   motherName: string;
   motherPhone: string;
   eventName: string;
-  babyName: string;
   expectedDueDate: string;
   eventDate: string;
   targetAmount: string;
@@ -28,7 +27,6 @@ export default function CreateEvent() {
     motherName: "",
     motherPhone: "",
     eventName: "",
-    babyName: "",
     expectedDueDate: "",
     eventDate: "",
     targetAmount: "",
@@ -75,7 +73,6 @@ export default function CreateEvent() {
     createMutation.mutate({
       motherCustomerId: 1,
       eventName: formData.eventName,
-      babyName: formData.babyName || undefined,
       expectedDueDate: formData.expectedDueDate || undefined,
       eventDate: formData.eventDate || undefined,
       targetAmount: formData.targetAmount ? parseFloat(formData.targetAmount) : undefined,
@@ -139,14 +136,6 @@ export default function CreateEvent() {
                     placeholder="Ex: Chá da Maria"
                     value={formData.eventName}
                     onChange={(e) => handleChange("eventName", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Nome do Bebê</Label>
-                  <Input
-                    placeholder="Ex: Benício"
-                    value={formData.babyName}
-                    onChange={(e) => handleChange("babyName", e.target.value)}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
