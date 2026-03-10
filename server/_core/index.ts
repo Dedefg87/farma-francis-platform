@@ -2067,6 +2067,36 @@ async function startServer() {
     }
   });
 
+  // Fix: Add display_order column to baby_shower_gift_packages
+  app.post("/api/fix/add-display-order", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Check if column exists
+      const check = await db.execute(
+        sql`SHOW COLUMNS FROM baby_shower_gift_packages LIKE 'display_order'`
+      );
+
+      if (check.length > 0) {
+        return res.json({ success: true, message: "Column already exists" });
+      }
+
+      // Add the column
+      await db.execute(
+        sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN display_order INT DEFAULT 0`
+      );
+
+      res.json({ success: true, message: "display_order column added successfully" });
+    } catch (error) {
+      console.error("[Fix] Error adding display_order column:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // EMERGENCY: Reset admin password
   app.get("/api/emergency/reset-admin-password", async (req, res) => {
     try {
