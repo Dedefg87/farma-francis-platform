@@ -33,18 +33,48 @@ export async function runBabyShowerMigration() {
           expected_due_date DATE NULL,
           event_date DATE NULL,
           status ENUM('active', 'closed', 'cancelled') NOT NULL DEFAULT 'active',
+          whatsapp_number VARCHAR(20) NULL,
           wallet_balance DECIMAL(10,2) DEFAULT 0.00,
           total_diapers_count INT DEFAULT 0,
           available_diapers_count INT DEFAULT 0,
           target_amount DECIMAL(12,2) NULL,
           total_guests INT DEFAULT 0,
           public_link VARCHAR(500) NULL,
+          welcome_message TEXT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           closed_at TIMESTAMP NULL,
           FOREIGN KEY (mother_customer_id) REFERENCES customers(id) ON DELETE SET NULL
         )
       `);
+    } else {
+      // Tabela já existe - verificar e adicionar colunas faltantes
+      console.log("[Baby Shower Migration] Checking baby_shower_events columns...");
+      
+      const columns = await db.raw(`
+        SELECT COLUMN_NAME FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'baby_shower_events'
+      `);
+      
+      const columnNames = Array.isArray(columns) 
+        ? columns.map((c: any) => c.COLUMN_NAME) 
+        : [];
+
+      // Adicionar colunas que faltam
+      if (!columnNames.includes('whatsapp_number')) {
+        console.log("[Baby Shower Migration] Adding whatsapp_number column");
+        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN whatsapp_number VARCHAR(20) NULL`);
+      }
+      
+      if (!columnNames.includes('welcome_message')) {
+        console.log("[Baby Shower Migration] Adding welcome_message column");
+        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN welcome_message TEXT NULL`);
+      }
+      
+      if (!columnNames.includes('baby_name')) {
+        console.log("[Baby Shower Migration] Adding baby_name column");
+        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN baby_name VARCHAR(255) NULL`);
+      }
     }
 
     // ==============================
@@ -73,7 +103,7 @@ export async function runBabyShowerMigration() {
       await db.raw(`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
     }
 
-    if (!oldExists && !newExists) {
+    if (!newExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_gift_packages table");
       await db.raw(`
         CREATE TABLE baby_shower_gift_packages (
@@ -81,17 +111,62 @@ export async function runBabyShowerMigration() {
           event_id INT NOT NULL,
           package_name VARCHAR(120) NOT NULL,
           description TEXT NULL,
+          image_url TEXT NULL,
           gift_type ENUM('diapers', 'wipes', 'money', 'product') NOT NULL DEFAULT 'diapers',
           quantity_represented INT DEFAULT 1,
           size_label VARCHAR(20) NULL,
           price DECIMAL(10,2) NOT NULL,
           stock_limit INT NULL,
           sold_count INT DEFAULT 0,
-          is_active INT NOT NULL DEFAULT 1,
+          is_active BOOLEAN NOT NULL DEFAULT true,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (event_id) REFERENCES baby_shower_events(id) ON DELETE CASCADE
         )
       `);
+    } else {
+      // Tabela existe - verificar e adicionar colunas faltantes
+      console.log("[Baby Shower Migration] Checking baby_shower_gift_packages columns...");
+      
+      const giftPkgColumns = await db.raw(`
+        SELECT COLUMN_NAME FROM information_schema.columns
+        WHERE table_schema = DATABASE() AND table_name = 'baby_shower_gift_packages'
+      `);
+      
+      const giftPkgColumnNames = Array.isArray(giftPkgColumns) 
+        ? giftPkgColumns.map((c: any) => c.COLUMN_NAME) 
+        : [];
+
+      // Renomear coluna 'name' para 'package_name' se existir
+      if (giftPkgColumnNames.includes('name') && !giftPkgColumnNames.includes('package_name')) {
+        console.log("[Baby Shower Migration] Renaming 'name' column to 'package_name'");
+        await db.raw(`ALTER TABLE baby_shower_gift_packages CHANGE COLUMN name package_name VARCHAR(255) NOT NULL`);
+      }
+
+      // Adicionar colunas que faltam
+      if (!giftPkgColumnNames.includes('image_url')) {
+        console.log("[Baby Shower Migration] Adding image_url column");
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN image_url TEXT NULL`);
+      }
+      
+      if (!giftPkgColumnNames.includes('gift_type')) {
+        console.log("[Baby Shower Migration] Adding gift_type column");
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN gift_type ENUM('diapers', 'wipes', 'money', 'product') NOT NULL DEFAULT 'diapers'`);
+      }
+      
+      if (!giftPkgColumnNames.includes('quantity_represented')) {
+        console.log("[Baby Shower Migration] Adding quantity_represented column");
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN quantity_represented INT DEFAULT 1`);
+      }
+      
+      if (!giftPkgColumnNames.includes('size_label')) {
+        console.log("[Baby Shower Migration] Adding size_label column");
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN size_label VARCHAR(20) NULL`);
+      }
+      
+      if (!giftPkgColumnNames.includes('is_active')) {
+        console.log("[Baby Shower Migration] Adding is_active column");
+        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true`);
+      }
     }
 
     // ==============================
@@ -144,10 +219,26 @@ export async function runBabyShowerMigration() {
         ? columns.map((c: any) => c.COLUMN_NAME) 
         : [];
 
+      // Renomear colunas para corresponder ao schema
+      if (columnNames.includes('status') && !columnNames.includes('payment_status')) {
+        console.log("[Baby Shower Migration] Renaming 'status' column to 'payment_status'");
+        await db.raw(`ALTER TABLE baby_shower_purchases CHANGE COLUMN status payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending'`);
+      }
+      
+      if (columnNames.includes('amount') && !columnNames.includes('amount_paid')) {
+        console.log("[Baby Shower Migration] Renaming 'amount' column to 'amount_paid'");
+        await db.raw(`ALTER TABLE baby_shower_purchases CHANGE COLUMN amount amount_paid DECIMAL(10,2) NOT NULL`);
+      }
+
       // Adicionar colunas que faltam
-      if (!columnNames.includes('created_at')) {
-        console.log("[Baby Shower Migration] Adding created_at column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+      if (!columnNames.includes('guest_customer_id')) {
+        console.log("[Baby Shower Migration] Adding guest_customer_id column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN guest_customer_id INT NULL`);
+      }
+      
+      if (!columnNames.includes('message_to_parents')) {
+        console.log("[Baby Shower Migration] Adding message_to_parents column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN message_to_parents TEXT NULL`);
       }
       
       if (!columnNames.includes('notification_sent')) {
@@ -158,6 +249,11 @@ export async function runBabyShowerMigration() {
       if (!columnNames.includes('notification_sent_at')) {
         console.log("[Baby Shower Migration] Adding notification_sent_at column");
         await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent_at TIMESTAMP NULL`);
+      }
+      
+      if (!columnNames.includes('created_at')) {
+        console.log("[Baby Shower Migration] Adding created_at column");
+        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
       }
     }
 
