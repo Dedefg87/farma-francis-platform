@@ -2481,7 +2481,6 @@ async function startServer() {
   });
 
   // POST /api/system/clean-database - Esvazia banco de dados (CUIDADO!)
-  // TESTE MÍNIMO - apenas SELECT 1
   app.post("/api/system/clean-database", async (req, res) => {
     try {
       const { confirm } = req.body;
@@ -2489,23 +2488,73 @@ async function startServer() {
         return res.status(400).json({ error: "Confirmação necessária" });
       }
 
-      const { Client } = await import("pg");
-      const client = new Client({ connectionString: process.env.DATABASE_URL });
-      await client.connect();
-      
+      // Usar mysql2 que está funcionando no Railway
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
       try {
-        // Teste absoluto mínimo
-        const result = await client.query('SELECT 1 as ok');
-        res.json({ success: true, result: result.rows[0] });
+        // Lista de tabelas descartáveis
+        const tables = [
+          'conversation_messages',
+          'received_messages', 
+          'system_logs',
+          'audit_logs',
+          'notifications',
+          'sessions',
+          'flow_executions',
+          'broadcast_messages'
+        ];
+
+        const results = [];
+        
+        for (const tableName of tables) {
+          try {
+            // Verificar se tabela existe
+            const [checkRows]: any = await pool.execute(
+              `SELECT table_name FROM information_schema.tables WHERE table_name = ? AND table_schema = DATABASE()`,
+              [tableName]
+            );
+            
+            if (checkRows.length > 0) {
+              // Deletar todas as linhas
+              const [result]: any = await pool.execute(`DELETE FROM \`${tableName}\``);
+              const deletedCount = result.affectedRows || 0;
+              
+              results.push({
+                table: tableName,
+                success: true,
+                rows: deletedCount
+              });
+            } else {
+              results.push({
+                table: tableName,
+                success: false,
+                error: 'Tabela não encontrada'
+              });
+            }
+          } catch (e: any) {
+            results.push({
+              table: tableName,
+              success: false,
+              error: e.message
+            });
+          }
+        }
+        
+        res.json({ 
+          success: true, 
+          results, 
+          message: "Limpeza concluída" 
+        });
       } finally {
-        await client.end();
+        await pool.end();
       }
     } catch (error: any) {
       console.error("[CleanDatabase] Error:", error);
-      return res.status(500).json({ 
-        error: error.message,
-        stack: error.stack?.split('\n').slice(0, 3).join('\n')
-      });
+      res.status(500).json({ error: String(error) });
     }
   });
 
