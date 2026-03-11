@@ -2485,7 +2485,6 @@ async function startServer() {
   app.post("/api/system/clean-database", async (req, res) => {
     try {
       const { confirm } = req.body;
-      console.log("[CleanDatabase] Recebido confirm:", confirm);
       if (!confirm) {
         return res.status(400).json({ error: "Confirmação necessária" });
       }
@@ -2493,12 +2492,13 @@ async function startServer() {
       const { Client } = await import("pg");
       const client = new Client({ connectionString: process.env.DATABASE_URL });
       await client.connect();
-      console.log("[CleanDatabase] Conectado ao PostgreSQL");
       
       try {
-        console.log("[CleanDatabase] Iniciando limpeza...");
+        // Teste simples de conexão
+        const testResult = await client.query('SELECT 1 as test');
+        console.log("[CleanDatabase] Teste de conexão:", testResult.rows[0]);
         
-        // Lista de tabelas descartáveis (logs, sessões, mensagens antigas, etc.)
+        // Lista de tabelas descartáveis
         const tables = [
           'conversation_messages',
           'received_messages', 
@@ -2508,62 +2508,35 @@ async function startServer() {
           'sessions',
           'flow_executions',
           'execution_logs',
-          'broadcast_messages',
-          'quick_replies_cache',
-          'webhook_logs'
+          'broadcast_messages'
         ];
 
         const results = [];
         
-        console.log("[CleanDatabase] Tabelas a limpar:", tables);
-        
         for (const tableName of tables) {
           try {
-            console.log(`[CleanDatabase] >> Processando: ${tableName}`);
-            
-            if (!tableName || typeof tableName !== 'string' || tableName.trim() === '') {
-              console.warn(`[CleanDatabase] Tabela inválida: "${tableName}" (type: ${typeof tableName}), pulando`);
-              continue;
-            }
-            
-            // Verificar se tabela existe
-            const checkSql = "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'";
-            console.log(`[CleanDatabase] SQL check: ${checkSql}, param: "${tableName}"`);
-            const checkResult = await client.query(checkSql, [tableName]);
-            
-            console.log(`[CleanDatabase] Tabela ${tableName} existe? ${checkResult.rows.length > 0}`);
+            // Verificar se tabela existe (query direta sem parâmetros)
+            const checkResult = await client.query(
+              `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}' AND table_schema = 'public'`
+            );
             
             if (checkResult.rows.length > 0) {
-              // Contar linhas antes
-              const countSql = `SELECT COUNT(*) FROM "${tableName}"`;
-              console.log(`[CleanDatabase] SQL count: ${countSql}`);
-              const beforeCount = await client.query(countSql);
-              const countBefore = Number(beforeCount.rows[0].count);
-              console.log(`[CleanDatabase] ${tableName}: ${countBefore} linhas antes`);
-              
               // Deletar todas as linhas
-              const deleteSql = `DELETE FROM "${tableName}"`;
-              console.log(`[CleanDatabase] SQL delete: ${deleteSql}`);
-              const deleteResult = await client.query(deleteSql);
-              const deletedCount = deleteResult.rowCount;
-              console.log(`[CleanDatabase] ${tableName}: ${deletedCount} linhas deletadas`);
+              const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
               
               results.push({
                 table: tableName,
                 success: true,
-                rows: deletedCount,
-                message: `Tabela ${tableName}: ${deletedCount} linha${deletedCount !== 1 ? 's' : ''} removida${deletedCount !== 1 ? 's' : ''} (era ${countBefore})`
+                rows: deleteResult.rowCount
               });
             } else {
-              console.log(`[CleanDatabase] ${tableName}: não encontrada`);
               results.push({
                 table: tableName,
                 success: false,
                 error: 'Tabela não encontrada'
               });
             }
-          } catch (e) {
-            console.error(`[CleanDatabase] Erro em ${tableName}:`, e);
+          } catch (e: any) {
             results.push({
               table: tableName,
               success: false,
@@ -2572,19 +2545,16 @@ async function startServer() {
           }
         }
         
-        console.log("[CleanDatabase] Processamento concluído, enviando resposta...");
-        
         res.json({ 
           success: true, 
           results, 
-          message: "Limpeza do banco de dados concluída" 
+          message: "Limpeza concluída" 
         });
       } finally {
         await client.end();
-        console.log("[CleanDatabase] Conexão fechada");
       }
-    } catch (error) {
-      console.error("[System/CleanDatabase] Error:", error);
+    } catch (error: any) {
+      console.error("[CleanDatabase] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });
