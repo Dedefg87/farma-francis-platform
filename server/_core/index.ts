@@ -2315,9 +2315,16 @@ async function startServer() {
 
       await pool.end();
 
+      // Normalizar campos: MySQL retorna TABLE_NAME, TABLE_ROWS (maiúsculo) ou table_name, table_rows (minúsculo)
+      const normalized = rows.map((row: any) => ({
+        table_name: row.table_name || row.TABLE_NAME || "unknown",
+        size_mb: Number(row.size_mb || row.SIZE_MB || 0),
+        table_rows: Number(row.table_rows || row.TABLE_ROWS || 0),
+      }));
+
       res.json({
         success: true,
-        tables: rows,
+        tables: normalized,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
