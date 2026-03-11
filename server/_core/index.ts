@@ -2380,7 +2380,7 @@ async function startServer() {
               }
             } catch (e) {
               // Tabela não existe ou erro - ignorar silenciosamente
-              if (!e.message.includes('doesn't exist')) {
+              if (!e.message.includes("doesn't exist")) {
                 console.log(`[System/Clean] Erro em ${tableName}: ${e.message}`);
               }
             }
