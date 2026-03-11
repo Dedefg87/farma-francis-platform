@@ -46,7 +46,12 @@ export async function sendWhatsAppNotification(params: {
       return false;
     }
 
-    const normalizedPhone = params.phone.replace(/\D/g, "");
+    // Normaliza para formato internacional (55DDDtelefone)
+    let normalizedPhone = params.phone.replace(/\D/g, "");
+    // Se não começar com 55, adiciona o código do Brasil
+    if (!normalizedPhone.startsWith("55")) {
+      normalizedPhone = "55" + normalizedPhone;
+    }
 
     const response = await fetch(
       `${apiUrl}/message/sendText/${instanceName}`,
