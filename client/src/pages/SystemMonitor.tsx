@@ -68,7 +68,8 @@ export default function SystemMonitor() {
       const dbSizeRes = await fetch("/api/system/database/size");
       if (dbSizeRes.ok) {
         const dbSizeData = await dbSizeRes.json();
-        setDbSize(dbSizeData.size_mb);
+        const size = Number(dbSizeData.size_mb) || 0;
+        setDbSize(size);
       }
 
       // Buscar estatísticas das tabelas
@@ -159,8 +160,8 @@ export default function SystemMonitor() {
     return (usedNum / totalNum) * 100;
   };
 
-  const totalTablesSize = tables.reduce((acc, t) => acc + t.size_mb, 0);
-  const topTables = [...tables].sort((a, b) => b.size_mb - a.size_mb).slice(0, 10);
+  const totalTablesSize = tables.reduce((acc, t) => acc + (Number(t.size_mb) || 0), 0);
+  const topTables = [...tables].sort((a, b) => (Number(b.size_mb) || 0) - (Number(a.size_mb) || 0)).slice(0, 10);
 
   if (loading) {
     return (
