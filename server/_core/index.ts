@@ -2485,6 +2485,7 @@ async function startServer() {
   app.post("/api/system/clean-database", async (req, res) => {
     try {
       const { confirm } = req.body;
+      console.log("[CleanDatabase] Recebido confirm:", confirm);
       if (!confirm) {
         return res.status(400).json({ error: "Confirmação necessária" });
       }
@@ -2492,6 +2493,7 @@ async function startServer() {
       const { Client } = await import("pg");
       const client = new Client({ connectionString: process.env.DATABASE_URL });
       await client.connect();
+      console.log("[CleanDatabase] Conectado ao PostgreSQL");
       
       try {
         console.log("[CleanDatabase] Iniciando limpeza...");
@@ -2517,16 +2519,16 @@ async function startServer() {
         
         for (const tableName of tables) {
           try {
-            console.log(`[CleanDatabase] Processando tabela: ${tableName} (tipo: ${typeof tableName}, length: ${tableName?.length})`);
+            console.log(`[CleanDatabase] >> Processando: ${tableName}`);
             
-            if (!tableName || tableName.trim() === '') {
-              console.warn(`[CleanDatabase] Tabela vazia/não definida, pulando`);
+            if (!tableName || typeof tableName !== 'string' || tableName.trim() === '') {
+              console.warn(`[CleanDatabase] Tabela inválida: "${tableName}" (type: ${typeof tableName}), pulando`);
               continue;
             }
             
             // Verificar se tabela existe
             const checkSql = "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'";
-            console.log(`[CleanDatabase] Executando: ${checkSql} com param: ${tableName}`);
+            console.log(`[CleanDatabase] SQL check: ${checkSql}, param: "${tableName}"`);
             const checkResult = await client.query(checkSql, [tableName]);
             
             console.log(`[CleanDatabase] Tabela ${tableName} existe? ${checkResult.rows.length > 0}`);
@@ -2534,14 +2536,14 @@ async function startServer() {
             if (checkResult.rows.length > 0) {
               // Contar linhas antes
               const countSql = `SELECT COUNT(*) FROM "${tableName}"`;
-              console.log(`[CleanDatabase] Executando: ${countSql}`);
+              console.log(`[CleanDatabase] SQL count: ${countSql}`);
               const beforeCount = await client.query(countSql);
               const countBefore = Number(beforeCount.rows[0].count);
               console.log(`[CleanDatabase] ${tableName}: ${countBefore} linhas antes`);
               
               // Deletar todas as linhas
               const deleteSql = `DELETE FROM "${tableName}"`;
-              console.log(`[CleanDatabase] Executando: ${deleteSql}`);
+              console.log(`[CleanDatabase] SQL delete: ${deleteSql}`);
               const deleteResult = await client.query(deleteSql);
               const deletedCount = deleteResult.rowCount;
               console.log(`[CleanDatabase] ${tableName}: ${deletedCount} linhas deletadas`);
@@ -2570,14 +2572,7 @@ async function startServer() {
           }
         }
         
-        // Vacuum desabilitado temporariamente para testes
-        // try {
-        //   console.log("[CleanDatabase] Executando VACUUM FULL...");
-        //   await client.query('VACUUM FULL');
-        //   console.log("[CleanDatabase] VACUUM concluído");
-        // } catch (vacuumError) {
-        //   console.warn("[CleanDatabase] VACUUM falhou (ignorado):", vacuumError);
-        // }
+        console.log("[CleanDatabase] Processamento concluído, enviando resposta...");
         
         res.json({ 
           success: true, 
@@ -2586,6 +2581,7 @@ async function startServer() {
         });
       } finally {
         await client.end();
+        console.log("[CleanDatabase] Conexão fechada");
       }
     } catch (error) {
       console.error("[System/CleanDatabase] Error:", error);
