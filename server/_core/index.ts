@@ -2513,26 +2513,36 @@ async function startServer() {
 
         const results = [];
         
+        console.log("[CleanDatabase] Tabelas a limpar:", tables);
+        
         for (const tableName of tables) {
           try {
-            console.log(`[CleanDatabase] Processando tabela: ${tableName}`);
+            console.log(`[CleanDatabase] Processando tabela: ${tableName} (tipo: ${typeof tableName}, length: ${tableName?.length})`);
+            
+            if (!tableName || tableName.trim() === '') {
+              console.warn(`[CleanDatabase] Tabela vazia/não definida, pulando`);
+              continue;
+            }
             
             // Verificar se tabela existe
-            const checkResult = await client.query(
-              "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'",
-              [tableName]
-            );
+            const checkSql = "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'";
+            console.log(`[CleanDatabase] Executando: ${checkSql} com param: ${tableName}`);
+            const checkResult = await client.query(checkSql, [tableName]);
             
             console.log(`[CleanDatabase] Tabela ${tableName} existe? ${checkResult.rows.length > 0}`);
             
             if (checkResult.rows.length > 0) {
               // Contar linhas antes
-              const beforeCount = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
+              const countSql = `SELECT COUNT(*) FROM "${tableName}"`;
+              console.log(`[CleanDatabase] Executando: ${countSql}`);
+              const beforeCount = await client.query(countSql);
               const countBefore = Number(beforeCount.rows[0].count);
               console.log(`[CleanDatabase] ${tableName}: ${countBefore} linhas antes`);
               
               // Deletar todas as linhas
-              const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
+              const deleteSql = `DELETE FROM "${tableName}"`;
+              console.log(`[CleanDatabase] Executando: ${deleteSql}`);
+              const deleteResult = await client.query(deleteSql);
               const deletedCount = deleteResult.rowCount;
               console.log(`[CleanDatabase] ${tableName}: ${deletedCount} linhas deletadas`);
               
