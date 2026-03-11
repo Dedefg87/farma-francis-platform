@@ -2494,6 +2494,8 @@ async function startServer() {
       await client.connect();
       
       try {
+        console.log("[CleanDatabase] Iniciando limpeza...");
+        
         // Lista de tabelas descartáveis (logs, sessões, mensagens antigas, etc.)
         const tables = [
           'conversation_messages',
@@ -2513,20 +2515,26 @@ async function startServer() {
         
         for (const tableName of tables) {
           try {
+            console.log(`[CleanDatabase] Processando tabela: ${tableName}`);
+            
             // Verificar se tabela existe
             const checkResult = await client.query(
               "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'",
               [tableName]
             );
             
+            console.log(`[CleanDatabase] Tabela ${tableName} existe? ${checkResult.rows.length > 0}`);
+            
             if (checkResult.rows.length > 0) {
               // Contar linhas antes
               const beforeCount = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
               const countBefore = Number(beforeCount.rows[0].count);
+              console.log(`[CleanDatabase] ${tableName}: ${countBefore} linhas antes`);
               
               // Deletar todas as linhas
               const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
               const deletedCount = deleteResult.rowCount;
+              console.log(`[CleanDatabase] ${tableName}: ${deletedCount} linhas deletadas`);
               
               results.push({
                 table: tableName,
@@ -2535,6 +2543,7 @@ async function startServer() {
                 message: `Tabela ${tableName}: ${deletedCount} linha${deletedCount !== 1 ? 's' : ''} removida${deletedCount !== 1 ? 's' : ''} (era ${countBefore})`
               });
             } else {
+              console.log(`[CleanDatabase] ${tableName}: não encontrada`);
               results.push({
                 table: tableName,
                 success: false,
@@ -2542,6 +2551,7 @@ async function startServer() {
               });
             }
           } catch (e) {
+            console.error(`[CleanDatabase] Erro em ${tableName}:`, e);
             results.push({
               table: tableName,
               success: false,
@@ -2552,9 +2562,11 @@ async function startServer() {
         
         // Vacuum para liberar espaço (executa em transação separada)
         try {
+          console.log("[CleanDatabase] Executando VACUUM FULL...");
           await client.query('VACUUM FULL');
+          console.log("[CleanDatabase] VACUUM concluído");
         } catch (vacuumError) {
-          console.warn("VACUUM falhou (ignorado):", vacuumError);
+          console.warn("[CleanDatabase] VACUUM falhou (ignorado):", vacuumError);
         }
         
         res.json({ 
