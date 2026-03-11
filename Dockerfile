@@ -1,4 +1,4 @@
-# Build: forced cache invalidation 2026-03-04-v4
+# Build: forced rebuild 2026-03-11
 FROM node:20-alpine
 
 WORKDIR /app
