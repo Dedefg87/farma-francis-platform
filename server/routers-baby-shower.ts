@@ -13,6 +13,7 @@ import {
 import { eq, and, gt, desc, asc, sql, inArray, SQL } from "drizzle-orm";
 import { randomUUID, randomBytes } from "node:crypto";
 import { sendWhatsAppNotification } from "./services/whatsapp.js";
+import { ShoppingCartCleanupService } from "./services/shopping-cart-cleanup.js";
 
 const generateEventCode = () => {
   const date = new Date();
@@ -639,6 +640,73 @@ export const babyShowerRouter = router({
 
       return { success: true, message: "Evento resetado com sucesso" };
     }),
+
+  // ============== LIMPEZA DE HISTÓRICO DE COMPRAS ==============
+
+  /**
+   * Admin: Obtém estatísticas de compras (para monitoramento)
+   */
+  getPurchaseStats: protectedProcedure.query(async () => {
+    const stats = await ShoppingCartCleanupService.getStats();
+    return stats;
+  }),
+
+  /**
+   * Admin: Limpa manualmente pedidos pendentes com mais de 24 horas
+   * Use para trigger manual do worker automático
+   */
+  cleanupPendingPurchases: protectedProcedure
+    .input(z.object({
+      dryRun: z.boolean().optional().default(false), // Se true, só mostra quantos seriam deletados
+    }))
+    .mutation(async ({ input }) => {
+      if (input.dryRun) {
+        const count = await ShoppingCartCleanupService.countPendingOlderThan24h();
+        return { success: true, dryRun: true, wouldDelete: count };
+      }
+
+      const result = await ShoppingCartCleanupService.cleanupPendingPurchases();
+      return { success: true, deleted: result.deleted };
+    }),
+
+  /**
+   * Admin: Limpa manualmente histórico antigo de compras (paid/failed/refunded)
+   * @param olderThanDays - Remove compras mais antigas que X dias (padrão: 365 dias)
+   */
+  cleanupOldPurchases: protectedProcedure
+    .input(z.object({
+      olderThanDays: z.number().int().positive().optional().default(365),
+      dryRun: z.boolean().optional().default(false),
+    }))
+    .mutation(async ({ input }) => {
+      if (input.dryRun) {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
+        const cutoffDate = new Date(Date.now() - input.olderThanDays * 24 * 60 * 60 * 1000);
+        const result = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(babyShowerPurchases)
+          .where(lt(babyShowerPurchases.createdAt, cutoffDate));
+        const count = result[0]?.count ?? 0;
+        return { success: true, dryRun: true, wouldDelete: count };
+      }
+
+      const result = await ShoppingCartCleanupService.cleanupOldPurchases(input.olderThanDays);
+      return { success: true, deleted: result.deleted };
+    }),
+
+  /**
+   * Admin: Deleta uma compra específica por ID
+   */
+  deletePurchase: protectedProcedure
+    .input(z.object({
+      purchaseId: z.number().int().positive(),
+    }))
+    .mutation(async ({ input }) => {
+      await ShoppingCartCleanupService.deletePurchase(input.purchaseId);
+      return { success: true };
+    }),
+
 });
 // Force rebuild 1772749799
 // Build: 1772751251
