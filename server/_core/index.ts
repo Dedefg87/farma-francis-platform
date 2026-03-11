@@ -11,7 +11,6 @@ import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
-import systemRouter from "../routes/system.js";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
@@ -89,7 +88,6 @@ async function startServer() {
 
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);
-app.use("/api/system", systemRouter);
 
   // Basic health check for load balancers and uptime monitoring
   app.get("/api/health", (_req, res) => {
@@ -2228,4 +2226,749 @@ app.use("/api/system", systemRouter);
   });
 
   // ========================================
+  // SYSTEM MONITORING ENDPOINTS
+  // ========================================
 
+  // GET /api/system/storage - Retorna informações de espaço em disco
+  app.get("/api/system/storage", async (req, res) => {
+    try {
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const execAsync = promisify(exec);
+
+      // Executar df -h para obter informações de disco
+      const { stdout } = await execAsync("df -h /");
+      const lines = stdout.trim().split("\n");
+      const [header, ...parts] = lines;
+      
+      const diskInfo = parts.map(line => {
+        const [filesystem, size, used, available, usePct, mounted] = line.split(/\s+/);
+        return { filesystem, size, used, available, usePct, mounted };
+      })[0] || {};
+
+      // Executar du para obter tamanho do diretório da aplicação
+      const appPath = process.cwd();
+      const { stdout: duStdout } = await execAsync(`du -sh ${appPath}`);
+      const appSize = duStdout.trim().split("\t")[0];
+
+      res.json({
+        success: true,
+        disk: diskInfo,
+        appSize,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Storage] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // GET /api/system/database/size - Retorna tamanho total do banco de dados
+  app.get("/api/system/database/size", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Query para obter tamanho do banco de dados
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          SUM(data_length + index_length) / 1024 / 1024 as size_mb
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
+      `);
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        size_mb: rows[0]?.size_mb || 0,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Database/Size] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // GET /api/system/database/tables - Retorna estatísticas de cada tabela
+  app.get("/api/system/database/tables", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Query para obter estatísticas das tabelas
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          table_name,
+          ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
+          table_rows
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
+        ORDER BY (data_length + index_length) DESC
+      `);
+
+      await pool.end();
+
+      // Normalizar campos: MySQL retorna TABLE_NAME, TABLE_ROWS (maiúsculo) ou table_name, table_rows (minúsculo)
+      const normalized = rows.map((row: any) => ({
+        table_name: row.table_name || row.TABLE_NAME || "unknown",
+        size_mb: Number(row.size_mb || row.SIZE_MB || 0),
+        table_rows: Number(row.table_rows || row.TABLE_ROWS || 0),
+      }));
+
+      res.json({
+        success: true,
+        tables: normalized,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Database/Tables] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // POST /api/system/clean - Limpa dados descartáveis (logs antigos, cache, temporários)
+  app.post("/api/system/clean", async (req, res) => {
+    try {
+      const { types } = req.body;
+      const results = [];
+      
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 5,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // 1. Limpar logs antigos (ex: logs de debug, sistema)
+      if (!types || types.includes('logs')) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 dias atrás
+        
+        try {
+          // Lista de tabelas de logs conhecidas
+          const logTables = [
+            'system_logs',
+            'audit_logs',
+            'crm_audit_logs',
+            'workflow_executions',
+            'execution_data'
+          ];
+          
+          let totalDeleted = 0;
+          let tablesFound = 0;
+          
+          for (const tableName of logTables) {
+            try {
+              // Verificar se a tabela existe e tem created_at
+              const [columns]: any = await pool.execute(
+                `SHOW COLUMNS FROM \`${tableName}\` LIKE 'created_at'`
+              );
+              
+              if (columns.length > 0) {
+                tablesFound++;
+                const [result] = await pool.execute(
+                  `DELETE FROM \`${tableName}\` WHERE created_at < ?`,
+                  [cutoffDate]
+                );
+                totalDeleted += result.affectedRows;
+              }
+            } catch (e) {
+              // Tabela não existe ou erro - ignorar silenciosamente
+              if (!e.message.includes("doesn't exist")) {
+                console.log(`[System/Clean] Erro em ${tableName}: ${e.message}`);
+              }
+            }
+          }
+          
+          results.push({
+            type: 'logs',
+            deleted: totalDeleted,
+            message: `Removidos ${totalDeleted} logs antigos de ${tablesFound} tabela${tablesFound !== 1 ? 's' : ''}`
+          });
+        } catch (e) {
+          results.push({
+            type: 'logs',
+            deleted: 0,
+            message: `Erro: ${e.message}`
+          });
+        }
+      }
+
+      // 2. Limpar mídias temporárias/órfãs
+      if (!types || types.includes("media_temp")) {
+        try {
+          // Buscar mensagens com mídia antiga (>90 dias) que não são mais referenciadas
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 90);
+          
+          const [orphanMedia]: any = await pool.execute(
+            `SELECT cm.id FROM conversation_messages cm
+             LEFT JOIN conversations c ON cm.conversation_id = c.id
+             WHERE cm.file_url IS NOT NULL
+             AND cm.file_url LIKE 'data:%'
+             AND c.id IS NULL
+             LIMIT 100`
+          );
+          
+          // Por segurança, apenas contar, não deletar
+          results.push({
+            type: "media_temp",
+            deleted: 0,
+            message: `${orphanMedia.length} mídias órfãs encontradas (não deletadas automaticamente)`
+          });
+        } catch (e) {
+          results.push({
+            type: "media_temp",
+            deleted: 0,
+            message: `Erro: ${e.message}`
+          });
+        }
+      }
+
+      // 3. Limpar sessões expiradas
+      if (!types || types.includes("sessions")) {
+        try {
+          const [tables]: any = await pool.execute(
+            "SHOW TABLES LIKE 'sessions'"
+          );
+          
+          if (tables.length > 0) {
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 7); // 7 dias
+            
+            const [result] = await pool.execute(
+              "DELETE FROM sessions WHERE expires_at < ?",
+              [cutoffDate]
+            );
+            results.push({
+              type: "sessions",
+              deleted: result.affectedRows,
+              message: `Removidas ${result.affectedRows} sessões expiradas`
+            });
+          } else {
+            results.push({
+              type: "sessions",
+              deleted: 0,
+              message: "Tabela de sessões não encontrada"
+            });
+          }
+        } catch (e) {
+          results.push({
+            type: "sessions",
+            deleted: 0,
+            message: `Erro: ${e.message}`
+          });
+        }
+      }
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        results,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Clean] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // POST /api/system/clean-database - Esvazia banco de dados (CUIDADO!)
+  // Requer confirmação explícita
+  app.post("/api/system/clean-database", async (req, res) => {
+    try {
+      const { confirm } = req.body;
+      if (!confirm) {
+        return res.status(400).json({ error: "Confirmação necessária" });
+      }
+
+      const { Client } = await import("pg");
+      const client = new Client({ connectionString: process.env.DATABASE_URL });
+      await client.connect();
+      
+      try {
+        // Lista de tabelas descartáveis (logs, sessões, mensagens antigas, etc.)
+        const tables = [
+          'conversation_messages',
+          'received_messages', 
+          'system_logs',
+          'audit_logs',
+          'notifications',
+          'sessions',
+          'flow_executions',
+          'execution_logs',
+          'broadcast_messages',
+          'quick_replies_cache',
+          'webhook_logs'
+        ];
+
+        const results = [];
+        
+        for (const tableName of tables) {
+          try {
+            // Verificar se tabela existe
+            const checkResult = await client.query(
+              "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'",
+              [tableName]
+            );
+            
+            if (checkResult.rows.length > 0) {
+              // Contar linhas antes
+              const beforeCount = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
+              const countBefore = Number(beforeCount.rows[0].count);
+              
+              // Deletar todas as linhas
+              const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
+              const deletedCount = deleteResult.rowCount;
+              
+              results.push({
+                table: tableName,
+                success: true,
+                rows: deletedCount,
+                message: `Tabela ${tableName}: ${deletedCount} linha${deletedCount !== 1 ? 's' : ''} removida${deletedCount !== 1 ? 's' : ''} (era ${countBefore})`
+              });
+            } else {
+              results.push({
+                table: tableName,
+                success: false,
+                error: 'Tabela não encontrada'
+              });
+            }
+          } catch (e) {
+            results.push({
+              table: tableName,
+              success: false,
+              error: e.message
+            });
+          }
+        }
+        
+        // Vacuum para liberar espaço (executa em transação separada)
+        try {
+          await client.query('VACUUM FULL');
+        } catch (vacuumError) {
+          console.warn("VACUUM falhou (ignorado):", vacuumError);
+        }
+        
+        res.json({ 
+          success: true, 
+          results, 
+          message: "Limpeza do banco de dados concluída" 
+        });
+      } finally {
+        await client.end();
+      }
+    } catch (error) {
+      console.error("[System/CleanDatabase] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // DEBUG: Check broadcast tables status
+  app.get("/api/debug/check-broadcast-tables", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Check existing tables
+      const tables = await db.execute(sql`SHOW TABLES LIKE 'broadcast%'`);
+
+      // Get table names
+      const tableNames = tables.map((row: any) => Object.values(row)[0]);
+
+      res.json({
+        tablesFound: tableNames,
+      });
+    } catch (error) {
+      console.error("Error checking tables:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // DEBUG: Create broadcast tables manually
+  app.get("/api/debug/create-broadcast-tables", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Check existing tables before
+      const tablesBefore = await db.execute(sql`SHOW TABLES LIKE 'broadcast%'`);
+
+      // Drop existing tables if they exist - disable FK checks first to avoid constraint errors
+      await db.execute(sql`SET FOREIGN_KEY_CHECKS = 0`);
+      await db.execute(sql`DROP TABLE IF EXISTS broadcast_messages`);
+      await db.execute(sql`DROP TABLE IF EXISTS broadcast_list_members`);
+      await db.execute(sql`DROP TABLE IF EXISTS broadcast_lists`);
+      await db.execute(sql`SET FOREIGN_KEY_CHECKS = 1`);
+
+      // Create broadcast_lists table with correct schema matching drizzle
+      await db.execute(sql`
+        CREATE TABLE broadcast_lists (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          description TEXT,
+          created_by INT NOT NULL,
+          status ENUM('active', 'paused', 'deleted') DEFAULT 'active' NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        )
+      `);
+
+      // Create broadcast_list_members table
+      await db.execute(sql`
+        CREATE TABLE broadcast_list_members (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          list_id INT NOT NULL,
+          customer_id INT NOT NULL,
+          added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          FOREIGN KEY (list_id) REFERENCES broadcast_lists(id) ON DELETE CASCADE,
+          FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+          UNIQUE KEY unique_member (list_id, customer_id)
+        )
+      `);
+
+      // Create broadcast_messages table
+      await db.execute(sql`
+        CREATE TABLE broadcast_messages (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          list_id INT NOT NULL,
+          content TEXT NOT NULL,
+          sent_by INT NOT NULL,
+          total_recipients INT NOT NULL,
+          successful_sends INT DEFAULT 0,
+          failed_sends INT DEFAULT 0,
+          sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          FOREIGN KEY (list_id) REFERENCES broadcast_lists(id) ON DELETE CASCADE,
+          FOREIGN KEY (sent_by) REFERENCES users(id)
+        )
+      `);
+
+      res.json({
+        success: true,
+        message: "Tabelas de broadcast recriadas com sucesso!",
+        previousTables: tablesBefore,
+      });
+    } catch (error) {
+      console.error("Error creating tables:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // tRPC API
+  app.use(
+    "/api/trpc",
+    createExpressMiddleware({
+      router: appRouter,
+      createContext,
+    })
+  );
+
+  // Debug: testar listActive query
+  app.get("/api/debug/list-active-raw", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          c.id, 
+          c.customer_name as customerName, 
+          c.status, 
+          c.assigned_to as assignedTo,
+          u.name as assignedAgentName
+        FROM conversations c
+        LEFT JOIN users u ON c.assigned_to = u.id
+        WHERE c.status IN ('assigned', 'open')
+        ORDER BY c.last_message_at DESC
+        LIMIT 20
+      `);
+      await pool.end();
+
+      res.json(rows);
+    } catch (error) {
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // Debug: verificar assignedAgentName (ANTES do serveStatic)
+  app.get("/api/debug/agent-names", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          c.id, 
+          c.customer_name as customerName, 
+          c.status, 
+          c.assigned_to as assignedTo,
+          u.name as assignedAgentName
+        FROM conversations c
+        LEFT JOIN users u ON c.assigned_to = u.id
+        ORDER BY c.id DESC
+        LIMIT 10
+      `);
+      await pool.end();
+
+      res.json(rows);
+    } catch (error) {
+      console.error("[Debug Agent Names] Error:", error);
+      res.status(500).json({ error: String(error), stack: (error as Error).stack });
+    }
+  });
+
+  // development mode uses Vite, production mode uses static files
+  if (process.env.NODE_ENV === "development") {
+    // Dynamic import - only loads vite in development
+    // vite.ts imports devDependencies that are not available in production
+    const vitePath = "./vite";
+    const { setupVite } = await import(
+      /* webpackIgnore: true */
+      /* @vite-ignore */
+      vitePath
+    );
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
+
+  // Railway requires exact PORT from environment variable
+  const port = parseInt(process.env.PORT || "3000");
+  console.log(`[Server] Starting on port ${port}...`);
+  console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
+  console.log(`[Server] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
+
+  // Bind to all interfaces to be accessible from Railway's router
+  // Final API catch-all for unknown API routes (JSON only)
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/api")) {
+      if (!res.headersSent) {
+        res.status(404).json({ error: "Not found", path: req.originalUrl });
+      } else {
+        next();
+      }
+    } else {
+      next();
+    }
+  });
+
+  server.listen(port, "0.0.0.0", async () => {
+    console.log(`Server running on http://localhost:${port}/`);
+
+    // Run CRM migration on startup
+    console.log("[Server] Running CRM migration...");
+    await runCRMMigration();
+    await runBabyShowerMigration();
+
+    // Start simple chatbot after server is running
+    import("../chatbot")
+      .then(module => {
+        module.startChatbot();
+      })
+      .catch(err => {
+        console.error("Failed to start chatbot:", err);
+      });
+
+    // Start flow engine for selected Automation flows
+    import("../flow-engine")
+      .then(module => {
+        module.startFlowEngine();
+      })
+      .catch(err => {
+        console.error("Failed to start flow engine:", err);
+      });
+
+    // Start CRM outbox worker (async capture / projections)
+    import("../crm-outbox-worker")
+      .then(module => {
+        module.startCrmOutboxWorker();
+      })
+      .catch(err => {
+        console.error("Failed to start CRM outbox worker:", err);
+      });
+
+    // Start PharmaCore refill worker (creates tasks for upcoming refills)
+    import("../pharma-refill-worker")
+      .then(module => {
+        module.startPharmaRefillWorker(10, 7, 3);
+      })
+      .catch(err => {
+        console.error("Failed to start Pharma refill worker:", err);
+      });
+
+    // Start PharmaCore birthday worker (creates tasks on birthdays)
+    import("../pharma-birthday-worker")
+      .then(module => {
+        module.startPharmaBirthdayWorker(720);
+      })
+      .catch(err => {
+        console.error("Failed to start Pharma birthday worker:", err);
+      });
+
+    // Start idle conversation closer (30min without customer reply)
+    import("../conversation-idle-worker")
+      .then(module => {
+        module.startConversationIdleWorker(2, 30, 50);
+      })
+      .catch(err => {
+        console.error("Failed to start idle close worker:", err);
+      });
+
+    // Start pause auto-finisher worker
+    import("../workers/pause-auto-finisher")
+      .then(module => {
+        module.startPauseAutoFinisher(1); // Check every 1 minute
+        console.log("Pause auto-finisher worker started");
+      })
+      .catch(error => {
+        console.error("Failed to start flow engine:", error);
+      });
+
+    // ========================================
+    // EVOLUTION 1: Auto Image Search for Products
+    // ========================================
+    app.post("/api/baby-shower/auto-image/:packageId", async (req, res) => {
+      try {
+        const packageId = parseInt(req.params.packageId);
+        const { productName } = req.body;
+
+        if (!packageId || !productName) {
+          return res.status(400).json({ error: "packageId and productName required" });
+        }
+
+        // Search for images via Serper API
+        const SERPER_API_KEY = process.env.SERPER_API_KEY || "6abb2781d7edf99aa211c064912283e3c804e8c0";
+        const response = await fetch("https://google.serper.dev/images", {
+          method: "POST",
+          headers: {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            q: productName + " produto imagem oficial",
+            gl: "br",
+            hl: "pt-br",
+          }),
+        });
+
+        if (!response.ok) {
+          return res.status(500).json({ error: "Failed to search images" });
+        }
+
+        const data = await response.json();
+        const images = data.images || [];
+        
+        if (images.length === 0) {
+          return res.json({ success: false, error: "No images found" });
+        }
+
+        // Get first image
+        const imageUrl = images[0].imageUrl || images[0].link;
+        
+        // Update in database
+        const db = await getDb();
+        if (db) {
+          await db.execute(sql`
+            UPDATE baby_shower_gift_packages 
+            SET image_url = ${imageUrl}
+            WHERE id = ${packageId}
+          `);
+        }
+
+        res.json({ success: true, imageUrl });
+      } catch (error) {
+        console.error("[AutoImage] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    // ========================================
+    // EVOLUTION 2: System Health Monitor
+    // ========================================
+    app.get("/api/system/health", async (req, res) => {
+      try {
+        const checks = [];
+        
+        // Check API
+        const apiStart = Date.now();
+        checks.push({
+          service: "API",
+          status: "ok",
+          responseTime: Date.now() - apiStart,
+          message: "API responding"
+        });
+        
+        // Check Database
+        try {
+          const db = await getDb();
+          if (db) {
+            await db.execute(sql`SELECT 1`);
+            checks.push({
+              service: "Database",
+              status: "ok",
+              message: "Database connection OK"
+            });
+          } else {
+            checks.push({
+              service: "Database",
+              status: "error",
+              message: "Database not available"
+            });
+          }
+        } catch (dbError) {
+          checks.push({
+            service: "Database",
+            status: "error",
+            message: String(dbError)
+          });
+        }
+        
+        res.json({
+          lastCheck: new Date().toISOString(),
+          checks,
+          alerts: []
+        });
+      } catch (error) {
+        console.error("[HealthMonitor] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    app.get("/api/system/status", async (req, res) => {
+      try {
+        const { getSystemStatus } = await import("../services/health-monitor");
+        const status = getSystemStatus();
+        res.json(status);
+      } catch (error) {
+        console.error("[HealthMonitor] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+
+    console.log(`🚀 Server listening on port ${port}`);
+  });
+}
+
+startServer().catch(console.error);
+// rebuild Tue Mar  3 20:02:39 -03 2026
+// FORCE REBUILD: 1772736794
