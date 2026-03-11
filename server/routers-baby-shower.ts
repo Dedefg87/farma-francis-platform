@@ -606,6 +606,39 @@ export const babyShowerRouter = router({
 
       return { success: true };
     }),
+
+  resetEvent: protectedProcedure
+    .input(z.object({
+      eventId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) { throw new Error("Database not available"); }
+
+      // Verificar se o evento existe
+      const [event] = await db.select().from(babyShowerEvents)
+        .where(eq(babyShowerEvents.id, input.eventId)).limit(1);
+
+      if (!event) throw new Error("Evento não encontrado");
+
+      // Zerar contadores do evento
+      await db.update(babyShowerEvents).set({
+        walletBalance: 0,
+        totalGuests: 0,
+        totalDiapersCount: 0,
+        availableDiapersCount: 0,
+      }).where(eq(babyShowerEvents.id, input.eventId));
+
+      // Zerar soldCount de todos os pacotes do evento
+      await db.update(babyShowerGiftPackages)
+        .set({ soldCount: 0 })
+        .where(eq(babyShowerGiftPackages.eventId, input.eventId));
+
+      // Opcional: limpar compras? NÃO - manter histórico
+      // Se quiser arquivar compras, pode criar campo `isArchived` ou mover para tabela histórica
+
+      return { success: true, message: "Evento resetado com sucesso" };
+    }),
 });
 // Force rebuild 1772749799
 // Build: 1772751251
