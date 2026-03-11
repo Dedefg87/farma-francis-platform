@@ -704,9 +704,12 @@ export const messagesRouter = router({
       // Log para debug de arquivos
       console.log("[MESSAGES LIST] Total messages:", messagesList.length);
       messagesList.forEach((msg: any) => {
+        console.log("[MESSAGES LIST] Message", msg.id, 
+          "senderType:", msg.senderType,
+          "senderName:", msg.senderName,
+          "content:", msg.content ? msg.content.substring(0, 30) + "..." : "null");
         if (msg.fileUrl) {
-          console.log("[MESSAGES LIST] Message", msg.id, 
-            "fileUrl length:", msg.fileUrl?.length,
+          console.log("[MESSAGES LIST]   fileUrl length:", msg.fileUrl?.length,
             "fileType:", msg.fileType,
             "fileName:", msg.fileName);
         }
