@@ -76,7 +76,13 @@ export default function SystemMonitor() {
       const tablesRes = await fetch("/api/system/database/tables");
       if (tablesRes.ok) {
         const tablesData = await tablesRes.json();
-        setTables(tablesData.tables);
+        // Garantir que cada tabela tenha valores numéricos
+        const normalized = (tablesData.tables || []).map((t: any) => ({
+          table_name: t.table_name || "unknown",
+          size_mb: Number(t.size_mb) || 0,
+          table_rows: Number(t.table_rows) || 0,
+        }));
+        setTables(normalized);
       }
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -160,8 +166,8 @@ export default function SystemMonitor() {
     return (usedNum / totalNum) * 100;
   };
 
-  const totalTablesSize = tables.reduce((acc, t) => acc + (Number(t.size_mb) || 0), 0);
-  const topTables = [...tables].sort((a, b) => (Number(b.size_mb) || 0) - (Number(a.size_mb) || 0)).slice(0, 10);
+  const totalTablesSize = tables.reduce((acc, t) => acc + (t.size_mb || 0), 0);
+  const topTables = [...tables].sort((a, b) => (b.size_mb || 0) - (a.size_mb || 0)).slice(0, 10);
 
   const safeTimestamp = storage?.timestamp ? new Date(storage.timestamp) : new Date();
   const safeDisk = storage?.disk || {};
@@ -395,16 +401,19 @@ export default function SystemMonitor() {
                   </tr>
                 </thead>
                 <tbody>
-                  {topTables.map((table) => (
-                    <tr key={table.table_name} className="border-b hover:bg-muted/50">
-                      <td className="p-2 font-mono text-xs">{table.table_name}</td>
-                      <td className="text-right p-2">{table.table_rows.toLocaleString()}</td>
-                      <td className="text-right p-2">{table.size_mb.toFixed(2)} MB</td>
-                      <td className="text-right p-2">
-                        {((table.size_mb / totalTablesSize) * 100).toFixed(1)}%
-                      </td>
-                    </tr>
-                  ))}
+                  {topTables.map((table) => {
+                    const size = Number(table.size_mb) || 0;
+                    const rows = Number(table.table_rows) || 0;
+                    const percent = totalTablesSize > 0 ? ((size / totalTablesSize) * 100).toFixed(1) : "0.0";
+                    return (
+                      <tr key={table.table_name} className="border-b hover:bg-muted/50">
+                        <td className="p-2 font-mono text-xs">{table.table_name}</td>
+                        <td className="text-right p-2">{rows.toLocaleString()}</td>
+                        <td className="text-right p-2">{size.toFixed(2)} MB</td>
+                        <td className="text-right p-2">{percent}%</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
