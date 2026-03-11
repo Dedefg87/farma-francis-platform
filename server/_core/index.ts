@@ -2481,7 +2481,7 @@ async function startServer() {
   });
 
   // POST /api/system/clean-database - Esvazia banco de dados (CUIDADO!)
-  // Requer confirmação explícita
+  // TESTE MÍNIMO - apenas SELECT 1
   app.post("/api/system/clean-database", async (req, res) => {
     try {
       const { confirm } = req.body;
@@ -2494,68 +2494,18 @@ async function startServer() {
       await client.connect();
       
       try {
-        // Teste simples de conexão
-        const testResult = await client.query('SELECT 1 as test');
-        console.log("[CleanDatabase] Teste de conexão:", testResult.rows[0]);
-        
-        // Lista de tabelas descartáveis
-        const tables = [
-          'conversation_messages',
-          'received_messages', 
-          'system_logs',
-          'audit_logs',
-          'notifications',
-          'sessions',
-          'flow_executions',
-          'execution_logs',
-          'broadcast_messages'
-        ];
-
-        const results = [];
-        
-        for (const tableName of tables) {
-          try {
-            // Verificar se tabela existe (query direta sem parâmetros)
-            const checkResult = await client.query(
-              `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}' AND table_schema = 'public'`
-            );
-            
-            if (checkResult.rows.length > 0) {
-              // Deletar todas as linhas
-              const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
-              
-              results.push({
-                table: tableName,
-                success: true,
-                rows: deleteResult.rowCount
-              });
-            } else {
-              results.push({
-                table: tableName,
-                success: false,
-                error: 'Tabela não encontrada'
-              });
-            }
-          } catch (e: any) {
-            results.push({
-              table: tableName,
-              success: false,
-              error: e.message
-            });
-          }
-        }
-        
-        res.json({ 
-          success: true, 
-          results, 
-          message: "Limpeza concluída" 
-        });
+        // Teste absoluto mínimo
+        const result = await client.query('SELECT 1 as ok');
+        res.json({ success: true, result: result.rows[0] });
       } finally {
         await client.end();
       }
     } catch (error: any) {
       console.error("[CleanDatabase] Error:", error);
-      res.status(500).json({ error: String(error) });
+      return res.status(500).json({ 
+        error: error.message,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n')
+      });
     }
   });
 
