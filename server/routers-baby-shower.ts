@@ -448,6 +448,13 @@ export const babyShowerRouter = router({
               message += `${pkg.description.trim()}\n\n`;
             }
             
+            // Adicionar quantidade total daquele produto já adquirida
+            const soldCount = (pkg?.soldCount || 0) + 1; // +1 para incluir esta compra
+            const qtyPerPackage = pkg?.quantityRepresented || 1;
+            const totalUnits = soldCount * qtyPerPackage;
+            const unitWord = qtyPerPackage > 1 ? "unidades" : "unidade";
+            message += `✅ *Total de ${pkg.packageName} já adquirido:* ${totalUnits} ${unitWord}\n\n`;
+            
             // Adicionar mensagem pessoal do convidado, se houver
             if (purchase.messageToParents?.trim()) {
               message += `💌 *Mensagem do Convidado:*\n"${purchase.messageToParents.trim()}"\n\n`;
