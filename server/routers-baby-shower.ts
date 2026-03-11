@@ -439,19 +439,14 @@ export const babyShowerRouter = router({
           if (parentsPhone) {
             const babyNameText = event.babyName ? `, ${event.babyName}` : "";
             
-            // Determinar o que mostrar: valor do vale ou nome do item
-            let presentDescription = "";
-            if (pkg?.isVoucher === true || pkg?.packageName?.toLowerCase().includes("vale")) {
-              // Vale-presente: mostrar valor
-              presentDescription = `💰 Vale Presente de R$ ${purchase.amountPaid}`;
-            } else {
-              // Item físico: mostrar nome do pacote
-              presentDescription = `📦 ${pkg?.packageName || "Um presente especial"}`;
-            }
-            
             // Mensagem principal
             let message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n`;
-            message += `${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n${presentDescription}\n\n`;
+            message += `${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\n`;
+            
+            // Adicionar lista de itens do pacote (description)
+            if (pkg?.description) {
+              message += `${pkg.description.trim()}\n\n`;
+            }
             
             // Adicionar mensagem pessoal do convidado, se houver
             if (purchase.messageToParents?.trim()) {
