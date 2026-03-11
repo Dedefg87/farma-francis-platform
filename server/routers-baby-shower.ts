@@ -10,7 +10,7 @@ import {
   crmTasks,
   integrationSettings,
 } from "../drizzle/schema";
-import { eq, and, desc, asc, sql, inArray, SQL } from "drizzle-orm";
+import { eq, and, gt, desc, asc, sql, inArray, SQL } from "drizzle-orm";
 import { randomUUID, randomBytes } from "node:crypto";
 import { sendWhatsAppNotification } from "./services/whatsapp.js";
 
@@ -440,27 +440,48 @@ export const babyShowerRouter = router({
             const babyNameText = event.babyName ? `, ${event.babyName}` : "";
             
             // Mensagem principal
-            let message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n`;
-            message += `${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\n`;
+            let message = `🎉 *NOVO PRESENTE PARA SEU CHÁ DE BEBÊ!*\n\n`;
+            message += `${purchase.guestName} acabou de presentear ${event.babyName || "o bebê"} com:\n📦 ${pkg?.packageName || "Um presente especial"}`;
             
-            // Adicionar lista de itens do pacote (description)
-            if (pkg?.description) {
-              message += `${pkg.description.trim()}\n\n`;
-            }
-            
-            // Adicionar quantidade total daquele produto já adquirida
-            const soldCount = (pkg?.soldCount || 0) + 1; // +1 para incluir esta compra
+            // Adicionar quantidade contida no pacote (ex: "Contém 1 vale compras")
             const qtyPerPackage = pkg?.quantityRepresented || 1;
-            const totalUnits = soldCount * qtyPerPackage;
-            const unitWord = qtyPerPackage > 1 ? "unidades" : "unidade";
-            message += `✅ *Total de ${pkg.packageName} já adquirido:* ${totalUnits} ${unitWord}\n\n`;
+            const unitLabel = qtyPerPackage > 1 ? `${qtyPerPackage} unidades` : `1 ${pkg?.packageName?.split(" ")[0] || "unidade"}`;
+            message += ` (Contém ${unitLabel})\n\n`;
             
-            // Adicionar mensagem pessoal do convidado, se houver
+            // Adicionar mensagem pessoal do convidado, se houver (EM CAIXA ALTA)
             if (purchase.messageToParents?.trim()) {
-              message += `💌 *Mensagem do Convidado:*\n"${purchase.messageToParents.trim()}"\n\n`;
+              message += `💌 *MENSAGEM DO CONVIDADO:*\n"${purchase.messageToParents.trim()}"\n\n`;
             }
             
-            message += `Sua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
+            message += `Sua Carteira Virtual foi atualizada com sucesso. 💰\n`;
+            message += `Total arrecadado: R$ ${event.walletBalance}\n\n`;
+            
+            // Adicionar extrato completo de todos os pacotes já comprados no evento
+            message += `📋 *Extrato de presentes ganhos até o momento:*\n`;
+            
+            // Buscar todos os pacotes vendidos (soldCount > 0) do evento
+            const allPackages = await db.select({
+              id: babyShowerGiftPackages.id,
+              packageName: babyShowerGiftPackages.packageName,
+              quantityRepresented: babyShowerGiftPackages.quantityRepresented,
+              soldCount: babyShowerGiftPackages.soldCount,
+            }).from(babyShowerGiftPackages)
+              .where(
+                and(
+                  eq(babyShowerGiftPackages.eventId, event.id),
+                  gt(babyShowerGiftPackages.soldCount, 0)
+                )
+              )
+              .orderBy(babyShowerGiftPackages.displayOrder);
+            
+            // Listar cada pacote com sua quantidade total
+            for (const p of allPackages) {
+              const totalUnits = (p.soldCount || 0) * (p.quantityRepresented || 1);
+              const unitWord = (p.quantityRepresented || 1) > 1 ? "unidades" : "unidade";
+              message += `. ${p.packageName} (${totalUnits} ${unitWord})\n`;
+            }
+            
+            message += `\n_Obrigado por escolher a Farma Francis!_ 💙`;
             
             const sent1 = await sendWhatsAppNotification({
               phone: parentsPhone,
