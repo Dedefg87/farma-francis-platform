@@ -1,4 +1,4 @@
-# Build: forced rebuild 2026-03-11
+# Build: forced rebuild for senderName fix - Wed Mar 11 19:22 GMT-3
 FROM node:20-alpine
 
 WORKDIR /app
