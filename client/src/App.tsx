@@ -148,6 +148,11 @@ function Router() {
           <LazyPage component={APISettings} />
         </AdminRoute>
       </Route>
+      <Route path="/settings/system">
+        <AdminRoute>
+          <LazyPage component={SystemMonitor} />
+        </AdminRoute>
+      </Route>
 
       {/* Rotas protegidas */}
       <Route path="/tickets">
