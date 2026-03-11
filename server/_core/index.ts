@@ -2225,6 +2225,313 @@ async function startServer() {
     }
   });
 
+  // ========================================
+  // SYSTEM MONITORING ENDPOINTS
+  // ========================================
+
+  // GET /api/system/storage - Retorna informações de espaço em disco
+  app.get("/api/system/storage", async (req, res) => {
+    try {
+      const { exec } = await import("child_process");
+      const { promisify } = await import("util");
+      const execAsync = promisify(exec);
+
+      // Executar df -h para obter informações de disco
+      const { stdout } = await execAsync("df -h /");
+      const lines = stdout.trim().split("\n");
+      const [header, ...parts] = lines;
+      
+      const diskInfo = parts.map(line => {
+        const [filesystem, size, used, available, usePct, mounted] = line.split(/\s+/);
+        return { filesystem, size, used, available, usePct, mounted };
+      })[0] || {};
+
+      // Executar du para obter tamanho do diretório da aplicação
+      const appPath = process.cwd();
+      const { stdout: duStdout } = await execAsync(`du -sh ${appPath}`);
+      const appSize = duStdout.trim().split("\t")[0];
+
+      res.json({
+        success: true,
+        disk: diskInfo,
+        appSize,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Storage] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // GET /api/system/database/size - Retorna tamanho total do banco de dados
+  app.get("/api/system/database/size", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Query para obter tamanho do banco de dados
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          SUM(data_length + index_length) / 1024 / 1024 as size_mb
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
+      `);
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        size_mb: rows[0]?.size_mb || 0,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Database/Size] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // GET /api/system/database/tables - Retorna estatísticas de cada tabela
+  app.get("/api/system/database/tables", async (req, res) => {
+    try {
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Query para obter estatísticas das tabelas
+      const [rows]: any = await pool.execute(`
+        SELECT 
+          table_name,
+          ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
+          table_rows
+        FROM information_schema.TABLES 
+        WHERE table_schema = DATABASE()
+        ORDER BY (data_length + index_length) DESC
+      `);
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        tables: rows,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Database/Tables] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // POST /api/system/clean - Limpa dados descartáveis (logs antigos, cache, temporários)
+  app.post("/api/system/clean", async (req, res) => {
+    try {
+      const { types } = req.body;
+      const results = [];
+      
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 5,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // 1. Limpar logs antigos (ex: logs de debug, sistema)
+      if (!types || types.includes("logs")) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 dias atrás
+        
+        try {
+          // Verificar se existe tabela de logs
+          const [tables]: any = await pool.execute(
+            "SHOW TABLES LIKE 'system_logs'"
+          );
+          
+          if (tables.length > 0) {
+            const [result] = await pool.execute(
+              "DELETE FROM system_logs WHERE created_at < ?",
+              [cutoffDate]
+            );
+            results.push({
+              type: "logs",
+              deleted: result.affectedRows,
+              message: `Removidos ${result.affectedRows} logs antigos`
+            });
+          } else {
+            results.push({
+              type: "logs",
+              deleted: 0,
+              message: "Tabela de logs não encontrada"
+            });
+          }
+        } catch (e) {
+          results.push({
+            type: "logs",
+            deleted: 0,
+            message: `Erro: ${e.message}`
+          });
+        }
+      }
+
+      // 2. Limpar mídias temporárias/órfãs
+      if (!types || types.includes("media_temp")) {
+        try {
+          // Buscar mensagens com mídia antiga (>90 dias) que não são mais referenciadas
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 90);
+          
+          const [orphanMedia]: any = await pool.execute(
+            `SELECT cm.id FROM conversation_messages cm
+             LEFT JOIN conversations c ON cm.conversation_id = c.id
+             WHERE cm.file_url IS NOT NULL
+             AND cm.file_url LIKE 'data:%'
+             AND c.id IS NULL
+             LIMIT 100`
+          );
+          
+          // Por segurança, apenas contar, não deletar
+          results.push({
+            type: "media_temp",
+            deleted: 0,
+            message: `${orphanMedia.length} mídias órfãs encontradas (não deletadas automaticamente)`
+          });
+        } catch (e) {
+          results.push({
+            type: "media_temp",
+            deleted: 0,
+            message: `Erro: ${e.message}`
+          });
+        }
+      }
+
+      // 3. Limpar sessões expiradas
+      if (!types || types.includes("sessions")) {
+        try {
+          const [tables]: any = await pool.execute(
+            "SHOW TABLES LIKE 'sessions'"
+          );
+          
+          if (tables.length > 0) {
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 7); // 7 dias
+            
+            const [result] = await pool.execute(
+              "DELETE FROM sessions WHERE expires_at < ?",
+              [cutoffDate]
+            );
+            results.push({
+              type: "sessions",
+              deleted: result.affectedRows,
+              message: `Removidas ${result.affectedRows} sessões expiradas`
+            });
+          } else {
+            results.push({
+              type: "sessions",
+              deleted: 0,
+              message: "Tabela de sessões não encontrada"
+            });
+          }
+        } catch (e) {
+          results.push({
+            type: "sessions",
+            deleted: 0,
+            message: `Erro: ${e.message}`
+          });
+        }
+      }
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        results,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/Clean] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // POST /api/system/clean-database - Esvazia banco de dados (CUIDADO!)
+  // Requer confirmação explícita
+  app.post("/api/system/clean-database", async (req, res) => {
+    try {
+      const { confirm, tables } = req.body;
+      
+      if (!confirm) {
+        return res.status(400).json({
+          error: "Required confirmation. Set confirm=true to proceed."
+        });
+      }
+
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Lista de tabelas DESCARTÁVEIS (não críticas)
+      // IMPORTANTE: NUNCA apagar tabelas críticas como users, integration_settings
+      const disposableTables = [
+        'conversation_messages',
+        'received_messages',
+        'system_logs',
+        'audit_logs',
+        'notifications',
+        'sessions',
+        'flow_executions',
+        'broadcast_messages',
+        // Adicionar conforme necessário
+      ];
+
+      // Se tables foi fornecido, usar apenas essas
+      const tablesToClean = tables && Array.isArray(tables)
+        ? tables.filter(t => disposableTables.includes(t))
+        : disposableTables;
+
+      const results = [];
+
+      // Desabilitar checks de foreign key
+      await pool.execute("SET FOREIGN_KEY_CHECKS = 0");
+
+      for (const table of tablesToClean) {
+        try {
+          const [result] = await pool.execute(`TRUNCATE TABLE \`${table}\``);
+          results.push({
+            table,
+            rows: result.affectedRows || 0,
+            success: true
+          });
+        } catch (e) {
+          results.push({
+            table,
+            rows: 0,
+            success: false,
+            error: e.message
+          });
+        }
+      }
+
+      // Reabilitar checks de foreign key
+      await pool.execute("SET FOREIGN_KEY_CHECKS = 1");
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        message: `Banco de dados limpo (tabelas descartáveis)`,
+        results,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("[System/CleanDatabase] Error:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
   // DEBUG: Check broadcast tables status
   app.get("/api/debug/check-broadcast-tables", async (req, res) => {
     try {

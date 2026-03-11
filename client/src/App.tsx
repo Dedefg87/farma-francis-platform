@@ -35,6 +35,7 @@ const BabyShowerEvents = lazy(() => import("./pages/BabyShowerEvents"));
 const BabyShowerCreate = lazy(() => import("./pages/baby-shower/CreateEvent"));
 const BabyShowerEventPage = lazy(() => import("./pages/baby-shower/EventPage"));
 const BabyShowerManage = lazy(() => import("./pages/baby-shower/ManageEvent"));
+const SystemMonitor = lazy(() => import("./pages/SystemMonitor"));
 
 // Loading spinner component
 function PageLoader() {
