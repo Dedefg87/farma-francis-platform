@@ -63,6 +63,13 @@ export async function sendWhatsAppNotification(params: {
       }
     );
 
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[WhatsApp] Falha ao enviar para ${normalizedPhone}: ${response.status} - ${errorText}`);
+    } else {
+      console.log(`[WhatsApp] ✅ Mensagem enviada para ${normalizedPhone}`);
+    }
+
     return response.ok;
   } catch (error) {
     console.error("[WhatsApp] Error sending WhatsApp:", error);
