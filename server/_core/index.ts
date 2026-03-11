@@ -2346,41 +2346,61 @@ async function startServer() {
       });
 
       // 1. Limpar logs antigos (ex: logs de debug, sistema)
-      if (!types || types.includes("logs")) {
+      if (!types || types.includes('logs')) {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 dias atrás
         
         try {
-          // Verificar se existe tabela de logs
-          const [tables]: any = await pool.execute(
-            "SHOW TABLES LIKE 'system_logs'"
+          // Buscar todas as tabelas que contêm 'log' no nome (case-insensitive)
+          const [logTables]: any = await pool.execute(
+            "SHOW TABLES WHERE lower(Tables_in_" + (process.env.DATABASE_NAME?.replace(/[^a-zA-Z0-9]/g, '') || 'database') + " LIKE '%log%')"
           );
           
-          if (tables.length > 0) {
-            const [result] = await pool.execute(
-              "DELETE FROM system_logs WHERE created_at < ?",
-              [cutoffDate]
-            );
+          if (logTables.length > 0) {
+            let totalDeleted = 0;
+            const tableNames = logTables.map((t: any) => Object.values(t)[0]);
+            
+            for (const tableName of tableNames) {
+              // Verificar se a tabela tem coluna created_at
+              try {
+                const [columns]: any = await pool.execute(
+                  `SHOW COLUMNS FROM \`${tableName}\` LIKE 'created_at'`
+                );
+                
+                if (columns.length > 0) {
+                  const [result] = await pool.execute(
+                    `DELETE FROM \`${tableName}\` WHERE created_at < ?`,
+                    [cutoffDate]
+                  );
+                  totalDeleted += result.affectedRows;
+                }
+              } catch (e) {
+                // Se der erro (tabela não tem created_at), pular
+                console.log(`[System/Clean] Tabela ${tableName} não tem created_at, pulando`);
+              }
+            }
+            
             results.push({
-              type: "logs",
-              deleted: result.affectedRows,
-              message: `Removidos ${result.affectedRows} logs antigos`
+              type: 'logs',
+              deleted: totalDeleted,
+              message: `Removidos ${totalDeleted} logs antigos de ${logTables.length} tabela${logTables.length !== 1 ? 's' : ''}`
             });
           } else {
             results.push({
-              type: "logs",
+              type: 'logs',
               deleted: 0,
-              message: "Tabela de logs não encontrada"
+              message: 'Nenhuma tabela de logs encontrada'
             });
           }
         } catch (e) {
           results.push({
-            type: "logs",
+            type: 'logs',
             deleted: 0,
             message: `Erro: ${e.message}`
           });
         }
       }
+
 
       // 2. Limpar mídias temporárias/órfãs
       if (!types || types.includes("media_temp")) {
