@@ -11,7 +11,7 @@ import {
   integrationSettings,
 } from "../drizzle/schema";
 import { eq, and, desc, asc, sql, inArray, SQL } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { sendWhatsAppNotification } from "./services/whatsapp.js";
 
 const generateEventCode = () => {
@@ -373,7 +373,7 @@ export const babyShowerRouter = router({
       if (!pkg) throw new Error("Pacote não encontrado");
       if (pkg.stockLimit && (pkg.soldCount ?? 0) >= pkg.stockLimit) throw new Error("Cotas esgotadas");
 
-      const confirmationToken = crypto.randomBytes(32).toString("hex"); // Gera token seguro
+      const confirmationToken = randomBytes(32).toString("hex"); // Gera token seguro
 
       const [purchase] = await db.insert(babyShowerPurchases).values({
         eventId: input.eventId,
