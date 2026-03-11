@@ -154,14 +154,18 @@ export default function SystemMonitor() {
   };
 
   const getUsePercentage = (used: string, total: string): number => {
-    const usedNum = parseFloat(used);
-    const totalNum = parseFloat(total);
-    if (isNaN(usedNum) || isNaN(totalNum) || totalNum === 0) return 0;
+    const usedNum = parseFloat(used) || 0;
+    const totalNum = parseFloat(total) || 0;
+    if (totalNum === 0) return 0;
     return (usedNum / totalNum) * 100;
   };
 
   const totalTablesSize = tables.reduce((acc, t) => acc + (Number(t.size_mb) || 0), 0);
   const topTables = [...tables].sort((a, b) => (Number(b.size_mb) || 0) - (Number(a.size_mb) || 0)).slice(0, 10);
+
+  const safeTimestamp = storage?.timestamp ? new Date(storage.timestamp) : new Date();
+  const safeDisk = storage?.disk || {};
+  const safeAppSize = storage?.appSize || "N/A";
 
   if (loading) {
     return (
@@ -203,9 +207,9 @@ export default function SystemMonitor() {
               <HardDrive className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{storage?.disk.size || "N/A"}</div>
+              <div className="text-2xl font-bold">{safeDisk.size || "N/A"}</div>
               <p className="text-xs text-muted-foreground">
-                {storage?.disk.mounted || "N/A"}
+                {safeDisk.mounted || "N/A"}
               </p>
             </CardContent>
           </Card>
@@ -216,9 +220,9 @@ export default function SystemMonitor() {
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{storage?.disk.used || "N/A"}</div>
+              <div className="text-2xl font-bold">{safeDisk.used || "N/A"}</div>
               <Progress 
-                value={getUsePercentage(storage?.disk.used || "0", storage?.disk.size || "0")} 
+                value={getUsePercentage(safeDisk.used || "0", safeDisk.size || "0")} 
                 className="mt-2"
               />
             </CardContent>
@@ -243,9 +247,9 @@ export default function SystemMonitor() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{storage?.appSize || "N/A"}</div>
+              <div className="text-2xl font-bold">{safeAppSize}</div>
               <p className="text-xs text-muted-foreground">
-                {new Date(storage?.timestamp || Date.now()).toLocaleTimeString()}
+                {safeTimestamp.toLocaleTimeString()}
               </p>
             </CardContent>
           </Card>
@@ -421,7 +425,7 @@ export default function SystemMonitor() {
             <div className="grid gap-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Timestamp</span>
-                <span className="font-mono">{new Date(storage?.timestamp || Date.now()).toLocaleString()}</span>
+                <span className="font-mono">{safeTimestamp.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Método de coleta</span>
