@@ -440,6 +440,7 @@ export default function AgentChat() {
                 <div className="space-y-4">
                   {messages.map(message => {
                     const isAgent = message.senderType === "agent";
+                    const senderName = message.senderName || "Agente";
                     return (
                       <div
                         key={message.id}
@@ -452,6 +453,12 @@ export default function AgentChat() {
                               : "bg-white text-gray-900 border border-gray-200"
                           }`}
                         >
+                          {/* Nome do agente acima da mensagem */}
+                          {isAgent && (
+                            <p className="text-xs font-semibold text-blue-100 mb-1">
+                              {senderName}
+                            </p>
+                          )}
                           {/* Arquivo anexado */}
                           {message.fileUrl && (
                             <div className="mb-2">

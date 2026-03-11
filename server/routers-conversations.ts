@@ -675,8 +675,23 @@ export const messagesRouter = router({
       }
 
       const messagesList = await db
-        .select()
+        .select({
+          id: conversationMessages.id,
+          conversationId: conversationMessages.conversationId,
+          senderId: conversationMessages.senderId,
+          senderType: conversationMessages.senderType,
+          content: conversationMessages.content,
+          fileUrl: conversationMessages.fileUrl,
+          fileName: conversationMessages.fileName,
+          fileType: conversationMessages.fileType,
+          fileSize: conversationMessages.fileSize,
+          readAt: conversationMessages.readAt,
+          createdAt: conversationMessages.createdAt,
+          // Nome do agente (se senderType for 'agent')
+          senderName: users.name,
+        })
         .from(conversationMessages)
+        .leftJoin(users, eq(conversationMessages.senderId, users.id))
         .where(eq(conversationMessages.conversationId, input.conversation_id))
         .orderBy(conversationMessages.createdAt);
 
