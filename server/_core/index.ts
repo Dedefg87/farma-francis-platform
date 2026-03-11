@@ -2351,47 +2351,46 @@ async function startServer() {
         cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 dias atrás
         
         try {
-          // Buscar todas as tabelas que contêm 'log' no nome (case-insensitive)
-          const [logTables]: any = await pool.execute(
-            "SHOW TABLES WHERE lower(Tables_in_" + (process.env.DATABASE_NAME?.replace(/[^a-zA-Z0-9]/g, '') || 'database') + " LIKE '%log%')"
-          );
+          // Lista de tabelas de logs conhecidas
+          const logTables = [
+            'system_logs',
+            'audit_logs',
+            'crm_audit_logs',
+            'workflow_executions',
+            'execution_data'
+          ];
           
-          if (logTables.length > 0) {
-            let totalDeleted = 0;
-            const tableNames = logTables.map((t: any) => Object.values(t)[0]);
-            
-            for (const tableName of tableNames) {
-              // Verificar se a tabela tem coluna created_at
-              try {
-                const [columns]: any = await pool.execute(
-                  `SHOW COLUMNS FROM \`${tableName}\` LIKE 'created_at'`
+          let totalDeleted = 0;
+          let tablesFound = 0;
+          
+          for (const tableName of logTables) {
+            try {
+              // Verificar se a tabela existe e tem created_at
+              const [columns]: any = await pool.execute(
+                `SHOW COLUMNS FROM \`${tableName}\` LIKE 'created_at'`
+              );
+              
+              if (columns.length > 0) {
+                tablesFound++;
+                const [result] = await pool.execute(
+                  `DELETE FROM \`${tableName}\` WHERE created_at < ?`,
+                  [cutoffDate]
                 );
-                
-                if (columns.length > 0) {
-                  const [result] = await pool.execute(
-                    `DELETE FROM \`${tableName}\` WHERE created_at < ?`,
-                    [cutoffDate]
-                  );
-                  totalDeleted += result.affectedRows;
-                }
-              } catch (e) {
-                // Se der erro (tabela não tem created_at), pular
-                console.log(`[System/Clean] Tabela ${tableName} não tem created_at, pulando`);
+                totalDeleted += result.affectedRows;
+              }
+            } catch (e) {
+              // Tabela não existe ou erro - ignorar silenciosamente
+              if (!e.message.includes('doesn't exist')) {
+                console.log(`[System/Clean] Erro em ${tableName}: ${e.message}`);
               }
             }
-            
-            results.push({
-              type: 'logs',
-              deleted: totalDeleted,
-              message: `Removidos ${totalDeleted} logs antigos de ${logTables.length} tabela${logTables.length !== 1 ? 's' : ''}`
-            });
-          } else {
-            results.push({
-              type: 'logs',
-              deleted: 0,
-              message: 'Nenhuma tabela de logs encontrada'
-            });
           }
+          
+          results.push({
+            type: 'logs',
+            deleted: totalDeleted,
+            message: `Removidos ${totalDeleted} logs antigos de ${tablesFound} tabela${tablesFound !== 1 ? 's' : ''}`
+          });
         } catch (e) {
           results.push({
             type: 'logs',
@@ -2400,7 +2399,6 @@ async function startServer() {
           });
         }
       }
-
 
       // 2. Limpar mídias temporárias/órfãs
       if (!types || types.includes("media_temp")) {
