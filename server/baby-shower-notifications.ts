@@ -3,10 +3,11 @@ import { integrationSettings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 /**
- * Enviar notificação de novo presente para a mãe
+ * Enviar notificação de novo presente para a farmácia
+ * Usa número fixo da farmácia (FARMACY_PHONE) em vez do phone do evento
  */
 export async function sendBabyShowerNotification(params: {
-  phone: string;
+  phone?: string; // keep for backwards compatibility but not used
   guestName: string;
   packageName: string;
   eventName: string;
@@ -41,7 +42,14 @@ export async function sendBabyShowerNotification(params: {
       return false;
     }
 
-    const normalizedPhone = params.phone.replace(/\D/g, "");
+    // Número fixo da farmácia (configurável via env)
+    let farmacyPhone = process.env.FARMACY_PHONE || "31995657081";
+    // Normaliza para formato internacional (55DDDtelefone)
+    farmacyPhone = farmacyPhone.replace(/\D/g, "");
+    if (!farmacyPhone.startsWith("55")) {
+      farmacyPhone = "55" + farmacyPhone;
+    }
+    const normalizedPhone = farmacyPhone;
     const balance = typeof params.totalBalance === "string" 
       ? parseFloat(params.totalBalance).toFixed(2)
       : Number(params.totalBalance).toFixed(2);
