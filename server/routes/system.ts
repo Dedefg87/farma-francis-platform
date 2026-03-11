@@ -129,6 +129,71 @@ systemRouter.post("/clean", async (req, res) => {
   }
 });
 
+// POST /api/system/clean-messages - Limpa mensagens antigas (cuidado!)
+systemRouter.post("/clean-messages", async (req, res) => {
+  try {
+    const { days = 90, dryRun = false } = req.body;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const { Client } = await import("pg");
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+
+    try {
+      // 1. Contar quantas mensagens serão afetadas
+      const countQuery = `
+        SELECT 
+          COUNT(*) as total_messages,
+          COUNT(DISTINCT conversation_id) as affected_conversations,
+          SUM(CASE WHEN file_url IS NOT NULL THEN 1 ELSE 0 END) as with_media
+        FROM conversation_messages 
+        WHERE created_at < $1
+      `;
+      const countResult = await client.query(countQuery, [cutoffDate]);
+      const stats = countResult.rows[0];
+
+      if (dryRun) {
+        return res.json({
+          success: true,
+          dryRun: true,
+          stats: {
+            messages: Number(stats.total_messages),
+            conversations: Number(stats.affected_conversations),
+            withMedia: Number(stats.with_media),
+            cutoffDate: cutoffDate.toISOString(),
+          },
+          message: `Simulação: ${stats.total_messages} mensagens em ${stats.affected_conversations} conversas seriam deletadas`
+        });
+      }
+
+      // 2. Deletar mensagens antigas
+      const deleteResult = await client.query(
+        'DELETE FROM conversation_messages WHERE created_at < $1 RETURNING id',
+        [cutoffDate]
+      );
+
+      const deletedCount = deleteResult.rowCount;
+
+      res.json({
+        success: true,
+        stats: {
+          messages: Number(deletedCount),
+          conversations: Number(stats.affected_conversations),
+          withMedia: Number(stats.with_media),
+          cutoffDate: cutoffDate.toISOString(),
+        },
+        message: `Removidas ${deletedCount} mensagens antigas`
+      });
+    } finally {
+      await client.end();
+    }
+  } catch (error) {
+    console.error("[System/CleanMessages] Error:", error);
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 // POST /api/system/clean-database
 systemRouter.post("/clean-database", async (req, res) => {
   res.status(501).json({ error: "Limpeza completa do banco não disponível para PostgreSQL. Use ferramentas de backup/restore." });
