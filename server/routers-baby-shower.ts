@@ -429,6 +429,7 @@ export const babyShowerRouter = router({
         }).where(eq(babyShowerEvents.id, purchase.eventId));
 
         // Notificar mãe via WhatsApp
+        let notificationSent = 0;
         if (event) {
           const [mother] = await db.select().from(customers)
             .where(eq(customers.id, event.motherCustomerId)).limit(1);
@@ -437,7 +438,7 @@ export const babyShowerRouter = router({
             const babyNameText = event.babyName ? `, ${event.babyName}` : "";
             const message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\nSua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
             
-            await sendWhatsAppNotification({
+            const sent1 = await sendWhatsAppNotification({
               phone: mother.phone,
               message,
             });
@@ -452,12 +453,21 @@ export const babyShowerRouter = router({
               });
             }
 
-            // Marcar notificação como enviada
-            await db.update(babyShowerPurchases).set({
-              notificationSent: 1,
-              notificationSentAt: new Date(),
-            }).where(eq(babyShowerPurchases.id, input.purchaseId));
+            // Só marca como enviada se a primeira notificação foi bem-sucedida
+            if (sent1) {
+              notificationSent = 1;
+            } else {
+              console.error("[ConfirmPayment] Falha ao enviar WhatsApp para", mother.phone);
+            }
           }
+        }
+
+        // Marcar notificação como enviada apenas se teve sucesso
+        if (notificationSent === 1) {
+          await db.update(babyShowerPurchases).set({
+            notificationSent: 1,
+            notificationSentAt: new Date(),
+          }).where(eq(babyShowerPurchases.id, input.purchaseId));
         }
       }
 

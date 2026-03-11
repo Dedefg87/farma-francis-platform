@@ -113,10 +113,11 @@ router.post("/payment", async (req: Request, res: Response) => {
           .where(eq(customers.id, event.motherCustomerId))
           .limit(1);
 
+        let notificationSent = 0;
         if (mother?.phone) {
           // Importar função de notificação
           const { sendBabyShowerNotification } = await import("./baby-shower-notifications");
-          await sendBabyShowerNotification({
+          const sent = await sendBabyShowerNotification({
             phone: mother.phone,
             guestName: purchase.guestName,
             packageName: pkg.packageName,
@@ -124,6 +125,15 @@ router.post("/payment", async (req: Request, res: Response) => {
             totalBalance: event.walletBalance,
           });
 
+          if (sent) {
+            notificationSent = 1;
+          } else {
+            console.error("[BabyShower Webhook] Falha ao enviar notificação WhatsApp para", mother.phone);
+          }
+        }
+
+        // Atualizar status de notificação apenas se enviada com sucesso
+        if (notificationSent === 1) {
           await db
             .update(babyShowerPurchases)
             .set({

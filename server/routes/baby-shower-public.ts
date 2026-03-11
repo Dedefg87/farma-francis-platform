@@ -60,28 +60,27 @@ babyShowerPublicRouter.get("/confirm-payment/:token", async (req, res) => {
     return res.json({ success: true, message: "Pagamento já confirmado anteriormente" });
   }
 
-  // Atualizar status da compra
-  await db.update(babyShowerPurchases)
-    .set({
-      paymentStatus: "paid",
-      paidAt: new Date(),
-      notificationSent: 1,
-      notificationSentAt: new Date(),
-    })
-    .where(eq(babyShowerPurchases.id, purchase.id));
-
   // Buscar dados relacionados para envio de notificação
   const [event] = await db.select().from(babyShowerEvents).where(eq(babyShowerEvents.id, purchase.eventId)).limit(1);
   const [pkg] = await db.select().from(babyShowerGiftPackages).where(eq(babyShowerGiftPackages.id, purchase.packageId)).limit(1);
   const [mother] = await db.select().from(customers).where(eq(customers.id, event.motherCustomerId)).limit(1);
 
+  // Atualizar status da compra para pago (mas ainda não marca notificação como enviada)
+  await db.update(babyShowerPurchases)
+    .set({
+      paymentStatus: "paid",
+      paidAt: new Date(),
+    })
+    .where(eq(babyShowerPurchases.id, purchase.id));
+
   // Enviar notificação WhatsApp aos pais
+  let notificationSent = 0;
   if (mother?.phone) {
     const babyNameText = event.babyName ? `, ${event.babyName}` : "";
     const message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n${purchase.guestName} presentou seu bebê${babyNameText} com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\nSua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
     
     try {
-      await sendWhatsAppNotification({
+      const sent1 = await sendWhatsAppNotification({
         phone: mother.phone,
         message,
       });
@@ -94,9 +93,26 @@ babyShowerPublicRouter.get("/confirm-payment/:token", async (req, res) => {
           message: personalMessage,
         });
       }
+
+      // Só marca como enviada se a primeira notificação (obrigatória) foi bem-sucedida
+      if (sent1) {
+        notificationSent = 1;
+      } else {
+        console.error("[Public Confirm] Falha ao enviar notificação WhatsApp para", mother.phone);
+      }
     } catch (err) {
-      console.error("[Public Confirm] Error sending WhatsApp:", err);
+      console.error("[Public Confirm] Erro ao enviar WhatsApp:", err);
     }
+  }
+
+  // Atualizar flags de notificação apenas se enviada com sucesso
+  if (notificationSent === 1) {
+    await db.update(babyShowerPurchases)
+      .set({
+        notificationSent: 1,
+        notificationSentAt: new Date(),
+      })
+      .where(eq(babyShowerPurchases.id, purchase.id));
   }
 
   // Retornar HTML ou JSON
