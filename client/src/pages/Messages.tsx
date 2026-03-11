@@ -860,6 +860,9 @@ export default function Messages() {
                                     : "bg-gray-100 text-gray-900"
                                 }`}
                               >
+                                <p className="text-xs font-medium mb-1 opacity-75">
+                                  {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
+                                </p>
                                 {msg.content && msg.content !== "null" && (
                                   <p className="text-sm">{msg.content}</p>
                                 )}
