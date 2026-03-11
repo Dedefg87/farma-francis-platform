@@ -2560,14 +2560,14 @@ async function startServer() {
           }
         }
         
-        // Vacuum para liberar espaço (executa em transação separada)
-        try {
-          console.log("[CleanDatabase] Executando VACUUM FULL...");
-          await client.query('VACUUM FULL');
-          console.log("[CleanDatabase] VACUUM concluído");
-        } catch (vacuumError) {
-          console.warn("[CleanDatabase] VACUUM falhou (ignorado):", vacuumError);
-        }
+        // Vacuum desabilitado temporariamente para testes
+        // try {
+        //   console.log("[CleanDatabase] Executando VACUUM FULL...");
+        //   await client.query('VACUUM FULL');
+        //   console.log("[CleanDatabase] VACUUM concluído");
+        // } catch (vacuumError) {
+        //   console.warn("[CleanDatabase] VACUUM falhou (ignorado):", vacuumError);
+        // }
         
         res.json({ 
           success: true, 
