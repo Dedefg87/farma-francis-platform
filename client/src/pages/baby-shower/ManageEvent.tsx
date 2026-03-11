@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings, Heart, GripVertical, Baby } from "lucide-react";
+import { Gift, Share2, Users, Wallet, Package, Plus, Copy, Check, Link, ArrowLeft, MessageCircle, ImageIcon, Trash2, Settings, Heart, GripVertical, Baby, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ManageEvent() {
@@ -145,9 +145,23 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
+  const resetEventMutation = trpc.babyShower.resetEvent.useMutation({
+    onSuccess: () => {
+      toast.success("Contadores zerados! Recarregando...");
+      refetch();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const handleDeletePackage = (pkg: any) => {
     if (confirm(`Tem certeza que deseja excluir "${pkg.packageName}"?`)) {
       deletePackageMutation.mutate({ id: pkg.id });
+    }
+  };
+
+  const handleResetEvent = () => {
+    if (confirm("Tem certeza que deseja zerar todos os contadores? Isso não apagará o histórico de compras, apenas os valores atuais (carteira, convidados, fraldas, vendas).")) {
+      resetEventMutation.mutate({ eventId });
     }
   };
 
@@ -289,14 +303,25 @@ export default function ManageEvent() {
     <FarmaDashboardLayout>
       <div className="max-w-5xl mx-auto">
         {/* Header com botão voltar */}
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/baby-shower")}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <Baby className="w-6 h-6 text-pink-500" />
-            <span className="text-xl font-bold text-pink-600">Gerenciar Chá de Bebê</span>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/baby-shower")}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex items-center gap-2">
+              <Baby className="w-6 h-6 text-pink-500" />
+              <span className="text-xl font-bold text-pink-600">Gerenciar Chá de Bebê</span>
+            </div>
           </div>
+          <Button 
+            variant="destructive" 
+            size="sm" 
+            onClick={handleResetEvent}
+            disabled={resetEventMutation.isPending}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            {resetEventMutation.isPending ? "Zerando..." : "Zerar Contadores"}
+          </Button>
         </div>
 
         <main>
