@@ -438,28 +438,38 @@ export const babyShowerRouter = router({
           const parentsPhone = event.whatsappNumber || mother?.phone;
           if (parentsPhone) {
             const babyNameText = event.babyName ? `, ${event.babyName}` : "";
-            const message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n📦 ${pkg?.packageName || "Um presente especial"}\n\nSua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
+            
+            // Determinar o que mostrar: valor do vale ou nome do item
+            let presentDescription = "";
+            if (pkg?.isVoucher === true || pkg?.packageName?.toLowerCase().includes("vale")) {
+              // Vale-presente: mostrar valor
+              presentDescription = `💰 Vale Presente de R$ ${purchase.amountPaid}`;
+            } else {
+              // Item físico: mostrar nome do pacote
+              presentDescription = `📦 ${pkg?.packageName || "Um presente especial"}`;
+            }
+            
+            // Mensagem principal
+            let message = `🎉 *Novo Presente para seu Chá de Bebê!*\n\n`;
+            message += `${purchase.guestName} acabou de presentear seu bebê${babyNameText} com:\n${presentDescription}\n\n`;
+            
+            // Adicionar mensagem pessoal do convidado, se houver
+            if (purchase.messageToParents?.trim()) {
+              message += `💌 *Mensagem do Convidado:*\n"${purchase.messageToParents.trim()}"\n\n`;
+            }
+            
+            message += `Sua Carteira Virtual foi atualizada.\nTotal arrecadado: R$ ${event.walletBalance}\n\n_Obrigado por escolher a Farma Francis!_`;
             
             const sent1 = await sendWhatsAppNotification({
               phone: parentsPhone,
               message,
             });
 
-            // Enviar mensagem pessoal do convidado, se houver
-            if (purchase.messageToParents) {
-              const personalMessage = `💌 *Mensagem do Convidado*\n\nDe: ${purchase.guestName}\n\n"${purchase.messageToParents}"\n\n---\nPresente: ${pkg?.packageName || "Presente especial"}\n\nCom carinho, Chá de Bebê Farma Francis.`;
-              
-              await sendWhatsAppNotification({
-                phone: mother.phone,
-                message: personalMessage,
-              });
-            }
-
             // Só marca como enviada se a primeira notificação foi bem-sucedida
             if (sent1) {
               notificationSent = 1;
             } else {
-              console.error("[ConfirmPayment] Falha ao enviar WhatsApp para", mother.phone);
+              console.error("[ConfirmPayment] Falha ao enviar WhatsApp para", parentsPhone);
             }
           }
         }
