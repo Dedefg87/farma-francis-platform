@@ -196,7 +196,92 @@ systemRouter.post("/clean-messages", async (req, res) => {
 
 // POST /api/system/clean-database
 systemRouter.post("/clean-database", async (req, res) => {
-  res.status(501).json({ error: "Limpeza completa do banco não disponível para PostgreSQL. Use ferramentas de backup/restore." });
+  try {
+    const { confirm } = req.body;
+    if (!confirm) {
+      return res.status(400).json({ error: "Confirmação necessária" });
+    }
+
+    const { Client } = await import("pg");
+    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    
+    try {
+      // Lista de tabelas descartáveis (logs, sessões, mensagens antigas, etc.)
+      const tables = [
+        'conversation_messages',
+        'received_messages', 
+        'system_logs',
+        'audit_logs',
+        'notifications',
+        'sessions',
+        'flow_executions',
+        'execution_logs',
+        'broadcast_messages',
+        'quick_replies_cache',
+        'webhook_logs'
+      ];
+
+      const results = [];
+      
+      for (const tableName of tables) {
+        try {
+          // Verificar se tabela existe
+          const checkResult = await client.query(
+            "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'",
+            [tableName]
+          );
+          
+          if (checkResult.rows.length > 0) {
+            // Contar linhas antes
+            const beforeCount = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
+            const countBefore = Number(beforeCount.rows[0].count);
+            
+            // Deletar todas as linhas
+            const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
+            const deletedCount = deleteResult.rowCount;
+            
+            results.push({
+              table: tableName,
+              success: true,
+              rows: deletedCount,
+              message: `Tabela ${tableName}: ${deletedCount} linha${deletedCount !== 1 ? 's' : ''} removida${deletedCount !== 1 ? 's' : ''} (era ${countBefore})`
+            });
+          } else {
+            results.push({
+              table: tableName,
+              success: false,
+              error: 'Tabela não encontrada'
+            });
+          }
+        } catch (e) {
+          results.push({
+            table: tableName,
+            success: false,
+            error: e.message
+          });
+        }
+      }
+      
+      // Vacuum para liberar espaço (executa em transação separada)
+      try {
+        await client.query('VACUUM FULL');
+      } catch (vacuumError) {
+        console.warn("VACUUM falhou (ignorado):", vacuumError);
+      }
+      
+      res.json({ 
+        success: true, 
+        results, 
+        message: "Limpeza do banco de dados concluída" 
+      });
+    } finally {
+      await client.end();
+    }
+  } catch (error) {
+    console.error("[System/CleanDatabase] Error:", error);
+    res.status(500).json({ error: String(error) });
+  }
 });
 
 export default systemRouter;
