@@ -173,6 +173,9 @@ export default function SystemMonitor() {
   const safeDisk = storage?.disk || {};
   const safeAppSize = storage?.appSize || "N/A";
 
+  // Debug logs para verificar dados recebidos
+  console.log("[SystemMonitor] Debug:", { storage, dbSize, tables, topTables, totalTablesSize });
+
   if (loading) {
     return (
       <FarmaDashboardLayout>
@@ -386,38 +389,45 @@ export default function SystemMonitor() {
               Tamanho das Tabelas
             </CardTitle>
             <CardDescription>
-              Total: <strong>{totalTablesSize.toFixed(2)} MB</strong> em {tables.length} tabelas
+              Total: <strong>{totalTablesSize.toFixed(2)} MB</strong> em {tables.length} tabela{tables.length !== 1 ? 's' : ''}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">Tabela</th>
-                    <th className="text-right p-2">Linhas</th>
-                    <th className="text-right p-2">Tamanho</th>
-                    <th className="text-right p-2">% do Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topTables.map((table) => {
-                    const size = Number(table.size_mb) || 0;
-                    const rows = Number(table.table_rows) || 0;
-                    const percent = totalTablesSize > 0 ? ((size / totalTablesSize) * 100).toFixed(1) : "0.0";
-                    return (
-                      <tr key={table.table_name} className="border-b hover:bg-muted/50">
-                        <td className="p-2 font-mono text-xs">{table.table_name}</td>
-                        <td className="text-right p-2">{rows.toLocaleString()}</td>
-                        <td className="text-right p-2">{size.toFixed(2)} MB</td>
-                        <td className="text-right p-2">{percent}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            {tables.length > 10 && (
+            {topTables.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhuma tabela encontrada ou banco de dados vazio.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2">Tabela</th>
+                      <th className="text-right p-2">Linhas</th>
+                      <th className="text-right p-2">Tamanho</th>
+                      <th className="text-right p-2">% do Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topTables.map((table) => {
+                      const size = Number(table.size_mb) || 0;
+                      const rows = Number(table.table_rows) || 0;
+                      const percent = totalTablesSize > 0 ? ((size / totalTablesSize) * 100).toFixed(1) : "0.0";
+                      return (
+                        <tr key={table.table_name} className="border-b hover:bg-muted/50">
+                          <td className="p-2 font-mono text-xs">{table.table_name}</td>
+                          <td className="text-right p-2">{rows.toLocaleString()}</td>
+                          <td className="text-right p-2">{size.toFixed(2)} MB</td>
+                          <td className="text-right p-2">{percent}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {tables.length > 10 && topTables.length > 0 && (
               <p className="text-xs text-muted-foreground mt-2">
                 Mostrando as 10 maiores tabelas de {tables.length} total
               </p>
