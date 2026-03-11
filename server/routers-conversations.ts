@@ -687,8 +687,14 @@ export const messagesRouter = router({
           fileSize: conversationMessages.fileSize,
           readAt: conversationMessages.readAt,
           createdAt: conversationMessages.createdAt,
-          // Nome do agente (se senderType for 'agent')
-          senderName: users.name,
+          // Nome formatado do agente: "Nome do Agente" ou "Nome - Admin"
+          senderName: sql<string>`CASE 
+            WHEN ${conversationMessages.senderType} = 'agent' AND ${users.role} = 'admin' 
+            THEN CONCAT(${users.name}, ' - Gerente')
+            WHEN ${conversationMessages.senderType} = 'agent' 
+            THEN ${users.name}
+            ELSE NULL 
+          END`.as('senderName'),
         })
         .from(conversationMessages)
         .leftJoin(users, eq(conversationMessages.senderId, users.id))
