@@ -139,11 +139,25 @@ export const agentRouter = router({
           .object({
             conversation_id: z.number(),
             content: z.string(),
+            // snake_case
             file_url: z.string().optional(),
             file_name: z.string().optional(),
             file_type: z.string().optional(),
             file_size: z.number().optional(),
+            // camelCase (para compatibilidade com frontend)
+            fileUrl: z.string().optional(),
+            fileName: z.string().optional(),
+            fileType: z.string().optional(),
+            fileSize: z.number().optional(),
           })
+          .transform(input => ({
+            conversation_id: input.conversation_id,
+            content: input.content,
+            file_url: input.file_url ?? input.fileUrl ?? undefined,
+            file_name: input.file_name ?? input.fileName ?? undefined,
+            file_type: input.file_type ?? input.fileType ?? undefined,
+            file_size: input.file_size ?? input.fileSize ?? undefined,
+          }))
           .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
