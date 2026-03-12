@@ -1032,10 +1032,6 @@ async function processEvolutionWebhook(body: any) {
 
         // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
         if (isSentByMe) {
-          // Responder 200 OK IMEDIATO antes de qualquer processamento pesado
-          res.status(200).json({ received: true });
-          await res.end();
-
           // Enfileirar job em background
           enqueueMobileSyncJob({
             remoteJid: remoteJid,
