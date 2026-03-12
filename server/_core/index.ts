@@ -2834,6 +2834,60 @@ async function startServer() {
     }
   });
 
+  // Debug: listar conversas com contagem de mensagens em ambas as tabelas
+  app.get("/api/debug/conversations-messages-count", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 20;
+      
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      const [rows]: any = await pool.execute(
+        `SELECT 
+          c.id,
+          c.customer_name,
+          c.status,
+          c.assigned_to,
+          u.name as agent_name,
+          COALESCE(new_counts.count, 0) as new_table_count,
+          COALESCE(old_counts.count, 0) as old_table_count
+        FROM conversations c
+        LEFT JOIN users u ON c.assigned_to = u.id
+        LEFT JOIN (
+          SELECT conversation_id, COUNT(*) as count 
+          FROM conversation_messages 
+          GROUP BY conversation_id
+        ) new_counts ON c.id = new_counts.conversation_id
+        LEFT JOIN (
+          SELECT ticket_id, COUNT(*) as count 
+          FROM messages 
+          GROUP BY ticket_id
+        ) old_counts ON c.id = old_counts.ticket_id
+        ORDER BY c.id DESC
+        LIMIT ?`,
+        [limit]
+      );
+
+      await pool.end();
+
+      res.json({
+        conversations: rows,
+        summary: {
+          total: rows.length,
+          using_new_table: rows.filter((c: any) => c.new_table_count > 0).length,
+          using_old_table: rows.filter((c: any) => c.new_table_count === 0 && c.old_table_count > 0).length,
+          empty: rows.filter((c: any) => c.new_table_count === 0 && c.old_table_count === 0).length,
+        }
+      });
+    } catch (error) {
+      console.error("[Debug Conversations Count] Error:", error);
+      res.status(500).json({ error: String(error), stack: (error as Error).stack });
+    }
+  });
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     // Dynamic import - only loads vite in development
