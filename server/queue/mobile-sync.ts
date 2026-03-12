@@ -6,7 +6,7 @@
 import { getDb } from "../db";
 import { conversations, conversationMessages, customers } from "../../drizzle/schema";
 import { eq, and, or, sql } from "drizzle-orm";
-import { downloadMediaAsBase64 } from "../db-messages";
+import { getMediaBase64FromEvolution } from "../media-download";
 import { sseManager, EVENTS } from "../_core/sse";
 
 interface MobileSyncJob {
@@ -132,37 +132,39 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   console.log("[MobileSync] Job media info:", {
     messageId: job.messageId,
     messageType: job.messageType,
-    mediaUrl: job.mediaUrl,
+    mediaUrl: job.mediaUrl ? "present" : "missing",
     mimeType: job.mimeType,
   });
 
-  // Se for mídia e não for data URL, baixar para preservar
+  // Se for mídia, baixar via Evolution API (getBase64FromMediaMessage)
+  // Isso é NECESSÁRIO porque URLs do WhatsApp expiram rapidamente
   if (
-    permanentMediaUrl &&
-    !permanentMediaUrl.startsWith("data:") &&
-    (job.messageType === "image" ||
-      job.messageType === "video" ||
-      job.messageType === "audio" ||
-      job.messageType === "document")
+    job.messageType === "image" ||
+    job.messageType === "video" ||
+    job.messageType === "audio" ||
+    job.messageType === "document"
   ) {
-    console.log("[MobileSync] Downloading media from:", permanentMediaUrl);
-    try {
-      const downloaded = await downloadMediaAsBase64(
-        permanentMediaUrl,
-        job.mimeType || null
-      );
-      if (downloaded) {
-        console.log("[MobileSync] Media downloaded successfully, size:", downloaded.length);
-        permanentMediaUrl = downloaded;
-      } else {
-        console.log("[MobileSync] Download returned empty, keeping original URL");
+    if (job.messageId) {
+      console.log("[MobileSync] Downloading media via Evolution API for message:", job.messageId);
+      try {
+        const mediaResult = await getMediaBase64FromEvolution({
+          id: job.messageId,
+          remoteJid: job.remoteJid,
+          fromMe: true, // Mensagem enviada pelo agente
+        });
+        if (mediaResult && mediaResult.dataUrl) {
+          console.log("[MobileSync] Media downloaded successfully, size:", mediaResult.base64Data.length);
+          permanentMediaUrl = mediaResult.dataUrl;
+        } else {
+          console.log("[MobileSync] Evolution API returned no media, keeping original URL");
+        }
+      } catch (downloadError) {
+        console.error("[MobileSync] Failed to download media:", job.messageId, downloadError);
+        // Manter URL original (mesmo que expire depois)
       }
-    } catch (downloadError) {
-      console.error("[MobileSync] Failed to download media:", job.messageId, downloadError);
-      // Manter URL original (mesmo que expire depois)
+    } else {
+      console.log("[MobileSync] No messageId, cannot download media");
     }
-  } else {
-    console.log("[MobileSync] Skipping media download (already data URL or not media)");
   }
 
   // Inserir mensagem na tabela conversation_messages
