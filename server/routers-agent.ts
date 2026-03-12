@@ -95,7 +95,7 @@ export const agentRouter = router({
   messages: router({
     list: protectedProcedure
       .input((raw: unknown) =>
-        z.object({ conversationId: z.number() }).parse(raw)
+        z.object({ conversation_id: z.number() }).parse(raw)
       )
       .query(async ({ input }) => {
         const { getDb } = await import("./db");
@@ -127,7 +127,7 @@ export const agentRouter = router({
           })
           .from(conversationMessages)
           .leftJoin(users, eq(conversationMessages.senderId, users.id))
-          .where(eq(conversationMessages.conversationId, input.conversationId))
+          .where(eq(conversationMessages.conversationId, input.conversation_id))
           .orderBy(conversationMessages.createdAt);
 
         return msgs;
@@ -137,12 +137,12 @@ export const agentRouter = router({
       .input((raw: unknown) =>
         z
           .object({
-            conversationId: z.number(),
+            conversation_id: z.number(),
             content: z.string(),
-            fileUrl: z.string().optional(),
-            fileName: z.string().optional(),
-            fileType: z.string().optional(),
-            fileSize: z.number().optional(),
+            file_url: z.string().optional(),
+            file_name: z.string().optional(),
+            file_type: z.string().optional(),
+            file_size: z.number().optional(),
           })
           .parse(raw)
       )
@@ -153,14 +153,14 @@ export const agentRouter = router({
         const { conversationMessages } = await import("../drizzle/schema");
 
         await db.insert(conversationMessages).values({
-          conversationId: input.conversationId,
+          conversationId: input.conversation_id,
           senderId: ctx.user.id,
           senderType: "agent",
           content: input.content,
-          fileUrl: input.fileUrl || null,
-          fileName: input.fileName || null,
-          fileType: input.fileType || null,
-          fileSize: input.fileSize || null,
+          fileUrl: input.file_url || null,
+          fileName: input.file_name || null,
+          fileType: input.file_type || null,
+          fileSize: input.file_size || null,
           createdAt: new Date(),
         });
 
