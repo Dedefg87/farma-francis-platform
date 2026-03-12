@@ -1009,9 +1009,11 @@ async function processEvolutionWebhook(body: any) {
         const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
 
-        // Ignorar eventos de envio
-        if (normalizedEvent.startsWith("send") || normalizedEvent.includes("send_message")) return;
-        if (!remoteJid) return;
+        // Se não tem remoteJid, não dá pra processar
+        if (!remoteJid) {
+          console.log("[Evolution Webhook] Missing remoteJid, skipping");
+          return;
+        }
 
         const fromNumber = normalizeInboundNumber(remoteJid);
         if (!fromNumber) return;
