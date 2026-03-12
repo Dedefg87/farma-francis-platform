@@ -2724,6 +2724,61 @@ async function startServer() {
     }
   });
 
+  // Debug: testar query de mensagens com senderName
+  app.get("/api/debug/test-messages-sender", async (req, res) => {
+    try {
+      const conversation_id = parseInt(req.query.conversation_id as string);
+      if (!conversation_id) {
+        return res.status(400).json({ error: "conversation_id é obrigatório" });
+      }
+
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Replica a query do messages.list para debug
+      const [rows]: any = await pool.execute(
+        `SELECT 
+          cm.id,
+          cm.conversation_id,
+          cm.sender_id,
+          cm.sender_type,
+          cm.content,
+          cm.file_url,
+          cm.file_name,
+          cm.file_type,
+          cm.file_size,
+          cm.created_at,
+          CASE 
+            WHEN cm.sender_type = 'agent' AND u.role = 'admin' 
+            THEN CONCAT(u.name, ' - Gerente')
+            WHEN cm.sender_type = 'agent' 
+            THEN u.name
+            ELSE NULL 
+          END as senderName
+        FROM conversation_messages cm
+        LEFT JOIN users u ON cm.sender_id = u.id
+        WHERE cm.conversation_id = ?
+        ORDER BY cm.created_at
+        LIMIT 20`,
+        [conversation_id]
+      );
+
+      await pool.end();
+
+      res.json({
+        count: rows.length,
+        messages: rows,
+        debug: "Query replicada de messages.list"
+      });
+    } catch (error) {
+      console.error("[Debug Test Messages] Error:", error);
+      res.status(500).json({ error: String(error), stack: (error as Error).stack });
+    }
+  });
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     // Dynamic import - only loads vite in development
