@@ -2925,6 +2925,42 @@ async function startServer() {
     }
   });
 
+  // Debug: testar envio de mensagem de agente (simula mutation send)
+  app.post("/api/debug/test-send-agent", async (req, res) => {
+    try {
+      const { conversation_id, content, agent_id = 8 } = req.body; // agent_id padrão = 8 (Anderson)
+      
+      if (!conversation_id || !content) {
+        return res.status(400).json({ error: "conversation_id e content são obrigatórios" });
+      }
+
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Insere diretamente na conversation_messages
+      const [result] = await pool.execute(
+        `INSERT INTO conversation_messages 
+         (conversation_id, sender_id, sender_type, content, created_at) 
+         VALUES (?, ?, 'agent', ?, NOW())`,
+        [conversation_id, agent_id, content]
+      );
+
+      await pool.end();
+
+      res.json({
+        success: true,
+        insertId: result.insertId,
+        message: "Mensagem de agente inserida (simulada)"
+      });
+    } catch (error) {
+      console.error("[Debug Test Send] Error:", error);
+      res.status(500).json({ error: String(error), stack: error instanceof Error ? error.stack : null });
+    }
+  });
+
   server.listen(port, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
@@ -3125,39 +3161,3 @@ async function startServer() {
 startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
 // FORCE REBUILD: 1772736794
-
-  // Debug: testar envio de mensagem de agente (simula mutation send)
-  app.post("/api/debug/test-send-agent", async (req, res) => {
-    try {
-      const { conversation_id, content, agent_id = 8 } = req.body; // agent_id padrão = 8 (Anderson)
-      
-      if (!conversation_id || !content) {
-        return res.status(400).json({ error: "conversation_id e content são obrigatórios" });
-      }
-
-      const mysql = await import("mysql2/promise");
-      const pool = mysql.createPool({
-        connectionLimit: 1,
-        uri: process.env.DATABASE_URL,
-      });
-
-      // Insere diretamente na conversation_messages
-      const [result] = await pool.execute(
-        `INSERT INTO conversation_messages 
-         (conversation_id, sender_id, sender_type, content, created_at) 
-         VALUES (?, ?, 'agent', ?, NOW())`,
-        [conversation_id, agent_id, content]
-      );
-
-      await pool.end();
-
-      res.json({
-        success: true,
-        insertId: result.insertId,
-        message: "Mensagem de agente inserida (simulada)"
-      });
-    } catch (error) {
-      console.error("[Debug Test Send] Error:", error);
-      res.status(500).json({ error: String(error), stack: (error as Error).stack });
-    }
-  });
