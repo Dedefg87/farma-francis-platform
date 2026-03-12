@@ -2727,6 +2727,9 @@ async function startServer() {
   // Debug: testar query de mensagens com senderName
   app.get("/api/debug/test-messages-sender", async (req, res) => {
     try {
+      // Evitar cache
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      
       const conversation_id = parseInt(req.query.conversation_id as string);
       if (!conversation_id) {
         return res.status(400).json({ error: "conversation_id é obrigatório" });
@@ -2771,7 +2774,8 @@ async function startServer() {
       res.json({
         count: rows.length,
         messages: rows,
-        debug: "Query replicada de messages.list"
+        debug: "Query replicada de messages.list",
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
       console.error("[Debug Test Messages] Error:", error);
