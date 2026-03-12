@@ -95,12 +95,13 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   }
 
   // Buscar conversa aberta/assigned para este cliente
+  // O banco armazena com + no início, então tentamos com e sem +
   const [conv] = await db
     .select()
     .from(conversations)
     .where(
       and(
-        eq(conversations.customerPhone, customerPhone),
+        sql`${conversations.customerPhone} IN ('${customerPhone}', '+${customerPhone}')`,
         sql`${conversations.status} IN ('open', 'assigned')`
       )
     )
@@ -180,16 +181,13 @@ async function processMobileSyncJob(job: MobileSyncJob) {
  * Normaliza número do WhatsApp para formato interno
  */
 function normalizeInboundNumber(remoteJid: string): string | null {
-  // remoteJid é algo como "5511999999999@s.whatsapp.net"
-  const match = remoteJid.match(/^(\d+)@/);
-  if (!match) return null;
+  // remoteJid é algo como "5511999999999@s.whatsapp.net" ou "+5511999999999@..."
+  // Extrair apenas os dígitos
+  const digits = remoteJid.replace(/\D/g, "");
+  if (digits.length < 10) return null;
 
-  let number = match[1];
-
-  // Remover prefixos desnecessários
-  number = number.replace(/^@?/, "");
-
-  // Garantir formato internacional
+  // Garantir formato internacional (55 no início)
+  let number = digits;
   if (!number.startsWith("55") && number.length === 11) {
     number = "55" + number;
   }
