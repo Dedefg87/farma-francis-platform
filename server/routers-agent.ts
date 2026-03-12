@@ -101,14 +101,35 @@ export const agentRouter = router({
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
-        const { messages } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
+        const { conversationMessages, users } = await import("../drizzle/schema");
+        const { eq, sql } = await import("drizzle-orm");
 
         const msgs = await db
-          .select()
-          .from(messages)
-          .where(eq(messages.ticketId, input.conversationId))
-          .orderBy(messages.createdAt);
+          .select({
+            id: conversationMessages.id,
+            conversationId: conversationMessages.conversationId,
+            senderId: conversationMessages.senderId,
+            senderType: conversationMessages.senderType,
+            content: conversationMessages.content,
+            fileUrl: conversationMessages.fileUrl,
+            fileName: conversationMessages.fileName,
+            fileType: conversationMessages.fileType,
+            fileSize: conversationMessages.fileSize,
+            readAt: conversationMessages.readAt,
+            createdAt: conversationMessages.createdAt,
+            senderName: sql<string>`CASE 
+              WHEN ${conversationMessages.senderType} = 'agent' AND ${users.role} = 'admin' 
+              THEN CONCAT(${users.name}, ' - Gerente')
+              WHEN ${conversationMessages.senderType} = 'agent' 
+              THEN ${users.name}
+              ELSE NULL 
+            END`.as('senderName'),
+          })
+          .from(conversationMessages)
+          .leftJoin(users, eq(conversationMessages.senderId, users.id))
+          .where(eq(conversationMessages.conversationId, input.conversationId))
+          .orderBy(conversationMessages.createdAt);
+
         return msgs;
       }),
 
@@ -118,7 +139,10 @@ export const agentRouter = router({
           .object({
             conversationId: z.number(),
             content: z.string(),
-            mediaUrl: z.string().optional(),
+            fileUrl: z.string().optional(),
+            fileName: z.string().optional(),
+            fileType: z.string().optional(),
+            fileSize: z.number().optional(),
           })
           .parse(raw)
       )
@@ -126,18 +150,21 @@ export const agentRouter = router({
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
-        const { messages } = await import("../drizzle/schema");
+        const { conversationMessages } = await import("../drizzle/schema");
 
-        const [msg] = await db.insert(messages).values({
-          ticketId: input.conversationId,
-          customerId: ctx.user.id,
-          channel: "whatsapp",
-          direction: "outbound",
+        await db.insert(conversationMessages).values({
+          conversationId: input.conversationId,
+          senderId: ctx.user.id,
+          senderType: "agent",
           content: input.content,
-          status: "sent",
+          fileUrl: input.fileUrl || null,
+          fileName: input.fileName || null,
+          fileType: input.fileType || null,
+          fileSize: input.fileSize || null,
           createdAt: new Date(),
         });
-        return { success: true, messageId: msg.insertId };
+
+        return { success: true };
       }),
   }),
 
