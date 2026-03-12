@@ -5,7 +5,7 @@
  */
 import { getDb } from "../db";
 import { conversations, conversationMessages, customers } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { downloadMediaAsBase64 } from "../db-messages";
 import { sseManager, EVENTS } from "../_core/sse";
 
@@ -101,7 +101,10 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     .from(conversations)
     .where(
       and(
-        sql`${conversations.customerPhone} IN ('${customerPhone}', '+${customerPhone}')`,
+        or(
+          eq(conversations.customerPhone, customerPhone),
+          eq(conversations.customerPhone, `+${customerPhone}`)
+        ),
         sql`${conversations.status} IN ('open', 'assigned')`
       )
     )
