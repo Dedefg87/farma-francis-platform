@@ -21,7 +21,7 @@ import { fetchEvolutionProfile } from "./messaging";
  * Download media from URL and convert to base64 Data URL
  * Enhanced version with proper headers and redirect handling
  */
-async function downloadMediaAsBase64(
+export async function downloadMediaAsBase64(
   mediaUrl: string,
   mimeType: string | null
 ): Promise<string | null> {

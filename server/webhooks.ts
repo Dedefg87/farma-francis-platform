@@ -5,8 +5,10 @@ import {
   receivedMessages,
   integrationSettings,
   conversations,
+  conversationMessages,
+  customers,
 } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
@@ -16,6 +18,7 @@ import {
   downloadAndSaveMedia,
   getMediaBase64FromEvolution,
 } from "./media-download";
+import { enqueueMobileSyncJob } from "./queue/mobile-sync";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
 
@@ -1004,6 +1007,7 @@ async function processEvolutionWebhook(body: any) {
         const remoteJid = key?.remoteJid || data?.remoteJid || messageData?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
         const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName || body?.sender?.name || body?.sender?.pushName || body?.data?.sender?.name;
         const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
+        const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
 
         // Ignorar eventos de envio
         if (normalizedEvent.startsWith("send") || normalizedEvent.includes("send_message")) return;
@@ -1012,18 +1016,7 @@ async function processEvolutionWebhook(body: any) {
         const fromNumber = normalizeInboundNumber(remoteJid);
         if (!fromNumber) return;
 
-        // Ignorar mensagens do próprio bot (enviadas pelo celular ou pela plataforma)
-        const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
-        if (isSentByMe) {
-          console.log("[Evolution Webhook] Ignoring message from me:", messageId);
-          return;
-        }
-
-        // Verificar duplicata
-        const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
-        if (existing) return;
-
-        // Determinar tipo e conteúdo da mensagem
+        // Determinar tipo e conteúdo da mensagem (rápido, sem download)
         const parsed = parseEvolutionMessageContent(messageContent);
         const messageType = parsed.type;
         const messageText = parsed.text;
@@ -1033,6 +1026,34 @@ async function processEvolutionWebhook(body: any) {
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
+
+        // Detectar mensagens enviadas pelo celular (fromMe === true)
+        const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
+
+        // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
+        if (isSentByMe) {
+          // Responder 200 OK IMEDIATO antes de qualquer processamento pesado
+          res.status(200).json({ received: true });
+          await res.end();
+
+          // Enfileirar job em background
+          enqueueMobileSyncJob({
+            remoteJid: remoteJid,
+            messageId: messageId,
+            messageText: messageText,
+            caption: caption,
+            messageType: messageType,
+            mediaUrl: mediaUrl,
+            mimeType: mimeType,
+            messageTimestamp: messageTimestamp,
+          }).catch(() => {}); // Erros silenciosos
+
+          return;
+        }
+
+        // Verificar duplicata
+        const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+        if (existing) return;
 
         // Se não tem conteúdo real, ignorar
         const hasRealContent =

@@ -14,6 +14,7 @@ import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
+import { startMobileSyncProcessor } from "../queue/mobile-sync";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -41,6 +42,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Iniciar processador de sync de mensagens mobile (background)
+  startMobileSyncProcessor();
+
   const app = express();
 
   // Trust proxy headers (required for Railway, Render, and other proxies)
