@@ -7,6 +7,7 @@ import { getDb } from "../db";
 import { conversations, conversationMessages, customers } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { downloadMediaAsBase64 } from "../db-messages";
+import { sseManager, EVENTS } from "../_core/sse";
 
 interface MobileSyncJob {
   id: string;
@@ -148,7 +149,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   }
 
   // Inserir mensagem na tabela conversation_messages
-  await db.insert(conversationMessages).values({
+  const [insertedMessage] = await db.insert(conversationMessages).values({
     conversationId: conv.id,
     senderId: conv.assignedTo, // Agente dono da conversa
     senderType: "agent",
@@ -158,7 +159,21 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     fileType: job.messageType || null,
     fileSize: null,
     createdAt: new Date(job.messageTimestamp * 1000),
-  });
+  }).returning({ id: conversationMessages.id });
+
+  // Notificar via SSE para atualizar frontend em tempo real
+  if (insertedMessage && insertedMessage.id) {
+    sseManager.emitToUser(conv.assignedTo, EVENTS.MESSAGE_CREATED, {
+      messageId: insertedMessage.id,
+      conversationId: conv.id,
+      senderId: conv.assignedTo,
+      senderType: "agent",
+      content: content,
+      fileUrl: permanentMediaUrl || null,
+      fileType: job.messageType || null,
+      createdAt: new Date(job.messageTimestamp * 1000).toISOString(),
+    });
+  }
 }
 
 /**
