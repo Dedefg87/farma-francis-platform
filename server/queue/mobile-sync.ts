@@ -127,6 +127,8 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";
+  // Economia de espaço: salvar apenas a URL original (não baixar como base64)
+  // URLs podem expirar, mas evita crescimento descontrolado do banco
   let permanentMediaUrl: string | null = job.mediaUrl || null;
 
   console.log("[MobileSync] Job media info:", {
@@ -136,36 +138,8 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     mimeType: job.mimeType,
   });
 
-  // Se for mídia, baixar via Evolution API (getBase64FromMediaMessage)
-  // Isso é NECESSÁRIO porque URLs do WhatsApp expiram rapidamente
-  if (
-    job.messageType === "image" ||
-    job.messageType === "video" ||
-    job.messageType === "audio" ||
-    job.messageType === "document"
-  ) {
-    if (job.messageId) {
-      console.log("[MobileSync] Downloading media via Evolution API for message:", job.messageId);
-      try {
-        const mediaResult = await getMediaBase64FromEvolution({
-          id: job.messageId,
-          remoteJid: job.remoteJid,
-          fromMe: true, // Mensagem enviada pelo agente
-        });
-        if (mediaResult && mediaResult.dataUrl) {
-          console.log("[MobileSync] Media downloaded successfully, size:", mediaResult.base64Data.length);
-          permanentMediaUrl = mediaResult.dataUrl;
-        } else {
-          console.log("[MobileSync] Evolution API returned no media, keeping original URL");
-        }
-      } catch (downloadError) {
-        console.error("[MobileSync] Failed to download media:", job.messageId, downloadError);
-        // Manter URL original (mesmo que expire depois)
-      }
-    } else {
-      console.log("[MobileSync] No messageId, cannot download media");
-    }
-  }
+  // NOTA: Não baixamos mídia para base64. Se necessário persistir,
+  // considerar storage externo (S3) ou cache com TTL.
 
   // Inserir mensagem na tabela conversation_messages
   await db.insert(conversationMessages).values({

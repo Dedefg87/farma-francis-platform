@@ -1068,32 +1068,11 @@ async function processEvolutionWebhook(body: any) {
           Boolean(mediaUrl && String(mediaUrl).trim());
         if (!hasRealContent && messageType === "unknown") return;
 
-        // Download media if present
-        let permanentMediaUrl = null;
-        let finalMimeType = mimeType;
-
-        if (imageBase64) {
-          const contentType = mimeType || "application/octet-stream";
-          permanentMediaUrl = `data:${contentType};base64,${imageBase64}`;
-        } else if (["image", "video", "audio", "document"].includes(messageType) && key?.id) {
-          const mediaResult = await getMediaBase64FromEvolution({
-            id: key.id,
-            remoteJid: remoteJid,
-            fromMe: fromMe,
-          });
-
-          if (mediaResult) {
-            permanentMediaUrl = mediaResult.dataUrl;
-            finalMimeType = mediaResult.mimeType;
-          } else {
-            const fallbackResult = await downloadAndSaveMedia(mediaUrl, mimeType, fromNumber, mediaKey, directPath);
-            if (fallbackResult) {
-              permanentMediaUrl = fallbackResult.dataUrl;
-            } else {
-              permanentMediaUrl = mediaUrl;
-            }
-          }
-        }
+        // Mídia: salvar apenas a URL (não baixar para base64 para economizar espaço)
+        // URLs do WhatsApp são temporárias, mas o frontend pode buscar de lá diretamente
+        // Se precisar persistir, usar storage externo no futuro
+        const permanentMediaUrl = mediaUrl; // Use original URL directly (no download)
+        const finalMimeType = mimeType;
 
         // Salvar mensagem recebida no banco
         await db.insert(receivedMessages).values({
