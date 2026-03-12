@@ -1032,18 +1032,21 @@ async function processEvolutionWebhook(body: any) {
 
         // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
         if (isSentByMe) {
-          // Enfileirar job em background
-          enqueueMobileSyncJob({
-            remoteJid: remoteJid,
-            messageId: messageId,
-            messageText: messageText,
-            caption: caption,
-            messageType: messageType,
-            mediaUrl: mediaUrl,
-            mimeType: mimeType,
-            messageTimestamp: messageTimestamp,
-          }).catch(() => {}); // Erros silenciosos
-
+          // Enfileirar job em background (fire and forget)
+          try {
+            enqueueMobileSyncJob({
+              remoteJid: remoteJid,
+              messageId: messageId,
+              messageText: messageText,
+              caption: caption,
+              messageType: messageType,
+              mediaUrl: mediaUrl,
+              mimeType: mimeType,
+              messageTimestamp: messageTimestamp,
+            });
+          } catch (e) {
+            // Erro ao enfileirar (raro), ignora silenciosamente
+          }
           return;
         }
 
