@@ -29,8 +29,19 @@ interface MessageMediaProps {
   isAgent?: boolean;
 }
 
+// Helper para obter URL de mídia (usa proxy se tiver messageId)
+function getMediaSrc(url: string | null, messageId?: number): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  if (messageId && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
+    return `/api/media/${messageId}`;
+  }
+  return url;
+}
+
 // Componente de player de áudio estilo WhatsApp
-function WhatsAppAudioPlayer({ mediaUrl, isAgent }: { mediaUrl: string; isAgent?: boolean }) {
+function WhatsAppAudioPlayer({ mediaUrl, isAgent, messageId }: { mediaUrl: string; isAgent?: boolean; messageId?: number }) {
+  const src = getMediaSrc(mediaUrl, messageId);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -114,7 +125,7 @@ function WhatsAppAudioPlayer({ mediaUrl, isAgent }: { mediaUrl: string; isAgent?
     <div className={`flex items-center gap-2 rounded-full px-3 py-2 ${
       isAgent ? 'bg-blue-600/30' : 'bg-gray-200/80'
     }`}>
-      <audio ref={audioRef} src={mediaUrl} preload="metadata" />
+      <audio ref={audioRef} src={src} preload="metadata" />
 
       {/* Botão Play/Pause */}
       <button
@@ -411,7 +422,7 @@ export function MessageMedia({
   if (isAudio) {
     return (
       <div className="max-w-xs">
-        <WhatsAppAudioPlayer mediaUrl={mediaUrl} isAgent={isAgent} />
+        <WhatsAppAudioPlayer mediaUrl={mediaUrl} isAgent={isAgent} messageId={messageId} />
       </div>
     );
   }
