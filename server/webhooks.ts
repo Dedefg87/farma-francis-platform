@@ -1089,8 +1089,6 @@ async function processEvolutionWebhook(body: any) {
           }
         }
 
-        const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
-
         // Salvar mensagem recebida no banco
         await db.insert(receivedMessages).values({
           provider: "whatsapp",

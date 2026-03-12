@@ -4,7 +4,7 @@
  * IMPORTANTE: Esta fila processa jobs em background SEM bloquear o webhook
  */
 import { getDb } from "../db";
-import { conversations, conversationMessages, customers } from "../drizzle/schema";
+import { conversations, conversationMessages, customers } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { downloadMediaAsBase64 } from "../db-messages";
 
@@ -170,17 +170,4 @@ export function startMobileSyncProcessor() {
 
   // Limpar intervalo ao encerrar (opcional)
   return () => clearInterval(interval);
-}
-
-
-/**
- * Inicializa o processador da fila (chamar no startup)
- */
-export function startMobileSyncProcessor() {
-  // Processar a cada 100ms se houver jobs
-  setInterval(() => {
-    if (queue.length > 0 && !isProcessing) {
-      setImmediate(processQueue);
-    }
-  }, 100);
 }
