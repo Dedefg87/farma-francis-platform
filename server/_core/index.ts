@@ -2845,8 +2845,9 @@ async function startServer() {
         uri: process.env.DATABASE_URL,
       });
 
-      const [rows]: any = await pool.execute(
-        `SELECT 
+      // Interpolação direta no LIMIT (safe porque limit é inteiro validado)
+      const sql = `
+        SELECT 
           c.id,
           c.customer_name,
           c.status,
@@ -2867,9 +2868,10 @@ async function startServer() {
           GROUP BY ticket_id
         ) old_counts ON c.id = old_counts.ticket_id
         ORDER BY c.id DESC
-        LIMIT ?`,
-        [limit]
-      );
+        LIMIT ${limit}
+      `;
+
+      const [rows]: any = await pool.execute(sql);
 
       await pool.end();
 
