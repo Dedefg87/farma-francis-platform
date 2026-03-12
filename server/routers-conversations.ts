@@ -871,8 +871,24 @@ export const messagesRouter = router({
         throw new Error("Destino não encontrado para esta conversa");
       }
 
+      // Buscar dados do agente para formatar nome
+      const [agent] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, ctx.user.id))
+        .limit(1);
+
+      const agentName = agent?.name || "Agente";
+      const roleSuffix = agent?.role === "admin" ? " - Gerente" : "";
+      const formattedAgentName = `${agentName}${roleSuffix}`;
+
+      // Prefixar nome do agente nas mensagens enviadas ao WhatsApp
+      const prefixedContent = `${formattedAgentName}\n${input.content}`;
+
       console.log("[SEND MESSAGE] Input:", JSON.stringify({
         content: input.content,
+        prefixedContent,
+        agentName: formattedAgentName,
         fileUrl: input.fileUrl,
         fileName: input.fileName,
         fileType: input.fileType,
@@ -912,14 +928,15 @@ export const messagesRouter = router({
               to: destination,
               documentUrl: input.fileUrl,
               filename: input.fileName,
-              mimeType: input.fileType
+              mimeType: input.fileType,
+              caption: prefixedContent,
             });
             await sendWhatsAppDocument({
               to: destination,
               documentUrl: input.fileUrl,
               filename: input.fileName || "documento",
               mimeType: input.fileType || "application/octet-stream",
-              caption: input.content,
+              caption: prefixedContent,
             });
           } else if (isAudio && input.fileUrl) {
             // Enviar áudio
@@ -937,20 +954,20 @@ export const messagesRouter = router({
                 to: destination,
                 mediaUrl: input.fileUrl,
                 mediaType: isVideo ? "video" : "image",
-                caption: input.content,
+                caption: prefixedContent,
               });
             } else {
               await sendWhatsAppImage({
                 to: destination,
                 imageUrl: input.fileUrl,
-                caption: input.content,
+                caption: prefixedContent,
               });
             }
           } else {
             console.log("[SEND MESSAGE] Sending TEXT to WhatsApp");
             await sendWhatsAppMessage({
               to: destination,
-              message: input.content,
+              message: prefixedContent,
             });
           }
         } else if (conversation.channel === "instagram") {
