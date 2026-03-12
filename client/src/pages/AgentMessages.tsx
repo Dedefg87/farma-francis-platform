@@ -1058,7 +1058,7 @@ export default function AgentMessages() {
                         }`}
                       >
                         {/* Nome do remetente */}
-                        <p className="text-xs font-medium mb-1 opacity-75">
+                        <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
                         {msg.content && msg.content !== "null" && (
