@@ -153,7 +153,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   }
 
   // Inserir mensagem na tabela conversation_messages
-  const [insertedMessage] = await db.insert(conversationMessages).values({
+  await db.insert(conversationMessages).values({
     conversationId: conv.id,
     senderId: conv.assignedTo, // Agente dono da conversa
     senderType: "agent",
@@ -163,7 +163,23 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     fileType: job.messageType || null,
     fileSize: null,
     createdAt: new Date(job.messageTimestamp * 1000),
-  }).returning({ id: conversationMessages.id });
+  });
+
+  // Buscar a mensagem recém-inserida (pelo conversationId + timestamp)
+  const [insertedMessage] = await db
+    .select()
+    .from(conversationMessages)
+    .where(
+      and(
+        eq(conversationMessages.conversationId, conv.id),
+        eq(conversationMessages.senderType, "agent"),
+        eq(conversationMessages.content, content),
+        sql`${conversationMessages.createdAt} >= ?`,
+        sql`${conversationMessages.createdAt} <= ?`
+      )
+    )
+    .orderBy(sql`${conversationMessages.id} DESC`)
+    .limit(1);
 
   // Notificar via SSE para atualizar frontend em tempo real
   if (insertedMessage && insertedMessage.id) {
