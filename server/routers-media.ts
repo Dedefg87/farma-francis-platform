@@ -98,6 +98,12 @@ router.get("/:messageId", async (req, res) => {
     // Requer fromNumber (remoteJid) e messageId (ID da mensagem no WhatsApp)
     if (fromNumber && messageId) {
       try {
+        console.log("[MediaProxy] Calling Evolution API with:", {
+          messageId,
+          fromNumber,
+          fromNumberIncludesAt: fromNumber.includes("@"),
+          fromMe: false,
+        });
         const mediaResult = await getMediaBase64FromEvolution({
           id: messageId,
           remoteJid: fromNumber,
@@ -111,10 +117,14 @@ router.get("/:messageId", async (req, res) => {
           res.set("Content-Type", contentType);
           console.log("[MediaProxy] Served from Evolution API (len:", buffer.length, ")");
           return res.send(buffer);
+        } else {
+          console.log("[MediaProxy] Evolution API returned null/empty");
         }
       } catch (err) {
         console.error("[MediaProxy] Error fetching from Evolution:", err);
       }
+    } else {
+      console.log("[MediaProxy] Skipping Evolution API - missing fromNumber or messageId", { fromNumber, messageId });
     }
 
     // Caso 4: Redirecionar para URL original (pode funcionar no navegador)
