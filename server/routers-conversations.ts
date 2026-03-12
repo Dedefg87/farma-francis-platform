@@ -883,8 +883,8 @@ export const messagesRouter = router({
       const formattedAgentName = `${agentName}${roleSuffix}`;
 
       // Prefixar nome do agente nas mensagens enviadas ao WhatsApp
-      // Usar HTML <strong> para ensure negrito e cor preta no WhatsApp
-      const prefixedContent = `<strong>${formattedAgentName}</strong>\n${input.content}`;
+      // Usar Markdown (*negrito*) para formatação compatível com Evolution API
+      const prefixedContent = `*${formattedAgentName}*\n${input.content}`;
 
       console.log("[SEND MESSAGE] Input:", JSON.stringify({
         content: input.content,
