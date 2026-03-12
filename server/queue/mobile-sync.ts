@@ -35,6 +35,11 @@ export function enqueueMobileSyncJob(job: Omit<MobileSyncJob, "id">) {
 
   queue.push(jobWithId);
 
+  // Log mínimo (apenas em debug, senão count pro CI)
+  if (queue.length % 10 === 0) {
+    console.log("[MobileSync] Queue size:", queue.length);
+  }
+
   // Processar assíncrono sem await
   if (!isProcessing) {
     setImmediate(processQueue);
@@ -56,6 +61,10 @@ async function processQueue() {
 
       try {
         await processMobileSyncJob(job);
+        // Log de sucesso a cada 10 jobs para não sobrecarregar
+        if (Math.random() < 0.1) {
+          console.log("[MobileSync] Job processed:", job.id, "queue remaining:", queue.length);
+        }
       } catch (error) {
         // Log mínimo, não quebra
         console.error("[MobileSync] Job failed:", job.id, error.message);
@@ -72,11 +81,17 @@ async function processQueue() {
  */
 async function processMobileSyncJob(job: MobileSyncJob) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    console.error("[MobileSync] DB not available for job:", job.id);
+    return;
+  }
 
   // Converter remoteJid para número do cliente
   const customerPhone = normalizeInboundNumber(job.remoteJid);
-  if (!customerPhone) return;
+  if (!customerPhone) {
+    console.error("[MobileSync] Failed to normalize phone from:", job.remoteJid);
+    return;
+  }
 
   // Buscar conversa aberta/assigned para este cliente
   const [conv] = await db
@@ -92,8 +107,11 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   if (!conv) {
     // Nenhuma conversa ativa com este cliente, ignorar
+    console.log("[MobileSync] No active conversation for phone:", customerPhone);
     return;
   }
+
+  console.log("[MobileSync] Processing job:", job.id, "for conversation:", conv.id, "agentId:", conv.assignedTo);
 
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";

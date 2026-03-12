@@ -1030,8 +1030,13 @@ async function processEvolutionWebhook(body: any) {
         // Detectar mensagens enviadas pelo celular (fromMe === true)
         const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
-        // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
+        if (!isSentByMe) {
+          console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
+        }
+
         if (isSentByMe) {
+          console.log("[Evolution Webhook] Detected fromMe message, enqueuing:", messageId, "to:", fromNumber);
+          // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
           // Enfileirar job em background (fire and forget)
           try {
             enqueueMobileSyncJob({
