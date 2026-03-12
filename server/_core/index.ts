@@ -2783,6 +2783,57 @@ async function startServer() {
     }
   });
 
+  // Debug: comparar mensagens nas duas tabelas (conversation_messages vs messages)
+  app.get("/api/debug/compare-messages-tables", async (req, res) => {
+    try {
+      const conversation_id = parseInt(req.query.conversation_id as string);
+      if (!conversation_id) {
+        return res.status(400).json({ error: "conversation_id é obrigatório" });
+      }
+
+      const mysql = await import("mysql2/promise");
+      const pool = mysql.createPool({
+        connectionLimit: 1,
+        uri: process.env.DATABASE_URL,
+      });
+
+      // Contar mensagens na tabela conversation_messages (nova)
+      const [newRows]: any = await pool.execute(
+        "SELECT COUNT(*) as count FROM conversation_messages WHERE conversation_id = ?",
+        [conversation_id]
+      );
+
+      // Contar mensagens na tabela messages (antiga)
+      const [oldRows]: any = await pool.execute(
+        "SELECT COUNT(*) as count FROM messages WHERE ticket_id = ?",
+        [conversation_id]
+      );
+
+      // Pegar algumas mensagens da tabela antiga para análise
+      const [oldMessages]: any = await pool.execute(
+        "SELECT id, ticket_id, customer_id, channel, direction, content, created_at FROM messages WHERE ticket_id = ? ORDER BY created_at LIMIT 5",
+        [conversation_id]
+      );
+
+      await pool.end();
+
+      res.json({
+        conversation_id,
+        newTableCount: newRows[0].count,
+        oldTableCount: oldRows[0].count,
+        sampleOldMessages: oldMessages,
+        analysis: newRows[0].count > 0 
+          ? "Nova tabela tem mensagens - deve funcionar" 
+          : oldRows[0].count > 0 
+            ? "APENAS tabela antiga contém mensagens - migration não aplicada" 
+            : "Nenhuma mensagem encontrada"
+      });
+    } catch (error) {
+      console.error("[Debug Compare Tables] Error:", error);
+      res.status(500).json({ error: String(error), stack: (error as Error).stack });
+    }
+  });
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     // Dynamic import - only loads vite in development
