@@ -59,7 +59,7 @@ export default function AgentTopBar() {
 
     conversations.forEach(conv => {
       const previousCount = previousMessagesRef.current.get(conv.id) || 0;
-      const currentCount = conv.messageCount || conv.unreadCount || 0;
+      const currentCount = conv.unreadCount || 0;
 
       // Se há mensagens novas e não é a primeira carga
       if (previousCount > 0 && currentCount > previousCount) {
