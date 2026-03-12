@@ -1,15 +1,107 @@
 /**
  * Serviço de busca automática de imagens de produtos
- * Usa Serper API + análise para encontrar a melhor imagem
+ * Usa Serper API (Google Images) + Pexels API como alternativa
  */
 
 const SERPER_API_KEY = process.env.SERPER_API_KEY || "6abb2781d7edf99aa211c064912283e3c804e8c0";
 const SERPER_API_URL = "https://google.serper.dev/images";
 
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "JmHy1kYEcjyobiVGbO8I8FIWLXBOiByWYmmFHEAC089aLqE4qEX9utkG";
+const PEXELS_API_URL = "https://api.pexels.com/v1/search";
+const PEXELS_VIDEO_URL = "https://api.pexels.com/videos/search";
+
 interface ImageResult {
   url: string;
   title: string;
   source: string;
+  photographer?: string;
+}
+
+interface VideoResult {
+  url: string;
+  title: string;
+  source: string;
+  thumbnail: string;
+  duration: number;
+}
+
+/**
+ * Busca imagens no Pexels (stock photos de alta qualidade)
+ */
+export async function searchPexelsImages(query: string, perPage: number = 10): Promise<ImageResult[]> {
+  if (!PEXELS_API_KEY) {
+    console.log("[Pexels] API key not configured");
+    return [];
+  }
+
+  try {
+    const response = await fetch(
+      `${PEXELS_API_URL}?query=${encodeURIComponent(query)}&per_page=${perPage}&locale=pt-BR`,
+      {
+        headers: {
+          Authorization: PEXELS_API_KEY,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error("[Pexels] API error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    const photos = data.photos || [];
+
+    return photos.map((photo: any) => ({
+      url: photo.src.large || photo.src.original,
+      title: photo.alt || query,
+      source: "pexels",
+      photographer: photo.photographer,
+    }));
+  } catch (error) {
+    console.error("[Pexels] Error:", error);
+    return [];
+  }
+}
+
+/**
+ * Busca vídeos no Pexels
+ */
+export async function searchPexelsVideos(query: string, perPage: number = 10): Promise<VideoResult[]> {
+  if (!PEXELS_API_KEY) {
+    console.log("[Pexels] API key not configured");
+    return [];
+  }
+
+  try {
+    const response = await fetch(
+      `${PEXELS_VIDEO_URL}?query=${encodeURIComponent(query)}&per_page=${perPage}`,
+      {
+        headers: {
+          Authorization: PEXELS_API_KEY,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.error("[Pexels Videos] API error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    const videos = data.videos || [];
+
+    return videos.map((video: any) => ({
+      url: video.video_files?.[0]?.link || "",
+      title: video.alt || query,
+      source: "pexels",
+      thumbnail: video.image,
+      duration: video.duration,
+    }));
+  } catch (error) {
+    console.error("[Pexels Videos] Error:", error);
+    return [];
+  }
 }
 
 /**
@@ -51,7 +143,7 @@ export async function searchProductImages(query: string): Promise<ImageResult[]>
 
 /**
  * Busca a melhor imagem para um produto
- * Prioriza: site oficial > e-commerce conhecido > outros
+ * Prioriza: Serper (produtos reais) > Pexels (stock photos)
  */
 export async function findBestProductImage(productName: string): Promise<string | null> {
   // Lista de sites confiáveis para produtos farmacêuticos
@@ -66,26 +158,36 @@ export async function findBestProductImage(productName: string): Promise<string 
     "mercado livre",
   ];
 
-  const images = await searchProductImages(productName);
+  // Primeiro, tentar Serper (Google Images)
+  const serperImages = await searchProductImages(productName);
 
-  if (images.length === 0) {
-    return null;
-  }
-
-  // Primeiro, tentar encontrar de site oficial ou confiável
-  for (const img of images) {
-    const sourceLower = img.source.toLowerCase();
-    for (const trusted of trustedSources) {
-      if (sourceLower.includes(trusted)) {
-        console.log(`[ImageSearch] Found trusted image for "${productName}" from ${img.source}`);
-        return img.url;
+  if (serperImages.length > 0) {
+    // Tentar encontrar de site oficial ou confiável
+    for (const img of serperImages) {
+      const sourceLower = img.source.toLowerCase();
+      for (const trusted of trustedSources) {
+        if (sourceLower.includes(trusted)) {
+          console.log(`[ImageSearch] Found trusted image for "${productName}" from ${img.source}`);
+          return img.url;
+        }
       }
     }
+
+    // Se não encontrou de fonte confiável, retornar a primeira
+    console.log(`[ImageSearch] Using first image for "${productName}" from ${serperImages[0].source}`);
+    return serperImages[0].url;
   }
 
-  // Se não encontrou de fonte confiável, retornar a primeira
-  console.log(`[ImageSearch] Using first image for "${productName}" from ${images[0].source}`);
-  return images[0].url;
+  // Fallback: tentar Pexels
+  console.log(`[ImageSearch] Serper empty, trying Pexels for "${productName}"`);
+  const pexelsImages = await searchPexelsImages(productName, 5);
+
+  if (pexelsImages.length > 0) {
+    console.log(`[ImageSearch] Using Pexels image for "${productName}" by ${pexelsImages[0].photographer}`);
+    return pexelsImages[0].url;
+  }
+
+  return null;
 }
 
 /**
