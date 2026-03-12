@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getDb } from "./db";
-import { receivedMessages, conversationMessages } from "../drizzle/schema";
+import { receivedMessages, conversationMessages, conversations } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { getMediaBase64FromEvolution } from "./media-download";
 
@@ -13,6 +13,7 @@ const router = Router();
  */
 router.get("/:messageId", async (req, res) => {
   const { messageId } = req.params;
+  console.log("[MediaProxy] Received request for messageId:", messageId);
 
   try {
     const db = await getDb();
@@ -20,44 +21,52 @@ router.get("/:messageId", async (req, res) => {
       return res.status(503).json({ error: "Database unavailable" });
     }
 
-    // Buscar em received_messages primeiro
-    const [received] = await db
+    // 1. Buscar na tabela conversation_messages pelo ID interno (primary key)
+    const [convMsg] = await db
       .select()
-      .from(receivedMessages)
-      .where(eq(receivedMessages.externalId, messageId))
+      .from(conversationMessages)
+      .where(eq(conversationMessages.id, Number(messageId)))
       .limit(1);
 
     let mediaUrl: string | null = null;
     let mimeType: string | null = null;
     let fromNumber: string | null = null;
-    let source: "received" | "conversation" = "received";
 
-    if (received) {
-      mediaUrl = received.mediaUrl;
-      mimeType = received.mimeType;
-      fromNumber = received.fromNumber;
+    if (convMsg) {
+      mediaUrl = convMsg.fileUrl;
+      mimeType = convMsg.fileType || null;
+      // Se for mensagem do cliente, buscar o phone (remoteJid) da conversations
+      if (convMsg.senderType === "customer") {
+        const [conv] = await db
+          .select({ customerPhone: conversations.customerPhone })
+          .from(conversations)
+          .where(eq(conversations.id, convMsg.conversationId))
+          .limit(1);
+        if (conv) fromNumber = conv.customerPhone;
+      }
+      console.log("[MediaProxy] Found in conversation_messages:", { mediaUrl: !!mediaUrl, mimeType, fromNumber });
     } else {
-      // Buscar em conversation_messages
-      const [convMsg] = await db
+      // 2. Fallback: buscar em received_messages por externalId (ID da Evolution)
+      const [received] = await db
         .select()
-        .from(conversationMessages)
-        .where(eq(conversationMessages.id, Number(messageId))) // pode ser ID interno
+        .from(receivedMessages)
+        .where(eq(receivedMessages.externalId, messageId))
         .limit(1);
 
-      if (convMsg) {
-        mediaUrl = convMsg.fileUrl;
-        mimeType = convMsg.fileType || null;
-        source = "conversation";
-        // Para mensagens de agente, não temos remoteJid facilmente; usar fallback
-        fromNumber = null;
+      if (received) {
+        mediaUrl = received.mediaUrl;
+        mimeType = received.mimeType;
+        fromNumber = received.fromNumber;
+        console.log("[MediaProxy] Found in received_messages:", { mediaUrl: !!mediaUrl, mimeType, fromNumber });
       }
     }
 
     if (!mediaUrl) {
+      console.log("[MediaProxy] Media not found for messageId:", messageId);
       return res.status(404).json({ error: "Mídia não encontrada" });
     }
 
-    // Se já é data URL (base64), extrair e servir diretamente
+    // Caso 1: Já é data URL (base64) → servir diretamente
     if (mediaUrl.startsWith("data:")) {
       const base64Data = mediaUrl.split(",")[1];
       const contentType = mediaUrl.split(";")[0].split(":")[1];
@@ -66,7 +75,7 @@ router.get("/:messageId", async (req, res) => {
       return res.send(buffer);
     }
 
-    // Se for URL http/https, tentar fetch direto (pode já estar válida)
+    // Caso 2: URL http/https → tentar fetch direto (pode ainda estar válida)
     try {
       const fetchResponse = await fetch(mediaUrl, {
         method: "GET",
@@ -77,20 +86,22 @@ router.get("/:messageId", async (req, res) => {
         const contentType = fetchResponse.headers.get("content-type") || mimeType || "application/octet-stream";
         res.set("Content-Type", contentType);
         const buffer = Buffer.from(await fetchResponse.arrayBuffer());
+        console.log("[MediaProxy] Served directly from URL (len:", buffer.length, ")");
         return res.send(buffer);
       }
     } catch (e) {
-      // URL expirou ou deu erro, vamos buscar da Evolution API
-      console.log("[MediaProxy] URL expired or error, fetching from Evolution API:", messageId);
+      // URL expirou ou erro de rede → prosseguir para Evolution API fallback
+      console.log("[MediaProxy] Direct fetch failed, trying Evolution API");
     }
 
-    // Fallback: buscar da Evolution API (getBase64FromMediaMessage)
+    // Caso 3: Buscar da Evolution API (usando getMediaBase64FromEvolution)
+    // Requer fromNumber (remoteJid) e messageId (ID da mensagem no WhatsApp)
     if (fromNumber && messageId) {
       try {
         const mediaResult = await getMediaBase64FromEvolution({
           id: messageId,
           remoteJid: fromNumber,
-          fromMe: source === "conversation", // se for conversationMessages, assume fromMe (agente)
+          fromMe: false, // mensagem recebida do cliente
         });
 
         if (mediaResult && mediaResult.dataUrl) {
@@ -98,6 +109,7 @@ router.get("/:messageId", async (req, res) => {
           const contentType = mediaResult.mimeType || "application/octet-stream";
           const buffer = Buffer.from(base64Data, "base64");
           res.set("Content-Type", contentType);
+          console.log("[MediaProxy] Served from Evolution API (len:", buffer.length, ")");
           return res.send(buffer);
         }
       } catch (err) {
@@ -105,8 +117,9 @@ router.get("/:messageId", async (req, res) => {
       }
     }
 
-    // Se tudo falhar, redirecionar para URL original (pode ainda funcionar)
+    // Caso 4: Redirecionar para URL original (pode funcionar no navegador)
     if (mediaUrl.startsWith("http")) {
+      console.log("[MediaProxy] Redirecting to original URL");
       return res.redirect(307, mediaUrl);
     }
 
