@@ -129,6 +129,13 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   let content = job.messageText || job.caption || "";
   let permanentMediaUrl: string | null = job.mediaUrl || null;
 
+  console.log("[MobileSync] Job media info:", {
+    messageId: job.messageId,
+    messageType: job.messageType,
+    mediaUrl: job.mediaUrl,
+    mimeType: job.mimeType,
+  });
+
   // Se for mídia e não for data URL, baixar para preservar
   if (
     permanentMediaUrl &&
@@ -138,18 +145,24 @@ async function processMobileSyncJob(job: MobileSyncJob) {
       job.messageType === "audio" ||
       job.messageType === "document")
   ) {
+    console.log("[MobileSync] Downloading media from:", permanentMediaUrl);
     try {
       const downloaded = await downloadMediaAsBase64(
         permanentMediaUrl,
         job.mimeType || null
       );
       if (downloaded) {
+        console.log("[MobileSync] Media downloaded successfully, size:", downloaded.length);
         permanentMediaUrl = downloaded;
+      } else {
+        console.log("[MobileSync] Download returned empty, keeping original URL");
       }
     } catch (downloadError) {
-      console.error("[MobileSync] Failed to download media:", job.messageId);
+      console.error("[MobileSync] Failed to download media:", job.messageId, downloadError);
       // Manter URL original (mesmo que expire depois)
     }
+  } else {
+    console.log("[MobileSync] Skipping media download (already data URL or not media)");
   }
 
   // Inserir mensagem na tabela conversation_messages
