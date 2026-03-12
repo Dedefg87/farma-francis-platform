@@ -570,17 +570,9 @@ export async function ingestInboundConversationMessage(message: {
       .where(eq(conversations.id, conversationId));
   }
 
-  // Download media if present (URLs expire quickly)
-  let fileUrlToSave = message.mediaUrl || null;
-  if (fileUrlToSave && message.messageType !== "text") {
-    const base64Url = await downloadMediaAsBase64(
-      fileUrlToSave,
-      message.mimeType ?? null
-    );
-    if (base64Url) {
-      fileUrlToSave = base64Url;
-    }
-  }
+  // Economia de espaço: salvar apenas URL original (não baixar como base64)
+  // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
+  const fileUrlToSave = message.mediaUrl || null;
   
   await db.insert(conversationMessages).values({
     conversationId,
