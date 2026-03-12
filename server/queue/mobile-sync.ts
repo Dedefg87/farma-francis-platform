@@ -108,6 +108,13 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   if (!conv) {
     // Nenhuma conversa ativa com este cliente, ignorar
     console.log("[MobileSync] No active conversation for phone:", customerPhone);
+    // Listar algumas conversas abertas para debug
+    const allOpen = await db
+      .select({ id: conversations.id, phone: conversations.customerPhone, status: conversations.status })
+      .from(conversations)
+      .where(sql`${conversations.status} IN ('open', 'assigned')`)
+      .limit(5);
+    console.log("[MobileSync] Sample open conversations:", JSON.stringify(allOpen));
     return;
   }
 
