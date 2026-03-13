@@ -11,6 +11,7 @@ import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
+import { mediaRouter } from "../routers-media";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
@@ -140,6 +141,9 @@ async function startServer() {
 
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);
+
+  // Media Proxy (mídia do WhatsApp/Evolution)
+  app.use("/api/media", mediaRouter);
 
   // Basic health check for load balancers and uptime monitoring
   app.get("/api/health", (_req, res) => {
