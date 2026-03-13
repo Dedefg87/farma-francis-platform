@@ -657,8 +657,10 @@ export async function ingestInboundConversationMessage(message: {
   console.log("[Ingest] ✅ Message ingested successfully:", { conversationId, messageDbId });
   return { conversationId, customerId: customer.id };
 }
-    };
 
+export async function listReceivedMessages(filters?: {
+  provider?: string;
+}) {
   const conditions = [];
   if (filters?.provider) {
     conditions.push(eq(receivedMessages.provider, filters.provider));
