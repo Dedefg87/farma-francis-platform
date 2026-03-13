@@ -584,6 +584,8 @@ export async function ingestInboundConversationMessage(message: {
     fileName: null,
     fileType: message.mimeType || null,
     fileSize: null,
+    externalId: message.externalId || null,
+    remoteJid: message.remoteJid || null,
     createdAt: now,
   });
 
