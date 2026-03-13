@@ -143,6 +143,7 @@ async function startServer() {
   app.use("/api", babyShowerPublicRouter);
 
   // Media Proxy (mídia do WhatsApp/Evolution)
+  // GET /api/media/:messageId - Serve mídia com suporte a R2 CDN, fallback Evolution API
   app.use("/api/media", mediaRouter);
 
   // Basic health check for load balancers and uptime monitoring
