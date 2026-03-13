@@ -175,13 +175,12 @@ async function startServer() {
         }
       }
 
-      // If it's a regular URL (not base64), try to fetch via Evolution API
+      // If it's a regular URL (not base64), fetch via Evolution API using getBase64FromMediaMessage
       console.log(
-        "[Media] file_url is not a data URL, trying Evolution API fallback:",
+        "[Media] file_url is not a data URL, using Evolution API getBase64FromMediaMessage:",
         fileUrl.substring(0, 50)
       );
 
-      // Try to fetch media via Evolution API
       try {
         const { getDb } = await import("../db");
         const { integrationSettings } = await import("../../drizzle/schema");
@@ -210,32 +209,81 @@ async function startServer() {
               const mediaId = mediaIdMatch ? mediaIdMatch[1] : null;
 
               if (mediaId) {
-                console.log(
-                  `[Media] Fetching media ${mediaId} from Evolution API`
+                // Get customer phone from conversation
+                const [convRows]: any = await pool.execute(
+                  `SELECT c.customer_phone 
+                   FROM conversations c 
+                   JOIN conversation_messages m ON c.id = m.conversation_id 
+                   WHERE m.id = ?`,
+                  [messageId]
                 );
 
-                // Try to get base64 from Evolution API
-                const mediaFetchUrl = `${apiUrl}/chat/fetchMedia/${mediaId}`;
-                const evoResponse = await fetch(mediaFetchUrl, {
-                  headers: {
-                    apikey: apiKey,
-                    "Content-Type": "application/json",
-                  },
-                  signal: AbortSignal.timeout(15000),
-                });
+                let remoteJid = null;
+                if (convRows && convRows.length > 0 && convRows[0].customer_phone) {
+                  let phone = convRows[0].customer_phone.replace(/\D/g, '');
+                  // Format: phone@s.whatsapp.net (without +)
+                  if (!phone.includes('@')) {
+                    remoteJid = phone + '@s.whatsapp.net';
+                  } else {
+                    remoteJid = phone;
+                  }
+                }
 
-                if (evoResponse.ok) {
-                  const evoData = await evoResponse.json();
-                  if (evoData?.base64) {
-                    console.log(
-                      "[Media] Got base64 from Evolution API, size:",
-                      evoData.base64.length
-                    );
-                    const mimeType = msg.file_type || "image/jpeg";
-                    const buffer = Buffer.from(evoData.base64, "base64");
+                if (!remoteJid) {
+                  console.warn("[Media] Could not determine remoteJid from conversation phone");
+                } else {
+                  // Call Evolution API getBase64FromMediaMessage with retry
+                  const url = `${apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
+                  let base64Data = null;
+                  let mimeTypeResult = null;
 
+                  for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                      console.log(`[Media] Attempt ${attempt}/3: Getting base64 from Evolution API for media ${mediaId}, remoteJid ${remoteJid}`);
+                      
+                      const response = await fetch(url, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          apikey: apiKey,
+                        },
+                        body: JSON.stringify({
+                          message: {
+                            key: {
+                              id: mediaId,
+                              remoteJid: remoteJid,
+                              fromMe: false,
+                            },
+                          },
+                          convertToMp4: false,
+                        }),
+                        signal: AbortSignal.timeout(20000),
+                      });
+
+                      if (response.ok) {
+                        const data = await response.json();
+                        if (data.base64) {
+                          base64Data = data.base64;
+                          mimeTypeResult = data.mimetype || msg.file_type || "application/octet-stream";
+                          console.log("[Media] Successfully retrieved base64, size:", base64Data.length);
+                          break;
+                        }
+                      } else {
+                        const errText = await response.text();
+                        console.warn("[Media] Evolution API attempt", attempt, "failed:", response.status, errText.substring(0, 200));
+                      }
+                    } catch (attemptErr) {
+                      console.warn("[Media] Attempt", attempt, "error:", attemptErr);
+                    }
+
+                    if (attempt < 3) {
+                      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    }
+                  }
+
+                  if (base64Data) {
+                    const dataUrl = `data:${mimeTypeResult};base64,${base64Data}`;
                     // Update database with base64 for future requests
-                    const dataUrl = `data:${mimeType};base64,${evoData.base64}`;
                     try {
                       const mysql2 = await import("mysql2/promise");
                       const pool2 = mysql2.createPool({
@@ -258,17 +306,20 @@ async function startServer() {
                       );
                     }
 
-                    res.setHeader("Content-Type", mimeType);
+                    const buffer = Buffer.from(base64Data, "base64");
+                    res.setHeader("Content-Type", mimeTypeResult);
                     res.setHeader("Content-Length", buffer.length);
                     res.setHeader("Cache-Control", "public, max-age=31536000");
+                    if (mimeTypeResult === "application/pdf") {
+                      res.setHeader("Content-Disposition", "inline");
+                    }
                     return res.send(buffer);
+                  } else {
+                    console.warn("[Media] All attempts to get base64 from Evolution API failed, returning 404");
                   }
-                } else {
-                  console.warn(
-                    "[Media] Evolution API fetch failed:",
-                    evoResponse.status
-                  );
                 }
+              } else {
+                console.warn("[Media] Could not extract mediaId from URL:", fileUrl.substring(0, 100));
               }
             }
           }
