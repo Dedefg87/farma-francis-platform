@@ -9,43 +9,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-function getR2Url(fileUrl: string | null | undefined): string {
-  if (!fileUrl) return "";
-  // If it's already a full URL (http/https), return as-is
-  if (fileUrl.startsWith("http")) {
-    return fileUrl;
-  }
-  // If it's a data URL, return as-is
-  if (fileUrl.startsWith("data:")) {
-    return fileUrl;
-  }
-  // If it's a relative path, prepend R2 URL
-  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-  // Ensure single slash between base and path
-  const cleanBase = r2Base.replace(/\/$/, "");
-  const cleanPath = fileUrl.replace(/^\//, "");
-  return `${cleanBase}/${cleanPath}`;
-}
-
 function getImageSrc(
   url: string | null | undefined,
   messageId?: number
 ): string {
   if (!url) return "";
-  // If it's a data URL, return it directly
+  
+  // Se já for data URL, retornar direto
   if (url.startsWith("data:")) {
     return url;
   }
-  // If it's a WhatsApp URL (temporary), use our media endpoint
-  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
-    return `/api/media/${messageId}`;
+  
+  // Se for URL absoluta (http/https), usar como está
+  if (url.startsWith("http")) {
+    return url;
   }
-  // If it's a relative path (from R2), construct full URL
-  if (!url.startsWith("http")) {
-    return getR2Url(url);
-  }
-  // Already a full URL
-  return url;
+  
+  // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
+  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  const cleanUrl = url.replace(/^\//, "");
+  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
 }
 
 function handleImageClick(url: string | null | undefined, messageId?: number) {

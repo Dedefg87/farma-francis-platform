@@ -945,6 +945,7 @@ export const conversationMessages = mysqlTable("conversation_messages", {
   conversationId: int("conversation_id")
     .references(() => conversations.id)
     .notNull(),
+  externalId: varchar("external_id", { length: 255 }), // Evolution API message ID for idempotency
   senderId: int("sender_id").references(() => users.id), // ID do agente (null se for cliente)
   senderType: mysqlEnum("sender_type", ["agent", "customer"]).notNull(),
   content: text("content").notNull(),

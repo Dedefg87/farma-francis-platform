@@ -14,10 +14,7 @@ import {
   ingestInboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
-import {
-  downloadAndSaveMedia,
-  getMediaBase64FromEvolution,
-} from "./media-download";
+
 import { enqueueMobileSyncJob } from "./queue/mobile-sync";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
@@ -85,6 +82,44 @@ function normalizeInboundNumber(value: string | undefined | null) {
   // Usar normalização brasileira
   const normalized = normalizeBrazilianNumber(stripped);
   return normalized.startsWith("+") ? normalized : `+${normalized}`;
+}
+
+/**
+ * Limpa URL do R2 para obter apenas o caminho relativo dentro do bucket.
+ * Remove query string, nome do bucket e deixa o path (ex: evolution-api/.../file.jpg)
+ */
+function cleanR2Url(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  // Verificar se é URL do R2 (r2.cloudflarestorage.com ou .r2.dev)
+  const isR2 =
+    url.includes(".r2.") ||
+    url.includes("r2.cloudflarestorage.com") ||
+    url.includes(".r2.dev");
+
+  if (!isR2) {
+    // Não é URL do R2, ignorar (não salvar)
+    console.log("[Webhooks] Non-R2 URL, skipping:", url.substring(0, 80));
+    return null;
+  }
+
+  try {
+    const parsed = new URL(url);
+    // pathname exemplo: /bucket-name/evolution-api/xxxx/file.jpg
+    const pathname = parsed.pathname;
+    // Separar partes e remover o primeiro segmento (bucket name)
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length < 2) {
+      console.log("[Webhooks] R2 URL has no bucket+path:", url);
+      return null;
+    }
+    const relativePath = parts.slice(1).join("/");
+    console.log("[Webhooks] Cleaned R2 path:", relativePath);
+    return relativePath;
+  } catch (e) {
+    console.error("[Webhooks] Failed to parse R2 URL:", url, e);
+    return null;
+  }
 }
 
 /**
@@ -431,6 +466,14 @@ router.post("/evolution/:event", async (req: Request, res: Response) => {
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
+    const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+    console.log("[Evolution Handler] 🎯 Received webhook:", {
+      method: req.method,
+      path: req.path,
+      url: fullUrl,
+      query: req.query,
+    });
+
     // RESPOSTA IMEDIATA - não bloquear o Evolution
     res.status(200).send("EVENT_RECEIVED");
 
@@ -451,7 +494,15 @@ async function processEvolutionWebhookAsync(req: Request) {
     const body = req.body;
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
+    console.log("1. [Evolution Webhook] 📥 Webhook recebido:", {
+      url: fullUrl,
+      bodyKeys: Object.keys(body || {}),
+      hasData: !!body?.data,
+      query: req.query,
+    });
+
     if (!body || Object.keys(body).length === 0) {
+      console.log("[Evolution Webhook] Empty body, skipping");
       return;
     }
 
@@ -471,9 +522,40 @@ async function processEvolutionWebhookAsync(req: Request) {
       }
     }
 
+    if (!eventName) {
+      console.log("[Evolution Webhook] Event name not detected, ignoring");
+      return;
+    }
+
+    console.log("[Evolution Webhook] 📥 Received event:", {
+      event: eventName,
+      hasData: !!body?.data,
+      bodyKeys: Object.keys(body),
+    });
+
+    console.log("2. [Evolution Webhook] ✅ Evento detectado:", eventName);
+
+    // ==========================================
+    // 🎯 FILTRAGEM CRÍTICA - PROCESSAR APENAS MENSAGENS
+    // ==========================================
+    const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
+
+    // Aceitar variações de eventos de mensagem
+    const allowedEvents = ["messages_upsert"];
+    
+    // Ignorar TUDO que não for mensagem nova
+    if (!allowedEvents.includes(normalizedEvent)) {
+      console.log(`[Evolution Webhook] ⏭️ Ignoring event type: ${eventName} (normalized: ${normalizedEvent})`);
+      return;
+    }
+
+    console.log("[Evolution Webhook] ✅ Event approved for processing");
+    console.log("3. [Evolution Webhook] ✅ Passou no filtro de eventos permitidos");
+
+    // A partir daqui, processamos APENAS mensagens.upsert
     const db = await getDb();
     if (!db) {
-      console.error("[Evolution Webhook] Database not available");
+      console.error("[Evolution Webhook] ❌ Database not available");
       return;
     }
 
@@ -496,14 +578,22 @@ async function processEvolutionWebhookAsync(req: Request) {
       const cleanExpected = expectedApiKey?.replace("@", "") || "";
 
       if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected && isProduction) {
+        console.log("[Evolution Webhook] 🔐 API key mismatch, ignoring");
+        console.log("  Expected:", cleanExpected.substring(0, 5) + "...");
+        console.log("  Received:", cleanApikey.substring(0, 5) + "...");
         return;
       }
+    } else {
+      console.warn("[Evolution Webhook] ⚠️ No Evolution API config found in database");
     }
 
-    // Processar evento
+    console.log("[Evolution Webhook] 🚀 Starting message processing...");
+    // Processar evento de mensagem
     await processEvolutionWebhook({ ...body, event: eventName });
+    console.log("[Evolution Webhook] ✅ Message processing completed");
   } catch (error) {
-    console.error("[Evolution Webhook] Error:", error);
+    console.error("[Evolution Webhook] 💥 Unhandled error:", error);
+    throw error;
   }
 }
 
@@ -554,6 +644,8 @@ async function processWhatsAppWebhook(body: any) {
           let caption = null;
           let latitude = null;
           let longitude = null;
+          let fileName = null;
+          let fileSize: number | null = null;
 
           switch (type) {
             case "text":
@@ -563,20 +655,28 @@ async function processWhatsAppWebhook(body: any) {
               mediaId = message.image?.id || null;
               caption = message.image?.caption || null;
               mimeType = message.image?.mime_type || null;
+              fileName = message.image?.file_name || null;
+              fileSize = message.image?.file_size ? parseInt(message.image.file_size) : null;
               break;
             case "audio":
               mediaId = message.audio?.id || null;
               mimeType = message.audio?.mime_type || null;
+              fileName = message.audio?.file_name || null;
+              fileSize = message.audio?.file_size ? parseInt(message.audio.file_size) : null;
               break;
             case "video":
               mediaId = message.video?.id || null;
               caption = message.video?.caption || null;
               mimeType = message.video?.mime_type || null;
+              fileName = message.video?.file_name || null;
+              fileSize = message.video?.file_size ? parseInt(message.video.file_size) : null;
               break;
             case "document":
               mediaId = message.document?.id || null;
               caption = message.document?.caption || null;
               mimeType = message.document?.mime_type || null;
+              fileName = message.document?.file_name || null;
+              fileSize = message.document?.file_size ? parseInt(message.document.file_size) : null;
               break;
             case "location":
               latitude = message.location?.latitude || null;
@@ -585,6 +685,8 @@ async function processWhatsAppWebhook(body: any) {
             case "sticker":
               mediaId = message.sticker?.id || null;
               mimeType = message.sticker?.mime_type || null;
+              fileName = message.sticker?.file_name || null;
+              fileSize = message.sticker?.file_size ? parseInt(message.sticker.file_size) : null;
               break;
             case "reaction":
               messageText = message.reaction?.emoji || null;
@@ -667,6 +769,9 @@ async function processWhatsAppWebhook(body: any) {
               caption,
               mediaUrl,
               mimeType,
+              fileName,
+              fileSize,
+              externalId: messageId, // Add this to trigger S3 download
               createdAt: new Date(),
             });
             console.log(
@@ -786,6 +891,7 @@ async function processInstagramWebhook(body: any) {
             caption: null,
             mediaUrl,
             mimeType,
+            externalId: messageId, // Add this to trigger S3 download
             createdAt: new Date(),
           });
           console.log(
@@ -852,7 +958,40 @@ function parseEvolutionMessageContent(message: any) {
       caption: null,
       mediaUrl: null,
       mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
+
+  // PRIORITÁRIO: Evolution com R2 envia mediaUrl direto na mensagem (nível superior)
+  if (message.mediaUrl) {
+    // Tenta inferir tipo a partir do mimeType ou extensão do nome
+    let type: string = "file";
+    const mimeType =
+      message.mimetype || message.mimeType || message.fileMimeType || null;
+    if (mimeType) {
+      if (mimeType.startsWith("image/")) type = "image";
+      else if (mimeType.startsWith("video/")) type = "video";
+      else if (mimeType.startsWith("audio/")) type = "audio";
+      else if (mimeType.includes("pdf")) type = "document";
+    } else if (message.fileName) {
+      const ext = message.fileName.split(".").pop()?.toLowerCase();
+      if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext || ""))
+        type = "image";
+      else if (["mp4", "webm", "mov"].includes(ext || "")) type = "video";
+      else if (["mp3", "ogg", "wav"].includes(ext || "")) type = "audio";
+      else if (ext === "pdf") type = "document";
+    }
+
+    return {
+      type,
+      text: null,
+      caption: message.caption || null,
+      mediaUrl: cleanR2Url(message.mediaUrl),
+      mimeType,
+      fileName: message.fileName || null,
+      fileSize: message.fileSize || null,
+    };
+  }
 
   if (message.conversation) {
     return {
@@ -861,6 +1000,8 @@ function parseEvolutionMessageContent(message: any) {
       caption: null,
       mediaUrl: null,
       mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
   }
 
@@ -871,6 +1012,8 @@ function parseEvolutionMessageContent(message: any) {
       caption: null,
       mediaUrl: null,
       mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
   }
 
@@ -886,10 +1029,13 @@ function parseEvolutionMessageContent(message: any) {
       type: "image",
       text: null,
       caption: message.imageMessage.caption || null,
-      mediaUrl:
-        message.imageMessage.url || message.imageMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.imageMessage.url || message.imageMessage.mediaUrl || null
+      ),
       mimeType:
         message.imageMessage.mimetype || message.imageMessage.mimeType || null,
+      fileName: message.imageMessage.fileName || null,
+      fileSize: message.imageMessage.fileSize || null,
       mediaKey: message.imageMessage.mediaKey || null,
       directPath: message.imageMessage.directPath || null,
       base64: message.imageMessage.base64 || null,
@@ -901,10 +1047,13 @@ function parseEvolutionMessageContent(message: any) {
       type: "video",
       text: null,
       caption: message.videoMessage.caption || null,
-      mediaUrl:
-        message.videoMessage.url || message.videoMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.videoMessage.url || message.videoMessage.mediaUrl || null
+      ),
       mimeType:
         message.videoMessage.mimetype || message.videoMessage.mimeType || null,
+      fileName: message.videoMessage.fileName || null,
+      fileSize: message.videoMessage.fileSize || null,
       mediaKey: message.videoMessage.mediaKey || null,
       directPath: message.videoMessage.directPath || null,
     };
@@ -915,12 +1064,15 @@ function parseEvolutionMessageContent(message: any) {
       type: "document",
       text: null,
       caption: message.documentMessage.caption || null,
-      mediaUrl:
-        message.documentMessage.url || message.documentMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.documentMessage.url || message.documentMessage.mediaUrl || null
+      ),
       mimeType:
         message.documentMessage.mimetype ||
         message.documentMessage.mimeType ||
         null,
+      fileName: message.documentMessage.fileName || null,
+      fileSize: message.documentMessage.fileSize || null,
       mediaKey: message.documentMessage.mediaKey || null,
       directPath: message.documentMessage.directPath || null,
     };
@@ -931,12 +1083,15 @@ function parseEvolutionMessageContent(message: any) {
       type: "audio",
       text: null,
       caption: null,
-      mediaUrl:
-        message.audioMessage.url || message.audioMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.audioMessage.url || message.audioMessage.mediaUrl || null
+      ),
       mimeType:
         message.audioMessage.mimetype ||
         message.audioMessage.mimeType ||
         "audio/ogg",
+      fileName: message.audioMessage.fileName || null,
+      fileSize: message.audioMessage.fileSize || null,
       mediaKey: message.audioMessage.mediaKey || null,
       directPath: message.audioMessage.directPath || null,
     };
@@ -948,12 +1103,15 @@ function parseEvolutionMessageContent(message: any) {
       type: "sticker",
       text: null,
       caption: null,
-      mediaUrl:
-        message.stickerMessage.url || message.stickerMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.stickerMessage.url || message.stickerMessage.mediaUrl || null
+      ),
       mimeType:
         message.stickerMessage.mimetype ||
         message.stickerMessage.mimeType ||
         "image/webp",
+      fileName: message.stickerMessage.fileName || null,
+      fileSize: message.stickerMessage.fileSize || null,
     };
   }
 
@@ -963,11 +1121,14 @@ function parseEvolutionMessageContent(message: any) {
     caption: null,
     mediaUrl: null,
     mimeType: null,
+    fileName: null,
+    fileSize: null,
   };
 }
 
 async function processEvolutionWebhook(body: any) {
   try {
+    console.log("4. [Evolution] 🚀 Iniciando processEvolutionWebhook");
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
@@ -1029,11 +1190,10 @@ async function processEvolutionWebhook(body: any) {
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
 
-        // Debug: Log do parsed
-        console.log("[Evolution Webhook] Parsed message:", { messageId, messageType, messageText: messageText?.substring(0, 50), mediaUrl: mediaUrl?.substring(0, 50) });
-
         // Detectar mensagens enviadas pelo celular (fromMe === true)
         const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
+
+        console.log("5. [Evolution] fromMe check:", { isSentByMe, fromMe, fromNumber, messageType });
 
         if (!isSentByMe) {
           console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
@@ -1060,49 +1220,77 @@ async function processEvolutionWebhook(body: any) {
           return;
         }
 
-        // Verificar duplicata
+        // ==============================================
+        // 🎯 FILTRO DE TIPO - Processar APENAS mensagens notify
+        // ==============================================
+        // Evolution pode enviar tipos: "notify" (mensagem nova), "append" (mídia de uma mensagem existente), "ephemeral" (temporária)
+        // Só queremos processar mensagens novas (notify)
+        const messageContext = data?.messageContext || data?.context || {};
+        const messageStatus = messageContext?.status || data?.status || "notify";
+
+        console.log("[Evolution Webhook] 📊 Message status check:", {
+          messageStatus,
+          messageType,
+          fromNumber,
+          fromMe: isSentByMe,
+        });
+
+        console.log("6. [Evolution] 📊 Message status check:", { messageStatus, messageType, fromNumber });
+
+        // Removido filtro por messageStatus - processar todas as mensagens
+        console.log("[Evolution Webhook] ✅ Message approved, proceeding to ingest");
+        console.log("7. [Evolution] ✅ Processando mensagem (sem filtro de status)");
+
+        // ==============================================
+        // 🎯 IDEMPOTÊNCIA - UPSERT com ID único
+        // ==============================================
+        // Verificar se já existe (mais seguro que simples insert)
         const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
-        if (existing) return;
 
-        // Se não tem conteúdo real, ignorar
-        const hasRealContent =
-          Boolean(messageText && String(messageText).trim()) ||
-          Boolean(caption && String(caption).trim()) ||
-          Boolean(mediaUrl && String(mediaUrl).trim());
-        if (!hasRealContent && messageType === "unknown") return;
+        // Dados comuns
+        const messageValues = {
+          provider: "whatsapp" as const,
+          externalId: messageId,
+          fromNumber,
+          fromName: pushName || null,
+          messageType: messageType as any,
+          messageText,
+          mediaUrl: mediaUrl || null,
+          mimeType: mimeType || null,
+          caption,
+          latitude: null,
+          longitude: null,
+          timestamp: messageTimestamp,
+          rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!mediaUrl }),
+          processed: 0,
+          customerId: existing?.customerId || null, // Manter customerId se já existir
+        };
 
-        // Mídia: salvar apenas a URL (não baixar para base64 para economizar espaço)
-        // URLs do WhatsApp são temporárias, mas o frontend pode buscar de lá diretamente
-        // Se precisar persistir, usar storage externo no futuro
-        const permanentMediaUrl = mediaUrl; // Use original URL directly (no download)
-        const finalMimeType = mimeType;
-
-        // Salvar mensagem recebida no banco
-        try {
-          await db.insert(receivedMessages).values({
-            provider: "whatsapp",
-            externalId: messageId,
-            fromNumber,
-            fromName: pushName || null,
-            messageType: messageType as any,
-            messageText,
-            mediaUrl: permanentMediaUrl || mediaUrl,
-            mimeType: finalMimeType || mimeType,
-            caption,
-            timestamp: messageTimestamp,
-            rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!permanentMediaUrl }),
-            processed: 0,
-          });
-          console.log("[Webhook] Saved received message:", messageId, "type:", messageType, "text_length:", messageText?.length);
-        } catch (insertErr: any) {
-          console.error("[Webhook] FAILED to insert received message:", messageId, "Error:", insertErr.message, "SQLState:", insertErr.sqlState, "Code:", insertErr.errno);
-          throw insertErr; // Re-throw to fail the webhook (so retry happens)
+        if (existing) {
+          // Atualizar apenas campos que podem mudar (nome, foto, etc.)
+          await db
+            .update(receivedMessages)
+            .set({
+              fromName: pushName || null,
+              messageText: messageText || existing.messageText,
+              mediaUrl: mediaUrl || existing.mediaUrl,
+              mimeType: mimeType || existing.mimeType,
+              caption: caption || existing.caption,
+              updatedAt: new Date(),
+            })
+            .where(eq(receivedMessages.id, existing.id));
+          console.log(`[Evolution Webhook] Updated existing message ${messageId}`);
+        } else {
+          // Inserir novo
+          await db.insert(receivedMessages).values(messageValues);
+          console.log(`[Evolution Webhook] Inserted new message ${messageId}`);
         }
 
         // Check survey response
         const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());
 
         if (!isPossibleSurveyResponse) {
+          console.log("8. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType });
           await ingestInboundConversationMessage({
             provider: "whatsapp",
             fromNumber,
@@ -1110,12 +1298,19 @@ async function processEvolutionWebhook(body: any) {
             messageType,
             messageText,
             caption,
-            mediaUrl: permanentMediaUrl || mediaUrl,
+            mediaUrl: mediaUrl || null,
             mimeType,
+            fileName: parsed.fileName,
+            fileSize: parsed.fileSize,
+            externalId: messageId,
           });
+          console.log("9. [Evolution] ✅ ingestInboundConversationMessage concluído");
+        } else {
+          console.log("[Evolution] Pulando ingest (survey response)");
         }
       } catch (msgError) {
-        console.error("[Evolution Webhook] Error:", msgError);
+        console.error("[Evolution Webhook] ❌ Error in message processing:", msgError);
+        console.error("[Evolution Webhook] Stack:", msgError instanceof Error ? msgError.stack : "N/A");
       }
       return;
     }

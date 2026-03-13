@@ -79,6 +79,26 @@ async function processMessage(message: any) {
     message.fromName
   );
 
+  // Ingest message into conversation_messages (so it appears in the chat)
+  try {
+    const { ingestInboundConversationMessage } = await import("./db-messages");
+    await ingestInboundConversationMessage({
+      provider: message.provider,
+      fromNumber: message.fromNumber,
+      fromName: message.fromName,
+      messageType: message.messageType,
+      messageText: message.messageText,
+      caption: message.caption,
+      mediaUrl: message.mediaUrl,
+      mimeType: message.mimeType,
+      createdAt: message.timestamp ? new Date(message.timestamp * 1000) : new Date(),
+    });
+    console.log(`[Flow Engine] Ingested message ${message.id} into conversation_messages`);
+  } catch (ingestErr) {
+    console.error(`[Flow Engine] Failed to ingest message:`, ingestErr);
+    // Continue anyway - will still mark as processed
+  }
+
   // PRIORITY 1: Check visual flows (N8N-style flows) first
   const visualFlowsList = await db
     .select()

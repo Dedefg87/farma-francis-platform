@@ -13,103 +13,7 @@ import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
 
-/**
- * Download media from URL and convert to base64 Data URL
- * This ensures the file persists even after the temporary WhatsApp/Meta URL expires
- */
-/**
- * Download media from URL and convert to base64 Data URL
- * Enhanced version with proper headers and redirect handling
- */
-export async function downloadMediaAsBase64(
-  mediaUrl: string,
-  mimeType: string | null
-): Promise<string | null> {
-  try {
-    // If already data URL, return as-is
-    if (mediaUrl.startsWith("data:")) {
-      return mediaUrl;
-    }
 
-    // WhatsApp URLs expire quickly - download immediately
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const response = await fetch(mediaUrl, {
-          method: "GET",
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            Accept: "*/*",
-          },
-          redirect: "follow",
-          signal: AbortSignal.timeout(5000),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const arrayBuffer = await response.arrayBuffer();
-        if (arrayBuffer.byteLength === 0) {
-          throw new Error("Empty response");
-        }
-
-        const buffer = Buffer.from(arrayBuffer);
-        const base64 = buffer.toString("base64");
-
-        // Determine content type
-        let contentType = mimeType || "application/octet-stream";
-        const headerCt = response.headers.get("content-type");
-        if (headerCt) {
-          contentType = headerCt.split(";")[0];
-        }
-        if (contentType === "application/octet-stream") {
-          const ext = mediaUrl.split("?")[0].split(".").pop()?.toLowerCase();
-          const mimeMap: Record<string, string> = {
-            jpg: "image/jpeg",
-            jpeg: "image/jpeg",
-            png: "image/png",
-            gif: "image/gif",
-            webp: "image/webp",
-            pdf: "application/pdf",
-            mp4: "video/mp4",
-            mp3: "audio/mpeg",
-            ogg: "audio/ogg",
-            webm: "video/webm",
-          };
-          if (ext && mimeMap[ext]) {
-            contentType = mimeMap[ext];
-          }
-        }
-
-        // Detect MIME type from magic bytes
-        if (buffer.length >= 4) {
-          const isJpeg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-          const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
-          const isGif = buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38;
-          const isPdf = buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
-          const isWebp = buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && 
-                          buffer.length >= 12 && buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50;
-
-          if (isJpeg) contentType = "image/jpeg";
-          else if (isPng) contentType = "image/png";
-          else if (isGif) contentType = "image/gif";
-          else if (isPdf) contentType = "application/pdf";
-          else if (isWebp) contentType = "image/webp";
-        }
-
-        return `data:${contentType};base64,${base64}`;
-      } catch (attemptError) {
-        if (attempt < 2) {
-          await new Promise(r => setTimeout(r, 500));
-        }
-      }
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
-}
 
 // Cache para evitar queries repetitivas de agent assignment
 const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
@@ -446,6 +350,9 @@ function buildInboundContent(message: {
   }
 }
 
+// ==============================================
+// Ingest inbound conversation message (WhatsApp/Instagram)
+// ==============================================
 export async function ingestInboundConversationMessage(message: {
   provider: "whatsapp" | "instagram";
   fromNumber: string;
@@ -455,183 +362,192 @@ export async function ingestInboundConversationMessage(message: {
   caption?: string | null;
   mediaUrl?: string | null;
   mimeType?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  externalId?: string | null; // Evolution API message ID
   createdAt?: Date;
 }) {
+  console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
+  
+  const db = await getDb();
+  if (!db) {
+    console.error("[ingestInbound] ❌ Database not available!");
+    return null;
+  }
+
   try {
-    const db = await getDb();
-    if (!db) {
-      console.error("[ingestInbound] Database not available!");
-      return null;
+    // 0. IDEMPOTÊNCIA: Verificar se já existe mensagem com este externalId
+    if (message.externalId) {
+      console.log("[Ingest] Step 0: Checking idempotency for externalId:", message.externalId);
+      const existingMsg = await db
+        .select()
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.externalId, message.externalId),
+            eq(conversationMessages.provider, message.provider)
+          )
+        )
+        .limit(1);
+
+      if (existingMsg.length > 0) {
+        console.log("[Ingest] ⏭️ Duplicate message detected, skipping. externalId:", message.externalId);
+        return { conversationId: existingMsg[0].conversationId, customerId: null };
+      }
+      console.log("[Ingest] ✅ New message, proceeding");
     }
 
-    // Process message first - don't block on profile picture fetch
+    // 1. Find or create customer
+    console.log("[Ingest] Step 1: findOrCreateCustomerByPhone");
     const customer = await findOrCreateCustomerByPhone(
       message.fromNumber,
       message.fromName || undefined
     );
-  
-  // Fetch profile picture in background (non-blocking)
-  if (message.provider === "whatsapp" && !customer?.photoUrl) {
-    setImmediate(async () => {
-      try {
-        const profile = await fetchEvolutionProfile(message.fromNumber);
-        if (profile?.profilePicture) {
-          const db = await getDb();
-          if (db && customer?.id) {
-            await db
-              .update(customers)
-              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
-              .where(eq(customers.id, customer.id));
+    console.log("[Ingest] Customer:", { id: customer.id, name: customer.name, phone: customer.phone });
+
+    // 2. Fetch profile picture in background (non-blocking)
+    if (message.provider === "whatsapp" && !customer?.photoUrl) {
+      setImmediate(async () => {
+        try {
+          const profile = await fetchEvolutionProfile(message.fromNumber);
+          if (profile?.profilePicture) {
+            const db = await getDb();
+            if (db && customer?.id) {
+              await db
+                .update(customers)
+                .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
+                .where(eq(customers.id, customer.id));
+            }
           }
+        } catch (err) {
+          // Silently fail - photo is not critical
         }
-      } catch (err) {
-        // Silently fail - photo is not critical
-      }
-    });
-  }
-  
-  const now = message.createdAt ?? new Date();
+      });
+    }
 
-  // Equal-load distribution: pick the least loaded online agent
-  let picked = await pickLeastLoadedOnlineAgent({
-    provider: message.provider,
-  });
+    const now = message.createdAt ?? new Date();
 
-  // NO FALLBACK: If no agent found, leave conversation in queue (open/unassigned)
-  const assignedUserId =
-    picked && Number.isFinite(picked.userId) && picked.userId > 0
+    // 3. Pick least loaded online agent
+    console.log("[Ingest] Step 3: pickLeastLoadedOnlineAgent");
+    let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
+    const assignedUserId = picked && Number.isFinite(picked.userId) && picked.userId > 0
       ? picked.userId
       : null;
+    console.log("[Ingest] Agent pick result:", { picked: picked?.userId, assignedUserId });
 
-  const [defaultQueue] = await db
-    .select()
-    .from(queues)
-    .where(eq(queues.status, "active"))
-    .orderBy(desc(queues.priority))
-    .limit(1);
+    // 4. Get default queue
+    console.log("[Ingest] Step 4: Get default queue");
+    const [defaultQueue] = await db
+      .select()
+      .from(queues)
+      .where(eq(queues.status, "active"))
+      .orderBy(desc(queues.priority))
+      .limit(1);
+    console.log("[Ingest] Default queue:", defaultQueue?.id || "none");
 
-  const [existingConversation] = await db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.customerId, customer.id),
-        eq(conversations.channel, message.provider),
-        or(
-          eq(conversations.status, "open"),
-          eq(conversations.status, "assigned")
-        )
-      )
-    )
-    .orderBy(desc(conversations.lastMessageAt))
-    .limit(1);
-
-  let conversationId = existingConversation?.id;
-
-  if (!conversationId) {
-    // Create new conversation
-    await db.insert(conversations).values({
-      customerId: customer.id,
-      customerName: customer.name,
-      customerPhone: customer.phone,
-      channel: message.provider,
-      status: assignedUserId ? "assigned" : "open",
-      assignedTo: assignedUserId,
-      queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
-      openedAt: now,
-      lastMessageAt: now,
-      unreadCount: 1,
-    });
-
-    const [newConversation] = await db
+    // 5. Find existing conversation (open or assigned)
+    console.log("[Ingest] Step 5: Find existing conversation");
+    const [existingConversation] = await db
       .select()
       .from(conversations)
-      .where(eq(conversations.customerId, customer.id))
-      .orderBy(desc(conversations.id))
+      .where(
+        and(
+          eq(conversations.customerId, customer.id),
+          eq(conversations.channel, message.provider),
+          or(
+            eq(conversations.status, "open"),
+            eq(conversations.status, "assigned")
+          )
+        )
+      )
+      .orderBy(desc(conversations.lastMessageAt))
       .limit(1);
 
-    conversationId = newConversation?.id;
-  } else {
-    // Update existing conversation
-    const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
-    await db
-      .update(conversations)
-      .set({
-        lastMessageAt: now,
-        unreadCount: sql<number>`unread_count + 1`,
-        ...(shouldAssign
-          ? {
-              assignedTo: assignedUserId,
-              status: "assigned",
-              queueId: null,
-            }
-          : {}),
-      })
-      .where(eq(conversations.id, conversationId));
-  }
+    let conversationId = existingConversation?.id;
+    console.log("[Ingest] Existing conversation:", conversationId || "none");
 
-  // Economia de espaço: salvar apenas URL original (não baixar como base64)
-  // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  const fileUrlToSave = message.mediaUrl || null;
-  
-  await db.insert(conversationMessages).values({
-    conversationId,
-    senderId: null,
-    senderType: "customer",
-    content: buildInboundContent(message),
-    fileUrl: fileUrlToSave,
-    fileName: null,
-    fileType: message.mimeType || null,
-    fileSize: null,
-    createdAt: now,
-  });
-
-  const [conversation] = await db
-    .select()
-    .from(conversations)
-    .where(eq(conversations.id, conversationId))
-    .limit(1);
-
-  // Notify connected agent via SSE
-  if (conversation?.assignedTo) {
-    sseManager.emitToUser(String(conversation.assignedTo), {
-      type: EVENTS.MESSAGE_NEW,
-      data: {
-        conversationId,
+    // 6. Create or update conversation
+    if (!conversationId) {
+      console.log("[Ingest] Step 6a: Creating new conversation");
+      await db.insert(conversations).values({
+        customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
-        content: buildInboundContent(message),
         channel: message.provider,
-      },
-      timestamp: now.getTime(),
-    });
-  }
+        status: assignedUserId ? "assigned" : "open",
+        assignedTo: assignedUserId,
+        queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
+        openedAt: now,
+        lastMessageAt: now,
+        unreadCount: 1,
+      });
 
-  return { conversationId, customerId: customer.id };
+      const [newConversation] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.customerId, customer.id))
+        .orderBy(desc(conversations.id))
+        .limit(1);
+
+      conversationId = newConversation?.id;
+      if (!conversationId) {
+        throw new Error("Failed to retrieve new conversation ID after insert");
+      }
+      console.log("[Ingest] New conversation created:", conversationId);
+    } else {
+      console.log("[Ingest] Step 6b: Updating existing conversation");
+      const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
+      await db
+        .update(conversations)
+        .set({
+          lastMessageAt: now,
+          unreadCount: sql<number>`unread_count + 1`,
+          ...(shouldAssign
+            ? {
+                assignedTo: assignedUserId,
+                status: "assigned",
+                queueId: null,
+              }
+            : {}),
+        })
+        .where(eq(conversations.id, conversationId));
+      console.log("[Ingest] Conversation updated:", conversationId, shouldAssign ? "(assigned)" : "");
+    }
+
+    // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
+    // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
+    const fileUrlToSave = message.mediaUrl || null;
+    console.log("[Ingest] Step 7: fileUrl to save:", fileUrlToSave ? "present" : "null");
+
+    // 8. Insert conversation message
+    console.log("[Ingest] Step 8: Inserting conversation message");
+    const insertResult = await db.insert(conversationMessages).values({
+      conversationId,
+      externalId: message.externalId || null,
+      senderId: null,
+      senderType: "customer",
+      content: buildInboundContent(message),
+      fileUrl: fileUrlToSave,
+      fileName: message.fileName || null,
+      fileType: message.mimeType || null,
+      fileSize: message.fileSize || null,
+      createdAt: now,
+    });
+
+    const messageDbId = insertResult.insertId as number;
+    console.log("[Ingest] ✅ Message inserted into conversationMessages:", { conversationId, messageDbId, externalId: message.externalId });
+
+    return { conversationId, customerId: customer.id };
   } catch (error) {
-    console.error("[ingestInbound] ERROR:", error);
-    return { conversationId: null, customerId: null };
+    console.error("[ingestInbound] ❌ Error during ingestion:", error);
+    console.error("[ingestInbound] Stack:", error instanceof Error ? error.stack : "N/A");
+    throw error; // rethrow para ser capturado pelo webhook
   }
 }
 
-/**
- * Get statistics about received messages
- */
-export async function getMessageStatistics(filters?: {
-  provider?: "whatsapp" | "instagram";
-  startDate?: Date;
-  endDate?: Date;
+export async function listReceivedMessages(filters?: {
+  provider?: string;
 }) {
-  const db = await getDb();
-  if (!db)
-    return {
-      total: 0,
-      processed: 0,
-      pending: 0,
-      byType: {},
-      byProvider: {},
-    };
-
   const conditions = [];
   if (filters?.provider) {
     conditions.push(eq(receivedMessages.provider, filters.provider));

@@ -13,6 +13,7 @@ import {
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _dbHealthCheck: number = 0; // timestamp do último health check bem-sucedido
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
@@ -73,15 +74,59 @@ export async function upsertUser(userData: {
 }
 
 export async function getDb() {
+  // Se temos um DB cacheado, verificar se ainda está saudável (health check a cada 30s)
+  if (_db && Date.now() - _dbHealthCheck < 30000) {
+    try {
+      // Teste rápido: obter contador de conexões
+      const session = (_db as any).session;
+      if (session && session.client) {
+        await session.client.query("SELECT 1");
+        //console.log("[Database] Health check OK (cached)");
+        return _db;
+      }
+    } catch (e) {
+      console.log("[Database] Health check failed, recreating pool...", e);
+      _db = null; // força recriação
+    }
+  }
+
+  // Se não temos DB cacheado ou health check falhou, criar novo
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
-      console.log("[Database] Connected successfully");
+      const db = drizzle(process.env.DATABASE_URL, {
+        connection: {
+          waitForConnections: true,
+          connectionLimit: 50,
+          queueLimit: 0,
+          connectTimeout: 20000,
+          acquireTimeout: 20000,
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 0,
+        },
+      });
+      _db = db;
+      _dbHealthCheck = Date.now();
+      console.log("[Database] New connection pool created (50 connections)");
     } catch (error) {
       console.error("[Database] Failed to connect:", error);
       _db = null;
     }
   }
+  
+  // Se ainda não temos DB, tentar um último health check
+  if (_db) {
+    try {
+      const session = (_db as any).session;
+      if (session && session.client) {
+        await session.client.query("SELECT 1");
+        _dbHealthCheck = Date.now();
+      }
+    } catch (e) {
+      console.error("[Database] Final health check failed:", e);
+      _db = null;
+    }
+  }
+  
   return _db;
 }
 

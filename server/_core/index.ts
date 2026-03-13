@@ -11,6 +11,7 @@ import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
+import mediaRouter from "../routers-media";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
@@ -25,7 +26,7 @@ import { runBabyShowerMigration } from "../baby-shower-migration";
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
   try {
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) {
       console.log("[Migration] DB not ready, skipping");
@@ -48,17 +49,25 @@ async function runMediaColumnsMigration() {
 
     // Indexes (ignore if exists)
     try {
-      await db.execute("CREATE INDEX idx_conversation_messages_external_id ON conversation_messages(external_id)");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id)");
       console.log("[Migration] Created index idx_conversation_messages_external_id");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Index external_id error:", e.message);
     }
 
     try {
-      await db.execute("CREATE INDEX idx_conversation_messages_remote_jid ON conversation_messages(remote_jid)");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_remote_jid ON conversation_messages(remote_jid)");
       console.log("[Migration] Created index idx_conversation_messages_remote_jid");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Index remote_jid error:", e.message);
+    }
+
+    // Unique constraint to prevent duplicate messages (provider + external_id)
+    try {
+      await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_messages_provider_external ON conversation_messages(provider, external_id)");
+      console.log("[Migration] Created unique index uq_conversation_messages_provider_external");
+    } catch (e: any) {
+      if (!e.message.includes("already exists")) console.error("[Migration] Unique index error:", e.message);
     }
 
     console.log("[Migration] Media columns migration completed");
@@ -140,6 +149,10 @@ async function startServer() {
 
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);
+
+  // Media Proxy (mídia do WhatsApp/Evolution)
+  // GET /api/media/:messageId - Serve mídia com suporte a R2 CDN, fallback Evolution API
+  app.use("/api/media", mediaRouter);
 
   // Basic health check for load balancers and uptime monitoring
   app.get("/api/health", (_req, res) => {
