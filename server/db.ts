@@ -73,9 +73,6 @@ export async function upsertUser(userData: {
   }
 }
 
-let _db: ReturnType<typeof drizzle> | null = null;
-let _dbHealthCheck: number = 0; // timestamp do último health check bem-sucedido
-
 export async function getDb() {
   // Se temos um DB cacheado, verificar se ainda está saudável (health check a cada 30s)
   if (_db && Date.now() - _dbHealthCheck < 30000) {
