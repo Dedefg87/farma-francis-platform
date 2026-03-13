@@ -488,8 +488,11 @@ async function processEvolutionWebhookAsync(req: Request) {
     // ==========================================
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
+    // Aceitar variações de eventos de mensagem
+    const allowedEvents = ["messages_upsert", "messages_upsert"];
+    
     // Ignorar TUDO que não for mensagem nova
-    if (normalizedEvent !== "messages_upsert") {
+    if (!allowedEvents.includes(normalizedEvent)) {
       console.log(`[Evolution Webhook] ⏭️ Ignoring event type: ${eventName} (normalized: ${normalizedEvent})`);
       return;
     }
@@ -1133,11 +1136,20 @@ async function processEvolutionWebhook(body: any) {
         const messageContext = data?.messageContext || data?.context || {};
         const messageStatus = messageContext?.status || data?.status || "notify";
 
+        console.log("[Evolution Webhook] 📊 Message status check:", {
+          messageStatus,
+          messageType,
+          fromNumber,
+          fromMe: isSentByMe,
+        });
+
         // Se não for "notify" (ou valor padrão), ignorar
         if (messageStatus !== "notify") {
-          console.log(`[Evolution Webhook] Ignoring non-notify message with status: ${messageStatus}`);
+          console.log(`[Evolution Webhook] ⏭️ Ignoring non-notify message with status: ${messageStatus}`);
           return;
         }
+
+        console.log("[Evolution Webhook] ✅ Message is notify, proceeding...");
 
         // ==============================================
         // 🎯 IDEMPOTÊNCIA - UPSERT com ID único

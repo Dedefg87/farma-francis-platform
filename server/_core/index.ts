@@ -26,7 +26,7 @@ import { runBabyShowerMigration } from "../baby-shower-migration";
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
   try {
-    const { getDb } = await import("./db");
+    const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) {
       console.log("[Migration] DB not ready, skipping");
