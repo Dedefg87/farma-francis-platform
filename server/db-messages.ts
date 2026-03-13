@@ -519,9 +519,11 @@ export async function ingestInboundConversationMessage(message: {
     const fileUrlToSave = message.mediaUrl || null;
     console.log("[Ingest] Step 7: fileUrl to save:", fileUrlToSave ? "present" : "null");
 
-    // 8. Insert conversation message
+    // 8. Insert conversation message (COM TRY/CATCH ROBUSTO)
     console.log("[Ingest] Step 8: Inserting conversation message");
-    const insertResult = await db.insert(conversationMessages).values({
+    
+    // Preparar valores com sanitização
+    const insertValues = {
       conversationId,
       externalId: message.externalId || null,
       senderId: null,
@@ -532,8 +534,46 @@ export async function ingestInboundConversationMessage(message: {
       fileType: message.mimeType || null,
       fileSize: message.fileSize || null,
       createdAt: now,
+    };
+    
+    // Log dos valores para debug (limitando tamanho para não poluir logs)
+    console.log("[Ingest] Insert values (prepared):", {
+      conversationId,
+      externalId: message.externalId,
+      senderType: "customer",
+      contentLength: buildInboundContent(message)?.length || 0,
+      fileUrl: fileUrlToSave ? `${fileUrlToSave.substring(0, 100)}...` : null,
+      fileName: message.fileName,
+      fileType: message.mimeType,
+      fileSize: message.fileSize,
+      createdAt: now,
     });
-
+    
+    let insertResult: any;
+    try {
+      insertResult = await db.insert(conversationMessages).values(insertValues);
+    } catch (error: any) {
+      console.error("[INGEST][DrizzleError] ❌ FATAL: Failed to insert conversation message");
+      console.error("[INGEST][DrizzleError] Error message:", error.message);
+      console.error("[INGEST][DrizzleError] Error code:", error.code);
+      console.error("[INGEST][DrizzleError] Full error:", error);
+      console.error("[INGEST][DrizzleError] Stack:", error instanceof Error ? error.stack : "N/A");
+      console.error("[INGEST][DrizzleError] Values that caused error:", JSON.stringify({
+        conversationId,
+        externalId: message.externalId,
+        content: buildInboundContent(message),
+        fileUrl: fileUrlToSave,
+        fileUrlLength: fileUrlToSave?.length,
+        fileName: message.fileName,
+        fileNameLength: message.fileName?.length,
+        fileType: message.mimeType,
+        fileTypeLength: message.mimeType?.length,
+        fileSize: message.fileSize,
+        createdAt: now,
+      }, null, 2));
+      throw error; // re-throw para webhook
+    }
+    
     const messageDbId = insertResult.insertId as number;
     console.log("[Ingest] ✅ Message inserted into conversationMessages:", { conversationId, messageDbId, externalId: message.externalId });
 
