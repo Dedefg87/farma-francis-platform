@@ -1029,6 +1029,9 @@ async function processEvolutionWebhook(body: any) {
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
 
+        // Debug: Log do parsed
+        console.log("[Evolution Webhook] Parsed message:", { messageId, messageType, messageText: messageText?.substring(0, 50), mediaUrl: mediaUrl?.substring(0, 50) });
+
         // Detectar mensagens enviadas pelo celular (fromMe === true)
         const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
@@ -1075,20 +1078,26 @@ async function processEvolutionWebhook(body: any) {
         const finalMimeType = mimeType;
 
         // Salvar mensagem recebida no banco
-        await db.insert(receivedMessages).values({
-          provider: "whatsapp",
-          externalId: messageId,
-          fromNumber,
-          fromName: pushName || null,
-          messageType: messageType as any,
-          messageText,
-          mediaUrl: permanentMediaUrl || mediaUrl,
-          mimeType: finalMimeType || mimeType,
-          caption,
-          timestamp: messageTimestamp,
-          rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!permanentMediaUrl }),
-          processed: 0,
-        });
+        try {
+          await db.insert(receivedMessages).values({
+            provider: "whatsapp",
+            externalId: messageId,
+            fromNumber,
+            fromName: pushName || null,
+            messageType: messageType as any,
+            messageText,
+            mediaUrl: permanentMediaUrl || mediaUrl,
+            mimeType: finalMimeType || mimeType,
+            caption,
+            timestamp: messageTimestamp,
+            rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!permanentMediaUrl }),
+            processed: 0,
+          });
+          console.log("[Webhook] Saved received message:", messageId, "type:", messageType, "text_length:", messageText?.length);
+        } catch (insertErr: any) {
+          console.error("[Webhook] FAILED to insert received message:", messageId, "Error:", insertErr.message, "SQLState:", insertErr.sqlState, "Code:", insertErr.errno);
+          throw insertErr; // Re-throw to fail the webhook (so retry happens)
+        }
 
         // Check survey response
         const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());

@@ -12,11 +12,46 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
-function getImageSrc(url: string | null | undefined): string {
+function getR2Url(fileUrl: string | null | undefined): string {
+  if (!fileUrl) return "";
+  // If it's already a full URL (http/https), return as-is
+  if (fileUrl.startsWith("http")) {
+    return fileUrl;
+  }
+  // If it's a data URL, return as-is
+  if (fileUrl.startsWith("data:")) {
+    return fileUrl;
+  }
+  // If it's a relative path, prepend R2 URL
+  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  // Ensure single slash between base and path
+  const cleanBase = r2Base.replace(/\/$/, "");
+  const cleanPath = fileUrl.replace(/^\//, "");
+  return `${cleanBase}/${cleanPath}`;
+}
+
+function getImageSrc(
+  url: string | null | undefined,
+  messageId?: number
+): string {
   if (!url) return "";
+  // If it's a data URL, return it directly
   if (url.startsWith("data:")) {
     return url;
   }
+  // If it's a WhatsApp URL (temporary), use our media endpoint
+  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
+    if (!messageId) {
+      console.warn("[getImageSrc] WhatsApp URL without messageId, returning raw URL");
+      return url;
+    }
+    return `/api/media/${messageId}`;
+  }
+  // If it's a relative path (from R2), construct full URL
+  if (!url.startsWith("http")) {
+    return getR2Url(url);
+  }
+  // Already a full URL
   return url;
 }
 
