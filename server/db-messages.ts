@@ -371,140 +371,157 @@ export async function ingestInboundConversationMessage(message: {
   
   const db = await getDb();
   if (!db) {
-    console.error("[ingestInbound] Database not available!");
+    console.error("[ingestInbound] ❌ Database not available!");
     return null;
   }
 
-  // 1. Find or create customer
-  const customer = await findOrCreateCustomerByPhone(
-    message.fromNumber,
-    message.fromName || undefined
-  );
+  try {
+    // 1. Find or create customer
+    console.log("[Ingest] Step 1: findOrCreateCustomerByPhone");
+    const customer = await findOrCreateCustomerByPhone(
+      message.fromNumber,
+      message.fromName || undefined
+    );
+    console.log("[Ingest] Customer:", { id: customer.id, name: customer.name, phone: customer.phone });
 
-  // 2. Fetch profile picture in background (non-blocking)
-  if (message.provider === "whatsapp" && !customer?.photoUrl) {
-    setImmediate(async () => {
-      try {
-        const profile = await fetchEvolutionProfile(message.fromNumber);
-        if (profile?.profilePicture) {
-          const db = await getDb();
-          if (db && customer?.id) {
-            await db
-              .update(customers)
-              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
-              .where(eq(customers.id, customer.id));
+    // 2. Fetch profile picture in background (non-blocking)
+    if (message.provider === "whatsapp" && !customer?.photoUrl) {
+      setImmediate(async () => {
+        try {
+          const profile = await fetchEvolutionProfile(message.fromNumber);
+          if (profile?.profilePicture) {
+            const db = await getDb();
+            if (db && customer?.id) {
+              await db
+                .update(customers)
+                .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
+                .where(eq(customers.id, customer.id));
+            }
           }
+        } catch (err) {
+          // Silently fail - photo is not critical
         }
-      } catch (err) {
-        // Silently fail - photo is not critical
-      }
-    });
-  }
+      });
+    }
 
-  const now = message.createdAt ?? new Date();
+    const now = message.createdAt ?? new Date();
 
-  // 3. Pick least loaded online agent
-  let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
-  const assignedUserId = picked && Number.isFinite(picked.userId) && picked.userId > 0
-    ? picked.userId
-    : null;
+    // 3. Pick least loaded online agent
+    console.log("[Ingest] Step 3: pickLeastLoadedOnlineAgent");
+    let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
+    const assignedUserId = picked && Number.isFinite(picked.userId) && picked.userId > 0
+      ? picked.userId
+      : null;
+    console.log("[Ingest] Agent pick result:", { picked: picked?.userId, assignedUserId });
 
-  console.log("[ingestInbound] 🎯 Agent pick result:", { picked: picked?.userId, assignedUserId, customerPhone: customer.phone });
+    // 4. Get default queue
+    console.log("[Ingest] Step 4: Get default queue");
+    const [defaultQueue] = await db
+      .select()
+      .from(queues)
+      .where(eq(queues.status, "active"))
+      .orderBy(desc(queues.priority))
+      .limit(1);
+    console.log("[Ingest] Default queue:", defaultQueue?.id || "none");
 
-  // 4. Get default queue
-  const [defaultQueue] = await db
-    .select()
-    .from(queues)
-    .where(eq(queues.status, "active"))
-    .orderBy(desc(queues.priority))
-    .limit(1);
-
-  // 5. Find existing conversation (open or assigned)
-  const [existingConversation] = await db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.customerId, customer.id),
-        eq(conversations.channel, message.provider),
-        or(
-          eq(conversations.status, "open"),
-          eq(conversations.status, "assigned")
-        )
-      )
-    )
-    .orderBy(desc(conversations.lastMessageAt))
-    .limit(1);
-
-  let conversationId = existingConversation?.id;
-
-  // 6. Create or update conversation
-  if (!conversationId) {
-    // Create new conversation
-    await db.insert(conversations).values({
-      customerId: customer.id,
-      customerName: customer.name,
-      customerPhone: customer.phone,
-      channel: message.provider,
-      status: assignedUserId ? "assigned" : "open",
-      assignedTo: assignedUserId,
-      queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
-      openedAt: now,
-      lastMessageAt: now,
-      unreadCount: 1,
-    });
-
-    const [newConversation] = await db
+    // 5. Find existing conversation (open or assigned)
+    console.log("[Ingest] Step 5: Find existing conversation");
+    const [existingConversation] = await db
       .select()
       .from(conversations)
-      .where(eq(conversations.customerId, customer.id))
-      .orderBy(desc(conversations.id))
+      .where(
+        and(
+          eq(conversations.customerId, customer.id),
+          eq(conversations.channel, message.provider),
+          or(
+            eq(conversations.status, "open"),
+            eq(conversations.status, "assigned")
+          )
+        )
+      )
+      .orderBy(desc(conversations.lastMessageAt))
       .limit(1);
 
-    conversationId = newConversation?.id;
-  } else {
-    // Update existing conversation
-    const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
-    await db
-      .update(conversations)
-      .set({
+    let conversationId = existingConversation?.id;
+    console.log("[Ingest] Existing conversation:", conversationId || "none");
+
+    // 6. Create or update conversation
+    if (!conversationId) {
+      console.log("[Ingest] Step 6a: Creating new conversation");
+      await db.insert(conversations).values({
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+        channel: message.provider,
+        status: assignedUserId ? "assigned" : "open",
+        assignedTo: assignedUserId,
+        queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
+        openedAt: now,
         lastMessageAt: now,
-        unreadCount: sql<number>`unread_count + 1`,
-        ...(shouldAssign
-          ? {
-              assignedTo: assignedUserId,
-              status: "assigned",
-              queueId: null,
-            }
-          : {}),
-      })
-      .where(eq(conversations.id, conversationId));
+        unreadCount: 1,
+      });
+
+      const [newConversation] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.customerId, customer.id))
+        .orderBy(desc(conversations.id))
+        .limit(1);
+
+      conversationId = newConversation?.id;
+      if (!conversationId) {
+        throw new Error("Failed to retrieve new conversation ID after insert");
+      }
+      console.log("[Ingest] New conversation created:", conversationId);
+    } else {
+      console.log("[Ingest] Step 6b: Updating existing conversation");
+      const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
+      await db
+        .update(conversations)
+        .set({
+          lastMessageAt: now,
+          unreadCount: sql<number>`unread_count + 1`,
+          ...(shouldAssign
+            ? {
+                assignedTo: assignedUserId,
+                status: "assigned",
+                queueId: null,
+              }
+            : {}),
+        })
+        .where(eq(conversations.id, conversationId));
+      console.log("[Ingest] Conversation updated:", conversationId, shouldAssign ? "(assigned)" : "");
+    }
+
+    // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
+    // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
+    const fileUrlToSave = message.mediaUrl || null;
+    console.log("[Ingest] Step 7: fileUrl to save:", fileUrlToSave ? "present" : "null");
+
+    // 8. Insert conversation message
+    console.log("[Ingest] Step 8: Inserting conversation message");
+    const insertResult = await db.insert(conversationMessages).values({
+      conversationId,
+      externalId: message.externalId || null,
+      senderId: null,
+      senderType: "customer",
+      content: buildInboundContent(message),
+      fileUrl: fileUrlToSave,
+      fileName: message.fileName || null,
+      fileType: message.mimeType || null,
+      fileSize: message.fileSize || null,
+      createdAt: now,
+    });
+
+    const messageDbId = insertResult.insertId as number;
+    console.log("[Ingest] ✅ Message inserted into conversationMessages:", { conversationId, messageDbId, externalId: message.externalId });
+
+    return { conversationId, customerId: customer.id };
+  } catch (error) {
+    console.error("[ingestInbound] ❌ Error during ingestion:", error);
+    console.error("[ingestInbound] Stack:", error instanceof Error ? error.stack : "N/A");
+    throw error; // rethrow para ser capturado pelo webhook
   }
-
-  // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
-  // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  const fileUrlToSave = message.mediaUrl || null;
-
-  // 8. Insert conversation message
-  const insertResult = await db.insert(conversationMessages).values({
-    conversationId,
-    externalId: message.externalId || null,
-    senderId: null,
-    senderType: "customer",
-    content: buildInboundContent(message),
-    fileUrl: fileUrlToSave,
-    fileName: message.fileName || null,
-    fileType: message.mimeType || null,
-    fileSize: message.fileSize || null,
-    createdAt: now,
-  });
-
-  const messageDbId = insertResult.insertId as number;
-
-
-
-  console.log("[Ingest] ✅ Message ingested successfully:", { conversationId, messageDbId });
-  return { conversationId, customerId: customer.id };
 }
 
 export async function listReceivedMessages(filters?: {

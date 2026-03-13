@@ -448,6 +448,13 @@ async function processEvolutionWebhookAsync(req: Request) {
     const body = req.body;
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
+    console.log("1. [Evolution Webhook] 📥 Webhook recebido:", {
+      url: fullUrl,
+      bodyKeys: Object.keys(body || {}),
+      hasData: !!body?.data,
+      query: req.query,
+    });
+
     if (!body || Object.keys(body).length === 0) {
       console.log("[Evolution Webhook] Empty body, skipping");
       return;
@@ -480,13 +487,15 @@ async function processEvolutionWebhookAsync(req: Request) {
       bodyKeys: Object.keys(body),
     });
 
+    console.log("2. [Evolution Webhook] ✅ Evento detectado:", eventName);
+
     // ==========================================
     // 🎯 FILTRAGEM CRÍTICA - PROCESSAR APENAS MENSAGENS
     // ==========================================
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
     // Aceitar variações de eventos de mensagem
-    const allowedEvents = ["messages_upsert", "messages_upsert"];
+    const allowedEvents = ["messages_upsert"];
     
     // Ignorar TUDO que não for mensagem nova
     if (!allowedEvents.includes(normalizedEvent)) {
@@ -495,6 +504,7 @@ async function processEvolutionWebhookAsync(req: Request) {
     }
 
     console.log("[Evolution Webhook] ✅ Event approved for processing");
+    console.log("3. [Evolution Webhook] ✅ Passou no filtro de eventos permitidos");
 
     // A partir daqui, processamos APENAS mensagens.upsert
     const db = await getDb();
@@ -1036,6 +1046,7 @@ function parseEvolutionMessageContent(message: any) {
 
 async function processEvolutionWebhook(body: any) {
   try {
+    console.log("4. [Evolution] 🚀 Iniciando processEvolutionWebhook");
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
@@ -1100,6 +1111,8 @@ async function processEvolutionWebhook(body: any) {
         // Detectar mensagens enviadas pelo celular (fromMe === true)
         const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
+        console.log("5. [Evolution] fromMe check:", { isSentByMe, fromMe, fromNumber, messageType });
+
         if (!isSentByMe) {
           console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
         }
@@ -1140,13 +1153,17 @@ async function processEvolutionWebhook(body: any) {
           fromMe: isSentByMe,
         });
 
+        console.log("6. [Evolution] 📊 Message status check:", { messageStatus, messageType, fromNumber });
+
         // Se não for "notify" (ou valor padrão), ignorar
         if (messageStatus !== "notify") {
+          console.log(`7. [Evolution] ⏭️ Ignorando non-notify: ${messageStatus}`);
           console.log(`[Evolution Webhook] ⏭️ Ignoring non-notify message with status: ${messageStatus}`);
           return;
         }
 
         console.log("[Evolution Webhook] ✅ Message is notify, proceeding...");
+        console.log("8. [Evolution] ✅ Notify aprovado, tentando salvar no banco");
 
         // ==============================================
         // 🎯 IDEMPOTÊNCIA - UPSERT com ID único
@@ -1197,6 +1214,7 @@ async function processEvolutionWebhook(body: any) {
         const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());
 
         if (!isPossibleSurveyResponse) {
+          console.log("9. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType });
           await ingestInboundConversationMessage({
             provider: "whatsapp",
             fromNumber,
@@ -1210,9 +1228,13 @@ async function processEvolutionWebhook(body: any) {
             fileSize: parsed.fileSize,
             externalId: messageId,
           });
+          console.log("10. [Evolution] ✅ ingestInboundConversationMessage concluído");
+        } else {
+          console.log("[Evolution] Pulando ingest (survey response)");
         }
       } catch (msgError) {
-        console.error("[Evolution Webhook] Error:", msgError);
+        console.error("[Evolution Webhook] ❌ Error in message processing:", msgError);
+        console.error("[Evolution Webhook] Stack:", msgError instanceof Error ? msgError.stack : "N/A");
       }
       return;
     }
