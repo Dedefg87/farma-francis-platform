@@ -9,3 +9,6 @@ ALTER TABLE conversation_messages ADD COLUMN remote_jid VARCHAR(255) NULL COMMEN
 -- Índices para busca rápida
 CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id);
 CREATE INDEX IF NOT EXISTS idx_conversation_messages_remote_jid ON conversation_messages(remote_jid);
+
+-- Unique index para garantir idempotência (provider + external_id)
+CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_messages_provider_external ON conversation_messages(provider, external_id);

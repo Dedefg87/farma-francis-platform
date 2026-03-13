@@ -62,6 +62,14 @@ async function runMediaColumnsMigration() {
       if (!e.message.includes("already exists")) console.error("[Migration] Index remote_jid error:", e.message);
     }
 
+    // Unique constraint to prevent duplicate messages (provider + external_id)
+    try {
+      await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_messages_provider_external ON conversation_messages(provider, external_id)");
+      console.log("[Migration] Created unique index uq_conversation_messages_provider_external");
+    } catch (e: any) {
+      if (!e.message.includes("already exists")) console.error("[Migration] Unique index error:", e.message);
+    }
+
     console.log("[Migration] Media columns migration completed");
   } catch (err) {
     console.error("[Migration] Failed:", err);

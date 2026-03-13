@@ -376,6 +376,27 @@ export async function ingestInboundConversationMessage(message: {
   }
 
   try {
+    // 0. IDEMPOTÊNCIA: Verificar se já existe mensagem com este externalId
+    if (message.externalId) {
+      console.log("[Ingest] Step 0: Checking idempotency for externalId:", message.externalId);
+      const existingMsg = await db
+        .select()
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.externalId, message.externalId),
+            eq(conversationMessages.provider, message.provider)
+          )
+        )
+        .limit(1);
+
+      if (existingMsg.length > 0) {
+        console.log("[Ingest] ⏭️ Duplicate message detected, skipping. externalId:", message.externalId);
+        return { conversationId: existingMsg[0].conversationId, customerId: null };
+      }
+      console.log("[Ingest] ✅ New message, proceeding");
+    }
+
     // 1. Find or create customer
     console.log("[Ingest] Step 1: findOrCreateCustomerByPhone");
     const customer = await findOrCreateCustomerByPhone(
