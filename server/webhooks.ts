@@ -1109,38 +1109,64 @@ async function processEvolutionWebhook(body: any) {
           return;
         }
 
-        // Verificar duplicata
+        // ==============================================
+        // 🎯 FILTRO DE TIPO - Processar APENAS mensagens notify
+        // ==============================================
+        // Evolution pode enviar tipos: "notify" (mensagem nova), "append" (mídia de uma mensagem existente), "ephemeral" (temporária)
+        // Só queremos processar mensagens novas (notify)
+        const messageContext = data?.messageContext || data?.context || {};
+        const messageStatus = messageContext?.status || data?.status || "notify";
+
+        // Se não for "notify" (ou valor padrão), ignorar
+        if (messageStatus !== "notify") {
+          console.log(`[Evolution Webhook] Ignoring non-notify message with status: ${messageStatus}`);
+          return;
+        }
+
+        // ==============================================
+        // 🎯 IDEMPOTÊNCIA - UPSERT com ID único
+        // ==============================================
+        // Verificar se já existe (mais seguro que simples insert)
         const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
-        if (existing) return;
 
-        // Se não tem conteúdo real, ignorar
-        const hasRealContent =
-          Boolean(messageText && String(messageText).trim()) ||
-          Boolean(caption && String(caption).trim()) ||
-          Boolean(mediaUrl && String(mediaUrl).trim());
-        if (!hasRealContent && messageType === "unknown") return;
-
-        // Mídia: salvar apenas a URL (não baixar para base64 para economizar espaço)
-        // URLs do WhatsApp são temporárias, mas o frontend pode buscar de lá diretamente
-        // Se precisar persistir, usar storage externo no futuro
-        const permanentMediaUrl = mediaUrl; // Use original URL directly (no download)
-        const finalMimeType = mimeType;
-
-        // Salvar mensagem recebida no banco
-        await db.insert(receivedMessages).values({
-          provider: "whatsapp",
+        // Dados comuns
+        const messageValues = {
+          provider: "whatsapp" as const,
           externalId: messageId,
           fromNumber,
           fromName: pushName || null,
           messageType: messageType as any,
           messageText,
-          mediaUrl: permanentMediaUrl || mediaUrl,
-          mimeType: finalMimeType || mimeType,
+          mediaUrl: mediaUrl || null,
+          mimeType: mimeType || null,
           caption,
+          latitude: null,
+          longitude: null,
           timestamp: messageTimestamp,
-          rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!permanentMediaUrl }),
+          rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!mediaUrl }),
           processed: 0,
-        });
+          customerId: existing?.customerId || null, // Manter customerId se já existir
+        };
+
+        if (existing) {
+          // Atualizar apenas campos que podem mudar (nome, foto, etc.)
+          await db
+            .update(receivedMessages)
+            .set({
+              fromName: pushName || null,
+              messageText: messageText || existing.messageText,
+              mediaUrl: mediaUrl || existing.mediaUrl,
+              mimeType: mimeType || existing.mimeType,
+              caption: caption || existing.caption,
+              updatedAt: new Date(),
+            })
+            .where(eq(receivedMessages.id, existing.id));
+          console.log(`[Evolution Webhook] Updated existing message ${messageId}`);
+        } else {
+          // Inserir novo
+          await db.insert(receivedMessages).values(messageValues);
+          console.log(`[Evolution Webhook] Inserted new message ${messageId}`);
+        }
 
         // Check survey response
         const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());
@@ -1153,10 +1179,11 @@ async function processEvolutionWebhook(body: any) {
             messageType,
             messageText,
             caption,
-            mediaUrl: permanentMediaUrl || mediaUrl,
+            mediaUrl: mediaUrl || null,
             mimeType,
             fileName: parsed.fileName,
             fileSize: parsed.fileSize,
+            externalId: messageId,
           });
         }
       } catch (msgError) {

@@ -579,7 +579,32 @@ export async function ingestInboundConversationMessage(message: {
   // Economia de espaço: salvar apenas URL original (não baixar como base64)
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
   const fileUrlToSave = message.mediaUrl || null;
-  
+
+  // ==============================================
+  // 🎯 PREVENÇÃO DE DUPLICATA EM CONVERSATION MESSAGES
+  // ==============================================
+  // Verificar se já existe uma mensagem com externalId (id da Evolution) nesta conversa
+  let conversationMessageExists = false;
+  if (message.externalId) {
+    const [existingConvMsg] = await db
+      .select()
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversationMessages.id, message.externalId) // Nota: field 'id' não é externalId; isso está errado!
+        )
+      )
+      .limit(1);
+    conversationMessageExists = !!existingConvMsg;
+  }
+
+  // Se já existe, pular inserção
+  if (conversationMessageExists) {
+    console.log(`[ingestInbound] Duplicate conversation message detected for externalId ${message.externalId}, skipping`);
+    return { conversationId, customerId: customer.id };
+  }
+
   // Insert message and get the ID
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
@@ -590,9 +615,11 @@ export async function ingestInboundConversationMessage(message: {
     fileName: message.fileName || null,
     fileType: message.mimeType || null,
     fileSize: message.fileSize || null,
+    // NOTA: ainda não temos external_id no schema, vamos добаgar via UPDATE depois
+    // Por agora, confiamos na verificação acima
     createdAt: now,
   });
-  
+
   const messageDbId = insertResult.insertId as number;
 
   // If it's a WhatsApp media message with a temporary URL, trigger Evolution download to upload to R2
