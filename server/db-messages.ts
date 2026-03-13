@@ -455,6 +455,8 @@ export async function ingestInboundConversationMessage(message: {
   caption?: string | null;
   mediaUrl?: string | null;
   mimeType?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
   createdAt?: Date;
 }) {
   console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
@@ -583,9 +585,9 @@ export async function ingestInboundConversationMessage(message: {
     senderType: "customer",
     content: buildInboundContent(message),
     fileUrl: fileUrlToSave,
-    fileName: null,
+    fileName: message.fileName || null,
     fileType: message.mimeType || null,
-    fileSize: null,
+    fileSize: message.fileSize || null,
     createdAt: now,
   });
 

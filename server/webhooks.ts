@@ -554,6 +554,8 @@ async function processWhatsAppWebhook(body: any) {
           let caption = null;
           let latitude = null;
           let longitude = null;
+          let fileName = null;
+          let fileSize: number | null = null;
 
           switch (type) {
             case "text":
@@ -563,20 +565,28 @@ async function processWhatsAppWebhook(body: any) {
               mediaId = message.image?.id || null;
               caption = message.image?.caption || null;
               mimeType = message.image?.mime_type || null;
+              fileName = message.image?.file_name || null;
+              fileSize = message.image?.file_size ? parseInt(message.image.file_size) : null;
               break;
             case "audio":
               mediaId = message.audio?.id || null;
               mimeType = message.audio?.mime_type || null;
+              fileName = message.audio?.file_name || null;
+              fileSize = message.audio?.file_size ? parseInt(message.audio.file_size) : null;
               break;
             case "video":
               mediaId = message.video?.id || null;
               caption = message.video?.caption || null;
               mimeType = message.video?.mime_type || null;
+              fileName = message.video?.file_name || null;
+              fileSize = message.video?.file_size ? parseInt(message.video.file_size) : null;
               break;
             case "document":
               mediaId = message.document?.id || null;
               caption = message.document?.caption || null;
               mimeType = message.document?.mime_type || null;
+              fileName = message.document?.file_name || null;
+              fileSize = message.document?.file_size ? parseInt(message.document.file_size) : null;
               break;
             case "location":
               latitude = message.location?.latitude || null;
@@ -585,6 +595,8 @@ async function processWhatsAppWebhook(body: any) {
             case "sticker":
               mediaId = message.sticker?.id || null;
               mimeType = message.sticker?.mime_type || null;
+              fileName = message.sticker?.file_name || null;
+              fileSize = message.sticker?.file_size ? parseInt(message.sticker.file_size) : null;
               break;
             case "reaction":
               messageText = message.reaction?.emoji || null;
@@ -667,6 +679,8 @@ async function processWhatsAppWebhook(body: any) {
               caption,
               mediaUrl,
               mimeType,
+              fileName,
+              fileSize,
               createdAt: new Date(),
             });
             console.log(
@@ -852,6 +866,8 @@ function parseEvolutionMessageContent(message: any) {
       caption: null,
       mediaUrl: null,
       mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
 
   if (message.conversation) {
@@ -861,6 +877,8 @@ function parseEvolutionMessageContent(message: any) {
       caption: null,
       mediaUrl: null,
       mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
   }
 
@@ -871,6 +889,8 @@ function parseEvolutionMessageContent(message: any) {
       caption: null,
       mediaUrl: null,
       mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
   }
 
@@ -890,6 +910,8 @@ function parseEvolutionMessageContent(message: any) {
         message.imageMessage.url || message.imageMessage.mediaUrl || null,
       mimeType:
         message.imageMessage.mimetype || message.imageMessage.mimeType || null,
+      fileName: message.imageMessage.fileName || null,
+      fileSize: message.imageMessage.fileSize || null,
       mediaKey: message.imageMessage.mediaKey || null,
       directPath: message.imageMessage.directPath || null,
       base64: message.imageMessage.base64 || null,
@@ -905,6 +927,8 @@ function parseEvolutionMessageContent(message: any) {
         message.videoMessage.url || message.videoMessage.mediaUrl || null,
       mimeType:
         message.videoMessage.mimetype || message.videoMessage.mimeType || null,
+      fileName: message.videoMessage.fileName || null,
+      fileSize: message.videoMessage.fileSize || null,
       mediaKey: message.videoMessage.mediaKey || null,
       directPath: message.videoMessage.directPath || null,
     };
@@ -921,6 +945,8 @@ function parseEvolutionMessageContent(message: any) {
         message.documentMessage.mimetype ||
         message.documentMessage.mimeType ||
         null,
+      fileName: message.documentMessage.fileName || null,
+      fileSize: message.documentMessage.fileSize || null,
       mediaKey: message.documentMessage.mediaKey || null,
       directPath: message.documentMessage.directPath || null,
     };
@@ -937,6 +963,8 @@ function parseEvolutionMessageContent(message: any) {
         message.audioMessage.mimetype ||
         message.audioMessage.mimeType ||
         "audio/ogg",
+      fileName: message.audioMessage.fileName || null,
+      fileSize: message.audioMessage.fileSize || null,
       mediaKey: message.audioMessage.mediaKey || null,
       directPath: message.audioMessage.directPath || null,
     };
@@ -954,6 +982,8 @@ function parseEvolutionMessageContent(message: any) {
         message.stickerMessage.mimetype ||
         message.stickerMessage.mimeType ||
         "image/webp",
+      fileName: message.stickerMessage.fileName || null,
+      fileSize: message.stickerMessage.fileSize || null,
     };
   }
 
@@ -963,6 +993,8 @@ function parseEvolutionMessageContent(message: any) {
     caption: null,
     mediaUrl: null,
     mimeType: null,
+    fileName: null,
+    fileSize: null,
   };
 }
 
@@ -1103,6 +1135,8 @@ async function processEvolutionWebhook(body: any) {
             caption,
             mediaUrl: permanentMediaUrl || mediaUrl,
             mimeType,
+            fileName: parsed.fileName,
+            fileSize: parsed.fileSize,
           });
         }
       } catch (msgError) {

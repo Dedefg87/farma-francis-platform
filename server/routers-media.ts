@@ -7,9 +7,21 @@ import { getMediaBase64FromEvolution } from "./media-download";
 const router = Router();
 
 /**
+ * Verifica se a URL é do R2 (Cloudflare)
+ */
+function isR2Url(url: string): boolean {
+  return (
+    url.includes(".r2.dev") ||
+    url.includes(".r2.cloudflarestorage.com") ||
+    url.includes("r2.cloudflarestorage.com")
+  );
+}
+
+/**
  * GET /api/media/:messageId
  * Proxy para servir mídia (imagens, vídeos, áudios, documentos)
- * Busca da Evolution API se a URL original expirou
+ * - Se URL for do R2: redireciona 302 (CDN direto, zero custo de banda)
+ * - Se URL for temporária do WhatsApp: tenta fetch direto ou fallback Evolution API
  */
 router.get("/:messageId", async (req, res) => {
   const { messageId } = req.params;
@@ -64,6 +76,12 @@ router.get("/:messageId", async (req, res) => {
     if (!mediaUrl) {
       console.log("[MediaProxy] Media not found for messageId:", messageId);
       return res.status(404).json({ error: "Mídia não encontrada" });
+    }
+
+    // Caso 0: Se for URL do R2, redirecionar diretamente (CDN, zero custo)
+    if (mediaUrl.startsWith("http") && isR2Url(mediaUrl)) {
+      console.log("[MediaProxy] Redirecting to R2 URL (CDN)");
+      return res.redirect(302, mediaUrl);
     }
 
     // Caso 1: Já é data URL (base64) → servir diretamente
