@@ -428,6 +428,14 @@ router.post("/evolution/:event", async (req: Request, res: Response) => {
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
+    const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+    console.log("[Evolution Handler] 🎯 Received webhook:", {
+      method: req.method,
+      path: req.path,
+      url: fullUrl,
+      query: req.query,
+    });
+
     // RESPOSTA IMEDIATA - não bloquear o Evolution
     res.status(200).send("EVENT_RECEIVED");
 
