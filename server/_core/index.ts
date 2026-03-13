@@ -49,14 +49,14 @@ async function runMediaColumnsMigration() {
 
     // Indexes (ignore if exists)
     try {
-      await db.execute("CREATE INDEX idx_conversation_messages_external_id ON conversation_messages(external_id)");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id)");
       console.log("[Migration] Created index idx_conversation_messages_external_id");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Index external_id error:", e.message);
     }
 
     try {
-      await db.execute("CREATE INDEX idx_conversation_messages_remote_jid ON conversation_messages(remote_jid)");
+      await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_remote_jid ON conversation_messages(remote_jid)");
       console.log("[Migration] Created index idx_conversation_messages_remote_jid");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Index remote_jid error:", e.message);
