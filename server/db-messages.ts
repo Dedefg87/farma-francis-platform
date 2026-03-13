@@ -457,6 +457,7 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   fileName?: string | null;
   fileSize?: number | null;
+  externalId?: string | null; // Evolution API message ID
   createdAt?: Date;
 }) {
   console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
@@ -579,7 +580,8 @@ export async function ingestInboundConversationMessage(message: {
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
   const fileUrlToSave = message.mediaUrl || null;
   
-  await db.insert(conversationMessages).values({
+  // Insert message and get the ID
+  const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     senderId: null,
     senderType: "customer",
@@ -590,6 +592,79 @@ export async function ingestInboundConversationMessage(message: {
     fileSize: message.fileSize || null,
     createdAt: now,
   });
+  
+  const messageDbId = insertResult.insertId as number;
+
+  // If it's a WhatsApp media message with a temporary URL, trigger Evolution download to upload to R2
+  if (
+    message.provider === "whatsapp" &&
+    message.externalId &&
+    fileUrlToSave &&
+    fileUrlToSave.includes("mmg.whatsapp.net")
+  ) {
+    try {
+      console.log("[S3] Triggering Evolution download for R2 upload, messageId:", message.externalId);
+      
+      // Get Evolution config
+      const [configRecord] = await db
+        .select()
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "evolution_api"))
+        .limit(1);
+      
+      if (configRecord?.settings) {
+        const settings = JSON.parse(configRecord.settings as string);
+        const instance = settings.instances?.find((i: any) => i.name === "Meu") || settings.instances?.[0];
+        
+        if (instance?.url && instance?.apiKey) {
+          const downloadUrl = `${instance.url}/message/download/${message.externalId}`;
+          console.log("[S3] Calling Evolution download endpoint:", downloadUrl);
+          
+          const response = await fetch(downloadUrl, {
+            headers: {
+              "apikey": instance.apiKey,
+            },
+            signal: AbortSignal.timeout(15000), // 15s timeout
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log("[S3] Download response:", data);
+            
+            // Evolution should return the R2 URL after upload
+            const r2Url = data?.url || data?.mediaUrl || null;
+            if (r2Url && r2Url.includes("r2.dev")) {
+              console.log("[S3] ✅ Got R2 URL, updating message:", r2Url);
+              
+              // Update message with R2 URL
+              await db
+                .update(conversationMessages)
+                .set({ 
+                  fileUrl: r2Url,
+                  // Also store the WhatsApp URL as external reference if needed
+                  // (optional, not used by frontend)
+                })
+                .where(eq(conversationMessages.id, messageDbId));
+              
+              console.log("[S3] Message updated with R2 URL");
+            } else {
+              console.warn("[S3] Download succeeded but no R2 URL in response:", data);
+            }
+          } else {
+            console.error("[S3] Download failed:", response.status, response.statusText);
+          }
+        } else {
+          console.warn("[S3] Evolution instance config incomplete");
+        }
+      } else {
+        console.warn("[S3] No Evolution config found in database");
+      }
+    } catch (err) {
+      console.error("[S3] Failed to trigger download:", err);
+      // Don't throw - the message is already saved with temporary URL
+      // The frontend can still try to fetch it (will fail after expiration)
+    }
+  }
 
   const [conversation] = await db
     .select()

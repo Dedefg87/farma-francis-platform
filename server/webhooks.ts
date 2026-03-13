@@ -681,6 +681,7 @@ async function processWhatsAppWebhook(body: any) {
               mimeType,
               fileName,
               fileSize,
+              externalId: messageId, // Add this to trigger S3 download
               createdAt: new Date(),
             });
             console.log(
@@ -800,6 +801,7 @@ async function processInstagramWebhook(body: any) {
             caption: null,
             mediaUrl,
             mimeType,
+            externalId: messageId, // Add this to trigger S3 download
             createdAt: new Date(),
           });
           console.log(
