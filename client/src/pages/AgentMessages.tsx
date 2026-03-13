@@ -19,15 +19,21 @@ function getImageSrc(
   messageId?: number
 ): string {
   if (!url) return "";
-  // If it's a data URL, return it directly
+  
+  // Se já for data URL, retornar direto
   if (url.startsWith("data:")) {
     return url;
   }
-  // If it's a WhatsApp URL (temporary), use our media endpoint
-  if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
-    return `/api/media/${messageId}`;
+  
+  // Se for URL absoluta (http/https), usar como está
+  if (url.startsWith("http")) {
+    return url;
   }
-  return url;
+  
+  // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
+  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  const cleanUrl = url.replace(/^\//, "");
+  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
 }
 
 /**
