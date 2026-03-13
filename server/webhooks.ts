@@ -1163,15 +1163,9 @@ async function processEvolutionWebhook(body: any) {
 
         console.log("6. [Evolution] 📊 Message status check:", { messageStatus, messageType, fromNumber });
 
-        // Se não for "notify" (ou valor padrão), ignorar
-        if (messageStatus !== "notify") {
-          console.log(`7. [Evolution] ⏭️ Ignorando non-notify: ${messageStatus}`);
-          console.log(`[Evolution Webhook] ⏭️ Ignoring non-notify message with status: ${messageStatus}`);
-          return;
-        }
-
-        console.log("[Evolution Webhook] ✅ Message is notify, proceeding...");
-        console.log("8. [Evolution] ✅ Notify aprovado, tentando salvar no banco");
+        // Removido filtro por messageStatus - processar todas as mensagens
+        console.log("[Evolution Webhook] ✅ Message approved, proceeding to ingest");
+        console.log("7. [Evolution] ✅ Processando mensagem (sem filtro de status)");
 
         // ==============================================
         // 🎯 IDEMPOTÊNCIA - UPSERT com ID único
@@ -1222,7 +1216,7 @@ async function processEvolutionWebhook(body: any) {
         const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());
 
         if (!isPossibleSurveyResponse) {
-          console.log("9. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType });
+          console.log("8. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType });
           await ingestInboundConversationMessage({
             provider: "whatsapp",
             fromNumber,
@@ -1236,7 +1230,7 @@ async function processEvolutionWebhook(body: any) {
             fileSize: parsed.fileSize,
             externalId: messageId,
           });
-          console.log("10. [Evolution] ✅ ingestInboundConversationMessage concluído");
+          console.log("9. [Evolution] ✅ ingestInboundConversationMessage concluído");
         } else {
           console.log("[Evolution] Pulando ingest (survey response)");
         }
