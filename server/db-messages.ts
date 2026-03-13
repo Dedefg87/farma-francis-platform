@@ -457,6 +457,7 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   createdAt?: Date;
 }) {
+  console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
   try {
     const db = await getDb();
     if (!db) {
