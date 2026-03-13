@@ -76,23 +76,22 @@ export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
       // Configurar pool com mais conexões e timeout maior
-      const connectionUrl = new URL(process.env.DATABASE_URL);
       const db = drizzle(process.env.DATABASE_URL, {
         connection: {
           // Pool configuration
           waitForConnections: true,
-          connectionLimit: 20, // Aumentado de 10 para 20
+          connectionLimit: 50, // Aumentado para 50 (era 20)
           queueLimit: 0,
           // Timeouts
-          connectTimeout: 10000, // 10s
-          acquireTimeout: 10000, // 10s
+          connectTimeout: 20000, // 20s
+          acquireTimeout: 20000, // 20s
           // Keepalive
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
         },
       });
       _db = db;
-      console.log("[Database] Connected successfully with enhanced pool");
+      console.log("[Database] Connected successfully with enhanced pool (50)");
     } catch (error) {
       console.error("[Database] Failed to connect:", error);
       _db = null;
