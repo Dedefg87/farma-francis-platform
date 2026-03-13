@@ -471,6 +471,23 @@ async function processEvolutionWebhookAsync(req: Request) {
       }
     }
 
+    if (!eventName) {
+      console.log("[Evolution Webhook] Event name not detected, ignoring");
+      return;
+    }
+
+    // ==========================================
+    // 🎯 FILTRAGEM CRÍTICA - PROCESSAR APENAS MENSAGENS
+    // ==========================================
+    const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
+
+    // Ignorar TUDO que não for mensagem nova
+    if (normalizedEvent !== "messages_upsert") {
+      console.log(`[Evolution Webhook] Ignoring event type: ${eventName} (normalized: ${normalizedEvent})`);
+      return;
+    }
+
+    // A partir daqui, processamos APENAS mensagens.upsert
     const db = await getDb();
     if (!db) {
       console.error("[Evolution Webhook] Database not available");
@@ -496,11 +513,12 @@ async function processEvolutionWebhookAsync(req: Request) {
       const cleanExpected = expectedApiKey?.replace("@", "") || "";
 
       if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected && isProduction) {
+        console.log("[Evolution Webhook] API key mismatch, ignoring");
         return;
       }
     }
 
-    // Processar evento
+    // Processar evento de mensagem
     await processEvolutionWebhook({ ...body, event: eventName });
   } catch (error) {
     console.error("[Evolution Webhook] Error:", error);
