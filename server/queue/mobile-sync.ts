@@ -94,33 +94,87 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     return;
   }
 
+  // Buscar ou criar cliente
+  let customer = await db
+    .select()
+    .from(customers)
+    .where(eq(customers.phone, customerPhone))
+    .limit(1);
+
+  if (customer.length === 0) {
+    // Criar novo cliente
+    await db.insert(customers).values({
+      name: `Cliente ${customerPhone}`,
+      phone: customerPhone,
+      status: "active",
+    });
+    customer = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.phone, customerPhone))
+      .limit(1);
+  }
+
+  if (customer.length === 0) {
+    console.error("[MobileSync] Failed to create/find customer:", customerPhone);
+    return;
+  }
+
+  const customerRecord = customer[0];
+
   // Buscar conversa aberta/assigned para este cliente
   const [conv] = await db
     .select()
     .from(conversations)
     .where(
       and(
+        eq(conversations.customerId, customerRecord.id),
+        eq(conversations.channel, "whatsapp"),
         or(
-          eq(conversations.customerPhone, customerPhone),
-          eq(conversations.customerPhone, `+${customerPhone}`)
-        ),
-        sql`${conversations.status} IN ('open', 'assigned')`
+          eq(conversations.status, "open"),
+          eq(conversations.status, "assigned")
+        )
       )
     )
     .limit(1);
 
+  let conversationId: number;
+
   if (!conv) {
-    console.log("[MobileSync] No active conversation for phone:", customerPhone);
-    return;
+    // Criar nova conversa (open, sem agente designado, sem queue)
+    const insertResult = await db.insert(conversations).values({
+      customerId: customerRecord.id,
+      customerName: customerRecord.name,
+      customerPhone: customerPhone,
+      channel: "whatsapp",
+      status: "open",
+      assignedTo: null,
+      queueId: null,
+      openedAt: new Date(),
+      lastMessageAt: new Date(),
+      unreadCount: 1,
+    });
+    conversationId = insertResult.insertId as number;
+    console.log("[MobileSync] Created new conversation:", conversationId, "for phone:", customerPhone);
+  } else {
+    conversationId = conv.id;
+    // Atualizar lastMessageAt e unreadCount
+    await db
+      .update(conversations)
+      .set({
+        lastMessageAt: new Date(),
+        unreadCount: sql<number>`unread_count + 1`,
+      })
+      .where(eq(conversations.id, conversationId));
   }
 
-  // DUPLICATE CHECK: Verificar sealready exists a message with same externalId for this conversation
+  // DUPLICATE CHECK: Verificar se já existe mensagem com mesmo externalId para esta conversa
   const existing = await db
     .select()
     .from(conversationMessages)
     .where(
       and(
-        eq(conversationMessages.conversationId, conv.id),
+        eq(conversationMessages.conversationId, conversationId),
         eq(conversationMessages.externalId, job.messageId)
       )
     )
@@ -131,58 +185,58 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     return;
   }
 
-  console.log("[MobileSync] Processing job:", job.id, "for conversation:", conv.id, "agentId:", conv.assignedTo);
+  console.log("[MobileSync] Processing job:", job.id, "for conversation:", conversationId);
 
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";
-  let permanentMediaUrl: string | null = job.mediaUrl || null;
-
-  console.log("[MobileSync] Job media info:", {
-    messageId: job.messageId,
-    messageType: job.messageType,
-    mediaUrl: job.mediaUrl ? "present" : "missing",
-    mimeType: job.mimeType,
-  });
 
   // Inserir mensagem na tabela conversation_messages
   await db.insert(conversationMessages).values({
-    conversationId: conv.id,
-    senderId: conv.assignedTo,
+    conversationId,
+    senderId: null, // Mensagem do agente, mas não há user_id no contexto do mobile-sync (será atualizado depois se necessário)
     senderType: "agent",
-    content: content,
-    fileUrl: permanentMediaUrl || null,
+    content,
+    fileUrl: job.mediaUrl || null,
     fileName: null,
     fileType: job.messageType || null,
     fileSize: null,
-    externalId: job.messageId, // Store externalId for duplicate detection
+    externalId: job.messageId,
     remoteJid: job.remoteJid,
     createdAt: new Date(job.messageTimestamp * 1000),
   });
 
-  // Notificar via SSE
-  const [insertedMessage] = await db
+  // Notificar via SSE se houver agente designado
+  const [updatedConv] = await db
     .select()
-    .from(conversationMessages)
-    .where(
-      and(
-        eq(conversationMessages.conversationId, conv.id),
-        eq(conversationMessages.externalId, job.messageId)
-      )
-    )
-    .orderBy(sql`${conversationMessages.id} DESC`)
+    .from(conversations)
+    .where(eq(conversations.id, conversationId))
     .limit(1);
 
-  if (insertedMessage && insertedMessage.id) {
-    sseManager.emitToUser(conv.assignedTo, EVENTS.MESSAGE_CREATED, {
-      messageId: insertedMessage.id,
-      conversationId: conv.id,
-      senderId: conv.assignedTo,
-      senderType: "agent",
-      content: content,
-      fileUrl: permanentMediaUrl || null,
-      fileType: job.messageType || null,
-      createdAt: new Date(job.messageTimestamp * 1000).toISOString(),
-    });
+  if (updatedConv?.assignedTo) {
+    const [insertedMessage] = await db
+      .select()
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversationMessages.externalId, job.messageId)
+        )
+      )
+      .orderBy(sql`${conversationMessages.id} DESC`)
+      .limit(1);
+
+    if (insertedMessage && insertedMessage.id) {
+      sseManager.emitToUser(updatedConv.assignedTo, EVENTS.MESSAGE_CREATED, {
+        messageId: insertedMessage.id,
+        conversationId,
+        senderId: null,
+        senderType: "agent",
+        content,
+        fileUrl: job.mediaUrl || null,
+        fileType: job.messageType || null,
+        createdAt: new Date(job.messageTimestamp * 1000).toISOString(),
+      });
+    }
   }
 }
 
