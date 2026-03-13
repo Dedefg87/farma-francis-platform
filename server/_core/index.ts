@@ -22,6 +22,51 @@ import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
 import { runBabyShowerMigration } from "../baby-shower-migration";
 
+// Auto-migrate media columns if missing
+async function runMediaColumnsMigration() {
+  try {
+    const { getDb } = await import("./db");
+    const db = await getDb();
+    if (!db) {
+      console.log("[Migration] DB not ready, skipping");
+      return;
+    }
+
+    // Check external_id
+    const [cols1]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'external_id'");
+    if (cols1.length === 0) {
+      await db.execute("ALTER TABLE conversation_messages ADD COLUMN external_id VARCHAR(255) NULL COMMENT 'ID da mensagem na Evolution API' AFTER id");
+      console.log("[Migration] Added external_id column");
+    }
+
+    // Check remote_jid
+    const [cols2]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'remote_jid'");
+    if (cols2.length === 0) {
+      await db.execute("ALTER TABLE conversation_messages ADD COLUMN remote_jid VARCHAR(255) NULL COMMENT 'JID do remetente' AFTER external_id");
+      console.log("[Migration] Added remote_jid column");
+    }
+
+    // Indexes (ignore if exists)
+    try {
+      await db.execute("CREATE INDEX idx_conversation_messages_external_id ON conversation_messages(external_id)");
+      console.log("[Migration] Created index idx_conversation_messages_external_id");
+    } catch (e: any) {
+      if (!e.message.includes("already exists")) console.error("[Migration] Index external_id error:", e.message);
+    }
+
+    try {
+      await db.execute("CREATE INDEX idx_conversation_messages_remote_jid ON conversation_messages(remote_jid)");
+      console.log("[Migration] Created index idx_conversation_messages_remote_jid");
+    } catch (e: any) {
+      if (!e.message.includes("already exists")) console.error("[Migration] Index remote_jid error:", e.message);
+    }
+
+    console.log("[Migration] Media columns migration completed");
+  } catch (err) {
+    console.error("[Migration] Failed:", err);
+  }
+}
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -42,6 +87,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Auto-migrate media columns
+  await runMediaColumnsMigration();
+
   // Iniciar processador de sync de mensagens mobile (background)
   startMobileSyncProcessor();
 
