@@ -469,6 +469,14 @@ export default function AgentChat() {
                           {message.fileUrl && (
                             <div className="mb-2">
                               {getMimeType(message.fileUrl, message.fileType).startsWith("image/") ? (
+                                <>
+                                  {/* DEBUG: Quadro vermelho para ver se a imagem está sendo renderizada */}
+                                  <div style={{ padding: '10px', background: '#ffebee', color: '#cc0000', borderRadius: '8px', marginBottom: '8px' }}>
+                                    <p><b>DEBUG IMAGEM:</b></p>
+                                    <p>fileUrl bruto: {String(message.fileUrl)}</p>
+                                    <p>URL calculada: {getImageSrc(message.fileUrl)}</p>
+                                    <p>Se isso apareceu, o Frontend sabe que é uma imagem!</p>
+                                  </div>
                                 <a
                                   href={getImageSrc(message.fileUrl)}
                                   target="_blank"
@@ -491,6 +499,7 @@ export default function AgentChat() {
                                     }}
                                   />
                                 </a>
+                                </>
                               ) : getMimeType(message.fileUrl, message.fileType).startsWith("video/") ? (
                                 <video
                                   src={getImageSrc(message.fileUrl)}

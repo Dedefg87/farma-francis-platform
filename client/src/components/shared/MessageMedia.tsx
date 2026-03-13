@@ -32,11 +32,28 @@ interface MessageMediaProps {
 // Helper para obter URL de mídia (usa proxy se tiver messageId)
 function getMediaSrc(url: string | null, messageId?: number): string {
   if (!url) return "";
-  if (url.startsWith("data:")) return url;
+  
+  // Se já for data URL, retornar direto
+  if (url.startsWith("data:")) {
+    return url;
+  }
+  
+  // Se for URL absoluta (http/https), usar como está
+  if (url.startsWith("http")) {
+    return url;
+  }
+  
+  // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
+  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  const cleanUrl = url.replace(/^\//, "");
+  const fullUrl = `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
+  
+  // Se tiver messageId e for URL do WhatsApp, usar proxy (manter comportamento original)
   if (messageId && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
     return `/api/media/${messageId}`;
   }
-  return url;
+  
+  return fullUrl;
 }
 
 // Componente de player de áudio estilo WhatsApp

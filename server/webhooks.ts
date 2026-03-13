@@ -89,6 +89,7 @@ function normalizeInboundNumber(value: string | undefined | null) {
  * Remove query string, nome do bucket e deixa o path (ex: evolution-api/.../file.jpg)
  */
 function cleanR2Url(url: string | null | undefined): string | null {
+  console.log("[cleanR2Url] Input URL:", url?.substring(0, 120));
   if (!url) return null;
 
   // Verificar se é URL do R2 (r2.cloudflarestorage.com ou .r2.dev)
