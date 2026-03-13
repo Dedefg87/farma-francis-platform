@@ -962,6 +962,37 @@ function parseEvolutionMessageContent(message: any) {
       fileSize: null,
     };
 
+  // PRIORITÁRIO: Evolution com R2 envia mediaUrl direto na mensagem (nível superior)
+  if (message.mediaUrl) {
+    // Tenta inferir tipo a partir do mimeType ou extensão do nome
+    let type: string = "file";
+    const mimeType =
+      message.mimetype || message.mimeType || message.fileMimeType || null;
+    if (mimeType) {
+      if (mimeType.startsWith("image/")) type = "image";
+      else if (mimeType.startsWith("video/")) type = "video";
+      else if (mimeType.startsWith("audio/")) type = "audio";
+      else if (mimeType.includes("pdf")) type = "document";
+    } else if (message.fileName) {
+      const ext = message.fileName.split(".").pop()?.toLowerCase();
+      if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext || ""))
+        type = "image";
+      else if (["mp4", "webm", "mov"].includes(ext || "")) type = "video";
+      else if (["mp3", "ogg", "wav"].includes(ext || "")) type = "audio";
+      else if (ext === "pdf") type = "document";
+    }
+
+    return {
+      type,
+      text: null,
+      caption: message.caption || null,
+      mediaUrl: cleanR2Url(message.mediaUrl),
+      mimeType,
+      fileName: message.fileName || null,
+      fileSize: message.fileSize || null,
+    };
+  }
+
   if (message.conversation) {
     return {
       type: "text",
@@ -998,8 +1029,9 @@ function parseEvolutionMessageContent(message: any) {
       type: "image",
       text: null,
       caption: message.imageMessage.caption || null,
-      mediaUrl:
-        message.imageMessage.url || message.imageMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.imageMessage.url || message.imageMessage.mediaUrl || null
+      ),
       mimeType:
         message.imageMessage.mimetype || message.imageMessage.mimeType || null,
       fileName: message.imageMessage.fileName || null,
@@ -1015,8 +1047,9 @@ function parseEvolutionMessageContent(message: any) {
       type: "video",
       text: null,
       caption: message.videoMessage.caption || null,
-      mediaUrl:
-        message.videoMessage.url || message.videoMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.videoMessage.url || message.videoMessage.mediaUrl || null
+      ),
       mimeType:
         message.videoMessage.mimetype || message.videoMessage.mimeType || null,
       fileName: message.videoMessage.fileName || null,
@@ -1031,8 +1064,9 @@ function parseEvolutionMessageContent(message: any) {
       type: "document",
       text: null,
       caption: message.documentMessage.caption || null,
-      mediaUrl:
-        message.documentMessage.url || message.documentMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.documentMessage.url || message.documentMessage.mediaUrl || null
+      ),
       mimeType:
         message.documentMessage.mimetype ||
         message.documentMessage.mimeType ||
@@ -1049,8 +1083,9 @@ function parseEvolutionMessageContent(message: any) {
       type: "audio",
       text: null,
       caption: null,
-      mediaUrl:
-        message.audioMessage.url || message.audioMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.audioMessage.url || message.audioMessage.mediaUrl || null
+      ),
       mimeType:
         message.audioMessage.mimetype ||
         message.audioMessage.mimeType ||
@@ -1068,8 +1103,9 @@ function parseEvolutionMessageContent(message: any) {
       type: "sticker",
       text: null,
       caption: null,
-      mediaUrl:
-        message.stickerMessage.url || message.stickerMessage.mediaUrl || null,
+      mediaUrl: cleanR2Url(
+        message.stickerMessage.url || message.stickerMessage.mediaUrl || null
+      ),
       mimeType:
         message.stickerMessage.mimetype ||
         message.stickerMessage.mimeType ||
