@@ -503,6 +503,8 @@ export async function ingestInboundConversationMessage(message: {
     picked && Number.isFinite(picked.userId) && picked.userId > 0
       ? picked.userId
       : null;
+  
+  console.log("[ingestInbound] 🎯 Agent pick result:", { picked: picked?.userId, assignedUserId, customerPhone: customer.phone });
 
   const [defaultQueue] = await db
     .select()
@@ -595,6 +597,7 @@ export async function ingestInboundConversationMessage(message: {
 
   // Notify connected agent via SSE
   if (conversation?.assignedTo) {
+    console.log("[ingestInbound] 🚀 Emitindo SSE para agente:", conversation.assignedTo, "conversationId:", conversationId);
     sseManager.emitToUser(String(conversation.assignedTo), {
       type: EVENTS.MESSAGE_NEW,
       data: {
@@ -606,6 +609,8 @@ export async function ingestInboundConversationMessage(message: {
       },
       timestamp: now.getTime(),
     });
+  } else {
+    console.log("[ingestInbound] ⚠️ Nenhum agente atribuído à conversa, SSE não emitida");
   }
 
   return { conversationId, customerId: customer.id };
