@@ -1103,8 +1103,6 @@ async function processEvolutionWebhook(body: any) {
             caption,
             mediaUrl: permanentMediaUrl || mediaUrl,
             mimeType,
-            externalId: key?.id || null,
-            remoteJid: remoteJid || null,
           });
         }
       } catch (msgError) {
