@@ -95,7 +95,6 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   }
 
   // Buscar conversa aberta/assigned para este cliente
-  // O banco armazena com + no início, então tentamos com e sem +
   const [conv] = await db
     .select()
     .from(conversations)
@@ -111,15 +110,24 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     .limit(1);
 
   if (!conv) {
-    // Nenhuma conversa ativa com este cliente, ignorar
     console.log("[MobileSync] No active conversation for phone:", customerPhone);
-    // Listar algumas conversas abertas para debug
-    const allOpen = await db
-      .select({ id: conversations.id, phone: conversations.customerPhone, status: conversations.status })
-      .from(conversations)
-      .where(sql`${conversations.status} IN ('open', 'assigned')`)
-      .limit(5);
-    console.log("[MobileSync] Sample open conversations:", JSON.stringify(allOpen));
+    return;
+  }
+
+  // DUPLICATE CHECK: Verificar sealready exists a message with same externalId for this conversation
+  const existing = await db
+    .select()
+    .from(conversationMessages)
+    .where(
+      and(
+        eq(conversationMessages.conversationId, conv.id),
+        eq(conversationMessages.externalId, job.messageId)
+      )
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    console.log("[MobileSync] Duplicate message ignored:", job.messageId);
     return;
   }
 
@@ -127,8 +135,6 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";
-  // Economia de espaço: salvar apenas a URL original (não baixar como base64)
-  // URLs podem expirar, mas evita crescimento descontrolado do banco
   let permanentMediaUrl: string | null = job.mediaUrl || null;
 
   console.log("[MobileSync] Job media info:", {
@@ -138,39 +144,34 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     mimeType: job.mimeType,
   });
 
-  // NOTA: Não baixamos mídia para base64. Se necessário persistir,
-  // considerar storage externo (S3) ou cache com TTL.
-
   // Inserir mensagem na tabela conversation_messages
   await db.insert(conversationMessages).values({
     conversationId: conv.id,
-    senderId: conv.assignedTo, // Agente dono da conversa
+    senderId: conv.assignedTo,
     senderType: "agent",
     content: content,
     fileUrl: permanentMediaUrl || null,
     fileName: null,
     fileType: job.messageType || null,
     fileSize: null,
+    externalId: job.messageId, // Store externalId for duplicate detection
+    remoteJid: job.remoteJid,
     createdAt: new Date(job.messageTimestamp * 1000),
   });
 
-  // Buscar a mensagem recém-inserida (pelo conversationId + timestamp)
+  // Notificar via SSE
   const [insertedMessage] = await db
     .select()
     .from(conversationMessages)
     .where(
       and(
         eq(conversationMessages.conversationId, conv.id),
-        eq(conversationMessages.senderType, "agent"),
-        eq(conversationMessages.content, content),
-        sql`${conversationMessages.createdAt} >= ?`,
-        sql`${conversationMessages.createdAt} <= ?`
+        eq(conversationMessages.externalId, job.messageId)
       )
     )
     .orderBy(sql`${conversationMessages.id} DESC`)
     .limit(1);
 
-  // Notificar via SSE para atualizar frontend em tempo real
   if (insertedMessage && insertedMessage.id) {
     sseManager.emitToUser(conv.assignedTo, EVENTS.MESSAGE_CREATED, {
       messageId: insertedMessage.id,
