@@ -452,6 +452,7 @@ async function processEvolutionWebhookAsync(req: Request) {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
     if (!body || Object.keys(body).length === 0) {
+      console.log("[Evolution Webhook] Empty body, skipping");
       return;
     }
 
@@ -476,6 +477,12 @@ async function processEvolutionWebhookAsync(req: Request) {
       return;
     }
 
+    console.log("[Evolution Webhook] 📥 Received event:", {
+      event: eventName,
+      hasData: !!body?.data,
+      bodyKeys: Object.keys(body),
+    });
+
     // ==========================================
     // 🎯 FILTRAGEM CRÍTICA - PROCESSAR APENAS MENSAGENS
     // ==========================================
@@ -483,14 +490,16 @@ async function processEvolutionWebhookAsync(req: Request) {
 
     // Ignorar TUDO que não for mensagem nova
     if (normalizedEvent !== "messages_upsert") {
-      console.log(`[Evolution Webhook] Ignoring event type: ${eventName} (normalized: ${normalizedEvent})`);
+      console.log(`[Evolution Webhook] ⏭️ Ignoring event type: ${eventName} (normalized: ${normalizedEvent})`);
       return;
     }
+
+    console.log("[Evolution Webhook] ✅ Event approved for processing");
 
     // A partir daqui, processamos APENAS mensagens.upsert
     const db = await getDb();
     if (!db) {
-      console.error("[Evolution Webhook] Database not available");
+      console.error("[Evolution Webhook] ❌ Database not available");
       return;
     }
 
@@ -513,15 +522,22 @@ async function processEvolutionWebhookAsync(req: Request) {
       const cleanExpected = expectedApiKey?.replace("@", "") || "";
 
       if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected && isProduction) {
-        console.log("[Evolution Webhook] API key mismatch, ignoring");
+        console.log("[Evolution Webhook] 🔐 API key mismatch, ignoring");
+        console.log("  Expected:", cleanExpected.substring(0, 5) + "...");
+        console.log("  Received:", cleanApikey.substring(0, 5) + "...");
         return;
       }
+    } else {
+      console.warn("[Evolution Webhook] ⚠️ No Evolution API config found in database");
     }
 
+    console.log("[Evolution Webhook] 🚀 Starting message processing...");
     // Processar evento de mensagem
     await processEvolutionWebhook({ ...body, event: eventName });
+    console.log("[Evolution Webhook] ✅ Message processing completed");
   } catch (error) {
-    console.error("[Evolution Webhook] Error:", error);
+    console.error("[Evolution Webhook] 💥 Unhandled error:", error);
+    throw error;
   }
 }
 
