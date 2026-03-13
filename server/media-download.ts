@@ -8,6 +8,11 @@ interface EvolutionConfig {
   instanceName: string;
 }
 
+// Cache da config (tTL 5 minutos)
+let cachedEvolutionConfig: EvolutionConfig | null = null;
+let configCacheExpiry: number = 0;
+const CONFIG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Normaliza URL da API removendo barra final.
  * Isso previne o bug de dupla barra "//" que causa 404.
@@ -21,56 +26,68 @@ export function normalizeApiUrl(url: string): string {
 }
 
 async function getEvolutionConfig(): Promise<EvolutionConfig | null> {
+  // Return cached config if still valid
+  if (cachedEvolutionConfig && Date.now() < configCacheExpiry) {
+    console.log("[Evolution Config] Using cached config");
+    return cachedEvolutionConfig;
+  }
+
   const { getDb } = await import("./db");
   const { integrationSettings } = await import("../drizzle/schema");
   const { eq } = await import("drizzle-orm");
 
   const db = await getDb();
-  if (!db) return null;
+  if (!db) {
+    console.error("[Evolution Config] Database not available");
+    return null;
+  }
 
-  const [config] = await db
-    .select()
-    .from(integrationSettings)
-    .where(eq(integrationSettings.integrationType, "evolution_api"))
-    .limit(1);
+  try {
+    const [config] = await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.integrationType, "evolution_api"))
+      .limit(1);
 
-  if (!config || !config.isActive) return null;
+    if (!config || !config.isActive) {
+      console.error("[Evolution Config] No active config found");
+      return null;
+    }
 
-  const configData =
-    typeof config.config === "string"
-      ? JSON.parse(config.config)
-      : config.config;
+    const configData =
+      typeof config.config === "string"
+        ? JSON.parse(config.config)
+        : config.config;
 
-  // Normalizar apiUrl para remover barra final (previne bug //)
-  const apiUrl = normalizeApiUrl(configData?.apiUrl || process.env.EVOLUTION_API_URL || "");
-  const apiKey =
-    configData?.apiKey ||
-    configData?.accessToken ||
-    process.env.EVOLUTION_API_KEY ||
-    "";
-  const instanceName =
-    configData?.instanceName || process.env.EVOLUTION_INSTANCE_NAME || "";
+    // Normalizar apiUrl para remover barra final (previne bug //)
+    const apiUrl = normalizeApiUrl(
+      configData?.apiUrl || process.env.EVOLUTION_API_URL || ""
+    );
+    const apiKey =
+      configData?.apiKey ||
+      configData?.accessToken ||
+      process.env.EVOLUTION_API_KEY ||
+      "";
+    const instanceName =
+      configData?.instanceName ||
+      process.env.EVOLUTION_INSTANCE_NAME ||
+      "";
 
-  console.log(
-    "[Evolution Config] apiUrl:",
-    apiUrl || "(from env: " + process.env.EVOLUTION_API_URL + ")"
-  );
-  console.log(
-    "[Evolution Config] instanceName:",
-    instanceName || "(from env: " + process.env.EVOLUTION_INSTANCE_NAME + ")"
-  );
-  console.log(
-    "[Evolution Config] apiKey length:",
-    apiKey?.length || "(from env)"
-  );
-  console.log(
-    "[Evolution Config] apiKey first 5 chars:",
-    apiKey?.substring ? apiKey.substring(0, 5) : "N/A"
-  );
+    if (!apiUrl || !apiKey || !instanceName) {
+      console.error("[Evolution Config] Missing required config");
+      return null;
+    }
 
-  if (!apiUrl || !apiKey || !instanceName) return null;
+    // Cache the config
+    cachedEvolutionConfig = { apiUrl, apiKey, instanceName };
+    configCacheExpiry = Date.now() + CONFIG_CACHE_TTL;
 
-  return { apiUrl, apiKey, instanceName };
+    console.log("[Evolution Config] Loaded and cached successfully");
+    return cachedEvolutionConfig;
+  } catch (error) {
+    console.error("[Evolution Config] Error loading config:", error);
+    return null;
+  }
 }
 
 /**
