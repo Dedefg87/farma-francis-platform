@@ -85,6 +85,44 @@ function normalizeInboundNumber(value: string | undefined | null) {
 }
 
 /**
+ * Limpa URL do R2 para obter apenas o caminho relativo dentro do bucket.
+ * Remove query string, nome do bucket e deixa o path (ex: evolution-api/.../file.jpg)
+ */
+function cleanR2Url(url: string | null | undefined): string | null {
+  if (!url) return null;
+
+  // Verificar se é URL do R2 (r2.cloudflarestorage.com ou .r2.dev)
+  const isR2 =
+    url.includes(".r2.") ||
+    url.includes("r2.cloudflarestorage.com") ||
+    url.includes(".r2.dev");
+
+  if (!isR2) {
+    // Não é URL do R2, ignorar (não salvar)
+    console.log("[Webhooks] Non-R2 URL, skipping:", url.substring(0, 80));
+    return null;
+  }
+
+  try {
+    const parsed = new URL(url);
+    // pathname exemplo: /bucket-name/evolution-api/xxxx/file.jpg
+    const pathname = parsed.pathname;
+    // Separar partes e remover o primeiro segmento (bucket name)
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts.length < 2) {
+      console.log("[Webhooks] R2 URL has no bucket+path:", url);
+      return null;
+    }
+    const relativePath = parts.slice(1).join("/");
+    console.log("[Webhooks] Cleaned R2 path:", relativePath);
+    return relativePath;
+  } catch (e) {
+    console.error("[Webhooks] Failed to parse R2 URL:", url, e);
+    return null;
+  }
+}
+
+/**
  * Get Evolution API configuration
  */
 async function getEvolutionConfig() {
