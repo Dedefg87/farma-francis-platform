@@ -455,6 +455,7 @@ export async function ingestInboundConversationMessage(message: {
   caption?: string | null;
   mediaUrl?: string | null;
   mimeType?: string | null;
+  externalId?: string | null; // ID da mensagem na Evolution API
   createdAt?: Date;
 }) {
   try {

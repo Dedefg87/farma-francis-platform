@@ -512,28 +512,8 @@ async function startServer() {
 
                   if (base64Data) {
                     const dataUrl = `data:${mimeTypeResult};base64,${base64Data}`;
-                    // Update database with base64 for future requests
-                    try {
-                      const mysql2 = await import("mysql2/promise");
-                      const pool2 = mysql2.createPool({
-                        connectionLimit: 1,
-                        uri: process.env.DATABASE_URL,
-                      });
-                      await pool2.execute(
-                        "UPDATE conversation_messages SET file_url = ? WHERE id = ?",
-                        [dataUrl, messageId]
-                      );
-                      await pool2.end();
-                      console.log(
-                        "[Media] Updated database with base64 for message",
-                        messageId
-                      );
-                    } catch (updateErr) {
-                      console.error(
-                        "[Media] Failed to update database:",
-                        updateErr
-                      );
-                    }
+                    // DON'T update database - base64 occupies too much space
+                    // Serve directly from Evolution API each time
 
                     const buffer = Buffer.from(base64Data, "base64");
                     res.setHeader("Content-Type", mimeTypeResult);
