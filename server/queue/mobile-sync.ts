@@ -6,7 +6,7 @@
 import { getDb } from "../db";
 import { conversations, conversationMessages, customers } from "../../drizzle/schema";
 import { eq, and, or, sql } from "drizzle-orm";
-import { getMediaBase64FromEvolution } from "../media-download";
+
 import { sseManager, EVENTS } from "../_core/sse";
 
 interface MobileSyncJob {

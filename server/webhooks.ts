@@ -14,10 +14,7 @@ import {
   ingestInboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
-import {
-  downloadAndSaveMedia,
-  getMediaBase64FromEvolution,
-} from "./media-download";
+
 import { enqueueMobileSyncJob } from "./queue/mobile-sync";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
