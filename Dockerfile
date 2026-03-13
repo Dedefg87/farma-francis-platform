@@ -1,4 +1,5 @@
-# Build: forced cache invalidation 2026-03-04-v4
+# Build: forced rebuild for senderName fix - Wed Mar 11 19:22 GMT-3
+# Rebuild triggered: 2026-03-12 12:11 GMT-3 (force no-cache for COPY layer)
 FROM node:20-alpine
 
 WORKDIR /app

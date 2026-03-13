@@ -95,20 +95,41 @@ export const agentRouter = router({
   messages: router({
     list: protectedProcedure
       .input((raw: unknown) =>
-        z.object({ conversationId: z.number() }).parse(raw)
+        z.object({ conversation_id: z.number() }).parse(raw)
       )
       .query(async ({ input }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
-        const { messages } = await import("../drizzle/schema");
-        const { eq } = await import("drizzle-orm");
+        const { conversationMessages, users } = await import("../drizzle/schema");
+        const { eq, sql } = await import("drizzle-orm");
 
         const msgs = await db
-          .select()
-          .from(messages)
-          .where(eq(messages.ticketId, input.conversationId))
-          .orderBy(messages.createdAt);
+          .select({
+            id: conversationMessages.id,
+            conversationId: conversationMessages.conversationId,
+            senderId: conversationMessages.senderId,
+            senderType: conversationMessages.senderType,
+            content: conversationMessages.content,
+            fileUrl: conversationMessages.fileUrl,
+            fileName: conversationMessages.fileName,
+            fileType: conversationMessages.fileType,
+            fileSize: conversationMessages.fileSize,
+            readAt: conversationMessages.readAt,
+            createdAt: conversationMessages.createdAt,
+            senderName: sql<string>`CASE 
+              WHEN ${conversationMessages.senderType} = 'agent' AND ${users.role} = 'admin' 
+              THEN CONCAT(${users.name}, ' - Gerente')
+              WHEN ${conversationMessages.senderType} = 'agent' 
+              THEN ${users.name}
+              ELSE NULL 
+            END`.as('senderName'),
+          })
+          .from(conversationMessages)
+          .leftJoin(users, eq(conversationMessages.senderId, users.id))
+          .where(eq(conversationMessages.conversationId, input.conversation_id))
+          .orderBy(conversationMessages.createdAt);
+
         return msgs;
       }),
 
@@ -116,28 +137,48 @@ export const agentRouter = router({
       .input((raw: unknown) =>
         z
           .object({
-            conversationId: z.number(),
+            conversation_id: z.number(),
             content: z.string(),
-            mediaUrl: z.string().optional(),
+            // snake_case
+            file_url: z.string().optional(),
+            file_name: z.string().optional(),
+            file_type: z.string().optional(),
+            file_size: z.number().optional(),
+            // camelCase (para compatibilidade com frontend)
+            fileUrl: z.string().optional(),
+            fileName: z.string().optional(),
+            fileType: z.string().optional(),
+            fileSize: z.number().optional(),
           })
+          .transform(input => ({
+            conversation_id: input.conversation_id,
+            content: input.content,
+            file_url: input.file_url ?? input.fileUrl ?? undefined,
+            file_name: input.file_name ?? input.fileName ?? undefined,
+            file_type: input.file_type ?? input.fileType ?? undefined,
+            file_size: input.file_size ?? input.fileSize ?? undefined,
+          }))
           .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
         if (!db) throw new Error("Database not available");
-        const { messages } = await import("../drizzle/schema");
+        const { conversationMessages } = await import("../drizzle/schema");
 
-        const [msg] = await db.insert(messages).values({
-          ticketId: input.conversationId,
-          customerId: ctx.user.id,
-          channel: "whatsapp",
-          direction: "outbound",
+        await db.insert(conversationMessages).values({
+          conversationId: input.conversation_id,
+          senderId: ctx.user.id,
+          senderType: "agent",
           content: input.content,
-          status: "sent",
+          fileUrl: input.file_url || null,
+          fileName: input.file_name || null,
+          fileType: input.file_type || null,
+          fileSize: input.file_size || null,
           createdAt: new Date(),
         });
-        return { success: true, messageId: msg.insertId };
+
+        return { success: true };
       }),
   }),
 

@@ -217,8 +217,6 @@ export default function NewConversationModal({
                 >
                   <option value="whatsapp">WhatsApp</option>
                   <option value="instagram">Instagram</option>
-                  <option value="telegram">Telegram</option>
-                  <option value="email">Email</option>
                 </select>
               </div>
 
@@ -226,11 +224,7 @@ export default function NewConversationModal({
                 <Label htmlFor="contact">
                   {channel === "whatsapp"
                     ? "Número de telefone"
-                    : channel === "instagram"
-                      ? "Username do Instagram"
-                      : channel === "telegram"
-                        ? "Username do Telegram"
-                        : "Email"}
+                    : "Username do Instagram"}
                 </Label>
                 <div className="relative">
                   {channel === "whatsapp" && (
@@ -243,11 +237,7 @@ export default function NewConversationModal({
                     placeholder={
                       channel === "whatsapp"
                         ? "(DDD) 9xxxx-xxxx"
-                        : channel === "instagram"
-                          ? "@username"
-                          : channel === "telegram"
-                            ? "@username"
-                            : "email@exemplo.com"
+                        : "@username"
                     }
                     value={phoneOrEmail}
                     onChange={e => setPhoneOrEmail(e.target.value)}

@@ -313,9 +313,36 @@ export const conversationsRouter = router({
     }),
 
   // Listar conversas ativas do agente (inclui todas - open E assigned - para fila)
+  // Usuários normais veem suas conversas atribuídas + conversas na fila (open sem assignedTo)
+  // Admins veem todas
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
+    
+    const userId = ctx.user.id;
+    const userRole = ctx.user.role;
+    
+    // Build where clause
+    // Admin: todas as conversas com status 'assigned' ou 'open'
+    // Usuário normal: conversas atribuídas a ele OU conversas na fila (status='open' e assignedTo=null)
+    const whereCondition = userRole === 'admin' 
+      ? or(
+          eq(conversations.status, "assigned"),
+          eq(conversations.status, "open")
+        )
+      : or(
+          // Conversas atribuídas ao usuário
+          and(
+            eq(conversations.status, "assigned"),
+            eq(conversations.assignedTo, userId)
+          ),
+          // Conversas na fila (status=open, sem assignedTo)
+          and(
+            eq(conversations.status, "open"),
+            isNull(conversations.assignedTo)
+          )
+        );
+    
     const agentConversations = await db
       .select({
         id: conversations.id,
@@ -326,6 +353,7 @@ export const conversationsRouter = router({
         channel: conversations.channel,
         status: conversations.status,
         assignedTo: conversations.assignedTo,
+        assignedAgentName: users.name,
         openedAt: conversations.openedAt,
         lastMessageAt: conversations.lastMessageAt,
         lastMessage: sql<string>`(
@@ -345,12 +373,8 @@ export const conversationsRouter = router({
       })
       .from(conversations)
       .leftJoin(customers, eq(conversations.customerId, customers.id))
-      .where(
-        or(
-          eq(conversations.status, "assigned"),
-          eq(conversations.status, "open")
-        )
-      )
+      .leftJoin(users, eq(conversations.assignedTo, users.id))
+      .where(whereCondition)
       .orderBy(desc(conversations.lastMessageAt));
 
     const normalizePhone = (value?: string | null) => {
@@ -651,17 +675,41 @@ export const messagesRouter = router({
       }
 
       const messagesList = await db
-        .select()
+        .select({
+          id: conversationMessages.id,
+          conversationId: conversationMessages.conversationId,
+          senderId: conversationMessages.senderId,
+          senderType: conversationMessages.senderType,
+          content: conversationMessages.content,
+          fileUrl: conversationMessages.fileUrl,
+          fileName: conversationMessages.fileName,
+          fileType: conversationMessages.fileType,
+          fileSize: conversationMessages.fileSize,
+          readAt: conversationMessages.readAt,
+          createdAt: conversationMessages.createdAt,
+          // Nome formatado do agente: "Nome do Agente" ou "Nome - Admin"
+          senderName: sql<string>`CASE 
+            WHEN ${conversationMessages.senderType} = 'agent' AND ${users.role} = 'admin' 
+            THEN CONCAT(${users.name}, ' - Gerente')
+            WHEN ${conversationMessages.senderType} = 'agent' 
+            THEN ${users.name}
+            ELSE NULL 
+          END`.as('senderName'),
+        })
         .from(conversationMessages)
+        .leftJoin(users, eq(conversationMessages.senderId, users.id))
         .where(eq(conversationMessages.conversationId, input.conversation_id))
         .orderBy(conversationMessages.createdAt);
 
       // Log para debug de arquivos
       console.log("[MESSAGES LIST] Total messages:", messagesList.length);
       messagesList.forEach((msg: any) => {
+        console.log("[MESSAGES LIST] Message", msg.id, 
+          "senderType:", msg.senderType,
+          "senderName:", msg.senderName,
+          "content:", msg.content ? msg.content.substring(0, 30) + "..." : "null");
         if (msg.fileUrl) {
-          console.log("[MESSAGES LIST] Message", msg.id, 
-            "fileUrl length:", msg.fileUrl?.length,
+          console.log("[MESSAGES LIST]   fileUrl length:", msg.fileUrl?.length,
             "fileType:", msg.fileType,
             "fileName:", msg.fileName);
         }
@@ -823,8 +871,25 @@ export const messagesRouter = router({
         throw new Error("Destino não encontrado para esta conversa");
       }
 
+      // Buscar dados do agente para formatar nome
+      const [agent] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, ctx.user.id))
+        .limit(1);
+
+      const agentName = agent?.name || "Agente";
+      const roleSuffix = agent?.role === "admin" ? " - Gerente" : "";
+      const formattedAgentName = `${agentName}${roleSuffix}`;
+
+      // Prefixar nome do agente nas mensagens enviadas ao WhatsApp
+      // Usar Markdown (*negrito*) + emoji preto para destacar
+      const prefixedContent = `⚫ *${formattedAgentName}*\n${input.content}`;
+
       console.log("[SEND MESSAGE] Input:", JSON.stringify({
         content: input.content,
+        prefixedContent,
+        agentName: formattedAgentName,
         fileUrl: input.fileUrl,
         fileName: input.fileName,
         fileType: input.fileType,
@@ -864,14 +929,15 @@ export const messagesRouter = router({
               to: destination,
               documentUrl: input.fileUrl,
               filename: input.fileName,
-              mimeType: input.fileType
+              mimeType: input.fileType,
+              caption: prefixedContent,
             });
             await sendWhatsAppDocument({
               to: destination,
               documentUrl: input.fileUrl,
               filename: input.fileName || "documento",
               mimeType: input.fileType || "application/octet-stream",
-              caption: input.content,
+              caption: prefixedContent,
             });
           } else if (isAudio && input.fileUrl) {
             // Enviar áudio
@@ -889,20 +955,20 @@ export const messagesRouter = router({
                 to: destination,
                 mediaUrl: input.fileUrl,
                 mediaType: isVideo ? "video" : "image",
-                caption: input.content,
+                caption: prefixedContent,
               });
             } else {
               await sendWhatsAppImage({
                 to: destination,
                 imageUrl: input.fileUrl,
-                caption: input.content,
+                caption: prefixedContent,
               });
             }
           } else {
             console.log("[SEND MESSAGE] Sending TEXT to WhatsApp");
             await sendWhatsAppMessage({
               to: destination,
-              message: input.content,
+              message: prefixedContent,
             });
           }
         } else if (conversation.channel === "instagram") {

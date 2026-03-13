@@ -1318,11 +1318,14 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
   // Dados do Evento
   eventCode: varchar("event_code", { length: 20 }).notNull().unique(), // Ex: "CHA202503001"
   eventName: varchar("event_name", { length: 255 }).notNull(), // Ex: "Chá da Maria"
+  babyName: varchar("baby_name", { length: 255 }), // Nome do bebê
   expectedDueDate: date("expected_due_date"), // Data prevista do parto
   eventDate: date("event_date"), // Data do evento físico (se houver)
   status: mysqlEnum("status", ["active", "closed", "cancelled"])
     .default("active")
     .notNull(),
+  // WhatsApp para contato (editável)
+  whatsappNumber: varchar("whatsapp_number", { length: 20 }), // Ex: "5531986337081"
   // Carteira Virtual (saldo em valor monetário)
   walletBalance: decimal("wallet_balance", { precision: 12, scale: 2 })
     .default("0.00")
@@ -1335,6 +1338,8 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
   totalGuests: int("total_guests").default(0), // Total de convidados que compraram
   // URLs de compartilhamento
   publicLink: varchar("public_link", { length: 500 }), // Link para convidados comprarem
+  // Mensagem personalizada para convidados
+  welcomeMessage: text("welcome_message"), // Mensagem carinhosa exibida na página pública
   // Timestamps
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
@@ -1355,6 +1360,8 @@ export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
   // Configuração da Cota
   packageName: varchar("package_name", { length: 120 }).notNull(), // Ex: "Pacote Fraldas P"
   description: text("description"),
+  // Imagem do produto
+  imageUrl: text("image_url"), // URL da imagem (upload ou externa, pode ser base64)
   // Tipo de presente
   giftType: mysqlEnum("gift_type", ["diapers", "wipes", "money", "product"])
     .default("diapers")
@@ -1368,6 +1375,8 @@ export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
   // Contadores
   soldCount: int("sold_count").default(0),
   isActive: int("is_active").default(1).notNull(),
+  // Ordem de exibição (drag-and-drop)
+  displayOrder: int("display_order").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -1411,6 +1420,8 @@ export const babyShowerPurchases = mysqlTable("baby_shower_purchases", {
   // Notificação enviada
   notificationSent: int("notification_sent").default(0),
   notificationSentAt: timestamp("notification_sent_at"),
+  // Token único para confirmação de pagamento via link
+  confirmationToken: varchar("confirmation_token", { length: 64 }).unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

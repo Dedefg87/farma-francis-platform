@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { getMimeType, getMediaUrl } from '@/hooks/usePdfViewer';
 import {
   FileText,
@@ -13,7 +13,9 @@ import {
   Music,
   Film,
   Image,
-  FileType
+  FileType,
+  Play,
+  Pause
 } from 'lucide-react';
 
 interface MessageMediaProps {
@@ -25,6 +27,162 @@ interface MessageMediaProps {
   onImageClick?: (url: string, id?: number) => void;
   onDocumentClick?: (url: string, id?: number, name?: string) => void;
   isAgent?: boolean;
+}
+
+// Helper para obter URL de mídia (usa proxy se tiver messageId)
+function getMediaSrc(url: string | null, messageId?: number): string {
+  if (!url) return "";
+  if (url.startsWith("data:")) return url;
+  if (messageId && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
+    return `/api/media/${messageId}`;
+  }
+  return url;
+}
+
+// Componente de player de áudio estilo WhatsApp
+function WhatsAppAudioPlayer({ mediaUrl, isAgent, messageId }: { mediaUrl: string; isAgent?: boolean; messageId?: number }) {
+  const src = getMediaSrc(mediaUrl, messageId);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [playbackRate, setPlaybackRate] = useState(1);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    audio.currentTime = percentage * duration;
+  };
+
+  const togglePlaybackRate = () => {
+    const rates = [1, 1.5, 2];
+    const currentIndex = rates.indexOf(playbackRate);
+    const nextRate = rates[(currentIndex + 1) % rates.length];
+    setPlaybackRate(nextRate);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextRate;
+    }
+  };
+
+  const formatTime = (time: number) => {
+    if (!time || !isFinite(time)) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Gerar "waveform" visual fake
+  const waveBars = Array.from({ length: 30 }, (_, i) => {
+    const height = Math.random() * 100;
+    return height;
+  });
+
+  return (
+    <div className={`flex items-center gap-2 rounded-full px-3 py-2 ${
+      isAgent ? 'bg-blue-600/30' : 'bg-gray-200/80'
+    }`}>
+      <audio ref={audioRef} src={src} preload="metadata" />
+
+      {/* Botão Play/Pause */}
+      <button
+        onClick={togglePlay}
+        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+          isAgent
+            ? 'bg-white text-blue-600 hover:bg-blue-50'
+            : 'bg-green-500 text-white hover:bg-green-600'
+        }`}
+      >
+        {isPlaying ? (
+          <Pause className="w-5 h-5" fill="currentColor" />
+        ) : (
+          <Play className="w-5 h-5 ml-0.5" fill="currentColor" />
+        )}
+      </button>
+
+      {/* Waveform / Progress Bar */}
+      <div
+        className="flex-1 flex items-center gap-0.5 h-8 cursor-pointer"
+        onClick={handleSeek}
+      >
+        {waveBars.map((height, i) => {
+          const barProgress = duration ? (currentTime / duration) * 30 : 0;
+          const isPassed = i < barProgress;
+          return (
+            <div
+              key={i}
+              className={`w-1 rounded-full transition-all ${
+                isPassed
+                  ? isAgent ? 'bg-white' : 'bg-green-500'
+                  : isAgent ? 'bg-white/40' : 'bg-gray-400'
+              }`}
+              style={{ height: `${Math.max(20, height)}%` }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Tempo e velocidade */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <span className={`text-xs font-medium ${isAgent ? 'text-white' : 'text-gray-600'}`}>
+          {formatTime(currentTime) || formatTime(duration)}
+        </span>
+        <button
+          onClick={togglePlaybackRate}
+          className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+            isAgent
+              ? 'bg-white/20 text-white hover:bg-white/30'
+              : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
+          }`}
+        >
+          {playbackRate}x
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -260,25 +418,11 @@ export function MessageMedia({
     );
   }
 
-  // Áudio
+  // Áudio - Player estilo WhatsApp
   if (isAudio) {
     return (
-      <div className={`rounded-lg p-3 ${isAgent ? 'bg-blue-600/20 border border-blue-400/30' : 'bg-white/20 border border-white/30'}`}>
-        <div className="flex items-center gap-3 mb-2">
-          <div className={`p-2 rounded-full ${bgColor}`}>
-            <Music className={`w-5 h-5 ${color}`} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{fileName || 'Áudio'}</p>
-            <p className="text-xs opacity-70">{size || label}</p>
-          </div>
-        </div>
-        <audio
-          src={mediaUrl}
-          controls
-          className="w-full h-10"
-          preload="metadata"
-        />
+      <div className="max-w-xs">
+        <WhatsAppAudioPlayer mediaUrl={mediaUrl} isAgent={isAgent} messageId={messageId} />
       </div>
     );
   }

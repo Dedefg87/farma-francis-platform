@@ -573,6 +573,13 @@ export default function Messages() {
                               {selectedConversationData?.customerPhone}
                             </span>
                           </div>
+                          {selectedConversationData?.assignedAgentName && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="text-xs text-green-600 font-medium">
+                                Atendente: {selectedConversationData.assignedAgentName}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <Sheet
@@ -853,6 +860,10 @@ export default function Messages() {
                                     : "bg-gray-100 text-gray-900"
                                 }`}
                               >
+                                {/* DEBUG: Agent name display */}
+                                <p className="text-xs font-medium mb-1 opacity-75" data-testid="sender-name">
+                                  {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
+                                </p>
                                 {msg.content && msg.content !== "null" && (
                                   <p className="text-sm">{msg.content}</p>
                                 )}
