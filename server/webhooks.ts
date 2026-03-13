@@ -963,61 +963,8 @@ function parseEvolutionMessageContent(message: any) {
       fileSize: null,
     };
 
-  // PRIORITÁRIO: Evolution com R2 envia mediaUrl direto na mensagem (nível superior)
-  if (message.mediaUrl) {
-    // Tenta inferir tipo a partir do mimeType ou extensão do nome
-    let type: string = "document"; // CORRIGIDO: 'file' -> 'document' (valor válido no ENUM)
-    const mimeType =
-      message.mimetype || message.mimeType || message.fileMimeType || null;
-    if (mimeType) {
-      if (mimeType.startsWith("image/")) type = "image";
-      else if (mimeType.startsWith("video/")) type = "video";
-      else if (mimeType.startsWith("audio/")) type = "audio";
-      else if (mimeType.includes("pdf")) type = "document";
-    } else if (message.fileName) {
-      const ext = message.fileName.split(".").pop()?.toLowerCase();
-      if (["jpg", "jpeg", "png", "gif", "webp"].includes(ext || ""))
-        type = "image";
-      else if (["mp4", "webm", "mov"].includes(ext || "")) type = "video";
-      else if (["mp3", "ogg", "wav"].includes(ext || "")) type = "audio";
-      else if (ext === "pdf") type = "document";
-    }
-
-    return {
-      type,
-      text: null,
-      caption: message.caption || null,
-      mediaUrl: cleanR2Url(message.mediaUrl),
-      mimeType,
-      fileName: message.fileName || null,
-      fileSize: message.fileSize || null,
-    };
-  }
-
-  if (message.conversation) {
-    return {
-      type: "text",
-      text: message.conversation,
-      caption: null,
-      mediaUrl: null,
-      mimeType: null,
-      fileName: null,
-      fileSize: null,
-    };
-  }
-
-  if (message.extendedTextMessage?.text) {
-    return {
-      type: "text",
-      text: message.extendedTextMessage.text,
-      caption: null,
-      mediaUrl: null,
-      mimeType: null,
-      fileName: null,
-      fileSize: null,
-    };
-  }
-
+  // PRIORIDADE ALTA: Detectar imagem EXPLICITAMENTE
+  // 1. Se existe imageMessage no payload → é imagem
   if (message.imageMessage) {
     // Check if base64 is already provided by Evolution API (when Send Base64 is enabled)
     if (message.imageMessage.base64) {
@@ -1043,6 +990,45 @@ function parseEvolutionMessageContent(message: any) {
     };
   }
 
+  // 2. Se existe mediaUrl direto (R2), verificar se é imagem pela extensão ou mimeType
+  if (message.mediaUrl) {
+    const mimeType =
+      message.mimetype || message.mimeType || message.fileMimeType || null;
+    const fileName = message.fileName || null;
+    const mediaUrl = message.mediaUrl;
+    
+    // Detectar tipo baseado em mimeType ou extensão
+    let type: string = "document"; // default para documentos
+    if (mimeType) {
+      if (mimeType.startsWith("image/")) type = "image";
+      else if (mimeType.startsWith("video/")) type = "video";
+      else if (mimeType.startsWith("audio/")) type = "audio";
+      else if (mimeType.includes("pdf") || mimeType.includes("document")) type = "document";
+    } else if (fileName) {
+      const ext = fileName.split(".").pop()?.toLowerCase();
+      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff"].includes(ext || "")) {
+        type = "image";
+      } else if (["mp4", "webm", "mov", "avi", "mkv"].includes(ext || "")) {
+        type = "video";
+      } else if (["mp3", "ogg", "wav", "m4a", "aac"].includes(ext || "")) {
+        type = "audio";
+      } else if (ext === "pdf" || ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext || "")) {
+        type = "document";
+      }
+    }
+
+    return {
+      type,
+      text: null,
+      caption: message.caption || null,
+      mediaUrl: cleanR2Url(mediaUrl),
+      mimeType,
+      fileName,
+      fileSize: message.fileSize || null,
+    };
+  }
+
+  // Outros tipos específicos (video, audio, document, sticker)
   if (message.videoMessage) {
     return {
       type: "video",
@@ -1113,6 +1099,31 @@ function parseEvolutionMessageContent(message: any) {
         "image/webp",
       fileName: message.stickerMessage.fileName || null,
       fileSize: message.stickerMessage.fileSize || null,
+    };
+  }
+
+  // Text messages
+  if (message.conversation) {
+    return {
+      type: "text",
+      text: message.conversation,
+      caption: null,
+      mediaUrl: null,
+      mimeType: null,
+      fileName: null,
+      fileSize: null,
+    };
+  }
+
+  if (message.extendedTextMessage?.text) {
+    return {
+      type: "text",
+      text: message.extendedTextMessage.text,
+      caption: null,
+      mediaUrl: null,
+      mimeType: null,
+      fileName: null,
+      fileSize: null,
     };
   }
 
