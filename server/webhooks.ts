@@ -966,7 +966,7 @@ function parseEvolutionMessageContent(message: any) {
   // PRIORITÁRIO: Evolution com R2 envia mediaUrl direto na mensagem (nível superior)
   if (message.mediaUrl) {
     // Tenta inferir tipo a partir do mimeType ou extensão do nome
-    let type: string = "file";
+    let type: string = "document"; // CORRIGIDO: 'file' -> 'document' (valor válido no ENUM)
     const mimeType =
       message.mimetype || message.mimeType || message.fileMimeType || null;
     if (mimeType) {
