@@ -13,6 +13,7 @@ import {
 } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _dbHealthCheck: number = 0; // timestamp do último health check bem-sucedido
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
