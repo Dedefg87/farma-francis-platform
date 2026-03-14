@@ -262,7 +262,13 @@ async function startServer() {
         );
 
         // Retorna URL pública no formato esperado pelo frontend
-        res.json({ url: publicUrl });
+        // IMPORTANTE: Retornar TODOS os campos que o frontend espera
+        res.json({
+          fileUrl: publicUrl,
+          fileName: file.originalname,
+          fileType: file.mimetype,
+          fileSize: file.size,
+        });
       } catch (error: any) {
         console.error("[BroadcastUpload] Erro no upload para R2:", error);
         res.status(500).json({
