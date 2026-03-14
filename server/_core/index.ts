@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 console.log("[Server] Starting initialization...");
 
 import express from "express";
@@ -18,7 +19,6 @@ import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
 import { sdk } from "./sdk";
 import multer from "multer";
-import { storagePut } from "../storage";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -249,18 +249,34 @@ async function startServer() {
           .json({ error: `Tipo de arquivo não permitido: ${req.file.mimetype}` });
       }
 
-      // Fazer upload para storage (R2 via proxy ou S3 direto conforme configurado)
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 8);
-      const ext = req.file.originalname.split(".").pop() || "bin";
-      const relKey = `broadcast-temp/${timestamp}-${random}.${ext}`;
+      // Upload direto para Cloudflare R2 usando variáveis S3_* existentes
+      const s3Client = new S3Client({
+        region: process.env.S3_REGION || "auto",
+        endpoint: `https://${process.env.S3_ENDPOINT}`,
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY!,
+          secretAccessKey: process.env.S3_SECRET_KEY!,
+        },
+      });
 
-      const result = await storagePut(relKey, req.file.buffer, req.file.mimetype);
+      const fileKey = `broadcast-temp/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${req.file.originalname.split(".").pop() || "bin"}`;
+
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: process.env.S3_BUCKET!,
+          Key: fileKey,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        })
+      );
+
+      // URL pública
+      const publicUrl = `${process.env.VITE_PUBLIC_R2_URL}/${fileKey}`;
 
       // Retornar metadados
       res.json({
         success: true,
-        fileUrl: result.url,
+        fileUrl: publicUrl,
         fileName: req.file.originalname,
         fileType: req.file.mimetype,
         fileSize: req.file.size,
