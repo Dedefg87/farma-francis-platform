@@ -9,7 +9,7 @@ import {
   queues,
   users,
 } from "../drizzle/schema";
-import { eq, desc, and, or, sql } from "drizzle-orm";
+import { eq, desc, and, or, sql, like } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
 
@@ -289,13 +289,25 @@ export async function findOrCreateCustomerByPhone(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const normalizedPhone = normalizePhone(phone);
-  const searchPhones = getPhoneSearchVariants(normalizedPhone);
+  const rawPhone = phone;
+  const cleanPhone = rawPhone.replace(/\D/g, '');
 
-  // Build flexible OR condition for Brazilian numbers (with/without 9th digit)
-  const searchCondition = searchPhones.length > 1
-    ? or(...searchPhones.map(p => eq(customers.phone, p)))
-    : eq(customers.phone, searchPhones[0]);
+  let searchCondition;
+  
+  // Se for Brasil (55) e tamanho adequado, usar LIKE para ignorar '+' e '9'
+  if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
+    const ddd = cleanPhone.substring(2, 4);
+    const last8 = cleanPhone.slice(-8);
+    // % no início ignora o '+' e % no meio ignora o 9
+    searchCondition = like(customers.phone, `%55${ddd}%${last8}`);
+  } else {
+    // Para outros países ou números curtos, usar busca exata normalizada
+    const normalizedPhone = normalizePhone(phone);
+    const searchPhones = getPhoneSearchVariants(normalizedPhone);
+    searchCondition = searchPhones.length > 1
+      ? or(...searchPhones.map(p => eq(customers.phone, p)))
+      : eq(customers.phone, searchPhones[0]);
+  }
 
   // Selecionar apenas colunas que existem no banco (evitar erro de colunas faltantes)
   const existing = await db
