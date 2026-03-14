@@ -841,9 +841,21 @@ export const messagesRouter = router({
         throw new Error("Conversa não encontrada ou sem permissão");
       }
 
-      const destination = conversation.customerPhone;
+      let destination = conversation.customerPhone;
       if (!destination) {
         throw new Error("Destino não encontrado para esta conversa");
+      }
+
+      // 🎯 DETECÇÃO DE GRUPO WHATSAPP
+      // Grupos podem ter hífen (antigos) ou ser muito longos (novos, >14 dígitos)
+      // Se for grupo e não tiver sufixo, adicionar @g.us
+      // Se for contato normal e não tiver sufixo, adicionar @s.whatsapp.net
+      const cleanNumber = destination.replace(/\D/g, '');
+      const isGroup = destination.includes('-') || cleanNumber.length > 14;
+      if (isGroup && !destination.includes('@')) {
+        destination = `${destination}@g.us`;
+      } else if (!isGroup && !destination.includes('@')) {
+        destination = `${destination}@s.whatsapp.net`;
       }
 
       // Buscar dados do agente para formatar nome
