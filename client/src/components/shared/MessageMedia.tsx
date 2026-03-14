@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getMimeType, getMediaUrl } from '@/hooks/usePdfViewer';
+import { getMimeType } from '@/hooks/usePdfViewer';
 import {
   FileText,
   FileSpreadsheet,
@@ -38,17 +38,25 @@ function getMediaSrc(url: string | null, messageId?: number): string {
     return url;
   }
   
-  // Se for URL do R2 (Cloudflare) - usar como está (já é pública)
-  if (url.includes(".r2.") || url.includes("r2.dev") || url.includes("r2.cloudflarestorage.com")) {
+  // Se for URL absoluta (http/https)
+  if (url.startsWith("http")) {
+    // Se for do R2 (Cloudflare), usar como está (já é pública)
+    if (url.includes(".r2.") || url.includes("r2.dev") || url.includes("r2.cloudflarestorage.com")) {
+      return url;
+    }
+    // Se for do WhatsApp CDN, usar proxy para autenticação
+    if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
+      if (messageId) {
+        return `/api/media/${messageId}`;
+      }
+      return url; // fallback sem messageId
+    }
+    // Outras URLs absolutas (nosso próprio domínio, etc.) - retornar direto
     return url;
   }
   
-  // Se for URL do WhatsApp CDN (mmg.whatsapp.net etc) - usar proxy para autenticação
-  if (url.startsWith("http") && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
-    if (messageId) {
-      return `/api/media/${messageId}`;
-    }
-    // Se não tem messageId, tentar usar a URL diretamente (pode falhar por CORS)
+  // Se for caminho absoluto do nosso servidor (começa com /) - retornar direto
+  if (url.startsWith("/")) {
     return url;
   }
   
@@ -391,7 +399,7 @@ export function MessageMedia({
   if (!fileUrl) return null;
 
   const mimeType = getMimeType(fileUrl, fileType);
-  const mediaUrl = getMediaUrl(fileUrl, messageId);
+  const mediaUrl = getMediaSrc(fileUrl, messageId);
   const { icon, color, bgColor, label } = getFileIcon(mimeType, fileName);
   const size = formatFileSize(fileSize);
 
