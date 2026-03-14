@@ -18,7 +18,7 @@ import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
 import { sdk } from "./sdk";
 import multer from "multer";
-import { storagePut } from "./storage";
+import { storagePut } from "../storage";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
