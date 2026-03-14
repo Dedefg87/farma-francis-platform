@@ -185,10 +185,24 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       });
 
       const data = await res.json();
+      console.log("[Broadcast] Upload response:", data); // DEBUG
+      
       if (!res.ok) throw new Error(data.error || "Upload falhou");
 
+      // Extrair URL de forma robusta (suporta ambos os formatos)
+      let fileUrl: string;
+      if (typeof data.fileUrl === 'string') {
+        fileUrl = data.fileUrl;
+      } else if (data.fileUrl && typeof data.fileUrl === 'object' && 'url' in data.fileUrl) {
+        fileUrl = (data.fileUrl as any).url;
+      } else if (data.url) {
+        fileUrl = data.url;
+      } else {
+        throw new Error("URL do arquivo não encontrada na resposta");
+      }
+
       setFileAttachment({
-        url: data.fileUrl,
+        url: fileUrl,
         name: data.fileName,
         type: data.fileType,
         size: data.fileSize,
@@ -209,16 +223,20 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       return;
     }
 
-    sendMessage.mutate({
+    const payload: any = {
       listId: selectedListId!,
       content: messageContent,
-      ...(fileAttachment && {
-        fileUrl: fileAttachment.url,
-        fileName: fileAttachment.name,
-        fileType: fileAttachment.type,
-        fileSize: fileAttachment.size,
-      }),
-    });
+    };
+    if (fileAttachment) {
+      payload.fileUrl = fileAttachment.url;
+      payload.fileName = fileAttachment.name;
+      payload.fileType = fileAttachment.type;
+      payload.fileSize = fileAttachment.size;
+    }
+
+    console.log("[Broadcast] Payload a ser enviado:", payload); // DEBUG
+
+    sendMessage.mutate(payload);
 
     // Limpar após envio
     setMessageContent("");
