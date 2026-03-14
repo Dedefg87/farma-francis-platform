@@ -376,7 +376,19 @@ export const broadcastRouter = router({
         phone: m.phone,
         status: "pending" as const,
       }));
-      await db.insert(broadcastMembersSent).values(memberSends);
+
+      // Inserção manual via SQL para evitar problemas de geração de query do Drizzle
+      if (memberSends.length > 0) {
+        const placeholders = memberSends.map(() => "(?, ?, ?, ?)").join(",");
+        const params: any[] = [];
+        for (const m of memberSends) {
+          params.push(m.messageId, m.customerId, m.phone, m.status);
+        }
+        await db.execute(
+          `INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status) VALUES ${placeholders}`,
+          params
+        );
+      }
 
       // Processar envio em background (não bloquear resposta)
       setImmediate(async () => {
