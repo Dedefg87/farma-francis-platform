@@ -250,37 +250,70 @@ async function startServer() {
       }
 
       // Upload direto para Cloudflare R2 usando variáveis S3_* existentes
-      const s3Client = new S3Client({
-        region: process.env.S3_REGION || "auto",
-        endpoint: `https://${process.env.S3_ENDPOINT}`,
-        credentials: {
-          accessKeyId: process.env.S3_ACCESS_KEY!,
-          secretAccessKey: process.env.S3_SECRET_KEY!,
-        },
-      });
+      try {
+        const accessKey = process.env.S3_ACCESS_KEY;
+        const secretKey = process.env.S3_SECRET_KEY;
+        const endpoint = process.env.S3_ENDPOINT;
+        const bucket = process.env.S3_BUCKET;
 
-      const fileKey = `broadcast-temp/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${req.file.originalname.split(".").pop() || "bin"}`;
+        // Validação explícita
+        if (!accessKey || !secretKey || !endpoint || !bucket) {
+          console.error("[BroadcastUpload] Variáveis de ambiente ausentes:", {
+            accessKey: !!accessKey,
+            secretKey: !!secretKey,
+            endpoint: !!endpoint,
+            bucket: !!bucket,
+          });
+          return res.status(500).json({
+            error: "Configuração do S3 ausente no servidor",
+            missing: {
+              S3_ACCESS_KEY: !accessKey,
+              S3_SECRET_KEY: !secretKey,
+              S3_ENDPOINT: !endpoint,
+              S3_BUCKET: !bucket,
+            },
+          });
+        }
 
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET!,
-          Key: fileKey,
-          Body: req.file.buffer,
-          ContentType: req.file.mimetype,
-        })
-      );
+        // Inicializa o cliente DENTRO da requisição
+        const s3Client = new S3Client({
+          region: process.env.S3_REGION || "auto",
+          endpoint: endpoint.startsWith("http") ? endpoint : `https://${endpoint}`,
+          credentials: {
+            accessKeyId: accessKey,
+            secretAccessKey: secretKey,
+          },
+        });
 
-      // URL pública
-      const publicUrl = `${process.env.VITE_PUBLIC_R2_URL}/${fileKey}`;
+        const fileKey = `broadcast-temp/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${req.file.originalname.split(".").pop() || "bin"}`;
 
-      // Retornar metadados
-      res.json({
-        success: true,
-        fileUrl: publicUrl,
-        fileName: req.file.originalname,
-        fileType: req.file.mimetype,
-        fileSize: req.file.size,
-      });
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: fileKey,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+          })
+        );
+
+        // URL pública
+        const publicUrl = `${process.env.VITE_PUBLIC_R2_URL}/${fileKey}`;
+
+        // Retornar metadados
+        res.json({
+          success: true,
+          fileUrl: publicUrl,
+          fileName: req.file.originalname,
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+        });
+      } catch (error: any) {
+        console.error("[BroadcastUpload] Erro detalhado no upload:", error);
+        res.status(500).json({
+          error: error.message || "Falha ao enviar arquivo",
+          stack: error.stack,
+        });
+      }
     } catch (error: any) {
       console.error("[BroadcastUpload] Error:", error);
       res.status(500).json({ error: "Erro no upload: " + error.message });
