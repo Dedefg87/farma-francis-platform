@@ -294,15 +294,18 @@ export async function findOrCreateCustomerByPhone(
 
   let searchCondition;
   
-  // Se for Brasil (55) e tamanho adequado, usar LIKE para ignorar '+' e '9'
+  // Determinar normalizedPhone para armazenamento (sempre armazenamos o número formatado padrão)
+  let normalizedPhone: string;
   if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
     const ddd = cleanPhone.substring(2, 4);
     const last8 = cleanPhone.slice(-8);
     // % no início ignora o '+' e % no meio ignora o 9
     searchCondition = like(customers.phone, `%55${ddd}%${last8}`);
+    // Para armazenar, usar o número limpo (apenas dígitos)
+    normalizedPhone = cleanPhone;
   } else {
     // Para outros países ou números curtos, usar busca exata normalizada
-    const normalizedPhone = normalizePhone(phone);
+    normalizedPhone = normalizePhone(phone);
     const searchPhones = getPhoneSearchVariants(normalizedPhone);
     searchCondition = searchPhones.length > 1
       ? or(...searchPhones.map(p => eq(customers.phone, p)))
