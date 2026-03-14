@@ -36,6 +36,9 @@ import {
   X,
   List,
   Megaphone,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 
 interface BroadcastListManagerProps {
@@ -52,6 +55,12 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomers, setSelectedCustomers] = useState<number[]>([]);
   const [messageContent, setMessageContent] = useState("");
+  const [fileAttachment, setFileAttachment] = useState<{
+    url: string;
+    name: string;
+    type: string;
+    size: number;
+  } | null>(null);
 
   // Queries
   const { data: lists, refetch: refetchLists } = trpc.broadcast.list.useQuery();
@@ -155,15 +164,65 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
     removeMember.mutate({ memberId });
   };
 
-  const handleSendMessage = () => {
-    if (!messageContent.trim()) {
-      toast.error("Digite uma mensagem");
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validação de tamanho: 16MB
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máximo 16MB)");
       return;
     }
+
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const res = await fetch("/api/broadcast/upload-temp-file", {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload falhou");
+
+      setFileAttachment({
+        url: data.fileUrl,
+        name: data.fileName,
+        type: data.fileType,
+        size: data.fileSize,
+      });
+      toast.success("Arquivo anexado!");
+    } catch (err: any) {
+      toast.error(`Erro no upload: ${err.message}`);
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setFileAttachment(null);
+  };
+
+  const handleSendMessage = () => {
+    if (!messageContent.trim() && !fileAttachment) {
+      toast.error("Digite uma mensagem ou anexe um arquivo");
+      return;
+    }
+
     sendMessage.mutate({
       listId: selectedListId!,
       content: messageContent,
+      ...(fileAttachment && {
+        fileUrl: fileAttachment.url,
+        fileName: fileAttachment.name,
+        fileType: fileAttachment.type,
+        fileSize: fileAttachment.size,
+      }),
     });
+
+    // Limpar após envio
+    setMessageContent("");
+    setFileAttachment(null);
   };
 
   const toggleCustomerSelection = (customerId: number) => {
@@ -319,19 +378,70 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
           <label className="text-sm font-medium">
             Enviar mensagem para lista
           </label>
-          <Textarea
-            placeholder="Digite sua mensagem..."
-            value={messageContent}
-            onChange={e => setMessageContent(e.target.value)}
-            className="bg-background"
-          />
+
+          <div className="relative">
+            <Textarea
+              placeholder="Digite sua mensagem..."
+              value={messageContent}
+              onChange={e => setMessageContent(e.target.value)}
+              className="bg-background pr-10"
+              rows={3}
+            />
+            <label className="absolute right-2 top-2 cursor-pointer text-muted-foreground hover:text-foreground">
+              <input
+                type="file"
+                className="hidden"
+                onChange={handleFileUpload}
+                disabled={sendMessage.isPending}
+              />
+              <Paperclip className="w-5 h-5" />
+            </label>
+          </div>
+
+          {/* File attachment preview */}
+          {fileAttachment && (
+            <div className="flex items-center gap-2 p-2 bg-background rounded border">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                {fileAttachment.type.startsWith("image/") ? (
+                  <img
+                    src={fileAttachment.url}
+                    alt={fileAttachment.name}
+                    className="w-10 h-10 object-cover rounded"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-gray-500" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {fileAttachment.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(fileAttachment.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveFile}
+                  disabled={sendMessage.isPending}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           <Button
             onClick={handleSendMessage}
-            disabled={sendMessage.isPending || !messageContent.trim()}
+            disabled={sendMessage.isPending || (!messageContent.trim() && !fileAttachment)}
             className="w-full"
           >
             <Send className="w-4 h-4 mr-2" />
-            {sendMessage.isPending ? "Enviando..." : "Enviar para Lista"}
+            {sendMessage.isPending
+              ? "Enviando..."
+              : `Enviar para Lista (${listDetail?.members?.length || 0})`}
           </Button>
         </div>
 

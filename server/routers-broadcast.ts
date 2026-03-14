@@ -5,7 +5,9 @@ import {
   broadcastLists,
   broadcastListMembers,
   broadcastMessages,
+  broadcastMembersSent,
   customers,
+  integrationSettings,
 } from "../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 
@@ -303,12 +305,16 @@ export const broadcastRouter = router({
       return results;
     }),
 
-  // Enviar mensagem para a lista
+  // Enviar mensagem para a lista (com suporte a arquivos)
   sendMessage: protectedProcedure
     .input(
       z.object({
         listId: z.number(),
         content: z.string().min(1),
+        fileUrl: z.string().optional(),
+        fileName: z.string().optional(),
+        fileType: z.string().optional(),
+        fileSize: z.number().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -346,12 +352,16 @@ export const broadcastRouter = router({
         throw new Error("Lista não possui membros");
       }
 
-      // Registrar o envio
+      // Registrar o envio (com campos de arquivo)
       const [message] = await db
         .insert(broadcastMessages)
         .values({
           listId: input.listId,
           content: input.content,
+          fileUrl: input.fileUrl || null,
+          fileName: input.fileName || null,
+          fileType: input.fileType || null,
+          fileSize: input.fileSize || null,
           sentBy: ctx.user.id,
           totalRecipients: members.length,
           successfulSends: 0,
@@ -359,8 +369,23 @@ export const broadcastRouter = router({
         })
         .$returningId();
 
-      // TODO: Integrar com Evolution API para envio real
-      // Por enquanto, apenas registramos no banco
+      // Registrar cada destinatário para rastreamento individual
+      const memberSends = members.map(m => ({
+        messageId: message.id,
+        customerId: m.customerId,
+        phone: m.phone,
+        status: "pending" as const,
+      }));
+      await db.insert(broadcastMembersSent).values(memberSends);
+
+      // Processar envio em background (não bloquear resposta)
+      setImmediate(async () => {
+        try {
+          await processBroadcastSend(message.id, db);
+        } catch (error) {
+          console.error("[Broadcast] Erro no processamento:", error);
+        }
+      });
 
       return {
         success: true,
@@ -407,4 +432,302 @@ export const broadcastRouter = router({
 
       return messages;
     }),
+
+  // Upload de arquivo temporário para broadcast (retorna URL pública no R2)
+  uploadTempFile: protectedProcedure
+    .input(
+      z.object({
+        file: z.custom<File>(), // Será recebido via FormData (multipart)
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Nota: Input via FormData não é suportado diretamente no tRPC.
+      // Esta mutation será chamada via endpoint REST especial.
+      // Mantemos a assinatura para documentação.
+      throw new Error(
+        "Use o endpoint REST /api/broadcast/upload-temp-file para upload de arquivos"
+      );
+    }),
 });
+
+/**
+ * ============================================================
+ * FUNÇÕES AUXILIARES - Broadcast
+ * ============================================================
+ */
+
+/**
+ * Busca configuração da Evolution API do banco
+ */
+async function getEvolutionConfig(db: Database) {
+  const [configRecord] = await db
+    .select()
+    .from(integrationSettings)
+    .where(eq(integrationSettings.integrationType, "evolution_api"))
+    .limit(1);
+
+  if (!configRecord?.config) return null;
+
+  const configData =
+    typeof configRecord.config === "string"
+      ? JSON.parse(configRecord.config)
+      : configRecord.config;
+
+  // Obter a instância "Meu" ou a primeira
+  const instance = (configData.instances as any[])?.find(
+    (i: any) => i.name === "Meu"
+  ) || (configData.instances as any[])?.[0];
+
+  return instance;
+}
+
+/**
+ * Processa o envio de um broadcast em background
+ */
+async function processBroadcastSend(messageId: number, db: Database) {
+  console.log("[Broadcast][Process] Starting processing for message:", messageId);
+
+  try {
+    // 1. Buscar mensagem de broadcast
+    const [message] = await db
+      .select({
+        id: broadcastMessages.id,
+        listId: broadcastMessages.listId,
+        content: broadcastMessages.content,
+        fileUrl: broadcastMessages.fileUrl,
+        fileName: broadcastMessages.fileName,
+        fileType: broadcastMessages.fileType,
+        fileSize: broadcastMessages.fileSize,
+        totalRecipients: broadcastMessages.totalRecipients,
+      })
+      .from(broadcastMessages)
+      .where(eq(broadcastMessages.id, messageId))
+      .limit(1);
+
+    if (!message) {
+      console.error("[Broadcast][Process] Message not found:", messageId);
+      return;
+    }
+
+    // 2. Buscar membros pendentes
+    const pendingMembers = await db
+      .select({
+        id: broadcastMembersSent.id,
+        customerId: broadcastMembersSent.customerId,
+        phone: broadcastMembersSent.phone,
+      })
+      .from(broadcastMembersSent)
+      .where(
+        and(
+          eq(broadcastMembersSent.messageId, messageId),
+          eq(broadcastMembersSent.status, "pending")
+        )
+      );
+
+    if (pendingMembers.length === 0) {
+      console.log("[Broadcast][Process] No pending members found");
+      return;
+    }
+
+    console.log(
+      "[Broadcast][Process] Processing",
+      pendingMembers.length,
+      "recipients"
+    );
+
+    // 3. Buscar config Evolution API
+    const instance = await getEvolutionConfig(db);
+    if (!instance?.url || !instance?.apiKey) {
+      console.error("[Broadcast][Process] Evolution API not configured");
+      // Marcar todos como falha
+      await db
+        .update(broadcastMembersSent)
+        .set({
+          status: "failed",
+          error: "Evolution API não configurada",
+        })
+        .where(
+          and(
+            eq(broadcastMembersSent.messageId, messageId),
+            eq(broadcastMembersSent.status, "pending")
+          )
+        );
+      await db
+        .update(broadcastMessages)
+        .set({
+          failedSends: sql<number>`failed_sends + ${pendingMembers.length}`,
+        })
+        .where(eq(broadcastMessages.id, messageId));
+      return;
+    }
+
+    const baseUrl = (instance.url as string).replace(/\/$/, "");
+    const apiKey = instance.apiKey as string;
+
+    // 4. Processar cada membro
+    for (const member of pendingMembers) {
+      try {
+        // Normalizar número (garante formato internacional)
+        const normalizedPhone = normalizePhone(member.phone);
+        const toNumber = `${normalizedPhone}@s.whatsapp.net`;
+
+        // Decidir se envia texto puro ou mídia
+        if (message.fileUrl) {
+          // Enviar com mídia
+          const mediaUrl = message.fileUrl;
+          const fileName = message.fileName || "arquivo";
+          const mimeType = message.fileType || "application/octet-stream";
+
+          // Baixar o arquivo da URL (R2 ou WhatsApp CDN) e re-enviar?
+          // Evolution API aceita URL pública diretamente se for acessível
+          // Para R2 URLs são públicas. Para WhatsApp URLs temporárias, precisamos baixar e re-hospedar?
+          // Decisão: Usar mediaUrl diretamente se for R2 (r2.dev), caso contrário baixar e reenviar como base64
+          let sendUrl: string;
+          let sendData: any;
+
+          if (mediaUrl.includes("r2.dev") || mediaUrl.startsWith("http")) {
+            // URL pública - Evolution API pode baixar diretamente
+            sendUrl = `${baseUrl}/chat/sendMediaMessage/${instance.name}`;
+            sendData = {
+              number: toNumber,
+              options: {
+                mediaUrl,
+                fileName,
+                mediaType: mimeType,
+                caption: message.content || undefined,
+              },
+            };
+          } else {
+            // URL temporária (whatsapp) - precisa baixar e enviar como base64
+            // (simplificado: por enquanto só suporta R2 / URLs públicas)
+            throw new Error("URL de mídia temporária não suportada no broadcast");
+          }
+
+          const response = await fetch(sendUrl, {
+            method: "POST",
+            headers: {
+              "apikey": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(sendData),
+            signal: AbortSignal.timeout(30000),
+          });
+
+          if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Evolution error: ${response.status} - ${err}`);
+          }
+
+          console.log(
+            "[Broadcast][Process] Media sent to",
+            normalizedPhone,
+            "status:",
+            response.status
+          );
+        } else {
+          // Enviar texto puro
+          const sendUrl = `${baseUrl}/chat/sendText/${instance.name}`;
+          const response = await fetch(sendUrl, {
+            method: "POST",
+            headers: {
+              "apikey": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              number: toNumber,
+              text: message.content,
+            }),
+            signal: AbortSignal.timeout(30000),
+          });
+
+          if (!response.ok) {
+            const err = await response.text();
+            throw new Error(`Evolution error: ${response.status} - ${err}`);
+          }
+
+          console.log(
+            "[Broadcast][Process] Text sent to",
+            normalizedPhone,
+            "status:",
+            response.status
+          );
+        }
+
+        // Marcar como enviado com sucesso
+        await db
+          .update(broadcastMembersSent)
+          .set({
+            status: "sent",
+            sentAt: new Date(),
+          })
+          .where(eq(broadcastMembersSent.id, member.id));
+
+        await db
+          .update(broadcastMessages)
+          .set({
+            successfulSends: sql<number>`successful_sends + 1`,
+          })
+          .where(eq(broadcastMessages.id, messageId));
+      } catch (error: any) {
+        console.error(
+          "[Broadcast][Process] Failed to send to",
+          member.phone,
+          ":",
+          error.message
+        );
+
+        // Marcar como falha
+        await db
+          .update(broadcastMembersSent)
+          .set({
+            status: "failed",
+            error: error.message,
+          })
+          .where(eq(broadcastMembersSent.id, member.id));
+
+        await db
+          .update(broadcastMessages)
+          .set({
+            failedSends: sql<number>`failed_sends + 1`,
+          })
+          .where(eq(broadcastMessages.id, messageId));
+      }
+    }
+
+    console.log("[Broadcast][Process] Completed for message:", messageId);
+  } catch (error: any) {
+    console.error("[Broadcast][Process] Critical error:", error);
+  }
+}
+
+/**
+ * Normaliza número do WhatsApp para formato internacional
+ * Reutilizado de mobile-sync.ts
+ */
+function normalizePhone(value: string): string {
+  let digits = value.replace(/\D/g, "");
+  if (!digits) return value;
+
+  // Se for muito longo (ID do WhatsApp), extrair a parte do telefone
+  if (digits.length >= 20) {
+    const atIndex = value.indexOf("@");
+    if (atIndex > 0) {
+      const cleanNumber = value.substring(0, atIndex).replace(/\D/g, "");
+      if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
+        digits = cleanNumber;
+      }
+    }
+    if (digits.length > 15) {
+      digits = digits.slice(-15);
+    }
+  }
+
+  // Remover nono dígito brasileiro se presente (após DDD)
+  if (digits.startsWith('55')) {
+    if (digits.length === 13) {
+      digits = digits.slice(0, 4) + digits.slice(5);
+    }
+  }
+
+  return digits.startsWith('+') ? digits : `+${digits}`;
+}

@@ -1301,6 +1301,30 @@ export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
 export type InsertBroadcastMessage = typeof broadcastMessages.$inferInsert;
 
 /**
+ * Broadcast Members Sent - Rastreamento de envio por destinatário
+ * Para cada mensagem de broadcast, registramos o status de entrega para cada membro
+ */
+export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
+  id: int("id").autoincrement().primaryKey(),
+  messageId: int("message_id")
+    .references(() => broadcastMessages.id)
+    .notNull(),
+  customerId: int("customer_id")
+    .references(() => customers.id)
+    .notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  status: mysqlEnum("status", ["pending", "sent", "failed"])
+    .default("pending")
+    .notNull(),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+});
+
+export type BroadcastMemberSent = typeof broadcastMembersSent.$inferSelect;
+export type InsertBroadcastMemberSent =
+  typeof broadcastMembersSent.$inferInsert;
+
+/**
  * ============================================================
  * MÓDULO CHÁ DE BEBÊ FARMA FRANCIS
  * Sistema de eventos virtuais para arrecadação de fraldas/presentes

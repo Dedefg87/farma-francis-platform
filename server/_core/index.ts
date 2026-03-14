@@ -16,6 +16,9 @@ import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
+import { sdk } from "./sdk";
+import multer from "multer";
+import { storagePut } from "./storage";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -73,6 +76,53 @@ async function runMediaColumnsMigration() {
     console.log("[Migration] Media columns migration completed");
   } catch (err) {
     console.error("[Migration] Failed:", err);
+  }
+}
+
+// Auto-migrate broadcast tables and columns
+async function runBroadcastMigrations() {
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.log("[BroadcastMigration] DB not ready, skipping");
+      return;
+    }
+
+    // Tabela broadcast_members_sent
+    const [table1]: any = await db.execute("SHOW TABLES LIKE 'broadcast_members_sent'");
+    if (table1.length === 0) {
+      await db.execute(`
+        CREATE TABLE broadcast_members_sent (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          message_id INT NOT NULL,
+          customer_id INT NOT NULL,
+          phone VARCHAR(20) NOT NULL,
+          status ENUM('pending','sent','failed') DEFAULT 'pending' NOT NULL,
+          error TEXT,
+          sent_at TIMESTAMP NULL,
+          FOREIGN KEY (message_id) REFERENCES broadcast_messages(id) ON DELETE CASCADE,
+          FOREIGN KEY (customer_id) REFERENCES customers(id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      await db.execute("CREATE INDEX idx_broadcast_members_sent_message_id ON broadcast_members_sent(message_id)");
+      await db.execute("CREATE INDEX idx_broadcast_members_sent_status ON broadcast_members_sent(status)");
+      await db.execute("CREATE INDEX idx_broadcast_members_sent_customer_id ON broadcast_members_sent(customer_id)");
+      console.log("[BroadcastMigration] Created table broadcast_members_sent");
+    }
+
+    // Colunas de arquivo em broadcast_messages
+    const [cols]: any = await db.execute("SHOW COLUMNS FROM broadcast_messages LIKE 'file_url'");
+    if (cols.length === 0) {
+      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_url VARCHAR(500) NULL COMMENT 'URL do arquivo no R2/Cloudflare' AFTER content");
+      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_name VARCHAR(255) NULL COMMENT 'Nome original do arquivo' AFTER file_url");
+      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_type VARCHAR(100) NULL COMMENT 'MIME type do arquivo' AFTER file_name");
+      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_size INT NULL COMMENT 'Tamanho do arquivo em bytes' AFTER file_type");
+      console.log("[BroadcastMigration] Added file columns to broadcast_messages");
+    }
+
+    console.log("[BroadcastMigration] Migration completed");
+  } catch (err) {
+    console.error("[BroadcastMigration] Failed:", err);
   }
 }
 
@@ -153,6 +203,75 @@ async function startServer() {
   // Media Proxy (mídia do WhatsApp/Evolution)
   // GET /api/media/:messageId - Serve mídia com suporte a R2 CDN, fallback Evolution API
   app.use("/api/media", mediaRouter);
+
+  // Broadcast File Upload
+  // POST /api/broadcast/upload-temp-file
+  // Recebe arquivo via FormData, faz upload para storage (R2) e retorna URL pública
+  // Acesso: requires authentication (via tRPC context middleware applied below)
+  const uploadParser = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 16 * 1024 * 1024 }, // 16MB
+  });
+
+  app.post("/api/broadcast/upload-temp-file", uploadParser.single("file"), async (req, res) => {
+    try {
+      // Authenticate using the same SDK logic as tRPC context
+      const user = await sdk.authenticateRequest(req);
+      if (!user) {
+        return res.status(401).json({ error: "Não autorizado" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+
+      // Validar tipo de arquivo
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+        "audio/mpeg",
+        "audio/ogg",
+        "audio/wav",
+        "video/mp4",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "text/plain",
+      ];
+
+      if (!allowedTypes.includes(req.file.mimetype)) {
+        return res
+          .status(400)
+          .json({ error: `Tipo de arquivo não permitido: ${req.file.mimetype}` });
+      }
+
+      // Gerar chave única
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 8);
+      const ext = req.file.originalname.split(".").pop() || "bin";
+      const key = `broadcast-temp/${timestamp}-${random}.${ext}`;
+
+      // Fazer upload para storage
+      const { url } = await storagePut(key, req.file.buffer, req.file.mimetype);
+
+      // Retornar metadados
+      res.json({
+        success: true,
+        fileUrl: url,
+        fileName: req.file.originalname,
+        fileType: req.file.mimetype,
+        fileSize: req.file.size,
+        key,
+      });
+    } catch (error: any) {
+      console.error("[BroadcastUpload] Error:", error);
+      res.status(500).json({ error: "Erro no upload: " + error.message });
+    }
+  });
 
   // Basic health check for load balancers and uptime monitoring
   app.get("/api/health", (_req, res) => {
@@ -3048,10 +3167,11 @@ async function startServer() {
   server.listen(port, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
-    // Run CRM migration on startup
+    // Run CRM and Broadcast migrations on startup
     console.log("[Server] Running CRM migration...");
     await runCRMMigration();
     await runBabyShowerMigration();
+    await runBroadcastMigrations();
 
     // Start simple chatbot after server is running
     import("../chatbot")
