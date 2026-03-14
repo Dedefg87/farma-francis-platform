@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 console.log("[Server] Starting initialization...");
 
 import express from "express";
@@ -19,6 +18,7 @@ import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
 import { sdk } from "./sdk";
 import multer from "multer";
+import { uploadToR2 } from "../r2-client";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -249,65 +249,24 @@ async function startServer() {
           .json({ error: `Tipo de arquivo não permitido: ${req.file.mimetype}` });
       }
 
-      // Upload direto para Cloudflare R2 usando variáveis existentes
+      // Upload para Cloudflare R2 usando a função existente (uploadToR2)
       try {
         const file = req.file;
         if (!file) throw new Error("Nenhum arquivo recebido do frontend");
 
-        // Busca variáveis com nomes S3_* (preferencial) ou CLOUDFLARE_* (fallback)
-        const accessKey = process.env.S3_ACCESS_KEY || process.env.CLOUDFLARE_ACCESS_KEY_ID;
-        const secretKey = process.env.S3_SECRET_KEY || process.env.CLOUDFLARE_SECRET_ACCESS_KEY;
-        const endpoint = process.env.S3_ENDPOINT || process.env.CLOUDFLARE_R2_ENDPOINT;
-        const bucket = process.env.S3_BUCKET || process.env.CLOUDFLARE_BUCKET;
-
-        // Log de debug para rastrear quais variáveis estão presentes
-        console.log("[BroadcastUpload] Credenciais R2:", {
-          S3_ACCESS_KEY: !!process.env.S3_ACCESS_KEY,
-          CLOUDFLARE_ACCESS_KEY_ID: !!process.env.CLOUDFLARE_ACCESS_KEY_ID,
-          S3_SECRET_KEY: !!process.env.S3_SECRET_KEY,
-          CLOUDFLARE_SECRET_ACCESS_KEY: !!process.env.CLOUDFLARE_SECRET_ACCESS_KEY,
-          S3_ENDPOINT: !!process.env.S3_ENDPOINT,
-          CLOUDFLARE_R2_ENDPOINT: !!process.env.CLOUDFLARE_R2_ENDPOINT,
-          S3_BUCKET: !!process.env.S3_BUCKET,
-          CLOUDFLARE_BUCKET: !!process.env.CLOUDFLARE_BUCKET,
-        });
-
-        if (!accessKey || !secretKey || !endpoint || !bucket) {
-          console.error("[BroadcastUpload] Credenciais do S3/R2 ausentes no servidor");
-          return res.status(500).json({
-            error: "Configuração do S3/R2 ausente no servidor. Verifique as variáveis de ambiente.",
-          });
-        }
-
-        // Inicializa o cliente DENTRO da requisição
-        const s3Client = new S3Client({
-          region: process.env.S3_REGION || "auto",
-          endpoint: endpoint.startsWith("http") ? endpoint.replace(/\/$/, "") : `https://${endpoint}`,
-          credentials: {
-            accessKeyId: accessKey,
-            secretAccessKey: secretKey,
-          },
-        });
-
-        // Gera chave única na pasta broadcast
-        const fileKey = `broadcast/${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
-
-        await s3Client.send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: fileKey,
-            Body: file.buffer,
-            ContentType: file.mimetype,
-          })
+        // Usa a função de upload já existente no projeto
+        const publicUrl = await uploadToR2(
+          file.buffer,
+          file.originalname,
+          file.mimetype
         );
 
-        const publicUrl = `${process.env.VITE_PUBLIC_R2_URL}/${fileKey}`;
+        // Retorna URL pública no formato esperado pelo frontend
         res.json({ url: publicUrl });
       } catch (error: any) {
-        console.error("[BroadcastUpload] Erro detalhado no upload:", error);
+        console.error("[BroadcastUpload] Erro no upload para R2:", error);
         res.status(500).json({
-          error: error.message || "Falha ao enviar arquivo",
-          stack: error.stack,
+          error: error.message || "Falha ao enviar arquivo para o R2",
         });
       }
     } catch (error: any) {
