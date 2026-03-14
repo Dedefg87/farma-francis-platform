@@ -163,6 +163,9 @@ export default function AgentMessages() {
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef<boolean>(true);
+  const hasInitiallyScrolledRef = useRef<boolean>(false);
   const previousMessagesCountRef = useRef<number>(0);
   const previousConversationsRef = useRef<number[]>([]);
   const previousTotalUnreadRef = useRef<number>(0);
@@ -488,12 +491,37 @@ export default function AgentMessages() {
     }
   }, [queryClient]);
 
-  // Scroll automático para última mensagem
-  useEffect(() => {
-    if (messages && messages.length > 0) {
+  // Scroll inteligente: só auto-scroll se estiver no final
+  const scrollToBottom = useCallback((force = false) => {
+    if (!messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+    if (force || isAtBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+    isAtBottomRef.current = isAtBottom;
+  }, []);
+
+  // Scroll inicial quando carrega conversa
+  useEffect(() => {
+    if (!hasInitiallyScrolledRef.current && messages && messages.length > 0) {
+      scrollToBottom(true);
+      hasInitiallyScrolledRef.current = true;
+    }
+  }, [messages, scrollToBottom]);
+
+  // Scroll condicional para novas mensagens
+  useEffect(() => {
+    if (hasInitiallyScrolledRef.current && isAtBottomRef.current && messages && messages.length > 0) {
+      scrollToBottom();
+    }
+  }, [messages?.length, scrollToBottom]);
 
   // Detectar novas mensagens e tocar som de notificação
   useEffect(() => {
@@ -1045,7 +1073,11 @@ export default function AgentMessages() {
               </div>
 
               {/* Mensagens */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+              <div 
+                ref={messagesContainerRef}
+                onScroll={handleScroll}
+                className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50"
+              >
                 {loadingMessages ? (
                   <div className="text-center text-gray-500">
                     Carregando mensagens...

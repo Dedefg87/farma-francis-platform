@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import QuickRepliesModal from "@/components/QuickRepliesModal";
 import { PDFPreview } from "@/components/PDFPreview";
@@ -452,7 +452,11 @@ export default function AgentChat() {
             </div>
 
             {/* Área de Mensagens */}
-            <ScrollArea className="flex-1 p-4 bg-gray-50">
+            <ScrollArea 
+              className="flex-1 p-4 bg-gray-50"
+              ref={messagesContainerRef}
+              onScroll={handleScroll}
+            >
               {messagesLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <p className="text-gray-500">Carregando mensagens...</p>
