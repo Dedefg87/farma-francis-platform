@@ -4,7 +4,7 @@
  * IMPORTANTE: Esta fila processa jobs em background SEM bloquear o webhook
  */
 import { getDb } from "../db";
-import { conversations, conversationMessages, customers } from "../../drizzle/schema";
+import { conversations, conversationMessages, customers, integrationSettings } from "../../drizzle/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 
 import { sseManager, EVENTS } from "../_core/sse";
@@ -216,7 +216,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   let content = job.messageText || job.caption || "";
 
   // Inserir mensagem na tabela conversation_messages
-  await db.insert(conversationMessages).values({
+  const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     senderId: null, // Mensagem do agente, mas não há user_id no contexto do mobile-sync (será atualizado depois se necessário)
     senderType: "agent",
@@ -229,6 +229,69 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     remoteJid: job.remoteJid,
     createdAt: new Date(job.messageTimestamp * 1000),
   });
+  const messageDbId = insertResult.insertId as number;
+
+  // Se houver mídia com URL temporária do WhatsApp, baixar via Evolution API e subir para R2
+  if (
+    job.mediaUrl &&
+    job.mediaUrl.includes("mmg.whatsapp.net") &&
+    job.messageId
+  ) {
+    try {
+      console.log("[MobileSync][S3] Triggering Evolution download for R2 upload, messageId:", job.messageId);
+      const dbForUpload = await getDb();
+      if (!dbForUpload) throw new Error("DB not available for S3 upload");
+
+      const [configRecord] = await dbForUpload
+        .select()
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "evolution_api"))
+        .limit(1);
+
+      if (configRecord?.config) {
+        const configData =
+          typeof configRecord.config === "string"
+            ? JSON.parse(configRecord.config)
+            : configRecord.config;
+
+        // Obter a instância "Meu" ou a primeira
+        const instance = (configData.instances as any[])?.find((i: any) => i.name === "Meu") || (configData.instances as any[])?.[0];
+
+        if (instance?.url && instance?.apiKey) {
+          const normalizedUrl = (instance.url as string).replace(/\/$/, "");
+          const downloadUrl = `${normalizedUrl}/message/download/${job.messageId}`;
+          console.log("[MobileSync][S3] Calling Evolution download endpoint:", downloadUrl);
+
+          const response = await fetch(downloadUrl, {
+            headers: {
+              apikey: instance.apiKey as string,
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const r2Url = data?.url || data?.mediaUrl || null;
+            if (r2Url && r2Url.includes("r2.dev")) {
+              console.log("[MobileSync][S3] ✅ Got R2 URL, updating message:", r2Url);
+
+              await dbForUpload
+                .update(conversationMessages)
+                .set({ fileUrl: r2Url })
+                .where(eq(conversationMessages.id, messageDbId));
+
+              console.log("[MobileSync][S3] Message updated with R2 URL");
+            }
+          } else {
+            console.log("[MobileSync][S3] ❌ Download failed:", response.status, response.statusText);
+          }
+        }
+      }
+    } catch (error) {
+      console.log("[MobileSync][S3] Error during R2 upload:", error);
+      // Non-critical - message still saved with original URL
+    }
+  }
 
   // Notificar via SSE se houver agente designado
   const [updatedConv] = await db

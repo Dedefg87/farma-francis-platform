@@ -661,6 +661,73 @@ export async function ingestInboundConversationMessage(message: {
     const messageDbId = insertResult.insertId as number;
     console.log("[Ingest] ✅ Message inserted into conversationMessages:", { conversationId, messageDbId, externalId: message.externalId });
 
+    // 9. If it's a WhatsApp media message with a temporary URL, trigger Evolution download to upload to R2
+    if (
+      message.provider === "whatsapp" &&
+      message.externalId &&
+      fileUrlToSave &&
+      fileUrlToSave.includes("mmg.whatsapp.net")
+    ) {
+      try {
+        console.log("[S3] Triggering Evolution download for R2 upload, messageId:", message.externalId);
+        const [configRecord] = await db
+          .select()
+          .from(integrationSettings)
+          .where(eq(integrationSettings.integrationType, "evolution_api"))
+          .limit(1);
+
+        if (configRecord?.config) {
+          const configData =
+            typeof configRecord.config === "string"
+              ? JSON.parse(configRecord.config)
+              : configRecord.config;
+
+          // Obter a instância "Meu" ou a primeira
+          const instance = (configData.instances as any[])?.find((i: any) => i.name === "Meu") || (configData.instances as any[])?.[0];
+
+          if (instance?.url && instance?.apiKey) {
+            const normalizedUrl = (instance.url as string).replace(/\/$/, "");
+            const downloadUrl = `${normalizedUrl}/message/download/${message.externalId}`;
+            console.log("[S3] Calling Evolution download endpoint:", downloadUrl);
+
+            const response = await fetch(downloadUrl, {
+              headers: {
+                apikey: instance.apiKey as string,
+              },
+              signal: AbortSignal.timeout(15000),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              console.log("[S3] Download response:", data);
+
+              const r2Url = data?.url || data?.mediaUrl || null;
+              if (r2Url && r2Url.includes("r2.dev")) {
+                console.log("[S3] ✅ Got R2 URL, updating message:", r2Url);
+
+                await db
+                  .update(conversationMessages)
+                  .set({ fileUrl: r2Url })
+                  .where(eq(conversationMessages.id, messageDbId));
+
+                console.log("[S3] Message updated with R2 URL");
+              }
+            } else {
+              console.log("[S3] ❌ Download failed:", response.status, response.statusText);
+            }
+          } else {
+            console.log("[S3] ⚠️ Evolution instance not configured properly");
+          }
+        } else {
+          console.log("[S3] ⚠️ No Evolution API config found");
+        }
+      } catch (error) {
+        console.log("[S3] Error during R2 upload:", error);
+        // Non-critical - message still saved with original URL
+      }
+    }
+
+    console.log("[Ingest] ✅ Message ingested successfully:", { conversationId, messageDbId });
     return { conversationId, customerId: customer.id };
   } catch (error) {
     console.error("[ingestInbound] ❌ Error during ingestion:", error);
