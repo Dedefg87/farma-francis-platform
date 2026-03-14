@@ -483,7 +483,7 @@ export default function Messages() {
                           <Avatar>
                             {conv.customerAvatar ? (
                               <AvatarImage
-                                src={conv.customerAvatar || undefined}
+                                src={getImageSrc(conv.customerAvatar)}
                                 alt={conv.customerName ?? "Cliente"}
                               />
                             ) : (
@@ -546,9 +546,7 @@ export default function Messages() {
                         <Avatar>
                           {selectedConversationData?.customerAvatar ? (
                             <AvatarImage
-                              src={String(
-                                selectedConversationData.customerAvatar
-                              )}
+                              src={getImageSrc(selectedConversationData.customerAvatar)}
                               alt={String(
                                 selectedConversationData.customerName ??
                                   "Cliente"
@@ -611,7 +609,7 @@ export default function Messages() {
                               <Avatar className="w-20 h-20">
                                 {customerDetails?.photoUrl ? (
                                   <AvatarImage
-                                    src={customerDetails.photoUrl}
+                                    src={getImageSrc(customerDetails.photoUrl)}
                                     alt={customerDetails.name}
                                   />
                                 ) : (
