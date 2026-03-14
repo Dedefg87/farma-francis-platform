@@ -984,6 +984,8 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   // 🎯 PRIORIDADE 2: Extrair mimetype específico baseado no tipo
   // ===========================================
   let mimeType: string | null = null;
+  
+  // Primeiro: tentar mimetype do tipo específico (documentMessage, imageMessage, etc)
   if (typeToSave === 'image' && message.imageMessage?.mimetype) {
     mimeType = message.imageMessage.mimetype || message.imageMessage.mimeType || null;
   } else if (typeToSave === 'video' && message.videoMessage?.mimetype) {
@@ -994,12 +996,51 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
     mimeType = message.documentMessage.mimetype || message.documentMessage.mimeType || null;
   } else if (typeToSave === 'sticker' && message.stickerMessage?.mimetype) {
     mimeType = message.stickerMessage.mimetype || message.stickerMessage.mimeType || null;
-  } else if (message.mimetype || message.mimeType || message.fileMimeType) {
-    mimeType = message.mimetype || message.mimeType || message.fileMimeType;
+  }
+  
+  // Fallback 1: mimetype genérico na mensagem
+  if (!mimeType) {
+    mimeType = message.mimetype || message.mimeType || message.fileMimeType || null;
   }
 
-  // Fallback: tentar extrair da extensão do fileName se ainda não temos mimeType
-  const fileName = message.fileName || null;
+  // ===========================================
+  // 🎯 PRIORIDADE 2.5: Extrair fileName específico por tipo
+  // ===========================================
+  let fileName: string | null = null;
+  
+  // Priorizar fileName do tipo específico (documentMessage, imageMessage, etc)
+  if (typeToSave === 'image' && message.imageMessage?.fileName) {
+    fileName = message.imageMessage.fileName;
+  } else if (typeToSave === 'video' && message.videoMessage?.fileName) {
+    fileName = message.videoMessage.fileName;
+  } else if (typeToSave === 'audio' && message.audioMessage?.fileName) {
+    fileName = message.audioMessage.fileName;
+  } else if (typeToSave === 'document' && message.documentMessage) {
+    // Documentos: fileName ou title (title é fallback comum)
+    fileName = message.documentMessage.fileName || message.documentMessage.title || null;
+  } else if (typeToSave === 'sticker' && message.stickerMessage?.fileName) {
+    fileName = message.stickerMessage.fileName;
+  }
+  
+  // Fallback: usar message.fileName genérico
+  if (!fileName) {
+    fileName = message.fileName || null;
+  }
+
+  // Se ainda não temos fileName mas temos tipo, gerar nome padrão
+  if (!fileName) {
+    const typeNames: Record<string, string> = {
+      image: 'imagem',
+      video: 'video',
+      audio: 'audio',
+      document: 'documento',
+      sticker: 'sticker',
+      location: 'localizacao',
+      contact: 'contato',
+      reaction: 'reacao'
+    };
+    fileName = `${typeNames[typeToSave] || 'arquivo'}_${Date.now()}`;
+  }
   if (!mimeType && fileName) {
     const ext = fileName.split('.').pop()?.toLowerCase();
     const mimeMap: Record<string, string> = {
