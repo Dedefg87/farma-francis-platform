@@ -39,7 +39,7 @@ export default function ManageEvent() {
     if (!file) return;
 
     // Validar tipo
-    if (!file.type.startsWith('image/')) {
+    if (!file.type?.startsWith?.('image/')) {
       toast.error("Selecione uma imagem válida");
       return;
     }

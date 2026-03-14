@@ -13,7 +13,7 @@ interface FilePreviewProps {
  * Mostra thumbnail para imagens/vídeos, ícone para documentos
  */
 export function FilePreviewAttachment({ file, preview, onRemove }: FilePreviewProps) {
-  const isVideo = file.type.startsWith('video/');
+  const isVideo = file.type?.startsWith?.('video/');
   const isPdf = file.type === 'application/pdf';
 
   return (

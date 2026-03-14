@@ -402,7 +402,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
           {fileAttachment && (
             <div className="flex items-center gap-2 p-2 bg-background rounded border">
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                {fileAttachment.type.startsWith("image/") ? (
+                {fileAttachment.type?.startsWith?.("image/") ? (
                   <img
                     src={fileAttachment.url}
                     alt={fileAttachment.name}

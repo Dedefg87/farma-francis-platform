@@ -51,7 +51,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     // Validar tipo
     const isAllowed = allowedTypes.some(type => {
       if (type.endsWith('/*')) {
-        return file.type.startsWith(type.replace('/*', '/'));
+        return file.type?.startsWith?.(type.replace('/*', '/'));
       }
       return type === file.type;
     });
@@ -64,13 +64,13 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
     setSelectedFile(file);
 
     // Criar preview
-    if (file.type.startsWith('image/')) {
+    if (file.type?.startsWith?.('image/')) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-    } else if (file.type.startsWith('video/')) {
+    } else if (file.type?.startsWith?.('video/')) {
       const video = document.createElement('video');
       video.src = URL.createObjectURL(file);
       video.currentTime = 1;

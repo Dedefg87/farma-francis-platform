@@ -40,13 +40,13 @@ export default function NewConversationModal({
     let cleaned = value.replace(/\D/g, "");
 
     // Adicionar 55 se não tiver
-    if (!cleaned.startsWith("55")) {
+    if (!cleaned?.startsWith?.("55")) {
       cleaned = "55" + cleaned;
     }
 
     // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), remover o 9
     // 55 31 9 86337081 → 55 31 86337081
-    if (cleaned.length === 13 && cleaned.startsWith("55")) {
+    if (cleaned.length === 13 && cleaned?.startsWith?.("55")) {
       cleaned = cleaned.substring(0, 4) + cleaned.substring(5);
     }
 

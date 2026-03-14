@@ -35,7 +35,7 @@ function handleImageClick(url: string | null | undefined, messageId?: number) {
   const src = getImageSrc(url, messageId);
   if (!src) return;
 
-  if (src.startsWith("data:")) {
+  if (src?.startsWith?.("data:")) {
     const win = window.open("", "_blank", "width=800,height=600");
     if (win) {
       win.document.write(

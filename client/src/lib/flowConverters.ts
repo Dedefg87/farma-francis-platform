@@ -179,10 +179,10 @@ export function convertFromReactFlow(nodes: Node[], edges: Edge[]): string {
 function isN8NFormat(data: any): boolean {
   // N8N tem nodes com propriedade type começando com 'n8n-nodes-' ou '@n8n/'
   if (data.nodes && Array.isArray(data.nodes)) {
-    return data.nodes.some((node: any) => 
+    return data.nodes.some((node: any) =>
       node.type && (
-        node.type.startsWith('n8n-nodes-') || 
-        node.type.startsWith('@n8n/')
+        node.type?.startsWith?.('n8n-nodes-') ||
+        node.type?.startsWith?.('@n8n/')
       )
     );
   }

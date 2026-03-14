@@ -51,7 +51,7 @@ export function usePdfViewer(): UsePdfViewerReturn {
     }
 
     // Se é data URL, converter para blob
-    if (fileUrl.startsWith('data:')) {
+    if (fileUrl?.startsWith?.('data:')) {
       setIsLoading(true);
       try {
         const match = fileUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -120,7 +120,7 @@ export function usePdfViewer(): UsePdfViewerReturn {
  * Prioriza o MIME type do data URL (mais confiável)
  */
 export function getMimeType(fileUrl: string | null | undefined, fileType: string | null | undefined): string {
-  if (fileUrl?.startsWith('data:')) {
+  if (fileUrl?.startsWith?.('data:')) {
     const mimeMatch = fileUrl.match(/^data:([^;]+);/);
     if (mimeMatch && mimeMatch[1]) {
       return mimeMatch[1];
@@ -134,16 +134,16 @@ export function getMimeType(fileUrl: string | null | undefined, fileType: string
  */
 export function getMediaUrl(url: string | null | undefined, messageId?: number): string {
   if (!url) return '';
-  
+
   // Se é data URL, retorna direto
-  if (url.startsWith('data:')) {
+  if (url?.startsWith?.('data:')) {
     return url;
   }
-  
+
   // Se tem messageId, usar endpoint de mídia
   if (messageId) {
     return `/api/media/${messageId}`;
   }
-  
+
   return url;
 }

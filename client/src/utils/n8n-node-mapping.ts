@@ -263,7 +263,7 @@ export function getN8NNodeInfo(n8nType: string): N8NNodeMapping {
  * Check if a node type is from N8N
  */
 export function isN8NNodeType(type: string): boolean {
-  return type.startsWith("n8n-nodes-base.") || type.startsWith("@n8n/");
+  return type?.startsWith?.("n8n-nodes-base.") || type?.startsWith?.("@n8n/");
 }
 
 /**

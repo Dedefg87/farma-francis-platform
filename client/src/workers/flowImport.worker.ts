@@ -244,10 +244,10 @@ function handleValidate(data: { nodes: any[]; edges: any[] }, id: string) {
 
 function detectN8NFormat(data: any): boolean {
   if (data.nodes && Array.isArray(data.nodes)) {
-    return data.nodes.some((node: any) => 
+    return data.nodes.some((node: any) =>
       node.type && (
-        node.type.startsWith('n8n-nodes-') || 
-        node.type.startsWith('@n8n/')
+        node.type?.startsWith?.('n8n-nodes-') ||
+        node.type?.startsWith?.('@n8n/')
       )
     );
   }

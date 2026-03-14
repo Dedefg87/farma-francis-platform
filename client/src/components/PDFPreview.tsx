@@ -56,7 +56,7 @@ function getFileInfo(mimeType: string, fileName: string | null): {
   canPreview: boolean;
 } {
   // Imagens
-  if (mimeType.startsWith("image/")) {
+  if (mimeType?.startsWith?.("image/")) {
     return {
       icon: <Image className="w-16 h-16" />,
       color: "text-pink-500",
@@ -67,7 +67,7 @@ function getFileInfo(mimeType: string, fileName: string | null): {
   }
 
   // Vídeos
-  if (mimeType.startsWith("video/")) {
+  if (mimeType?.startsWith?.("video/")) {
     return {
       icon: <Film className="w-16 h-16" />,
       color: "text-purple-500",
@@ -78,7 +78,7 @@ function getFileInfo(mimeType: string, fileName: string | null): {
   }
 
   // Áudios
-  if (mimeType.startsWith("audio/")) {
+  if (mimeType?.startsWith?.("audio/")) {
     return {
       icon: <Music className="w-16 h-16" />,
       color: "text-green-500",
@@ -170,7 +170,7 @@ function getFileInfo(mimeType: string, fileName: string | null): {
   // Código
   if (
     mimeType === "application/json" ||
-    mimeType.startsWith("text/") ||
+    mimeType?.startsWith?.("text/") ||
     fileName?.endsWith(".json") ||
     fileName?.endsWith(".js") ||
     fileName?.endsWith(".html") ||

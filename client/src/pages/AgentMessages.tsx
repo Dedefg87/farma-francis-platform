@@ -411,7 +411,7 @@ export default function AgentMessages() {
   const imageItems = useMemo(() => {
     if (!messages) return [];
     return messages
-      .filter(msg => msg.fileUrl && getMimeType(msg.fileUrl, msg.fileType).startsWith("image/"))
+      .filter(msg => msg.fileUrl && getMimeType(msg.fileUrl, msg.fileType)?.startsWith?.("image/"))
       .map(msg => ({
         id: msg.id,
         fileUrl: msg.fileUrl!,
@@ -1295,7 +1295,7 @@ export default function AgentMessages() {
                     className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg p-3"
                   >
                     <div className="flex items-center gap-3">
-                      {getMimeType(item.fileUrl, item.fileType).startsWith(
+                      {getMimeType(item.fileUrl, item.fileType)?.startsWith?.(
                         "image/"
                       ) && item.fileUrl ? (
                         <img
