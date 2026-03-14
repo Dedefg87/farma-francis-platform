@@ -964,6 +964,18 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
     };
 
   // ===========================================
+  // 🎯 DESEMPACOTAMENTO DE VIEW ONCE E OUTROS WRAPPERS
+  // O WhatsApp (Baileys) encapsula mídias em viewOnceMessage, viewOnceMessageV2, etc.
+  // Precisamos extrair a mensagem real desses wrappers
+  // ===========================================
+  const actualMessage = 
+    message.viewOnceMessage?.message ||
+    message.viewOnceMessageV2?.message ||
+    message.viewOnceMessageV2Extension?.message ||
+    message.documentWithCaptionMessage?.message ||
+    message;
+
+  // ===========================================
   // 🎯 PRIORIDADE 1: Usar messageType da Evolution API
   // A Evolution envia o tipo exato em payload.data.messageType
   // ===========================================
@@ -986,16 +998,16 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   let mimeType: string | null = null;
   
   // Primeiro: tentar mimetype do tipo específico (documentMessage, imageMessage, etc)
-  if (typeToSave === 'image' && message.imageMessage?.mimetype) {
-    mimeType = message.imageMessage.mimetype || message.imageMessage.mimeType || null;
-  } else if (typeToSave === 'video' && message.videoMessage?.mimetype) {
-    mimeType = message.videoMessage.mimetype || message.videoMessage.mimeType || null;
-  } else if (typeToSave === 'audio' && message.audioMessage?.mimetype) {
-    mimeType = message.audioMessage.mimetype || message.audioMessage.mimeType || null;
-  } else if (typeToSave === 'document' && message.documentMessage?.mimetype) {
-    mimeType = message.documentMessage.mimetype || message.documentMessage.mimeType || null;
-  } else if (typeToSave === 'sticker' && message.stickerMessage?.mimetype) {
-    mimeType = message.stickerMessage.mimetype || message.stickerMessage.mimeType || null;
+  if (typeToSave === 'image' && actualMessage.imageMessage?.mimetype) {
+    mimeType = actualMessage.imageMessage.mimetype || actualMessage.imageMessage.mimeType || null;
+  } else if (typeToSave === 'video' && actualMessage.videoMessage?.mimetype) {
+    mimeType = actualMessage.videoMessage.mimetype || actualMessage.videoMessage.mimeType || null;
+  } else if (typeToSave === 'audio' && actualMessage.audioMessage?.mimetype) {
+    mimeType = actualMessage.audioMessage.mimetype || actualMessage.audioMessage.mimeType || null;
+  } else if (typeToSave === 'document' && actualMessage.documentMessage?.mimetype) {
+    mimeType = actualMessage.documentMessage.mimetype || actualMessage.documentMessage.mimeType || null;
+  } else if (typeToSave === 'sticker' && actualMessage.stickerMessage?.mimetype) {
+    mimeType = actualMessage.stickerMessage.mimetype || actualMessage.stickerMessage.mimeType || null;
   }
   
   // Fallback 1: mimetype genérico na mensagem
@@ -1009,17 +1021,17 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   let fileName: string | null = null;
   
   // Priorizar fileName do tipo específico (documentMessage, imageMessage, etc)
-  if (typeToSave === 'image' && message.imageMessage?.fileName) {
-    fileName = message.imageMessage.fileName;
-  } else if (typeToSave === 'video' && message.videoMessage?.fileName) {
-    fileName = message.videoMessage.fileName;
-  } else if (typeToSave === 'audio' && message.audioMessage?.fileName) {
-    fileName = message.audioMessage.fileName;
-  } else if (typeToSave === 'document' && message.documentMessage) {
+  if (typeToSave === 'image' && actualMessage.imageMessage?.fileName) {
+    fileName = actualMessage.imageMessage.fileName;
+  } else if (typeToSave === 'video' && actualMessage.videoMessage?.fileName) {
+    fileName = actualMessage.videoMessage.fileName;
+  } else if (typeToSave === 'audio' && actualMessage.audioMessage?.fileName) {
+    fileName = actualMessage.audioMessage.fileName;
+  } else if (typeToSave === 'document' && actualMessage.documentMessage) {
     // Documentos: fileName ou title (title é fallback comum)
-    fileName = message.documentMessage.fileName || message.documentMessage.title || null;
-  } else if (typeToSave === 'sticker' && message.stickerMessage?.fileName) {
-    fileName = message.stickerMessage.fileName;
+    fileName = actualMessage.documentMessage.fileName || actualMessage.documentMessage.title || null;
+  } else if (typeToSave === 'sticker' && actualMessage.stickerMessage?.fileName) {
+    fileName = actualMessage.stickerMessage.fileName;
   }
   
   // Fallback: usar message.fileName genérico
@@ -1060,11 +1072,11 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
 
   // 🎯 BLINDAGEM PARA DOCUMENTOS ENCAPSULADOS (documentWithCaptionMessage)
   // O WhatsApp às vezes envia documentos com legenda dentro de documentWithCaptionMessage
-  // Nesse caso, o documentMessage original fica aninhado: documentWithCaptionMessage.message.documentMessage
+  // Nesse caso, o documentMessage original fica aninhado: documentWithCaptionMessage.actualMessage.documentMessage
   // Precisamos re-extrair fileName e mimeType diretamente do documento real
   const docWrapper = message.documentWithCaptionMessage;
   if (docWrapper?.message?.documentMessage) {
-    const realDoc = docWrapper.message.documentMessage;
+    const realDoc = docWrapper.actualMessage.documentMessage;
     // Sobrescrever fileName e mimeType com os valores reais do documento
     if (realDoc.fileName) fileName = realDoc.fileName;
     else if (realDoc.title) fileName = realDoc.title;
@@ -1087,16 +1099,16 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   // Primeiro: message.mediaUrl (URL do R2/Cloudflare) - MAIS IMPORTANTE
   if (message.mediaUrl) {
     rawUrl = message.mediaUrl;
-  } else if (typeToSave === 'image' && message.imageMessage) {
-    rawUrl = message.imageMessage.url || message.imageMessage.mediaUrl || null;
-  } else if (typeToSave === 'video' && message.videoMessage) {
-    rawUrl = message.videoMessage.url || message.videoMessage.mediaUrl || null;
-  } else if (typeToSave === 'audio' && message.audioMessage) {
-    rawUrl = message.audioMessage.url || message.audioMessage.mediaUrl || null;
-  } else if (typeToSave === 'document' && message.documentMessage) {
-    rawUrl = message.documentMessage.url || message.documentMessage.mediaUrl || null;
-  } else if (typeToSave === 'sticker' && message.stickerMessage) {
-    rawUrl = message.stickerMessage.url || message.stickerMessage.mediaUrl || null;
+  } else if (typeToSave === 'image' && actualMessage.imageMessage) {
+    rawUrl = actualMessage.imageMessage.url || actualMessage.imageMessage.mediaUrl || null;
+  } else if (typeToSave === 'video' && actualMessage.videoMessage) {
+    rawUrl = actualMessage.videoMessage.url || actualMessage.videoMessage.mediaUrl || null;
+  } else if (typeToSave === 'audio' && actualMessage.audioMessage) {
+    rawUrl = actualMessage.audioMessage.url || actualMessage.audioMessage.mediaUrl || null;
+  } else if (typeToSave === 'document' && actualMessage.documentMessage) {
+    rawUrl = actualMessage.documentMessage.url || actualMessage.documentMessage.mediaUrl || null;
+  } else if (typeToSave === 'sticker' && actualMessage.stickerMessage) {
+    rawUrl = actualMessage.stickerMessage.url || actualMessage.stickerMessage.mediaUrl || null;
   }
 
   // Limpar URL do R2 para obter apenas o caminho relativo
@@ -1112,31 +1124,31 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
     text = message.conversation || message.extendedTextMessage?.text || null;
   } else {
     caption = message.caption || 
-              message.imageMessage?.caption || 
-              message.videoMessage?.caption || 
-              message.documentMessage?.caption || null;
+              actualMessage.imageMessage?.caption || 
+              actualMessage.videoMessage?.caption || 
+              actualMessage.documentMessage?.caption || null;
   }
 
   // ===========================================
   // 🎯 FileSize (tentar de qualquer fonte)
   // ===========================================
   const fileSize = message.fileSize || 
-                   message.imageMessage?.fileSize || 
-                   message.videoMessage?.fileSize || 
-                   message.documentMessage?.fileSize || 
-                   message.audioMessage?.fileSize || null;
+                   actualMessage.imageMessage?.fileSize || 
+                   actualMessage.videoMessage?.fileSize || 
+                   actualMessage.documentMessage?.fileSize || 
+                   actualMessage.audioMessage?.fileSize || null;
 
   // Base64 (apenas para imagens, se fornecido)
-  const base64 = typeToSave === 'image' ? message.imageMessage?.base64 || null : null;
-  const mediaKey = (typeToSave === 'image' && message.imageMessage?.mediaKey) ||
-                   (typeToSave === 'video' && message.videoMessage?.mediaKey) ||
-                   (typeToSave === 'audio' && message.audioMessage?.mediaKey) ||
-                   (typeToSave === 'document' && message.documentMessage?.mediaKey) ||
+  const base64 = typeToSave === 'image' ? actualMessage.imageMessage?.base64 || null : null;
+  const mediaKey = (typeToSave === 'image' && actualMessage.imageMessage?.mediaKey) ||
+                   (typeToSave === 'video' && actualMessage.videoMessage?.mediaKey) ||
+                   (typeToSave === 'audio' && actualMessage.audioMessage?.mediaKey) ||
+                   (typeToSave === 'document' && actualMessage.documentMessage?.mediaKey) ||
                    null;
-  const directPath = (typeToSave === 'image' && message.imageMessage?.directPath) ||
-                     (typeToSave === 'video' && message.videoMessage?.directPath) ||
-                     (typeToSave === 'audio' && message.audioMessage?.directPath) ||
-                     (typeToSave === 'document' && message.documentMessage?.directPath) ||
+  const directPath = (typeToSave === 'image' && actualMessage.imageMessage?.directPath) ||
+                     (typeToSave === 'video' && actualMessage.videoMessage?.directPath) ||
+                     (typeToSave === 'audio' && actualMessage.audioMessage?.directPath) ||
+                     (typeToSave === 'document' && actualMessage.documentMessage?.directPath) ||
                      null;
 
   return {
