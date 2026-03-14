@@ -963,8 +963,47 @@ function parseEvolutionMessageContent(message: any) {
       fileSize: null,
     };
 
-  // PRIORIDADE ALTA: Detectar imagem EXPLICITAMENTE
-  // 1. Se existe imageMessage no payload → é imagem
+  // PRIORIDADE ALTA: Pegar mediaUrl da raiz da message primeiro (URL do R2/Cloudflare)
+  // A Evolution API injeta a URL do S3/R2 em message.mediaUrl
+  // Se não existir, faz fallback para os fields específicos (que podem conter URL criptografada do WhatsApp CDN)
+  const mimeType = message.mimetype || message.mimeType || message.fileMimeType || null;
+  const fileName = message.fileName || null;
+  const mediaUrl = message.mediaUrl || null;
+
+  if (mediaUrl) {
+    // Tem a URL do R2 direto - detectar tipo pelo mimeType ou fileName
+    let type: string = "document";
+    if (mimeType) {
+      if (mimeType.startsWith("image/")) type = "image";
+      else if (mimeType.startsWith("video/")) type = "video";
+      else if (mimeType.startsWith("audio/")) type = "audio";
+      else if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("spreadsheet") || mimeType.includes("presentation")) type = "document";
+    } else if (fileName) {
+      const ext = fileName.split(".").pop()?.toLowerCase();
+      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg"].includes(ext || "")) {
+        type = "image";
+      } else if (["mp4", "webm", "mov", "avi", "mkv", "3gp"].includes(ext || "")) {
+        type = "video";
+      } else if (["mp3", "ogg", "wav", "m4a", "aac", "opus"].includes(ext || "")) {
+        type = "audio";
+      } else if (ext === "pdf" || ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "zip", "rar", "7z"].includes(ext || "")) {
+        type = "document";
+      }
+    }
+
+    return {
+      type,
+      text: null,
+      caption: message.caption || null,
+      mediaUrl: cleanR2Url(mediaUrl),
+      mimeType,
+      fileName,
+      fileSize: message.fileSize || null,
+    };
+  }
+
+  // Se não tem mediaUrl na raiz, tentar fields específicos como fallback
+  // PRIORIDADE BAIXA: imageMessage.URL (pode ser URL criptografada do WhatsApp CDN)
   if (message.imageMessage) {
     // Check if base64 is already provided by Evolution API (when Send Base64 is enabled)
     if (message.imageMessage.base64) {
@@ -987,44 +1026,6 @@ function parseEvolutionMessageContent(message: any) {
       mediaKey: message.imageMessage.mediaKey || null,
       directPath: message.imageMessage.directPath || null,
       base64: message.imageMessage.base64 || null,
-    };
-  }
-
-  // 2. Se existe mediaUrl direto (R2), verificar se é imagem pela extensão ou mimeType
-  if (message.mediaUrl) {
-    const mimeType =
-      message.mimetype || message.mimeType || message.fileMimeType || null;
-    const fileName = message.fileName || null;
-    const mediaUrl = message.mediaUrl;
-    
-    // Detectar tipo baseado em mimeType ou extensão
-    let type: string = "document"; // default para documentos
-    if (mimeType) {
-      if (mimeType.startsWith("image/")) type = "image";
-      else if (mimeType.startsWith("video/")) type = "video";
-      else if (mimeType.startsWith("audio/")) type = "audio";
-      else if (mimeType.includes("pdf") || mimeType.includes("document")) type = "document";
-    } else if (fileName) {
-      const ext = fileName.split(".").pop()?.toLowerCase();
-      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff"].includes(ext || "")) {
-        type = "image";
-      } else if (["mp4", "webm", "mov", "avi", "mkv"].includes(ext || "")) {
-        type = "video";
-      } else if (["mp3", "ogg", "wav", "m4a", "aac"].includes(ext || "")) {
-        type = "audio";
-      } else if (ext === "pdf" || ["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(ext || "")) {
-        type = "document";
-      }
-    }
-
-    return {
-      type,
-      text: null,
-      caption: message.caption || null,
-      mediaUrl: cleanR2Url(mediaUrl),
-      mimeType,
-      fileName,
-      fileSize: message.fileSize || null,
     };
   }
 
