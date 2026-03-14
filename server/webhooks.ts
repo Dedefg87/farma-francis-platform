@@ -1058,6 +1058,31 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
     mimeType = mimeMap[ext || ''] || null;
   }
 
+  // 🎯 BLINDAGEM PARA DOCUMENTOS ENCAPSULADOS (documentWithCaptionMessage)
+  // O WhatsApp às vezes envia documentos com legenda dentro de documentWithCaptionMessage
+  // Nesse caso, o documentMessage original fica aninhado: documentWithCaptionMessage.message.documentMessage
+  // Precisamos re-extrair fileName e mimeType diretamente do documento real
+  const docWrapper = message.documentWithCaptionMessage;
+  if (docWrapper?.message?.documentMessage) {
+    const realDoc = docWrapper.message.documentMessage;
+    // Sobrescrever fileName e mimeType com os valores reais do documento
+    if (realDoc.fileName) fileName = realDoc.fileName;
+    else if (realDoc.title) fileName = realDoc.title;
+    
+    // Se o mimeType não foi capturado ou é genérico, tentar do documento real
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      mimeType = realDoc.mimetype || realDoc.mimeType || null;
+    }
+    
+    console.log("[Blindagem] documentWithCaptionMessage detectado. fileName extraído:", fileName, "mimeType:", mimeType);
+  }
+
+  // ===========================================
+  // 🎯 PRIORIDADE 3: Extrair URL (sempre usar message.mediaUrl primeiro)
+  // ===========================================
+  let rawUrl: string | null = null;
+  }
+
   // ===========================================
   // 🎯 PRIORIDADE 3: Extrair URL (sempre usar message.mediaUrl primeiro)
   // ===========================================
