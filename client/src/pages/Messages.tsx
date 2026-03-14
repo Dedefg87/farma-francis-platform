@@ -869,7 +869,7 @@ export default function Messages() {
                                   {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                                 </p>
                                 {msg.content && msg.content !== "null" && (
-                                  <p className="text-sm">{msg.content}</p>
+                                  <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">

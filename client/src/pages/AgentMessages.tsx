@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
+import { renderContentWithLinks } from "@/utils/text-format";
 
 function getImageSrc(
   url: string | null | undefined,
@@ -1100,7 +1101,7 @@ export default function AgentMessages() {
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
                         {msg.content && msg.content !== "null" && (
-                          <p className="text-sm">{msg.content}</p>
+                          <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
