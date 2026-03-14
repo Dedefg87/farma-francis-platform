@@ -890,7 +890,7 @@ export default function AgentMessages() {
                     <Avatar className="w-10 h-10 flex-shrink-0">
                       {conv.customerAvatar ? (
                         <AvatarImage
-                          src={conv.customerAvatar}
+                          src={getImageSrc(conv.customerAvatar)}
                           alt={conv.customerName || "Contato"}
                         />
                       ) : null}
@@ -963,7 +963,7 @@ export default function AgentMessages() {
                     <Avatar className="w-10 h-10">
                       {selectedConversation?.customerAvatar ? (
                         <AvatarImage
-                          src={selectedConversation.customerAvatar}
+                          src={getImageSrc(selectedConversation.customerAvatar)}
                           alt={selectedConversation.customerName || "Contato"}
                         />
                       ) : null}

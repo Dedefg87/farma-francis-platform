@@ -344,10 +344,17 @@ export default function AgentChat() {
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-blue-500 text-white">
-                        {conversation.customerName?.charAt(0).toUpperCase() ||
-                          "C"}
-                      </AvatarFallback>
+                      {conversation.customerAvatar ? (
+                        <AvatarImage
+                          src={getImageSrc(conversation.customerAvatar)}
+                          alt={conversation.customerName ?? "Cliente"}
+                        />
+                      ) : (
+                        <AvatarFallback className="bg-blue-500 text-white">
+                          {conversation.customerName?.charAt(0).toUpperCase() ||
+                            "C"}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
@@ -393,9 +400,17 @@ export default function AgentChat() {
             <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-blue-500 text-white">
-                    {selectedConv.customerName?.charAt(0).toUpperCase() || "C"}
-                  </AvatarFallback>
+                  {selectedConv.customerAvatar ? (
+                    <AvatarImage
+                      src={getImageSrc(selectedConv.customerAvatar)}
+                      alt={selectedConv.customerName ?? "Cliente"}
+                    />
+                  ) : (
+                    <AvatarFallback className="bg-blue-500 text-white">
+                      {selectedConv.customerName?.charAt(0).toUpperCase() ||
+                        "C"}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
                 <div>
                   <h3 className="font-semibold text-gray-900">
