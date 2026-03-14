@@ -251,12 +251,14 @@ async function startServer() {
 
       // Upload direto para Cloudflare R2 usando variáveis S3_* existentes
       try {
+        const file = req.file;
+        if (!file) throw new Error("Nenhum arquivo recebido do frontend");
+
         const accessKey = process.env.S3_ACCESS_KEY;
         const secretKey = process.env.S3_SECRET_KEY;
         const endpoint = process.env.S3_ENDPOINT;
         const bucket = process.env.S3_BUCKET;
 
-        // Validação explícita
         if (!accessKey || !secretKey || !endpoint || !bucket) {
           console.error("[BroadcastUpload] Variáveis de ambiente ausentes:", {
             accessKey: !!accessKey,
@@ -265,7 +267,7 @@ async function startServer() {
             bucket: !!bucket,
           });
           return res.status(500).json({
-            error: "Configuração do S3 ausente no servidor",
+            error: "Credenciais do S3 ausentes no servidor",
             missing: {
               S3_ACCESS_KEY: !accessKey,
               S3_SECRET_KEY: !secretKey,
@@ -285,28 +287,20 @@ async function startServer() {
           },
         });
 
-        const fileKey = `broadcast-temp/${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${req.file.originalname.split(".").pop() || "bin"}`;
+        // Gera chave única na pasta broadcast
+        const fileKey = `broadcast/${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
 
         await s3Client.send(
           new PutObjectCommand({
             Bucket: bucket,
             Key: fileKey,
-            Body: req.file.buffer,
-            ContentType: req.file.mimetype,
+            Body: file.buffer,
+            ContentType: file.mimetype,
           })
         );
 
-        // URL pública
         const publicUrl = `${process.env.VITE_PUBLIC_R2_URL}/${fileKey}`;
-
-        // Retornar metadados
-        res.json({
-          success: true,
-          fileUrl: publicUrl,
-          fileName: req.file.originalname,
-          fileType: req.file.mimetype,
-          fileSize: req.file.size,
-        });
+        res.json({ url: publicUrl });
       } catch (error: any) {
         console.error("[BroadcastUpload] Erro detalhado no upload:", error);
         res.status(500).json({
