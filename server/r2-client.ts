@@ -1,80 +1,25 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
-/**
- * Faz upload de um arquivo para o Cloudflare R2
- * @param buffer - Conteúdo do arquivo como Buffer
- * @param originalName - Nome original do arquivo (será usado na chave)
- * @param mimetype - Tipo MIME do arquivo
- * @returns URL pública do arquivo no R2
- */
-export async function uploadToR2(
-  buffer: Buffer,
-  originalName: string,
-  mimetype: string
-): Promise<string> {
-  const endpoint = process.env.S3_ENDPOINT || "";
-
-  // Trava de segurança
-  if (!endpoint) {
-    throw new Error("S3_ENDPOINT não está carregado nas variáveis de ambiente do processo.");
-  }
-
-  const formattedEndpoint = endpoint.startsWith("http") ? endpoint : `https://${endpoint}`;
-
-  // Cliente S3 inicializado apenas quando a função é chamada (garante que process.env existe)
+export async function uploadToR2(buffer: Buffer, originalName: string, mimetype: string) {
+  // Conexão direta e forçada ignorando o process.env do Railway
   const s3Client = new S3Client({
-    region: process.env.S3_REGION || "auto",
-    endpoint: formattedEndpoint,
+    region: 'auto',
+    endpoint: 'https://816a5ff9c45a435c3a40b4fc262c914c.r2.cloudflarestorage.com',
     credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY || "",
-      secretAccessKey: process.env.S3_SECRET_KEY || "",
+      accessKeyId: 'debc3a713faeb6d442dab499221ba42f',
+      secretAccessKey: 'c82abdafb97bf0d1a39e66644c86cacbe373cb6aa2b852ea5786726070a0513c',
     },
   });
 
-  // Gera chave única na pasta broadcast
-  const fileKey = `broadcast/${Date.now()}-${originalName.replace(/\s+/g, "_")}`;
+  // Limpa o nome do arquivo para evitar quebras de link
+  const fileKey = `broadcast/${Date.now()}-${originalName.replace(/\s+/g, '_')}`;
 
-  // Fazer upload
-  const command = new PutObjectCommand({
-    Bucket: process.env.S3_BUCKET!,
+  await s3Client.send(new PutObjectCommand({
+    Bucket: 'farmafranciswhatsappmedia',
     Key: fileKey,
     Body: buffer,
     ContentType: mimetype,
-  });
+  }));
 
-  await s3Client.send(command);
-
-  // URL pública (usa VITE_PUBLIC_R2_URL)
-  const publicUrl = `${process.env.VITE_PUBLIC_R2_URL}/${fileKey}`;
-  return publicUrl;
-}
-
-/**
- * Gera URL pré-assinada para acesso privado (não usado aqui, mas útil)
- */
-export async function getSignedUrl(key: string, expiresIn = 3600): Promise<string> {
-  const endpoint = process.env.S3_ENDPOINT || "";
-
-  if (!endpoint) {
-    throw new Error("S3_ENDPOINT não está carregado nas variáveis de ambiente do processo.");
-  }
-
-  const formattedEndpoint = endpoint.startsWith("http") ? endpoint : `https://${endpoint}`;
-
-  const s3Client = new S3Client({
-    region: process.env.S3_REGION || "auto",
-    endpoint: formattedEndpoint,
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY || "",
-      secretAccessKey: process.env.S3_SECRET_KEY || "",
-    },
-  });
-
-  const command = new PutObjectCommand({
-    Bucket: process.env.S3_BUCKET!,
-    Key: key,
-  });
-  const url = await getSignedUrl(s3Client, command, { expiresIn });
-  return url;
+  return { url: `https://pub-33c481f0a9e94adb8870472308f49471.r2.dev/${fileKey}` };
 }
