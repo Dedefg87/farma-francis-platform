@@ -78,7 +78,7 @@ import {
   X,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
-
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -887,6 +887,17 @@ export default function AgentMessages() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
+                    <Avatar className="w-10 h-10 flex-shrink-0">
+                      {conv.customerAvatar ? (
+                        <AvatarImage
+                          src={conv.customerAvatar}
+                          alt={conv.customerName || "Contato"}
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                        <User className="w-5 h-5" />
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className={`font-semibold truncate ${conv.unreadCount > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
@@ -949,6 +960,17 @@ export default function AgentMessages() {
               <div className="bg-white border-b border-gray-200 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
+                      {selectedConversation?.customerAvatar ? (
+                        <AvatarImage
+                          src={selectedConversation.customerAvatar}
+                          alt={selectedConversation.customerName || "Contato"}
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                        <User className="w-5 h-5" />
+                      </AvatarFallback>
+                    </Avatar>
                     <div>
                       <h3 className="font-semibold text-gray-900">
                         {selectedConversation.customerName}

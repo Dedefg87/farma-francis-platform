@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
 function getImageSrc(url: string | null | undefined, filename?: string | null): string {
@@ -342,6 +343,12 @@ export default function AgentChat() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-blue-500 text-white">
+                        {conversation.customerName?.charAt(0).toUpperCase() ||
+                          "C"}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-medium text-gray-900 truncate">
@@ -385,6 +392,11 @@ export default function AgentChat() {
             {/* Header do Chat */}
             <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-blue-500 text-white">
+                    {selectedConv.customerName?.charAt(0).toUpperCase() || "C"}
+                  </AvatarFallback>
+                </Avatar>
                 <div>
                   <h3 className="font-semibold text-gray-900">
                     {selectedConv.customerName || selectedConv.customerPhone}
