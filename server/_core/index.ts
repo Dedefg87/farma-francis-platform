@@ -249,38 +249,40 @@ async function startServer() {
           .json({ error: `Tipo de arquivo não permitido: ${req.file.mimetype}` });
       }
 
-      // Upload direto para Cloudflare R2 usando variáveis S3_* existentes
+      // Upload direto para Cloudflare R2 usando variáveis existentes
       try {
         const file = req.file;
         if (!file) throw new Error("Nenhum arquivo recebido do frontend");
 
-        const accessKey = process.env.S3_ACCESS_KEY;
-        const secretKey = process.env.S3_SECRET_KEY;
-        const endpoint = process.env.S3_ENDPOINT;
-        const bucket = process.env.S3_BUCKET;
+        // Busca variáveis com nomes S3_* (preferencial) ou CLOUDFLARE_* (fallback)
+        const accessKey = process.env.S3_ACCESS_KEY || process.env.CLOUDFLARE_ACCESS_KEY_ID;
+        const secretKey = process.env.S3_SECRET_KEY || process.env.CLOUDFLARE_SECRET_ACCESS_KEY;
+        const endpoint = process.env.S3_ENDPOINT || process.env.CLOUDFLARE_R2_ENDPOINT;
+        const bucket = process.env.S3_BUCKET || process.env.CLOUDFLARE_BUCKET;
+
+        // Log de debug para rastrear quais variáveis estão presentes
+        console.log("[BroadcastUpload] Credenciais R2:", {
+          S3_ACCESS_KEY: !!process.env.S3_ACCESS_KEY,
+          CLOUDFLARE_ACCESS_KEY_ID: !!process.env.CLOUDFLARE_ACCESS_KEY_ID,
+          S3_SECRET_KEY: !!process.env.S3_SECRET_KEY,
+          CLOUDFLARE_SECRET_ACCESS_KEY: !!process.env.CLOUDFLARE_SECRET_ACCESS_KEY,
+          S3_ENDPOINT: !!process.env.S3_ENDPOINT,
+          CLOUDFLARE_R2_ENDPOINT: !!process.env.CLOUDFLARE_R2_ENDPOINT,
+          S3_BUCKET: !!process.env.S3_BUCKET,
+          CLOUDFLARE_BUCKET: !!process.env.CLOUDFLARE_BUCKET,
+        });
 
         if (!accessKey || !secretKey || !endpoint || !bucket) {
-          console.error("[BroadcastUpload] Variáveis de ambiente ausentes:", {
-            accessKey: !!accessKey,
-            secretKey: !!secretKey,
-            endpoint: !!endpoint,
-            bucket: !!bucket,
-          });
+          console.error("[BroadcastUpload] Credenciais do S3/R2 ausentes no servidor");
           return res.status(500).json({
-            error: "Credenciais do S3 ausentes no servidor",
-            missing: {
-              S3_ACCESS_KEY: !accessKey,
-              S3_SECRET_KEY: !secretKey,
-              S3_ENDPOINT: !endpoint,
-              S3_BUCKET: !bucket,
-            },
+            error: "Configuração do S3/R2 ausente no servidor. Verifique as variáveis de ambiente.",
           });
         }
 
         // Inicializa o cliente DENTRO da requisição
         const s3Client = new S3Client({
           region: process.env.S3_REGION || "auto",
-          endpoint: endpoint.startsWith("http") ? endpoint : `https://${endpoint}`,
+          endpoint: endpoint.startsWith("http") ? endpoint.replace(/\/$/, "") : `https://${endpoint}`,
           credentials: {
             accessKeyId: accessKey,
             secretAccessKey: secretKey,
