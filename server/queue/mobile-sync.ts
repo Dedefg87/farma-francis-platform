@@ -9,24 +9,31 @@ import { eq, and, or, sql } from "drizzle-orm";
 
 import { sseManager, EVENTS } from "../_core/sse";
 
-// Gera variações de números para busca flexível (com/sem nono para Brasil)
-function getPhoneSearchVariants(phone: string): string[] {
-  const variants: string[] = [phone];
-  const digits = phone.replace(/\D/g, '');
-  
-  if (digits.startsWith('55')) {
-    if (digits.length === 12) {
-      // SEM nono -> gerar COM nono
-      const withNon = digits.slice(0, 4) + '9' + digits.slice(4);
-      variants.push(phone.startsWith('+') ? `+${withNon}` : withNon);
-    } else if (digits.length === 13) {
-      // COM nono -> gerar SEM nono
-      const withoutNon = digits.slice(0, 4) + digits.slice(5);
-      variants.push(phone.startsWith('+') ? `+${withoutNon}` : withoutNon);
-    }
+// Gera todas as variações de número brasileiro (com/sem 9, com/sem +55)
+// REUTILIZA a mesma lógica de db-messages.ts para consistência
+function getPhoneVariations(phone: string): string[] {
+  const clean = phone.replace(/\D/g, '');
+
+  if (!clean.startsWith('55') || clean.length < 12) {
+    return [phone, clean, `+${clean}`];
   }
-  
-  return variants;
+
+  const ddd = clean.substring(2, 4);
+  const last8 = clean.slice(-8);
+
+  return [
+    `55${ddd}9${last8}`,          // Padrão com 9
+    `55${ddd}${last8}`,           // Padrão sem 9
+    `+55${ddd}9${last8}`,         // Com + e com 9
+    `+55${ddd}${last8}`,          // Com + e sem 9
+    `${ddd}9${last8}`,            // Sem DDI e com 9
+    `${ddd}${last8}`              // Sem DDI e sem 9
+  ];
+}
+
+// Alias para compatibilidade (usar sempre getPhoneVariations)
+function getPhoneSearchVariants(phone: string): string[] {
+  return getPhoneVariations(phone);
 }
 
 interface MobileSyncJob {
