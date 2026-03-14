@@ -222,8 +222,20 @@ export function PDFPreview({
   const mimeType = getMimeType(url, fileType);
   const fileInfo = getFileInfo(mimeType, fileName || null);
 
-  // Criar URL final quando o modal abrir
+  // 🔒 PROTEÇÃO CONTRA ARQUIVOS .ENC (fantasmas do passado)
+  // Se a URL ou nome do arquivo terminar em .enc, BLOQUEAR preview
+  const isEncFile = url?.toLowerCase().endsWith('.enc') ||
+                    fileName?.toLowerCase().endsWith('.enc');
+
   useEffect(() => {
+    // Se for arquivo .enc, mostrar erro imediatamente
+    if (isEncFile) {
+      console.warn("[PDFPreview] Arquivo .enc bloqueado - não será renderizado");
+      setError("Mídia antiga não suportada (arquivo .enc)");
+      setLoading(false);
+      return;
+    }
+
     if (!open) {
       // Limpar blob URL anterior
       if (blobUrl) {

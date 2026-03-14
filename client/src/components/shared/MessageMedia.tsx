@@ -398,6 +398,20 @@ export function MessageMedia({
 }: MessageMediaProps) {
   if (!fileUrl) return null;
 
+  // 🔒 PROTEÇÃO CONTRA ARQUIVOS .ENC (fantasmas do passado)
+  // Se a URL ou nome do arquivo terminar em .enc, NÃO tentar renderizar
+  // Isso evita downloads automáticos de arquivos quebrados do WhatsApp antigo
+  const isEncFile = fileUrl.toLowerCase().endsWith('.enc') ||
+                    fileName?.toLowerCase().endsWith('.enc');
+
+  if (isEncFile) {
+    return (
+      <div className="p-3 text-sm text-gray-500 bg-gray-100 rounded-md border border-gray-200">
+        ⚠️ Mídia antiga não suportada
+      </div>
+    );
+  }
+
   const mimeType = getMimeType(fileUrl, fileType);
   const mediaUrl = getMediaSrc(fileUrl, messageId);
   const { icon, color, bgColor, label } = getFileIcon(mimeType, fileName);
