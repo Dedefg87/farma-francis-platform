@@ -29,7 +29,7 @@ interface MessageMediaProps {
   isAgent?: boolean;
 }
 
-// Helper para obter URL de mídia (usa proxy se tiver messageId)
+// Helper para obter URL de mídia (usa R2 público ou proxy)
 function getMediaSrc(url: string | null, messageId?: number): string {
   if (!url) return "";
   
@@ -38,22 +38,24 @@ function getMediaSrc(url: string | null, messageId?: number): string {
     return url;
   }
   
-  // Se for URL absoluta (http/https), usar como está
-  if (url.startsWith("http")) {
+  // Se for URL do R2 (Cloudflare) - usar como está (já é pública)
+  if (url.includes(".r2.") || url.includes("r2.dev") || url.includes("r2.cloudflarestorage.com")) {
     return url;
   }
   
-  // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
-  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-  const cleanUrl = url.replace(/^\//, "");
-  const fullUrl = `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
-  
-  // Se tiver messageId e for URL do WhatsApp, usar proxy (manter comportamento original)
-  if (messageId && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
-    return `/api/media/${messageId}`;
+  // Se for URL do WhatsApp CDN (mmg.whatsapp.net etc) - usar proxy para autenticação
+  if (url.startsWith("http") && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
+    if (messageId) {
+      return `/api/media/${messageId}`;
+    }
+    // Se não tem messageId, tentar usar a URL diretamente (pode falhar por CORS)
+    return url;
   }
   
-  return fullUrl;
+  // Se for caminho relativo (ex: "evolution-api/..."), usar PUBLIC_R2_URL
+  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  const cleanUrl = url.replace(/^\//, "");
+  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
 }
 
 // Componente de player de áudio estilo WhatsApp
