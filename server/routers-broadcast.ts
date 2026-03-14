@@ -338,7 +338,7 @@ export const broadcastRouter = router({
         throw new Error("Lista não encontrada ou inativa");
       }
 
-      // Buscar membros
+      // Buscar membros (apenas com telefone válido)
       const members = await db
         .select({
           customerId: broadcastListMembers.customerId,
@@ -346,10 +346,18 @@ export const broadcastRouter = router({
         })
         .from(broadcastListMembers)
         .leftJoin(customers, eq(broadcastListMembers.customerId, customers.id))
-        .where(eq(broadcastListMembers.listId, input.listId));
+        .where(
+          and(
+            eq(broadcastListMembers.listId, input.listId),
+            sql`${customers.phone} IS NOT NULL` // Apenas membros com telefone
+          )
+        );
 
-      if (members.length === 0) {
-        throw new Error("Lista não possui membros");
+      // Filtrar no código também (segurança extra)
+      const validMembers = members.filter(m => m.phone && m.customerId);
+
+      if (validMembers.length === 0) {
+        throw new Error("Lista não possui membros com telefone válido");
       }
 
       // Registrar o envio (com campos de arquivo)
@@ -363,19 +371,35 @@ export const broadcastRouter = router({
           fileType: input.fileType || null,
           fileSize: input.fileSize || null,
           sentBy: ctx.user.id,
-          totalRecipients: members.length,
+          totalRecipients: validMembers.length,
           successfulSends: 0,
           failedSends: 0,
         })
         .$returningId();
 
-      // Registrar cada destinatário para rastreamento individual
-      const memberSends = members.map(m => ({
-        messageId: message.id,
-        customerId: m.customerId,
-        phone: m.phone,
+      console.log(
+        "[Broadcast] Message created with ID:",
+        message.id,
+        "for",
+        validMembers.length,
+        "recipients"
+      );
+
+      // Sanitizar e preparar array para inserção em lote
+      const memberSends = validMembers.map(m => ({
+        messageId: Number(message.id),
+        customerId: Number(m.customerId),
+        phone: String(m.phone),
         status: "pending" as const,
       }));
+
+      // Log de segurança para debugar o que está indo para o banco
+      console.log(
+        "[Broadcast] Payload para broadcast_members_sent:",
+        memberSends.slice(0, 3), // Mostra apenas os 3 primeiros para não poluir
+        "... e mais",
+        memberSends.length - 3
+      );
 
       // Inserção manual via SQL para evitar problemas de geração de query do Drizzle
       if (memberSends.length > 0) {
@@ -388,6 +412,7 @@ export const broadcastRouter = router({
           `INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status) VALUES ${placeholders}`,
           params
         );
+        console.log("[Broadcast] Inserção em massa concluída");
       }
 
       // Processar envio em background (não bloquear resposta)
