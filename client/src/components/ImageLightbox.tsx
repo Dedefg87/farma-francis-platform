@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, X } from "lucide-react";
@@ -121,6 +122,7 @@ export function ImageLightbox({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-none">
+        <DialogTitle className="sr-only">Visualização de imagem</DialogTitle>
         {/* Header com controles */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/70 to-transparent">
           <div className="text-white text-sm">
