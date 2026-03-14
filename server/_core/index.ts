@@ -249,17 +249,18 @@ async function startServer() {
           .json({ error: `Tipo de arquivo não permitido: ${req.file.mimetype}` });
       }
 
-      // Fazer upload direto para R2 usando S3Client
-      const url = await uploadToR2(
-        req.file.buffer,
-        req.file.originalname,
-        req.file.mimetype
-      );
+      // Fazer upload para storage (R2 via proxy ou S3 direto conforme configurado)
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substring(2, 8);
+      const ext = req.file.originalname.split(".").pop() || "bin";
+      const relKey = `broadcast-temp/${timestamp}-${random}.${ext}`;
+
+      const result = await storagePut(relKey, req.file.buffer, req.file.mimetype);
 
       // Retornar metadados
       res.json({
         success: true,
-        fileUrl: url,
+        fileUrl: result.url,
         fileName: req.file.originalname,
         fileType: req.file.mimetype,
         fileSize: req.file.size,
