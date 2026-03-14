@@ -9,9 +9,33 @@ import {
   queues,
   users,
 } from "../drizzle/schema";
-import { eq, desc, and, or, sql, like } from "drizzle-orm";
+import { eq, desc, and, or, sql, like, inArray } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
+
+// Gera todas as variações de número de telefone brasileiro (com/sem 9, com/sem +55)
+function getPhoneVariations(rawPhone: string): string[] {
+  const clean = rawPhone.replace(/\D/g, ''); // Remove tudo que não é número
+
+  // Se não for número brasileiro válido, retorna apenas as versões básicas
+  if (!clean.startsWith('55') || clean.length < 12) {
+    return [rawPhone, clean, `+${clean}`];
+  }
+
+  // Extrai DDD e os últimos 8 dígitos (ignorando o 9)
+  const ddd = clean.substring(2, 4);
+  const last8 = clean.slice(-8);
+
+  // Retorna todas as 6 combinações possíveis no WhatsApp BR
+  return [
+    `55${ddd}9${last8}`,          // Padrão com 9
+    `55${ddd}${last8}`,           // Padrão sem 9
+    `+55${ddd}9${last8}`,         // Com + e com 9
+    `+55${ddd}${last8}`,          // Com + e sem 9
+    `${ddd}9${last8}`,            // Sem DDI e com 9
+    `${ddd}${last8}`              // Sem DDI e sem 9
+  ];
+}
 
 
 
@@ -292,25 +316,8 @@ export async function findOrCreateCustomerByPhone(
   const rawPhone = phone;
   const cleanPhone = rawPhone.replace(/\D/g, '');
 
-  let searchCondition;
-  
-  // Determinar normalizedPhone para armazenamento (sempre armazenamos o número formatado padrão)
-  let normalizedPhone: string;
-  if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
-    const ddd = cleanPhone.substring(2, 4);
-    const last8 = cleanPhone.slice(-8);
-    // % no início ignora o '+' e % no meio ignora o 9
-    searchCondition = like(customers.phone, `%55${ddd}%${last8}`);
-    // Para armazenar, usar o número limpo (apenas dígitos)
-    normalizedPhone = cleanPhone;
-  } else {
-    // Para outros países ou números curtos, usar busca exata normalizada
-    normalizedPhone = normalizePhone(phone);
-    const searchPhones = getPhoneSearchVariants(normalizedPhone);
-    searchCondition = searchPhones.length > 1
-      ? or(...searchPhones.map(p => eq(customers.phone, p)))
-      : eq(customers.phone, searchPhones[0]);
-  }
+  // Gera todas as variações possíveis do número (com/sem 9, com/sem +55)
+  const phoneVariations = getPhoneVariations(phone);
 
   // Selecionar apenas colunas que existem no banco (evitar erro de colunas faltantes)
   const existing = await db
@@ -323,8 +330,11 @@ export async function findOrCreateCustomerByPhone(
       photoUrl: customers.photoUrl,
     })
     .from(customers)
-    .where(searchCondition)
+    .where(inArray(customers.phone, phoneVariations))
     .limit(1);
+
+  // Para armazenamento, usar o número limpo (apenas dígitos) como padrão
+  const normalizedPhone = cleanPhone;
 
   if (existing.length > 0) {
     const updates: Record<string, unknown> = {};
