@@ -537,6 +537,22 @@ async function processEvolutionWebhookAsync(req: Request) {
     console.log("2. [Evolution Webhook] ✅ Evento detectado:", eventName);
 
     // ==========================================
+    // 🚫 BLOQUEIO DE GRUPOS - Early Return
+    // ==========================================
+    // Extrair remoteJid (identificador da conversa) de várias estruturas possíveis
+    const remoteJid =
+      body?.data?.key?.remoteJid ||
+      body?.data?.remoteJid ||
+      body?.destination ||
+      body?.data?.message?.key?.remoteJid ||
+      "";
+
+    if (remoteJid.includes("@g.us")) {
+      console.log(`🚫 [Grupos] Mensagem de grupo ignorada: ${remoteJid}`);
+      return; // Não processar nada, silenciosamente
+    }
+
+    // ==========================================
     // 🎯 FILTRAGEM CRÍTICA - PROCESSAR APENAS MENSAGENS
     // ==========================================
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
