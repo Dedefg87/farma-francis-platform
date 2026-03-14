@@ -1146,6 +1146,26 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   }
 
   // ===========================================
+  // 🎯 TRATAMENTO DE LOCALIZAÇÃO (Transforma em Link)
+  // ===========================================
+  const locationMsg = actualMessage?.locationMessage || actualMessage?.liveLocationMessage;
+  
+  if (locationMsg) {
+    const lat = locationMsg.degreesLatitude || locationMsg.latitude;
+    const lng = locationMsg.degreesLongitude || locationMsg.longitude;
+    
+    if (lat && lng) {
+      const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+      let locationText = `📍 *Localização Recebida:*\n${mapsUrl}`;
+      
+      if (locationMsg.name) locationText += `\nLocal: ${locationMsg.name}`;
+      if (locationMsg.address) locationText += `\nEndereço: ${locationMsg.address}`;
+      
+      text = locationText;
+    }
+  }
+
+  // ===========================================
   // 🎯 FileSize (tentar de qualquer fonte)
   // ===========================================
   const fileSize = message.fileSize || 

@@ -403,7 +403,12 @@ function buildInboundContent(message: {
   messageType: string;
   messageText?: string | null;
   caption?: string | null;
+  text?: string | null; // ← NOVO: texto já processado (inclui localização formatada)
 }) {
+  // PRIORITÁRIO: Se já temos texto processado (localização, etc), usar diretamente
+  if (message.text?.trim()) return message.text;
+  
+  // Fallback para a lógica original
   if (message.messageText?.trim()) return message.messageText;
   if (message.caption?.trim()) return message.caption;
 
