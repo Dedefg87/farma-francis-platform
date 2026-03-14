@@ -474,7 +474,7 @@ export function MessageMedia({
       <div className="rounded-lg overflow-hidden border bg-white max-w-xs">
         <div
           className="h-32 overflow-hidden cursor-pointer relative"
-          onClick={() => onDocumentClick?.(fileUrl, messageId, fileName || undefined)}
+          onClick={() => onDocumentClick?.(mediaUrl, messageId, fileName || undefined)}
         >
           <iframe
             src={mediaUrl}
@@ -492,7 +492,7 @@ export function MessageMedia({
             </div>
           </div>
           <button
-            onClick={() => onDocumentClick?.(fileUrl, messageId, fileName || undefined)}
+            onClick={() => onDocumentClick?.(mediaUrl, messageId, fileName || undefined)}
             className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
           >
             Abrir
@@ -505,7 +505,7 @@ export function MessageMedia({
   // Outros documentos com ícone específico
   return (
     <div
-      onClick={() => onDocumentClick?.(fileUrl, messageId, fileName || undefined)}
+      onClick={() => onDocumentClick?.(mediaUrl, messageId, fileName || undefined)}
       className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
         isAgent
           ? 'bg-blue-600/20 hover:bg-blue-600/30 border border-blue-400/30'
