@@ -18,7 +18,7 @@ import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
 import { sdk } from "./sdk";
 import multer from "multer";
-import { storagePut } from "../storage";
+import { uploadToR2 } from "../r2-client";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -249,14 +249,12 @@ async function startServer() {
           .json({ error: `Tipo de arquivo não permitido: ${req.file.mimetype}` });
       }
 
-      // Gerar chave única
-      const timestamp = Date.now();
-      const random = Math.random().toString(36).substring(2, 8);
-      const ext = req.file.originalname.split(".").pop() || "bin";
-      const key = `broadcast-temp/${timestamp}-${random}.${ext}`;
-
-      // Fazer upload para storage
-      const { url } = await storagePut(key, req.file.buffer, req.file.mimetype);
+      // Fazer upload direto para R2 usando S3Client
+      const url = await uploadToR2(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype
+      );
 
       // Retornar metadados
       res.json({
@@ -265,7 +263,6 @@ async function startServer() {
         fileName: req.file.originalname,
         fileType: req.file.mimetype,
         fileSize: req.file.size,
-        key,
       });
     } catch (error: any) {
       console.error("[BroadcastUpload] Error:", error);
