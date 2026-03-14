@@ -951,7 +951,7 @@ function extractEvolutionMessage(body: any) {
   };
 }
 
-function parseEvolutionMessageContent(message: any) {
+function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   if (!message)
     return {
       type: "unknown",
@@ -963,179 +963,132 @@ function parseEvolutionMessageContent(message: any) {
       fileSize: null,
     };
 
-  // PRIORIDADE ALTA: Pegar mediaUrl da raiz da message primeiro (URL do R2/Cloudflare)
-  // A Evolution API injeta a URL do S3/R2 em message.mediaUrl
-  // Se não existir, faz fallback para os fields específicos (que podem conter URL criptografada do WhatsApp CDN)
-  const mimeType = message.mimetype || message.mimeType || message.fileMimeType || null;
+  // ===========================================
+  // 🎯 PRIORIDADE 1: Usar messageType da Evolution API
+  // A Evolution envia o tipo exato em payload.data.messageType
+  // ===========================================
+  let typeToSave = 'text';
+  if (rawMessageType) {
+    if (rawMessageType === 'imageMessage') typeToSave = 'image';
+    else if (rawMessageType === 'audioMessage') typeToSave = 'audio';
+    else if (rawMessageType === 'videoMessage') typeToSave = 'video';
+    else if (rawMessageType === 'documentMessage') typeToSave = 'document';
+    else if (rawMessageType === 'conversation') typeToSave = 'text';
+    else if (rawMessageType === 'stickerMessage') typeToSave = 'sticker';
+    else if (rawMessageType === 'locationMessage') typeToSave = 'location';
+    else if (rawMessageType === 'contactMessage') typeToSave = 'contact';
+    else if (rawMessageType === 'reactionMessage') typeToSave = 'reaction';
+  }
+
+  // ===========================================
+  // 🎯 PRIORIDADE 2: Extrair mimetype específico baseado no tipo
+  // ===========================================
+  let mimeType: string | null = null;
+  if (typeToSave === 'image' && message.imageMessage?.mimetype) {
+    mimeType = message.imageMessage.mimetype || message.imageMessage.mimeType || null;
+  } else if (typeToSave === 'video' && message.videoMessage?.mimetype) {
+    mimeType = message.videoMessage.mimetype || message.videoMessage.mimeType || null;
+  } else if (typeToSave === 'audio' && message.audioMessage?.mimetype) {
+    mimeType = message.audioMessage.mimetype || message.audioMessage.mimeType || null;
+  } else if (typeToSave === 'document' && message.documentMessage?.mimetype) {
+    mimeType = message.documentMessage.mimetype || message.documentMessage.mimeType || null;
+  } else if (typeToSave === 'sticker' && message.stickerMessage?.mimetype) {
+    mimeType = message.stickerMessage.mimetype || message.stickerMessage.mimeType || null;
+  } else if (message.mimetype || message.mimeType || message.fileMimeType) {
+    mimeType = message.mimetype || message.mimeType || message.fileMimeType;
+  }
+
+  // Fallback: tentar extrair da extensão do fileName se ainda não temos mimeType
   const fileName = message.fileName || null;
-  const mediaUrl = message.mediaUrl || null;
-
-  if (mediaUrl) {
-    // Tem a URL do R2 direto - detectar tipo pelo mimeType ou fileName
-    let type: string = "document";
-    if (mimeType) {
-      if (mimeType.startsWith("image/")) type = "image";
-      else if (mimeType.startsWith("video/")) type = "video";
-      else if (mimeType.startsWith("audio/")) type = "audio";
-      else if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("spreadsheet") || mimeType.includes("presentation")) type = "document";
-    } else if (fileName) {
-      const ext = fileName.split(".").pop()?.toLowerCase();
-      if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg"].includes(ext || "")) {
-        type = "image";
-      } else if (["mp4", "webm", "mov", "avi", "mkv", "3gp"].includes(ext || "")) {
-        type = "video";
-      } else if (["mp3", "ogg", "wav", "m4a", "aac", "opus"].includes(ext || "")) {
-        type = "audio";
-      } else if (ext === "pdf" || ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "zip", "rar", "7z"].includes(ext || "")) {
-        type = "document";
-      }
-    }
-
-    return {
-      type,
-      text: null,
-      caption: message.caption || null,
-      mediaUrl: cleanR2Url(mediaUrl),
-      mimeType,
-      fileName,
-      fileSize: message.fileSize || null,
+  if (!mimeType && fileName) {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    const mimeMap: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+      gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', svg: 'image/svg+xml',
+      mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', avi: 'video/x-msvideo',
+      mp3: 'audio/mpeg', ogg: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac',
+      pdf: 'application/pdf', doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     };
+    mimeType = mimeMap[ext || ''] || null;
   }
 
-  // Se não tem mediaUrl na raiz, tentar fields específicos como fallback
-  // PRIORIDADE BAIXA: imageMessage.URL (pode ser URL criptografada do WhatsApp CDN)
-  if (message.imageMessage) {
-    // Check if base64 is already provided by Evolution API (when Send Base64 is enabled)
-    if (message.imageMessage.base64) {
-      console.log(
-        "[Evolution Webhook] base64 already present in imageMessage, length:",
-        message.imageMessage.base64.length
-      );
-    }
-    return {
-      type: "image",
-      text: null,
-      caption: message.imageMessage.caption || null,
-      mediaUrl: cleanR2Url(
-        message.imageMessage.url || message.imageMessage.mediaUrl || null
-      ),
-      mimeType:
-        message.imageMessage.mimetype || message.imageMessage.mimeType || null,
-      fileName: message.imageMessage.fileName || null,
-      fileSize: message.imageMessage.fileSize || null,
-      mediaKey: message.imageMessage.mediaKey || null,
-      directPath: message.imageMessage.directPath || null,
-      base64: message.imageMessage.base64 || null,
-    };
+  // ===========================================
+  // 🎯 PRIORIDADE 3: Extrair URL (sempre usar message.mediaUrl primeiro)
+  // ===========================================
+  let rawUrl: string | null = null;
+  
+  // Primeiro: message.mediaUrl (URL do R2/Cloudflare) - MAIS IMPORTANTE
+  if (message.mediaUrl) {
+    rawUrl = message.mediaUrl;
+  } else if (typeToSave === 'image' && message.imageMessage) {
+    rawUrl = message.imageMessage.url || message.imageMessage.mediaUrl || null;
+  } else if (typeToSave === 'video' && message.videoMessage) {
+    rawUrl = message.videoMessage.url || message.videoMessage.mediaUrl || null;
+  } else if (typeToSave === 'audio' && message.audioMessage) {
+    rawUrl = message.audioMessage.url || message.audioMessage.mediaUrl || null;
+  } else if (typeToSave === 'document' && message.documentMessage) {
+    rawUrl = message.documentMessage.url || message.documentMessage.mediaUrl || null;
+  } else if (typeToSave === 'sticker' && message.stickerMessage) {
+    rawUrl = message.stickerMessage.url || message.stickerMessage.mediaUrl || null;
   }
 
-  // Outros tipos específicos (video, audio, document, sticker)
-  if (message.videoMessage) {
-    return {
-      type: "video",
-      text: null,
-      caption: message.videoMessage.caption || null,
-      mediaUrl: cleanR2Url(
-        message.videoMessage.url || message.videoMessage.mediaUrl || null
-      ),
-      mimeType:
-        message.videoMessage.mimetype || message.videoMessage.mimeType || null,
-      fileName: message.videoMessage.fileName || null,
-      fileSize: message.videoMessage.fileSize || null,
-      mediaKey: message.videoMessage.mediaKey || null,
-      directPath: message.videoMessage.directPath || null,
-    };
+  // Limpar URL do R2 para obter apenas o caminho relativo
+  const mediaUrl = rawUrl ? cleanR2Url(rawUrl) : null;
+
+  // ===========================================
+  // 🎯 Texto e Caption
+  // ===========================================
+  let text: string | null = null;
+  let caption: string | null = null;
+
+  if (typeToSave === 'text' || typeToSave === 'unknown') {
+    text = message.conversation || message.extendedTextMessage?.text || null;
+  } else {
+    caption = message.caption || 
+              message.imageMessage?.caption || 
+              message.videoMessage?.caption || 
+              message.documentMessage?.caption || null;
   }
 
-  if (message.documentMessage) {
-    return {
-      type: "document",
-      text: null,
-      caption: message.documentMessage.caption || null,
-      mediaUrl: cleanR2Url(
-        message.documentMessage.url || message.documentMessage.mediaUrl || null
-      ),
-      mimeType:
-        message.documentMessage.mimetype ||
-        message.documentMessage.mimeType ||
-        null,
-      fileName: message.documentMessage.fileName || null,
-      fileSize: message.documentMessage.fileSize || null,
-      mediaKey: message.documentMessage.mediaKey || null,
-      directPath: message.documentMessage.directPath || null,
-    };
-  }
+  // ===========================================
+  // 🎯 FileSize (tentar de qualquer fonte)
+  // ===========================================
+  const fileSize = message.fileSize || 
+                   message.imageMessage?.fileSize || 
+                   message.videoMessage?.fileSize || 
+                   message.documentMessage?.fileSize || 
+                   message.audioMessage?.fileSize || null;
 
-  if (message.audioMessage) {
-    return {
-      type: "audio",
-      text: null,
-      caption: null,
-      mediaUrl: cleanR2Url(
-        message.audioMessage.url || message.audioMessage.mediaUrl || null
-      ),
-      mimeType:
-        message.audioMessage.mimetype ||
-        message.audioMessage.mimeType ||
-        "audio/ogg",
-      fileName: message.audioMessage.fileName || null,
-      fileSize: message.audioMessage.fileSize || null,
-      mediaKey: message.audioMessage.mediaKey || null,
-      directPath: message.audioMessage.directPath || null,
-    };
-  }
-
-  // Handle sticker messages
-  if (message.stickerMessage) {
-    return {
-      type: "sticker",
-      text: null,
-      caption: null,
-      mediaUrl: cleanR2Url(
-        message.stickerMessage.url || message.stickerMessage.mediaUrl || null
-      ),
-      mimeType:
-        message.stickerMessage.mimetype ||
-        message.stickerMessage.mimeType ||
-        "image/webp",
-      fileName: message.stickerMessage.fileName || null,
-      fileSize: message.stickerMessage.fileSize || null,
-    };
-  }
-
-  // Text messages
-  if (message.conversation) {
-    return {
-      type: "text",
-      text: message.conversation,
-      caption: null,
-      mediaUrl: null,
-      mimeType: null,
-      fileName: null,
-      fileSize: null,
-    };
-  }
-
-  if (message.extendedTextMessage?.text) {
-    return {
-      type: "text",
-      text: message.extendedTextMessage.text,
-      caption: null,
-      mediaUrl: null,
-      mimeType: null,
-      fileName: null,
-      fileSize: null,
-    };
-  }
+  // Base64 (apenas para imagens, se fornecido)
+  const base64 = typeToSave === 'image' ? message.imageMessage?.base64 || null : null;
+  const mediaKey = (typeToSave === 'image' && message.imageMessage?.mediaKey) ||
+                   (typeToSave === 'video' && message.videoMessage?.mediaKey) ||
+                   (typeToSave === 'audio' && message.audioMessage?.mediaKey) ||
+                   (typeToSave === 'document' && message.documentMessage?.mediaKey) ||
+                   null;
+  const directPath = (typeToSave === 'image' && message.imageMessage?.directPath) ||
+                     (typeToSave === 'video' && message.videoMessage?.directPath) ||
+                     (typeToSave === 'audio' && message.audioMessage?.directPath) ||
+                     (typeToSave === 'document' && message.documentMessage?.directPath) ||
+                     null;
 
   return {
-    type: "unknown",
-    text: null,
-    caption: null,
-    mediaUrl: null,
-    mimeType: null,
-    fileName: null,
-    fileSize: null,
+    type: typeToSave as any,
+    text,
+    caption,
+    mediaUrl,
+    mimeType,
+    fileName,
+    fileSize,
+    // Campos extras que podem ser úteis
+    ...(base64 && { base64 }),
+    ...(mediaKey && { mediaKey }),
+    ...(directPath && { directPath }),
   };
 }
 
@@ -1182,6 +1135,7 @@ async function processEvolutionWebhook(body: any) {
         const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName || body?.sender?.name || body?.sender?.pushName || body?.data?.sender?.name;
         const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
+        const rawMessageType = data?.messageType || null; // PRIORITY: Evolution API message type
 
         // Se não tem remoteJid, não dá pra processar
         if (!remoteJid) {
@@ -1193,7 +1147,7 @@ async function processEvolutionWebhook(body: any) {
         if (!fromNumber) return;
 
         // Determinar tipo e conteúdo da mensagem (rápido, sem download)
-        const parsed = parseEvolutionMessageContent(messageContent);
+        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType);
         const messageType = parsed.type;
         const messageText = parsed.text;
         const caption = parsed.caption;
