@@ -310,7 +310,7 @@ export const broadcastRouter = router({
     .input(
       z.object({
         listId: z.number(),
-        content: z.string().min(1),
+        content: z.string().optional().default(''),
         fileUrl: z.string().optional(),
         fileName: z.string().optional(),
         fileType: z.string().optional(),
