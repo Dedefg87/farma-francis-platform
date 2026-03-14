@@ -226,32 +226,59 @@ export async function getConversationHistory(
 /**
  * Find or create customer by phone number
  */
-function normalizePhone(value: string) {
-  // Remove all non-digits
-  const digits = value.replace(/\D/g, "");
+function normalizePhone(value: string): string {
+  // Remover tudo que não for dígito
+  let digits = value.replace(/\D/g, "");
   if (!digits) return value;
 
-  // Handle WhatsApp IDs that are too long - extract just the phone number
-  // WhatsApp IDs can be like: 55120363423395306073@c.us
-  let phone = digits;
-
-  // If it's a WhatsApp-style ID (very long number), extract just the phone part
+  // Se for muito longo (ID do WhatsApp), extrair a parte do telefone
   if (digits.length >= 20) {
-    // Try to extract phone from WhatsApp ID format: 5511XXXXXXXXX@c.us -> 5511XXXXXXXXX
     const atIndex = value.indexOf("@");
     if (atIndex > 0) {
       const cleanNumber = value.substring(0, atIndex).replace(/\D/g, "");
       if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
-        phone = cleanNumber;
+        digits = cleanNumber;
       }
     }
-    // If still too long, just use the last 15 digits (typical phone)
-    if (phone.length > 15) {
-      phone = phone.slice(-15);
+    if (digits.length > 15) {
+      digits = digits.slice(-15);
     }
   }
 
-  return phone.startsWith("+") ? phone : `+${phone}`;
+  // Remover nono dígito brasileiro se presente (após DDD)
+  // Formato: 55 + DDD (2) + 8 ou 9 dígitos
+  // Com nono: 55+DDD+9+número (13 dígitos sem o +)
+  // Sem nono: 55+DDD+número (12 dígitos)
+  if (digits.startsWith('55')) {
+    if (digits.length === 13) {
+      // Remover o nono (5º dígito)
+      digits = digits.slice(0, 4) + digits.slice(5);
+    }
+    // Se length 12, já está correto
+    // Outros tamanhos mantemos como está
+  }
+
+  // Garantir formato internacional com +
+  return digits.startsWith('+') ? digits : `+${digits}`;
+}
+
+// Gera variações de números para busca flexível (com/sem nono para Brasil)
+export function getPhoneSearchVariants(normalizedPhone: string): string[] {
+  const variants: string[] = [normalizedPhone];
+  const digits = normalizedPhone.replace(/\D/g, '');
+  
+  // Apenas para números brasileiros (55)
+  if (digits.startsWith('55')) {
+    if (digits.length === 12) {
+      // Versão SEM nono, gerar COM nono (para pegar registros antigos que foram salvos com nono)
+      const withNon = digits.slice(0, 4) + '9' + digits.slice(4);
+      variants.push(normalizedPhone.startsWith('+') ? `+${withNon}` : withNon);
+    } else if (digits.length === 11) {
+      // Raro, mas pode ser número sem o código do país? Ignorar.
+    }
+  }
+  
+  return variants;
 }
 
 export async function findOrCreateCustomerByPhone(
@@ -263,6 +290,12 @@ export async function findOrCreateCustomerByPhone(
   if (!db) throw new Error("Database not available");
 
   const normalizedPhone = normalizePhone(phone);
+  const searchPhones = getPhoneSearchVariants(normalizedPhone);
+
+  // Build flexible OR condition for Brazilian numbers (with/without 9th digit)
+  const searchCondition = searchPhones.length > 1
+    ? or(...searchPhones.map(p => eq(customers.phone, p)))
+    : eq(customers.phone, searchPhones[0]);
 
   // Selecionar apenas colunas que existem no banco (evitar erro de colunas faltantes)
   const existing = await db
@@ -275,7 +308,7 @@ export async function findOrCreateCustomerByPhone(
       photoUrl: customers.photoUrl,
     })
     .from(customers)
-    .where(eq(customers.phone, normalizedPhone))
+    .where(searchCondition)
     .limit(1);
 
   if (existing.length > 0) {
@@ -303,7 +336,7 @@ export async function findOrCreateCustomerByPhone(
     status: "active",
   });
 
-  // Get the newly created customer
+  // Get the newly created customer (use same search condition to be consistent)
   const newCustomer = await db
     .select({
       id: customers.id,
@@ -314,7 +347,7 @@ export async function findOrCreateCustomerByPhone(
       photoUrl: customers.photoUrl,
     })
     .from(customers)
-    .where(eq(customers.phone, normalizedPhone))
+    .where(searchCondition)
     .limit(1);
 
   return newCustomer[0];

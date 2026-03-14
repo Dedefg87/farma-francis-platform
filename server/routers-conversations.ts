@@ -24,6 +24,7 @@ import {
 } from "./messaging";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
+import { getPhoneSearchVariants } from "./db-messages";
 
 /**
  * Normalizar número de telefone brasileiro
@@ -94,50 +95,24 @@ export const conversationsRouter = router({
             normalized: normalizedPhone,
           });
 
-          // Buscar customer existente por número normalizado (com ou sem 9)
+          // Buscar customer com busca flexível (com/sem nono) usando variantes
+          const phoneVariants = getPhoneSearchVariants(normalizedPhone);
+          const phoneCondition = phoneVariants.length > 1
+            ? or(...phoneVariants.map(v => eq(customers.phone, v)))
+            : eq(customers.phone, phoneVariants[0]);
+
           const [existingCustomer] = await db
             .select()
             .from(customers)
-            .where(eq(customers.phone, normalizedPhone))
+            .where(phoneCondition)
             .limit(1);
 
           if (existingCustomer) {
             console.log(
-              "[Conversations] Customer encontrado pelo número normalizado:",
+              "[Conversations] Customer encontrado (flexible search):",
               existingCustomer.name
             );
             customerId = existingCustomer.id;
-          } else {
-            // Tentar buscar por outros formatos possíveis
-            const possibleFormats = [
-              normalizedPhone,
-              normalizedPhone.startsWith("55")
-                ? normalizedPhone.substring(0, 2) + normalizedPhone.substring(4)
-                : normalizedPhone, // sem 9
-            ];
-
-            console.log(
-              "[Conversations] Procurando formatos alternativos:",
-              possibleFormats
-            );
-
-            // Tentar cada formato
-            for (const format of possibleFormats) {
-              const [altCustomer] = await db
-                .select()
-                .from(customers)
-                .where(eq(customers.phone, format))
-                .limit(1);
-
-              if (altCustomer) {
-                console.log(
-                  "[Conversations] Customer encontrado por formato alternativo:",
-                  altCustomer.name
-                );
-                customerId = altCustomer.id;
-                break;
-              }
-            }
           }
         } else {
           // É email

@@ -9,6 +9,26 @@ import { eq, and, or, sql } from "drizzle-orm";
 
 import { sseManager, EVENTS } from "../_core/sse";
 
+// Gera variações de números para busca flexível (com/sem nono para Brasil)
+function getPhoneSearchVariants(phone: string): string[] {
+  const variants: string[] = [phone];
+  const digits = phone.replace(/\D/g, '');
+  
+  if (digits.startsWith('55')) {
+    if (digits.length === 12) {
+      // SEM nono -> gerar COM nono
+      const withNon = digits.slice(0, 4) + '9' + digits.slice(4);
+      variants.push(phone.startsWith('+') ? `+${withNon}` : withNon);
+    } else if (digits.length === 13) {
+      // COM nono -> gerar SEM nono
+      const withoutNon = digits.slice(0, 4) + digits.slice(5);
+      variants.push(phone.startsWith('+') ? `+${withoutNon}` : withoutNon);
+    }
+  }
+  
+  return variants;
+}
+
 interface MobileSyncJob {
   id: string;
   remoteJid: string; // Número do cliente (destinatário)
@@ -94,11 +114,16 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     return;
   }
 
-  // Buscar ou criar cliente
+  // Buscar cliente com busca flexível (com/sem nono)
+  const phoneVariants = getPhoneSearchVariants(customerPhone);
+  const phoneCondition = phoneVariants.length > 1
+    ? or(...phoneVariants.map(v => eq(customers.phone, v)))
+    : eq(customers.phone, phoneVariants[0]);
+
   let customer = await db
     .select()
     .from(customers)
-    .where(eq(customers.phone, customerPhone))
+    .where(phoneCondition)
     .limit(1);
 
   if (customer.length === 0) {
@@ -111,7 +136,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     customer = await db
       .select()
       .from(customers)
-      .where(eq(customers.phone, customerPhone))
+      .where(phoneCondition)
       .limit(1);
   }
 
