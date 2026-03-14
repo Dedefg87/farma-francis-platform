@@ -1080,10 +1080,6 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   // ===========================================
   // 🎯 PRIORIDADE 3: Extrair URL (sempre usar message.mediaUrl primeiro)
   // ===========================================
-  let rawUrl: string | null = null;
-  }
-
-  // ===========================================
   // 🎯 PRIORIDADE 3: Extrair URL (sempre usar message.mediaUrl primeiro)
   // ===========================================
   let rawUrl: string | null = null;
