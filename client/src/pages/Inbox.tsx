@@ -121,7 +121,7 @@ export default function Inbox() {
     }
 
     setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
+    if (file.type?.startsWith?.("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => setFilePreview(reader.result as string);
       reader.readAsDataURL(file);

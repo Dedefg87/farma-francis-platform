@@ -14,12 +14,12 @@ import { useToast } from "@/hooks/use-toast";
 
 function getImageSrc(url: string | null | undefined, filename?: string | null): string {
   if (!url) return "";
-  
+
   // Se já for data URL ou URL absoluta, usar como está
-  if (url.startsWith("data:") || url.startsWith("http")) {
+  if (url.startsWith?.("data:") || url.startsWith?.("http")) {
     return url;
   }
-  
+
   // É um caminho relativo do R2 - prefixar com PUBLIC_R2_URL
   const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
   const cleanUrl = url.replace(/^\//, "");
@@ -188,7 +188,7 @@ export default function AgentChat() {
     setSelectedFile(file);
 
     // Criar preview para imagens
-    if (file.type.startsWith("image/")) {
+    if (file.type?.startsWith?.("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result as string);
@@ -487,7 +487,7 @@ export default function AgentChat() {
                           {/* Arquivo anexado */}
                           {message.fileUrl && (
                             <div className="mb-2">
-                              {getMimeType(message.fileUrl, message.fileType).startsWith("image/") ? (
+                              {getMimeType(message.fileUrl, message.fileType)?.startsWith?.("image/") ? (
                                 <>
                                   {/* DEBUG: Quadro vermelho para ver se a imagem está sendo renderizada */}
                                   <div style={{ padding: '10px', background: '#ffebee', color: '#cc0000', borderRadius: '8px', marginBottom: '8px' }}>
@@ -519,7 +519,7 @@ export default function AgentChat() {
                                   />
                                 </a>
                                 </>
-                              ) : getMimeType(message.fileUrl, message.fileType).startsWith("video/") ? (
+                              ) : getMimeType(message.fileUrl, message.fileType)?.startsWith?.("video/") ? (
                                 <video
                                   src={getImageSrc(message.fileUrl)}
                                   controls

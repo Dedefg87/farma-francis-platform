@@ -32,14 +32,14 @@ interface MessageMediaProps {
 // Helper para obter URL de mídia (usa R2 público ou proxy)
 function getMediaSrc(url: string | null, messageId?: number): string {
   if (!url) return "";
-  
+
   // Se já for data URL, retornar direto
-  if (url.startsWith("data:")) {
+  if (url.startsWith?.("data:")) {
     return url;
   }
-  
+
   // Se for URL absoluta (http/https)
-  if (url.startsWith("http")) {
+  if (url.startsWith?.("http")) {
     // Se for do R2 (Cloudflare), usar como está (já é pública)
     if (url.includes(".r2.") || url.includes("r2.dev") || url.includes("r2.cloudflarestorage.com")) {
       return url;
@@ -54,12 +54,12 @@ function getMediaSrc(url: string | null, messageId?: number): string {
     // Outras URLs absolutas (nosso próprio domínio, etc.) - retornar direto
     return url;
   }
-  
+
   // Se for caminho absoluto do nosso servidor (começa com /) - retornar direto
-  if (url.startsWith("/")) {
+  if (url.startsWith?.("/")) {
     return url;
   }
-  
+
   // Se for caminho relativo (ex: "evolution-api/..."), usar PUBLIC_R2_URL
   const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
   const cleanUrl = url.replace(/^\//, "");
@@ -217,7 +217,7 @@ function WhatsAppAudioPlayer({ mediaUrl, isAgent, messageId }: { mediaUrl: strin
  */
 function getFileIcon(mimeType: string, fileName: string | null): { icon: React.ReactNode; color: string; bgColor: string; label: string } {
   // Imagens
-  if (mimeType.startsWith('image/')) {
+  if (mimeType?.startsWith?.('image/')) {
     return {
       icon: <Image className="w-8 h-8" />,
       color: 'text-pink-500',
@@ -227,7 +227,7 @@ function getFileIcon(mimeType: string, fileName: string | null): { icon: React.R
   }
 
   // Vídeos
-  if (mimeType.startsWith('video/')) {
+  if (mimeType?.startsWith?.('video/')) {
     return {
       icon: <Film className="w-8 h-8" />,
       color: 'text-purple-500',
@@ -237,7 +237,7 @@ function getFileIcon(mimeType: string, fileName: string | null): { icon: React.R
   }
 
   // Áudios
-  if (mimeType.startsWith('audio/')) {
+  if (mimeType?.startsWith?.('audio/')) {
     return {
       icon: <Music className="w-8 h-8" />,
       color: 'text-green-500',
@@ -349,7 +349,7 @@ function getFileIcon(mimeType: string, fileName: string | null): { icon: React.R
   }
 
   // Texto
-  if (mimeType.startsWith('text/')) {
+  if (mimeType?.startsWith?.('text/')) {
     return {
       icon: <FileType className="w-8 h-8" />,
       color: 'text-gray-600',
@@ -417,9 +417,9 @@ export function MessageMedia({
   const { icon, color, bgColor, label } = getFileIcon(mimeType, fileName);
   const size = formatFileSize(fileSize);
 
-  const isImage = mimeType.startsWith('image/');
-  const isVideo = mimeType.startsWith('video/');
-  const isAudio = mimeType.startsWith('audio/');
+  const isImage = mimeType?.startsWith?.('image/');
+  const isVideo = mimeType?.startsWith?.('video/');
+  const isAudio = mimeType?.startsWith?.('audio/');
   const isPdf = mimeType === 'application/pdf';
 
   // Imagem

@@ -14,17 +14,17 @@ function getImageSrc(
   messageId?: number
 ): string {
   if (!url) return "";
-  
+
   // Se já for data URL, retornar direto
-  if (url.startsWith("data:")) {
+  if (url.startsWith?.("data:")) {
     return url;
   }
-  
+
   // Se for URL absoluta (http/https), usar como está
-  if (url.startsWith("http")) {
+  if (url.startsWith?.("http")) {
     return url;
   }
-  
+
   // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
   const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
   const cleanUrl = url.replace(/^\//, "");
@@ -203,7 +203,7 @@ export default function Messages() {
     setSelectedFile(file);
 
     // Criar preview para imagens
-    if (file.type.startsWith("image/")) {
+    if (file.type?.startsWith?.("image/")) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setFilePreview(reader.result as string);
