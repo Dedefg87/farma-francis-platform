@@ -369,6 +369,9 @@ export const broadcastRouter = router({
         throw new Error("Nenhum destinatário selecionado para o envio.");
       }
 
+      // Declaração da variável no escopo superior
+      let finalMessageId: number;
+
       try {
         // 2. Salva a Mensagem Principal Primeiro (SEM .returning())
         const result = await db
@@ -388,7 +391,7 @@ export const broadcastRouter = router({
 
         // Extrai o ID dependendo do driver (mysql2, sqlite, etc.)
         const rawId = Array.isArray(result) ? result[0]?.insertId : result?.insertId || result?.lastInsertRowid;
-        const finalMessageId = Number(rawId);
+        finalMessageId = Number(rawId);
 
         console.log("[Broadcast] ID da mensagem criada:", finalMessageId);
 
