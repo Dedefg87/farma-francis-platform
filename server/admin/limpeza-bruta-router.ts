@@ -4,6 +4,38 @@ import { getDb } from "../db";
 const router = Router();
 
 /**
+ * GET /api/admin/check-db
+ * Diagnóstico rápido: verifica quantos clientes existem no banco ativo
+ */
+router.get("/check-db", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) {
+      return res.status(500).json({ error: "Database not available" });
+    }
+
+    // Contar clientes
+    const result: any = await (db as any).execute("SELECT COUNT(*) as total FROM customers");
+    const total = result.rows?.[0]?.total || 0;
+
+    // Listar algumas tabelas para verificar conexão
+    const tablesResult: any = await (db as any).execute("SHOW TABLES");
+    const tables = tablesResult.rows?.map((row: any) => Object.values(row)[0]) || [];
+
+    res.json({
+      success: true,
+      totalCustomers: total,
+      database: "connected",
+      tables: tables.slice(0, 10), // primeiras 10 tabelas
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error("[CheckDB] Erro:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * Normaliza número para comparação (remove +, espaços, traços)
  * Se for brasileiro (55) com 13 dígitos, remove o 9 após DDD
  */
