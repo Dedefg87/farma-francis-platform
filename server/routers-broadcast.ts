@@ -818,19 +818,26 @@ async function processBroadcastSend(messageId: number) {
             const fileName = message.fileName || "arquivo";
             const mimeType = message.fileType || "application/octet-stream";
 
+            // Deduzir o tipo de mídia para a Evolution API
+            let mediaTypeEvolution = "document";
+            if (mimeType) {
+              if (mimeType.includes("image")) mediaTypeEvolution = "image";
+              else if (mimeType.includes("video")) mediaTypeEvolution = "video";
+              else if (mimeType.includes("audio")) mediaTypeEvolution = "audio";
+            }
+
             let sendUrl: string;
             let sendData: any;
 
             if (mediaUrl.includes("r2.dev") || mediaUrl.startsWith("http")) {
               sendUrl = `${baseUrl}/message/sendMedia/${instance.name}`;
+              // Formato Evolution API V2: mediatype na raiz
               sendData = {
                 number: toNumber,
-                options: {
-                  mediaUrl,
-                  fileName,
-                  mediaType: mimeType,
-                  caption: message.content || undefined,
-                },
+                mediatype: mediaTypeEvolution,
+                media: mediaUrl,
+                caption: message.content || "",
+                fileName: fileName,
               };
             } else {
               throw new Error("URL de mídia temporária não suportada no broadcast");
