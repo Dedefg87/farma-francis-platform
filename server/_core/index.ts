@@ -100,8 +100,9 @@ async function runBroadcastMigrations() {
           status ENUM('pending','sent','failed') DEFAULT 'pending' NOT NULL,
           error TEXT,
           sent_at TIMESTAMP NULL,
-          FOREIGN KEY (message_id) REFERENCES broadcast_messages(id) ON DELETE CASCADE,
-          FOREIGN KEY (customer_id) REFERENCES customers(id)
+          FOREIGN KEY (message_id) REFERENCES broadcast_messages(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE ON UPDATE CASCADE,
+          UNIQUE KEY broadcast_members_sent_message_id_phone_unique (message_id, phone)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
       await db.execute("CREATE INDEX idx_broadcast_members_sent_message_id ON broadcast_members_sent(message_id)");
