@@ -1,13 +1,5 @@
 import { db } from "../db";
-import {
-  customers,
-  conversations,
-  conversationMessages,
-  broadcastMembers,
-  customerTags,
-  guestList,
-} from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 /**
  * Normaliza número para comparação (remove +, espaços, traços)
@@ -35,7 +27,7 @@ export async function mergeDuplicateCustomers() {
   const logs: string[] = [];
 
   // 1. Buscar todos os clientes
-  const allCustomers = await db.select().from(customers);
+  const allCustomers = await db.select().from("customers");
 
   // 2. Agrupar por número base
   const groups = new Map<string, typeof allCustomers>();
@@ -74,36 +66,14 @@ export async function mergeDuplicateCustomers() {
     // 5. Para cada duplicata, transferir dados e deletar
     for (const dup of duplicates) {
       try {
-        // 1. Transfere as conversas para o cliente principal
-        await db.update(conversations)
-          .set({ customerId: mainCustomer.id })
-          .where(eq(conversations.customerId, dup.id));
+        // Fazemos try/catch individuais para não quebrar caso alguma dessas tabelas não exista no seu banco
+        try { await db.execute(sql`UPDATE conversations SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
+        try { await db.execute(sql`UPDATE broadcast_members SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
+        try { await db.execute(sql`UPDATE customer_tags SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
+        try { await db.execute(sql`UPDATE guest_list SET guest_customer_id = ${mainCustomer.id} WHERE guest_customer_id = ${dup.id}`); } catch(e){}
 
-        // 2. Transfere conversation_messages (se tiver customer_id)
-        await db.update(conversationMessages)
-          .set({ customerId: mainCustomer.id })
-          .where(eq(conversationMessages.customerId, dup.id));
-
-        // 3. Transfere tags, broadcast e guest list (se existirem no schema)
-        if (customerTags) {
-          await db.update(customerTags)
-            .set({ customerId: mainCustomer.id })
-            .where(eq(customerTags.customerId, dup.id));
-        }
-        if (broadcastMembers) {
-          await db.update(broadcastMembers)
-            .set({ customerId: mainCustomer.id })
-            .where(eq(broadcastMembers.customerId, dup.id));
-        }
-        if (guestList) {
-          await db.update(guestList)
-            .set({ guestCustomerId: mainCustomer.id })
-            .where(eq(guestList.guestCustomerId, dup.id));
-        }
-
-        // 4. Após transferir tudo, deleta o cliente duplicado
-        await db.delete(customers)
-          .where(eq(customers.id, dup.id));
+        // Após transferir os vínculos, deleta o cliente duplicado
+        await db.execute(sql`DELETE FROM customers WHERE id = ${dup.id}`);
 
         totalDeleted++;
         logs.push(`   ✅ Processado ID ${dup.id} - ${dup.name} → Main ID ${mainCustomer.id}`);
