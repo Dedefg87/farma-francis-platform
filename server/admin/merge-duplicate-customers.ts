@@ -66,13 +66,14 @@ export async function mergeDuplicateCustomers() {
     // 5. Para cada duplicata, transferir dados e deletar
     for (const dup of duplicates) {
       try {
-        // Fazemos try/catch individuais para não quebrar caso alguma dessas tabelas não exista no seu banco
+        // 1. Atualiza absolutamente todas as tabelas conhecidas
         try { await db.execute(sql`UPDATE conversations SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
+        try { await db.execute(sql`UPDATE conversation_messages SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
         try { await db.execute(sql`UPDATE broadcast_members SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
         try { await db.execute(sql`UPDATE customer_tags SET customer_id = ${mainCustomer.id} WHERE customer_id = ${dup.id}`); } catch(e){}
         try { await db.execute(sql`UPDATE guest_list SET guest_customer_id = ${mainCustomer.id} WHERE guest_customer_id = ${dup.id}`); } catch(e){}
 
-        // Após transferir os vínculos, deleta o cliente duplicado
+        // 2. Agora sim, com todos os vínculos transferidos, deleta o cliente
         await db.execute(sql`DELETE FROM customers WHERE id = ${dup.id}`);
 
         totalDeleted++;
