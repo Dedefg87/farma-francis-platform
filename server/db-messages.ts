@@ -280,6 +280,27 @@ export function getPhoneSearchVariants(normalizedPhone: string): string[] {
   return variants;
 }
 
+export function getBrazilianPhoneVariations(phone: string): string[] {
+  if (!phone) return [];
+  if (!phone.startsWith('55')) return [phone];
+
+  const withoutCountry = phone.slice(2);
+
+  if (withoutCountry.length === 10) {
+    // Sem o 9
+    const ddd = withoutCountry.slice(0, 2);
+    const number = withoutCountry.slice(2);
+    return [phone, `55${ddd}9${number}`];
+  } else if (withoutCountry.length === 11) {
+    // Com o 9
+    const ddd = withoutCountry.slice(0, 2);
+    const number = withoutCountry.slice(3);
+    return [phone, `55${ddd}${number}`];
+  }
+
+  return [phone];
+}
+
 export async function findOrCreateCustomerByPhone(
   phone: string,
   name?: string,
