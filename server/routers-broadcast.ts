@@ -584,25 +584,46 @@ export const broadcastRouter = router({
  * Busca configuração da Evolution API do banco
  */
 async function getEvolutionConfig(db: Database) {
-  const [configRecord] = await db
-    .select()
-    .from(integrationSettings)
-    .where(eq(integrationSettings.integrationType, "evolution_api"))
-    .limit(1);
+  console.log("[Broadcast][getEvolutionConfig] Buscando configuração Evolution API...");
+  
+  try {
+    const [configRecord] = await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.integrationType, "evolution_api"))
+      .limit(1);
 
-  if (!configRecord?.config) return null;
+    console.log("[Broadcast][getEvolutionConfig] Registro encontrado:", configRecord ? "SIM" : "NÃO");
+    
+    if (!configRecord?.config) {
+      console.log("[Broadcast][getEvolutionConfig] configRecord ou config é null/undefined");
+      return null;
+    }
 
-  const configData =
-    typeof configRecord.config === "string"
-      ? JSON.parse(configRecord.config)
-      : configRecord.config;
+    const configData =
+      typeof configRecord.config === "string"
+        ? JSON.parse(configRecord.config)
+        : configRecord.config;
 
-  // Obter a instância "Meu" ou a primeira
-  const instance = (configData.instances as any[])?.find(
-    (i: any) => i.name === "Meu"
-  ) || (configData.instances as any[])?.[0];
-
-  return instance;
+    console.log("[Broadcast][getEvolutionConfig] Config data:", JSON.stringify(configData).substring(0, 200));
+    
+    // Obter a instância "Meu" ou a primeira
+    const instances = (configData.instances as any[]) || [];
+    console.log("[Broadcast][getEvolutionConfig] Instâncias encontradas:", instances.length);
+    
+    const instance = instances.find((i: any) => i.name === "Meu") || instances[0];
+    
+    if (instance) {
+      console.log("[Broadcast][getEvolutionConfig] Instância selecionada:", instance.name, "URL:", instance.url || "N/A", "APIKey:", instance.apiKey ? "PRESENTE" : "AUSENTE");
+    } else {
+      console.log("[Broadcast][getEvolutionConfig] Nenhuma instância encontrada no config");
+    }
+    
+    return instance;
+  } catch (err) {
+    console.error("[Broadcast][getEvolutionConfig] Erro ao buscar config:", err);
+    return null;
+  }
 }
 
 /**
