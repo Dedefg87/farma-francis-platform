@@ -713,96 +713,132 @@ async function processBroadcastSend(messageId: number) {
     const baseUrl = (instance.url as string).replace(/\/$/, "");
     const apiKey = instance.apiKey as string;
 
-    // 4. Processar cada membro
+    // 4. Processar cada membro com retry automático se Evolution retornar exists:false
     for (const member of pendingMembers) {
-      try {
-        // Normalizar número (garante formato com 9º dígito para Brasil)
-        const normalizedPhone = normalizeWhatsAppNumber(member.phone);
-        const toNumber = `${normalizedPhone}@s.whatsapp.net`;
-
-        // Decidir se envia texto puro ou mídia
-        if (message.fileUrl) {
-          // Enviar com mídia
-          const mediaUrl = message.fileUrl;
-          const fileName = message.fileName || "arquivo";
-          const mimeType = message.fileType || "application/octet-stream";
-
-          // Baixar o arquivo da URL (R2 ou WhatsApp CDN) e re-enviar?
-          // Evolution API aceita URL pública diretamente se for acessível
-          // Para R2 URLs são públicas. Para WhatsApp URLs temporárias, precisamos baixar e re-hospedar?
-          // Decisão: Usar mediaUrl diretamente se for R2 (r2.dev), caso contrário baixar e reenviar como base64
-          let sendUrl: string;
-          let sendData: any;
-
-          if (mediaUrl.includes("r2.dev") || mediaUrl.startsWith("http")) {
-            // URL pública - Evolution API pode baixar diretamente
-            sendUrl = `${baseUrl}/chat/sendMediaMessage/${instance.name}`;
-            sendData = {
-              number: toNumber,
-              options: {
-                mediaUrl,
-                fileName,
-                mediaType: mimeType,
-                caption: message.content || undefined,
-              },
-            };
-          } else {
-            // URL temporária (whatsapp) - precisa baixar e enviar como base64
-            // (simplificado: por enquanto só suporta R2 / URLs públicas)
-            throw new Error("URL de mídia temporária não suportada no broadcast");
-          }
-
-          const response = await fetch(sendUrl, {
-            method: "POST",
-            headers: {
-              "apikey": apiKey,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(sendData),
-            signal: AbortSignal.timeout(30000),
-          });
-
-          if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`Evolution error: ${response.status} - ${err}`);
-          }
-
-          console.log(
-            "[Broadcast][Process] Media sent to",
-            normalizedPhone,
-            "status:",
-            response.status
-          );
-        } else {
-          // Enviar texto puro
-          const sendUrl = `${baseUrl}/chat/sendText/${instance.name}`;
-          const response = await fetch(sendUrl, {
-            method: "POST",
-            headers: {
-              "apikey": apiKey,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              number: toNumber,
-              text: message.content,
-            }),
-            signal: AbortSignal.timeout(30000),
-          });
-
-          if (!response.ok) {
-            const err = await response.text();
-            throw new Error(`Evolution error: ${response.status} - ${err}`);
-          }
-
-          console.log(
-            "[Broadcast][Process] Text sent to",
-            normalizedPhone,
-            "status:",
-            response.status
-          );
+      const sendWithRetry = async (
+        phone: string,
+        attempt: number = 1
+      ): Promise<boolean> => {
+        if (attempt > 2) {
+          console.error(`[Broadcast][Process] Max retries exceeded for ${phone}`);
+          return false;
         }
 
-        // Marcar como enviado com sucesso
+        const normalizedPhone = normalizeWhatsAppNumber(phone);
+        const toNumber = `${normalizedPhone}@s.whatsapp.net`;
+
+        try {
+          let response: Response;
+
+          if (message.fileUrl) {
+            const mediaUrl = message.fileUrl;
+            const fileName = message.fileName || "arquivo";
+            const mimeType = message.fileType || "application/octet-stream";
+
+            let sendUrl: string;
+            let sendData: any;
+
+            if (mediaUrl.includes("r2.dev") || mediaUrl.startsWith("http")) {
+              sendUrl = `${baseUrl}/chat/sendMediaMessage/${instance.name}`;
+              sendData = {
+                number: toNumber,
+                options: {
+                  mediaUrl,
+                  fileName,
+                  mediaType: mimeType,
+                  caption: message.content || undefined,
+                },
+              };
+            } else {
+              throw new Error("URL de mídia temporária não suportada no broadcast");
+            }
+
+            response = await fetch(sendUrl, {
+              method: "POST",
+              headers: {
+                "apikey": apiKey,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(sendData),
+              signal: AbortSignal.timeout(30000),
+            });
+          } else {
+            const sendUrl = `${baseUrl}/chat/sendText/${instance.name}`;
+            response = await fetch(sendUrl, {
+              method: "POST",
+              headers: {
+                "apikey": apiKey,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                number: toNumber,
+                text: message.content,
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+          }
+
+          if (!response.ok) {
+            const errBody = await response.text();
+            let errMsg = `Evolution error: ${response.status} - ${errBody}`;
+
+            // Tratar erro 400 com exists:false
+            if (response.status === 400) {
+              try {
+                const errJson = JSON.parse(errBody);
+                if (errJson.message?.some((m: any) => m.code === 'exists' && m.number)) {
+                  const correctNumber = errJson.message.find((m: any) => m.code === 'exists').number;
+                  console.warn(`[Broadcast][Process] Number ${normalizedPhone} invalid, Evolution suggests ${correctNumber}. Updating customer and retrying...`);
+
+                  // Atualizar telefone do cliente
+                  await db
+                    .update(customers)
+                    .set({ phone: correctNumber, updatedAt: new Date() })
+                    .where(eq(customers.id, member.customerId));
+
+                  // Atualizar telefone no broadcastMembersSent
+                  await db
+                    .update(broadcastMembersSent)
+                    .set({ phone: correctNumber })
+                    .where(eq(broadcastMembersSent.id, member.id));
+
+                  // Retry com número corrigido
+                  return await sendWithRetry(correctNumber, attempt + 1);
+                }
+              } catch (e) {
+                // ignore parse error
+              }
+            }
+
+            throw new Error(errMsg);
+          }
+
+          // Sucesso
+          if (message.fileUrl) {
+            console.log(
+              "[Broadcast][Process] Media sent to",
+              normalizedPhone,
+              "status:",
+              response.status
+            );
+          } else {
+            console.log(
+              "[Broadcast][Process] Text sent to",
+              normalizedPhone,
+              "status:",
+              response.status
+            );
+          }
+
+          return true;
+        } catch (error: any) {
+          console.error(`[Broadcast][Process] Send error for ${phone}:`, error.message);
+          return false;
+        }
+      };
+
+      const success = await sendWithRetry(member.phone);
+      if (success) {
         await db
           .update(broadcastMembersSent)
           .set({
@@ -817,20 +853,12 @@ async function processBroadcastSend(messageId: number) {
             successfulSends: sql<number>`successful_sends + 1`,
           })
           .where(eq(broadcastMessages.id, messageId));
-      } catch (error: any) {
-        console.error(
-          "[Broadcast][Process] Failed to send to",
-          member.phone,
-          ":",
-          error.message
-        );
-
-        // Marcar como falha
+      } else {
         await db
           .update(broadcastMembersSent)
           .set({
             status: "failed",
-            error: error.message,
+            error: "Failed to send after retries",
           })
           .where(eq(broadcastMembersSent.id, member.id));
 

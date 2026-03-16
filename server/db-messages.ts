@@ -292,14 +292,14 @@ export async function findOrCreateCustomerByPhone(
   const rawPhone = phone;
   const cleanPhone = rawPhone.replace(/\D/g, '');
 
-  // 2. Extrair a raiz imutável (últimos 8 dígitos) para busca por sufixo
-  const phoneRoot = cleanPhone.slice(-8);
-
-  if (phoneRoot.length < 8) {
+  if (cleanPhone.length < 8) {
     throw new Error(`Número muito curto para busca: ${phone}`);
   }
 
-  // 3. Busca por sufixo (últimos 8 dígitos) - ignora DDI, DDD, 9º dígito
+  // 2. Gerar variações (com/sem 9º dígito) para números brasileiros
+  const phoneVariations = getBrazilianPhoneVariations(cleanPhone);
+
+  // 3. Busca exata por qualquer uma das variações
   let existing = await db
     .select({
       id: customers.id,
@@ -310,7 +310,7 @@ export async function findOrCreateCustomerByPhone(
       photoUrl: customers.photoUrl,
     })
     .from(customers)
-    .where(like(customers.phone, `%${phoneRoot}`))
+    .where(inArray(customers.phone, phoneVariations))
     .limit(1);
 
   // 4. Se não achou, cria novo cliente

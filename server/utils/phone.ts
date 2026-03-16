@@ -81,3 +81,55 @@ export function getPhoneSearchVariants(rawNumber: string): string[] {
   // Deduplica
   return [...new Set(variants)];
 }
+
+/**
+ * Retorna as duas variações principais de um número brasileiro:
+ * - Variação original (com ou sem 9)
+ * - Variação oposta (se tiver 9,remove; se não tiver, adiciona)
+ *
+ * Usado para queries exatas (IN) no banco
+ */
+export function getBrazilianPhoneVariations(phone: string): string[] {
+  if (!phone.startsWith('55')) return [phone];
+
+  const withoutCountry = phone.slice(2);
+
+  if (withoutCountry.length === 10) {
+    // Sem o 9: 55 + DDD (2) + numero (8) = 12 dígitos
+    const ddd = withoutCountry.slice(0, 2);
+    const number = withoutCountry.slice(2);
+    return [phone, `55${ddd}9${number}`];
+  } else if (withoutCountry.length === 11) {
+    // Com o 9: 55 + DDD (2) + 9 + numero (8) = 13 dígitos
+    const ddd = withoutCountry.slice(0, 2);
+    const number = withoutCountry.slice(3);
+    return [phone, `55${ddd}${number}`];
+  }
+
+  return [phone];
+}
+
+/**
+ * Retorna todas as variações de busca (normalizadas) para um número.
+ * Inclui: número normalizado (com 9), sem o 9, com +, etc.
+ * Usado para busca flexível com WHERE like ou inArray.
+ */
+export function getAllPhoneSearchVariants(rawPhone: string): string[] {
+  const normalized = normalizeWhatsAppNumber(rawPhone);
+  const variants: string[] = [];
+
+  // Forma normalizada (com 9)
+  variants.push(normalized);
+
+  // Se brasileiro, adiciona variação sem o 9
+  if (normalized.startsWith('55') && normalized.length === 13) {
+    const without9 = normalized.slice(0, 4) + normalized.slice(5);
+    variants.push(without9);
+    // Também com + prefix
+    variants.push(`+${normalized}`);
+    variants.push(`+${without9}`);
+  }
+
+  // Deduplica
+  return [...new Set(variants)];
+}
