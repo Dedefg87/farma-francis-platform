@@ -610,6 +610,16 @@ async function getEvolutionConfig(db: Database) {
 async function processBroadcastSend(messageId: number) {
   console.log("[Broadcast][Process] Starting processing for message:", messageId);
 
+  // DEBUG CRÍTICO: Verificar se as tabelas estão definidas no schema importado
+  if (!broadcastMembersSent) {
+    console.error("[Broadcast Fatal] A tabela 'broadcastMembersSent' está UNDEFINED no schema importado! Verifique as exportações no schema.ts.");
+    return;
+  }
+  if (!broadcastMessages) {
+    console.error("[Broadcast Fatal] A tabela 'messages' está UNDEFINED no schema importado!");
+    return;
+  }
+
   const db = await getDb();
   if (!db) {
     console.error("[Broadcast][Process] Database not available");
@@ -638,20 +648,28 @@ async function processBroadcastSend(messageId: number) {
       return;
     }
 
-    // 2. Buscar membros pendentes
-    const pendingMembers = await db
-      .select({
-        id: broadcastMembersSent.id,
-        customerId: broadcastMembersSent.customerId,
-        phone: broadcastMembersSent.phone,
-      })
-      .from(broadcastMembersSent)
-      .where(
-        and(
-          eq(broadcastMembersSent.messageId, messageId),
-          eq(broadcastMembersSent.status, "pending")
-        )
-      );
+    // 2. Buscar membros pendentes (com debug)
+    try {
+      const pendingMembers = await db
+        .select({
+          id: broadcastMembersSent.id,
+          customerId: broadcastMembersSent.customerId,
+          phone: broadcastMembersSent.phone,
+        })
+        .from(broadcastMembersSent)
+        .where(
+          and(
+            eq(broadcastMembersSent.messageId, messageId),
+            eq(broadcastMembersSent.status, "pending")
+          )
+        );
+
+      if (!pendingMembers || pendingMembers.length === 0) {
+        console.log(`[Broadcast] Nenhum membro pendente encontrado para a mensagem ${messageId}.`);
+        return;
+      }
+
+      console.log("[Broadcast][Process] Processing", pendingMembers.length, "recipients");
 
     if (pendingMembers.length === 0) {
       console.log("[Broadcast][Process] No pending members found");
