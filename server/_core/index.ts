@@ -11,7 +11,6 @@ import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
-import limpezaBrutaRouter from "../admin/limpeza-bruta-router.js";
 import mediaRouter from "../routers-media";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
@@ -317,6 +316,59 @@ async function startServer() {
   // Media Proxy (mídia do WhatsApp/Evolution)
   // GET /api/media/:messageId - Serve mídia com suporte a R2 CDN, fallback Evolution API
   app.use("/api/media", mediaRouter);
+
+  // === ADMIN ROUTES - DIAGNÓSTICO E LIMPEZA ===
+  // GET /api/admin/check-db - Diagnóstico do banco ativo
+  app.get("/api/admin/check-db", async (req, res) => {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "Database not available" });
+    try {
+      const result: any = await (db as any).execute("SELECT COUNT(*) as total FROM customers");
+      const total = result.rows?.[0]?.total || 0;
+      const tablesResult: any = await (db as any).execute("SHOW TABLES");
+      const tables = tablesResult.rows?.map((row: any) => Object.values(row)[0]) || [];
+      res.json({ success: true, totalCustomers: total, tables: tables.slice(0,10) });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/admin/limpeza-bruta - Cirurgia manual de duplicatas
+  app.post("/api/admin/limpeza-bruta", async (req, res) => {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "Database not available" });
+    function normalize(phone: string): string {
+      if (!phone) return "";
+      let d = phone.replace(/\D/g, '');
+      if (!d.startsWith('55')) return d;
+      if (d.length === 13) d = "55" + d.slice(2,4) + d.slice(5);
+      return d;
+    }
+    try {
+      const all: any[] = await (db as any).execute("SELECT * FROM customers ORDER BY id ASC");
+      const groups = new Map<string, any[]>();
+      for (const c of all) { const n = normalize(c.phone); if (n) { if (!groups.has(n)) groups.set(n, []); groups.get(n)!.push(c); } }
+      const dups = Array.from(groups.values()).filter(g => g.length > 1);
+      const logs: string[] = []; let del = 0;
+      for (const g of dups) {
+        g.sort((a,b) => a.id - b.id);
+        const main = g[0];
+        for (const dup of g.slice(1)) {
+          try {
+            for (const [t,f,w] of [["conversations","customer_id","customer_id"],["conversation_messages","customer_id","customer_id"],["broadcast_members_sent","customer_id","customer_id"],["customer_tags","customer_id","customer_id"],["baby_shower_purchases","guest_customer_id","guest_customer_id"]] as any) {
+              try { await (db as any).execute(`UPDATE ${t} SET ${f} = ? WHERE ${w} = ?`, [main.id, dup.id]); } catch {}
+            }
+            await (db as any).execute("DELETE FROM customers WHERE id = ?", [dup.id]);
+            del++; logs.push(`✅ ID ${dup.id} → ${main.id}`);
+          } catch (e: any) { logs.push(`❌ ID ${dup.id}: ${e.message}`); }
+        }
+      }
+      res.json({ success: true, totalCustomers: all.length, duplicateGroups: dups.length, deleted: del, logs });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  });
+  // === FIM ADMIN ROUTES ===
 
 
   // Admin Routes
