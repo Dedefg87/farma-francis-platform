@@ -14,13 +14,6 @@ import { normalizeWhatsAppNumber } from "./utils/phone";
 
 export const broadcastRouter = router({
   // Listar todas as listas de transmissão
-// DEBUG: Verificar se as tabelas foram importadas corretamente
-console.log("[BroadcastRouter] Schema import check:", {
-  broadcastMembersSent: !!broadcastMembersSent,
-  broadcastMessages: !!broadcastMessages,
-  broadcastLists: !!broadcastLists,
-  broadcastListMembers: !!broadcastListMembers,
-});
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
