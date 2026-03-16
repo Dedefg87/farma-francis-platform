@@ -948,6 +948,7 @@ export const conversationMessages = mysqlTable("conversation_messages", {
   externalId: varchar("external_id", { length: 255 }), // Evolution API message ID for idempotency
   senderId: int("sender_id").references(() => users.id), // ID do agente (null se for cliente)
   senderType: mysqlEnum("sender_type", ["agent", "customer"]).notNull(),
+  provider: mysqlEnum("provider", ["whatsapp", "instagram"]).notNull(), // Provedor da mensagem
   content: text("content").notNull(),
   // Campos de anexo
   fileUrl: longtext("file_url"), // Can contain base64 data URLs

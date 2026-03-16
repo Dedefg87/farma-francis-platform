@@ -50,6 +50,13 @@ async function runMediaColumnsMigration() {
       console.log("[Migration] Added remote_jid column");
     }
 
+    // Check provider
+    const [cols3]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'provider'");
+    if (cols3.length === 0) {
+      await db.execute("ALTER TABLE conversation_messages ADD COLUMN provider ENUM('whatsapp','instagram') NOT NULL DEFAULT 'whatsapp' COMMENT 'Provedor da mensagem' AFTER remote_jid");
+      console.log("[Migration] Added provider column");
+    }
+
     // Indexes (ignore if exists)
     try {
       await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id)");
