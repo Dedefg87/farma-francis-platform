@@ -822,7 +822,7 @@ async function processBroadcastSend(messageId: number) {
             let sendData: any;
 
             if (mediaUrl.includes("r2.dev") || mediaUrl.startsWith("http")) {
-              sendUrl = `${baseUrl}/chat/sendMediaMessage/${instance.name}`;
+              sendUrl = `${baseUrl}/message/sendMedia/${instance.name}`;
               sendData = {
                 number: toNumber,
                 options: {
