@@ -846,7 +846,7 @@ async function processBroadcastSend(messageId: number) {
               signal: AbortSignal.timeout(30000),
             });
           } else {
-            const sendUrl = `${baseUrl}/chat/sendText/${instance.name}`;
+            const sendUrl = `${baseUrl}/message/sendText/${instance.name}`;
             response = await fetch(sendUrl, {
               method: "POST",
               headers: {
