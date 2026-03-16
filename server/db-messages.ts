@@ -502,19 +502,17 @@ export async function ingestInboundConversationMessage(message: {
       .limit(1);
     console.log("[Ingest] Default queue:", defaultQueue?.id || "none");
 
-    // 5. Find existing conversation (com busca por variações de número)
+    // 5. Find existing conversation (com busca por variações de número) - SQL CRU
     console.log("[Ingest] Step 5: Find existing conversation");
     const phoneVariants = getBrazilianPhoneVariations(normalizedPhone);
+    const v1 = phoneVariants[0];
+    const v2 = phoneVariants[1] || phoneVariants[0];
     
     const [existingConversation] = await db
       .select()
       .from(conversations)
       .where(
-        and(
-          eq(conversations.customerId, customer.id),
-          eq(conversations.channel, message.provider),
-          inArray(conversations.remoteJid, phoneVariants)
-        )
+        sql`conversations.customer_id = ${customer.id} AND conversations.channel = ${message.provider} AND conversations.remote_jid IN (${v1}, ${v2})`
       )
       .limit(1);
 
