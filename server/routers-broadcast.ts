@@ -369,8 +369,8 @@ export const broadcastRouter = router({
       }
 
       try {
-        // 2. Salva a Mensagem Principal Primeiro (Garante a Foreign Key)
-        const [insertedMessage] = await db
+        // 2. Salva a Mensagem Principal Primeiro (SEM .returning())
+        const result = await db
           .insert(broadcastMessages)
           .values({
             listId: input.listId,
@@ -383,18 +383,21 @@ export const broadcastRouter = router({
             totalRecipients: validMembers.length,
             successfulSends: 0,
             failedSends: 0,
-          })
-          .returning();
+          });
 
-        if (!insertedMessage || !insertedMessage.id) {
-          throw new Error("Falha ao criar a mensagem principal no banco de dados.");
+        // Extrai o ID dependendo do driver (mysql2, sqlite, etc.)
+        const rawId = Array.isArray(result) ? result[0]?.insertId : result?.insertId || result?.lastInsertRowid;
+        const finalMessageId = Number(rawId);
+
+        if (!finalMessageId || isNaN(finalMessageId)) {
+          throw new Error("Mensagem salva, mas falha ao recuperar o ID (insertId não encontrado).");
         }
 
-        // 3. Monta o array garantindo a tipagem correta e removendo itens inválidos
+        // 3. Monta o array garantindo a tipagem correta
         const membersToInsert = validMembers
           .filter(m => m && m.customerId && m.phone) // Segurança extra
           .map(member => ({
-            messageId: Number(insertedMessage.id),
+            messageId: finalMessageId,
             customerId: Number(member.customerId),
             phone: String(member.phone),
             status: 'pending' as const
@@ -424,7 +427,6 @@ export const broadcastRouter = router({
       }
 
       // Processar envio em background (não bloquear resposta)
-      const finalMessageId = insertedMessage.id;
       setImmediate(async () => {
         try {
           await processBroadcastSend(finalMessageId, db);
