@@ -35,7 +35,6 @@ import { crmRouter } from "./routers-crm";
 import { telemetryRouter } from "./routers-telemetry";
 import { automationRouter } from "./routers-automation";
 import { surveyRouter } from "./routers-survey";
-import { broadcastRouter } from "./routers-broadcast";
 import { babyShowerRouter } from "./routers-baby-shower";
 import { migrationRouter } from "./routers-migration";
 
@@ -1123,9 +1122,6 @@ export const appRouter = router({
 
   // Survey - Pesquisa de Satisfação
   survey: surveyRouter,
-
-  // Broadcast Lists - Listas de Transmissão
-  broadcast: broadcastRouter,
 
   // Dashboard Statistics
   dashboardStats: dashboardStatsRouter,
