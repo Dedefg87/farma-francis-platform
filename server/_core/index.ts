@@ -320,18 +320,29 @@ async function startServer() {
   // === ADMIN ROUTES - DIAGNÓSTICO E LIMPEZA ===
   // GET /api/admin/check-db - Diagnóstico do banco ativo
   app.get("/api/admin/check-db", async (req, res) => {
-    const { getDb } = await import("../db");
-    const db = await getDb();
-    if (!db) return res.status(500).json({ error: "Database not available" });
+    const { getDbRaw } = await import("../db");
+    const dbRaw = await getDbRaw();
+    if (!dbRaw) return res.status(500).json({ error: "Database not available" });
     try {
       // Query bruta com resultado completo
-      const result: any = await (db as any).execute("SELECT COUNT(*) as total FROM customers");
-      console.log("[check-db] Resultado COUNT:", JSON.stringify(result, null, 2));
-      const total = result?.rows?.[0]?.total || result?.[0]?.total || result?.total || 0;
-      const tablesResult: any = await (db as any).execute("SHOW TABLES");
-      console.log("[check-db] Resultado SHOW TABLES:", JSON.stringify(tablesResult, null, 2));
-      const tables = tablesResult?.rows?.map((row: any) => Object.values(row)[0]) || tablesResult?.map((row: any) => Object.values(row)[0]) || [];
-      res.json({ success: true, totalCustomers: Number(total), tables: tables.slice(0,15), rawCountResult: result, rawTablesResult: tablesResult });
+      const countResult = await dbRaw.raw("SELECT COUNT(*) as total FROM customers");
+      console.log("[check-db] COUNT resultado:", JSON.stringify(countResult, null, 2));
+      const total = countResult?.[0]?.total || 0;
+      
+      const tablesResult = await dbRaw.raw("SHOW TABLES");
+      console.log("[check-db] SHOW TABLES resultado:", JSON.stringify(tablesResult, null, 2));
+      const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
+      
+      // Pegar alguns clientes para amostra
+      const sampleCustomers = await dbRaw.raw("SELECT id, name, phone FROM customers LIMIT 5");
+      
+      res.json({ 
+        success: true, 
+        totalCustomers: Number(total), 
+        tables: tables.slice(0,15),
+        sampleCustomers,
+        dbType: "mysql2-raw"
+      });
     } catch (err: any) {
       console.error("[check-db] Erro:", err);
       res.status(500).json({ error: err.message });
