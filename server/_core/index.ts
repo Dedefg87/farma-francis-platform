@@ -175,6 +175,47 @@ async function startServer() {
     console.error("[BroadcastMigration] ❌ Failed to add file columns:", err);
   }
 
+  // 🚨 FIX Evolution API URL (6125 → ffea)
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (db) {
+      const [rows]: any = await db.execute(
+        `SELECT id, config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1`
+      );
+      
+      if (rows.length > 0) {
+        const row = rows[0];
+        const config = JSON.parse(row.config);
+        const newUrl = 'https://evolution-api-production-ffea.up.railway.app';
+        
+        let needsUpdate = false;
+        
+        // Check both old formats
+        if (config.apiUrl && config.apiUrl.includes('6125')) {
+          config.apiUrl = newUrl;
+          needsUpdate = true;
+        }
+        if (config.instances && config.instances[0]?.url && config.instances[0].url.includes('6125')) {
+          config.instances = config.instances.map((inst: any) => ({ ...inst, url: newUrl }));
+          needsUpdate = true;
+        }
+        
+        if (needsUpdate) {
+          await db.execute(
+            `UPDATE integration_settings SET config = ?, updated_at = NOW() WHERE id = ?`,
+            [JSON.stringify(config), row.id]
+          );
+          console.log("[EvolutionFix] ✅ Fixed Evolution API URL from 6125 to ffea");
+        } else {
+          console.log("[EvolutionFix] ✅ Evolution API URL already correct (ffea)");
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[EvolutionFix] ❌ Failed to fix Evolution URL:", err);
+  }
+
   // Iniciar processador de sync de mensagens mobile (background)
   // Auto-migrate broadcast tables (cria tabela broadcast_members_sent se não existir)
   await runBroadcastMigrations();
