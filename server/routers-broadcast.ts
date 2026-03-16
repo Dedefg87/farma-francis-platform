@@ -374,6 +374,7 @@ export const broadcastRouter = router({
 
       try {
         // 2. Salva a Mensagem Principal Primeiro (SEM .returning())
+        // Nota: Usamos ?? null para converter undefined em null, evitando erro no MySQL
         const result = await db
           .insert(broadcastMessages)
           .values({
