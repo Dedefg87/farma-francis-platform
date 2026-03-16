@@ -14,8 +14,6 @@ import { normalizeWhatsAppNumber } from "./utils/phone";
 
 export const broadcastRouter = router({
   // Listar todas as listas de transmissão
-// DEBUG: Listar todas as tabelas disponíveis no schema
-console.log("[BroadcastWorker] Tabelas disponíveis no schema importado:", Object.keys({ broadcastLists, broadcastListMembers, broadcastMessages, broadcastMembersSent, customers, integrationSettings }));
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -611,6 +609,7 @@ async function getEvolutionConfig(db: Database) {
  */
 async function processBroadcastSend(messageId: number) {
   console.log("[Broadcast][Process] Starting processing for message:", messageId);
+
   // DEBUG: Mostrar todas as tabelas disponíveis
   console.log("[BroadcastWorker] Tabelas disponíveis no schema importado:", {
     broadcastMembersSent: broadcastMembersSent ? "OK" : "UNDEFINED",
