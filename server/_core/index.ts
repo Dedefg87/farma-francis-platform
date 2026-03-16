@@ -11,6 +11,7 @@ import { sql, SQL } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
+import limpezaBrutaRouter from "../admin/limpeza-bruta-router.js";
 import mediaRouter from "../routers-media";
 import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
@@ -317,6 +318,10 @@ async function startServer() {
   // GET /api/media/:messageId - Serve mídia com suporte a R2 CDN, fallback Evolution API
   app.use("/api/media", mediaRouter);
 
+
+  // Admin Routes
+  // POST /api/admin/limpeza-bruta - Limpeza manual de duplicatas (emergência)
+  app.use("/api/admin", limpezaBrutaRouter);
   // Broadcast File Upload
   // POST /api/broadcast/upload-temp-file
   // Recebe arquivo via FormData, faz upload para storage (R2) e retorna URL pública
