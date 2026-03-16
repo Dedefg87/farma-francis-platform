@@ -649,30 +649,22 @@ async function processBroadcastSend(messageId: number) {
     }
 
     // 2. Buscar membros pendentes (com debug)
-    try {
-      const pendingMembers = await db
-        .select({
-          id: broadcastMembersSent.id,
-          customerId: broadcastMembersSent.customerId,
-          phone: broadcastMembersSent.phone,
-        })
-        .from(broadcastMembersSent)
-        .where(
-          and(
-            eq(broadcastMembersSent.messageId, messageId),
-            eq(broadcastMembersSent.status, "pending")
-          )
-        );
+    const pendingMembers = await db
+      .select({
+        id: broadcastMembersSent.id,
+        customerId: broadcastMembersSent.customerId,
+        phone: broadcastMembersSent.phone,
+      })
+      .from(broadcastMembersSent)
+      .where(
+        and(
+          eq(broadcastMembersSent.messageId, messageId),
+          eq(broadcastMembersSent.status, "pending")
+        )
+      );
 
-      if (!pendingMembers || pendingMembers.length === 0) {
-        console.log(`[Broadcast] Nenhum membro pendente encontrado para a mensagem ${messageId}.`);
-        return;
-      }
-
-      console.log("[Broadcast][Process] Processing", pendingMembers.length, "recipients");
-
-    if (pendingMembers.length === 0) {
-      console.log("[Broadcast][Process] No pending members found");
+    if (!pendingMembers || pendingMembers.length === 0) {
+      console.log(`[Broadcast] Nenhum membro pendente encontrado para a mensagem ${messageId}.`);
       return;
     }
 
