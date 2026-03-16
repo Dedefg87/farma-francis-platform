@@ -463,7 +463,10 @@ export const broadcastRouter = router({
       // Processar envio em background (não bloquear resposta)
       setImmediate(async () => {
         try {
-          await processBroadcastSend(finalMessageId, db);
+          // Obtém uma nova conexão para o background (evita problemas de escopo/closed db)
+          const bgDb = await getDb();
+          if (!bgDb) throw new Error("Database not available in background");
+          await processBroadcastSend(finalMessageId, bgDb);
         } catch (error) {
           console.error("[Broadcast] Erro no processamento:", error);
         }
@@ -604,8 +607,14 @@ async function getEvolutionConfig(db: Database) {
 /**
  * Processa o envio de um broadcast em background
  */
-async function processBroadcastSend(messageId: number, db: Database) {
+async function processBroadcastSend(messageId: number) {
   console.log("[Broadcast][Process] Starting processing for message:", messageId);
+
+  const db = await getDb();
+  if (!db) {
+    console.error("[Broadcast][Process] Database not available");
+    return;
+  }
 
   try {
     // 1. Buscar mensagem de broadcast
