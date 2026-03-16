@@ -129,6 +129,13 @@ async function runBroadcastMigrations() {
       console.log("[BroadcastMigration] Added file columns to broadcast_messages");
     }
 
+    // Coluna provider em conversation_messages (para webhook)
+    const [provCol]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'provider'");
+    if (provCol.length === 0) {
+      await db.execute("ALTER TABLE conversation_messages ADD COLUMN provider ENUM('whatsapp','instagram') NOT NULL DEFAULT 'whatsapp' COMMENT 'Provedor da mensagem' AFTER remote_jid");
+      console.log("[BroadcastMigration] Added provider column to conversation_messages");
+    }
+
     console.log("[BroadcastMigration] Migration completed");
   } catch (err) {
     console.error("[BroadcastMigration] Failed:", err);
@@ -182,19 +189,28 @@ async function startServer() {
     console.error("[BroadcastMigration] ❌ Failed to add file columns:", err);
   }
 
-  // 🚨 FIX Evolution API URL (6125 → ffea)
+  // 🚨 FIX Evolution API URL (6125 → ffea) AND CREATE IF MISSING
   try {
     const { getDb } = await import("../db");
+    const { integrationSettings } = await import("../../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
     const db = await getDb();
     if (db) {
-      const [rows]: any = await db.execute(
-        `SELECT id, config FROM integration_settings WHERE integration_type = 'evolution_api' LIMIT 1`
-      );
+      // Fetch existing config
+      const existing = await db
+        .select({
+          id: integrationSettings.id,
+          config: integrationSettings.config,
+        })
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "evolution_api"))
+        .limit(1);
+
+      const newUrl = 'https://evolution-api-production-ffea.up.railway.app';
       
-      if (rows.length > 0) {
-        const row = rows[0];
-        const config = JSON.parse(row.config);
-        const newUrl = 'https://evolution-api-production-ffea.up.railway.app';
+      if (existing.length > 0) {
+        const row = existing[0];
+        const config = typeof row.config === 'string' ? JSON.parse(row.config) : row.config;
         
         let needsUpdate = false;
         
@@ -209,18 +225,39 @@ async function startServer() {
         }
         
         if (needsUpdate) {
-          await db.execute(
-            `UPDATE integration_settings SET config = ?, updated_at = NOW() WHERE id = ?`,
-            [JSON.stringify(config), row.id]
-          );
-          console.log("[EvolutionFix] ✅ Fixed Evolution API URL from 6125 to ffea");
+          await db
+            .update(integrationSettings)
+            .set({ config, updatedAt: new Date() })
+            .where(eq(integrationSettings.id, row.id));
+          console.log("[EvolutionFix] ✅ Fixed Evolution API URL from 6125 to ffea (updated existing record)");
         } else {
           console.log("[EvolutionFix] ✅ Evolution API URL already correct (ffea)");
         }
+      } else {
+        // Create new record with correct URL
+        const defaultConfig = {
+          instances: [
+            {
+              name: "Meu",
+              url: newUrl,
+              apiKey: "@Afrancis87", // Keep existing key (user should update if different)
+            },
+          ],
+        };
+        
+        await db.insert(integrationSettings).values({
+          integrationType: "evolution_api",
+          name: "Evolution API (Auto-created)",
+          isActive: true,
+          config: defaultConfig,
+          createdBy: 1, // Admin user
+        });
+        
+        console.log("[EvolutionFix] ✅ Created Evolution API config with correct URL (ffea)");
       }
     }
   } catch (err) {
-    console.error("[EvolutionFix] ❌ Failed to fix Evolution URL:", err);
+    console.error("[EvolutionFix] ❌ Failed to fix/create Evolution config:", err);
   }
 
   // Iniciar processador de sync de mensagens mobile (background)
