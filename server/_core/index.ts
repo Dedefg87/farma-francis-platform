@@ -322,18 +322,19 @@ async function startServer() {
   app.get("/api/admin/check-db", async (req, res) => {
     const { getDbRaw } = await import("../db");
     const dbRaw = await getDbRaw();
-    if (!dbRaw) return res.status(500).json({ error: "Database not available" });
+    
+    // Mascarar DATABASE_URL para diagnóstico
+    const dbUrl = process.env.DATABASE_URL || "NÃO DEFINIDA";
+    const maskedUrl = dbUrl.replace(/:[^:@]+@/, ":****@");
+    
+    if (!dbRaw) return res.status(500).json({ error: "Database not available", dbUrl: maskedUrl });
     try {
-      // Query bruta com resultado completo
       const countResult = await dbRaw.raw("SELECT COUNT(*) as total FROM customers");
-      console.log("[check-db] COUNT resultado:", JSON.stringify(countResult, null, 2));
       const total = countResult?.[0]?.total || 0;
       
       const tablesResult = await dbRaw.raw("SHOW TABLES");
-      console.log("[check-db] SHOW TABLES resultado:", JSON.stringify(tablesResult, null, 2));
       const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
       
-      // Pegar alguns clientes para amostra
       const sampleCustomers = await dbRaw.raw("SELECT id, name, phone FROM customers LIMIT 5");
       
       res.json({ 
@@ -341,11 +342,12 @@ async function startServer() {
         totalCustomers: Number(total), 
         tables: tables.slice(0,15),
         sampleCustomers,
+        dbUrl: maskedUrl,
         dbType: "mysql2-raw"
       });
     } catch (err: any) {
       console.error("[check-db] Erro:", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: err.message, dbUrl: maskedUrl });
     }
   });
 
