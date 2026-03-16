@@ -14,32 +14,6 @@ import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
 import { normalizeWhatsAppNumber } from "./utils/phone";
 
-// Gera todas as variações de número de telefone brasileiro (com/sem 9, com/sem +55)
-function getPhoneVariations(rawPhone: string): string[] {
-  const clean = rawPhone.replace(/\D/g, ''); // Remove tudo que não é número
-
-  // Se não for número brasileiro válido, retorna apenas as versões básicas
-  if (!clean.startsWith('55') || clean.length < 12) {
-    return [rawPhone, clean, `+${clean}`];
-  }
-
-  // Extrai DDD e os últimos 8 dígitos (ignorando o 9)
-  const ddd = clean.substring(2, 4);
-  const last8 = clean.slice(-8);
-
-  // Retorna todas as 6 combinações possíveis no WhatsApp BR
-  return [
-    `55${ddd}9${last8}`,          // Padrão com 9
-    `55${ddd}${last8}`,           // Padrão sem 9
-    `+55${ddd}9${last8}`,         // Com + e com 9
-    `+55${ddd}${last8}`,          // Com + e sem 9
-    `${ddd}9${last8}`,            // Sem DDI e com 9
-    `${ddd}${last8}`              // Sem DDI e sem 9
-  ];
-}
-
-
-
 // Cache para evitar queries repetitivas de agent assignment
 const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
 const CACHE_TTL_MS = 30 * 1000; // 30 segundos
@@ -314,54 +288,19 @@ export async function findOrCreateCustomerByPhone(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  // Gera todas as variações possíveis do número para busca (com/sem 9, com/sem +55)
-  const phoneVariations = getPhoneVariations(phone);
+  // 1. Extrair número limpo (apenas dígitos)
+  const rawPhone = phone;
+  const cleanPhone = rawPhone.replace(/\D/g, '');
 
-  // Selecionar apenas colunas que existem no banco (evitar erro de colunas faltantes)
-  const existing = await db
-    .select({
-      id: customers.id,
-      name: customers.name,
-      email: customers.email,
-      phone: customers.phone,
-      status: customers.status,
-      photoUrl: customers.photoUrl,
-    })
-    .from(customers)
-    .where(inArray(customers.phone, phoneVariations))
-    .limit(1);
+  // 2. Extrair a raiz imutável (últimos 8 dígitos) para busca por sufixo
+  const phoneRoot = cleanPhone.slice(-8);
 
-  // Para armazenamento, usar normalização que garante o 9º dígito (padrão único)
-  const normalizedPhone = normalizeWhatsAppNumber(phone);
-
-  if (existing.length > 0) {
-    const updates: Record<string, unknown> = {};
-    if (name && existing[0].name !== name) {
-      updates.name = name;
-    }
-    if (photoUrl && existing[0].photoUrl !== photoUrl) {
-      updates.photoUrl = photoUrl;
-    }
-    if (Object.keys(updates).length > 0) {
-      await db
-        .update(customers)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(eq(customers.id, existing[0].id));
-    }
-    return existing[0];
+  if (phoneRoot.length < 8) {
+    throw new Error(`Número muito curto para busca: ${phone}`);
   }
 
-  // Create new customer - campos essenciais
-  const result = await db.insert(customers).values({
-    name: name || `Cliente ${phone}`,
-    phone: normalizedPhone,
-    photoUrl: photoUrl || null,
-    status: "active",
-  });
-
-  // Get the newly created customer (use same search condition to be consistent)
-  const searchCondition = inArray(customers.phone, phoneVariations);
-  const newCustomer = await db
+  // 3. Busca por sufixo (últimos 8 dígitos) - ignora DDI, DDD, 9º dígito
+  let existing = await db
     .select({
       id: customers.id,
       name: customers.name,
@@ -371,8 +310,67 @@ export async function findOrCreateCustomerByPhone(
       photoUrl: customers.photoUrl,
     })
     .from(customers)
-    .where(searchCondition)
+    .where(like(customers.phone, `%${phoneRoot}`))
     .limit(1);
+
+  // 4. Se não achou, cria novo cliente
+  if (!existing || existing.length === 0) {
+    // Nome elegante fallback
+    const pushName = name;
+    const finalName = (pushName && pushName.trim() !== '')
+      ? pushName
+      : `Cliente ${phoneRoot.slice(-4)}`;
+
+    // Normaliza antes de salvar (adiciona 9 se necessário)
+    let phoneToSave = cleanPhone;
+    if (phoneToSave.startsWith('55') && phoneToSave.length === 12) {
+      phoneToSave = `${phoneToSave.slice(0,4)}9${phoneToSave.slice(4)}`;
+    }
+
+    const result = await db.insert(customers).values({
+      name: finalName,
+      phone: phoneToSave,
+      photoUrl: photoUrl || null,
+      status: "active",
+    });
+
+    // Extrai ID do resultado (MySQL/SQLite)
+    const rawId = Array.isArray(result) ? result[0]?.insertId : result?.insertId || result?.lastInsertRowid;
+    const newId = Number(rawId);
+
+    if (!newId || isNaN(newId)) {
+      throw new Error("Falha ao obter ID do cliente recém-criado");
+    }
+
+    // Retorna objeto cliente criado
+    existing = [{
+      id: newId,
+      name: finalName,
+      email: null,
+      phone: phoneToSave,
+      status: "active",
+      photoUrl: photoUrl || null,
+    } as any];
+  }
+
+  const customer = existing[0];
+
+  // Atualiza nome/foto se necessário
+  if (name && customer.name !== name) {
+    await db
+      .update(customers)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(customers.id, customer.id));
+  }
+  if (photoUrl && customer.photoUrl !== photoUrl) {
+    await db
+      .update(customers)
+      .set({ photoUrl, updatedAt: new Date() })
+      .where(eq(customers.id, customer.id));
+  }
+
+  return customer;
+}
 
   // 🎯 BUSCA AGRESSIVA DE FOTO DE PERFIL (se não foi fornecida)
   if (!photoUrl && newCustomer[0]?.id) {
