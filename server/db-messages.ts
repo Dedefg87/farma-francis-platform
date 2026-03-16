@@ -513,10 +513,7 @@ export async function ingestInboundConversationMessage(message: {
         and(
           eq(conversations.customerId, customer.id),
           eq(conversations.channel, message.provider),
-          inArray(
-            sql`CAST(${conversations.remoteJid} AS CHAR)`,
-            phoneVariants
-          )
+          inArray(conversations.remoteJid, phoneVariants)
         )
       )
       .limit(1);
