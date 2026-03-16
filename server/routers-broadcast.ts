@@ -390,6 +390,8 @@ export const broadcastRouter = router({
         const rawId = Array.isArray(result) ? result[0]?.insertId : result?.insertId || result?.lastInsertRowid;
         const finalMessageId = Number(rawId);
 
+        console.log("[Broadcast] ID da mensagem criada:", finalMessageId);
+
         if (!finalMessageId || isNaN(finalMessageId)) {
           throw new Error("Mensagem salva, mas falha ao recuperar o ID (insertId não encontrado).");
         }
@@ -418,8 +420,8 @@ export const broadcastRouter = router({
           throw new Error("Nenhum cliente válido sobrou após a filtragem de duplicatas.");
         }
 
-        // Log para debug no Railway
-        console.log(`[Broadcast] Inserindo ${membersToInsert.length} clientes na fila (deduplicados)...`);
+        // Log para debug
+        console.log("[Broadcast] Dados prontos para insert:", membersToInsert);
 
         // 4. Insere no banco usando SQL direto para total controle da sintaxe
         const placeholders = membersToInsert.map(() => "(?, ?, ?, ?)").join(",");
@@ -435,12 +437,21 @@ export const broadcastRouter = router({
           );
           console.log("[Broadcast] Inserção em massa concluída com sucesso");
         } catch (dbError: any) {
-          console.error("[Broadcast] Detalhe do Erro no Banco:", dbError.message || dbError);
-          throw new Error(`O banco rejeitou os dados: ${dbError.message || 'Erro de constraint'}`);
+          console.error("[Broadcast DB Error]:", dbError);
+
+          // Extrai a mensagem real do banco
+          const errorMessage = dbError?.message || dbError?.code || "Erro desconhecido no banco";
+
+          // Retorna o erro exato para o frontend exibir
+          return res.status(500).json({
+            error: `O banco rejeitou os dados. Motivo exato: ${errorMessage}`
+          });
         }
       } catch (error: any) {
         console.error("[Broadcast] Erro fatal na gravação:", error);
-        throw error; // Deixa o erro subir para ser capturado pelo handler TRPC
+        return res.status(500).json({
+          error: `Erro interno ao processar o envio: ${error.message || error}`
+        });
       }
 
       // Processar envio em background (não bloquear resposta)
@@ -454,8 +465,8 @@ export const broadcastRouter = router({
 
       return {
         success: true,
-        messageId: message.id,
-        totalRecipients: members.length,
+        messageId: finalMessageId,
+        totalRecipients: validMembers.length,
       };
     }),
 
