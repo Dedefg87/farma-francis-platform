@@ -47,6 +47,7 @@ export async function mergeDuplicateCustomers() {
 
   logs.push(`🔍 Total de clientes: ${allCustomers.length}`);
   logs.push(`🔍 Grupos duplicados encontrados: ${duplicateGroups.length}`);
+  logs.push(`⚡ Usando SQL Puro (db.execute)`); // Identificador de versão
 
   let totalMerged = 0;
   let totalDeleted = 0;
