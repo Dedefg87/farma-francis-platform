@@ -394,15 +394,19 @@ export const broadcastRouter = router({
           throw new Error("Mensagem salva, mas falha ao recuperar o ID (insertId não encontrado).");
         }
 
-        // 3. Filtro Anti-Duplicata (remove customer_id duplicados)
-        const uniqueMembersMap = new Map<number, any>();
+        // 3. Filtro Anti-Duplicata SUPERIOR (Baseado no telefone limpo)
+        const uniqueMembersMap = new Map<string, any>();
 
         validMembers.forEach(m => {
           if (m && m.customerId && m.phone) {
-            uniqueMembersMap.set(Number(m.customerId), {
+            // Limpa o número removendo +, traços e espaços para comparação perfeita
+            const cleanPhone = String(m.phone).replace(/\D/g, '');
+
+            // Usa o telefone limpo como chave! Se houver 2 IDs com o mesmo telefone, só 1 passa.
+            uniqueMembersMap.set(cleanPhone, {
               messageId: finalMessageId,
               customerId: Number(m.customerId),
-              phone: String(m.phone),
+              phone: cleanPhone,
               status: 'pending' as const
             });
           }
