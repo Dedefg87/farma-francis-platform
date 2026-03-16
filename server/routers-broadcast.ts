@@ -417,9 +417,18 @@ export const broadcastRouter = router({
         // Log para debug no Railway
         console.log(`[Broadcast] Inserindo ${membersToInsert.length} clientes na fila (deduplicados)...`);
 
-        // 4. Insere no banco com segurança e captura de erro detalhada
+        // 4. Insere no banco usando SQL direto para total controle da sintaxe
+        const placeholders = membersToInsert.map(() => "(?, ?, ?, ?)").join(",");
+        const params: any[] = [];
+        for (const m of membersToInsert) {
+          params.push(m.messageId, m.customerId, m.phone, m.status);
+        }
+
         try {
-          await db.insert(broadcastMembersSent).values(membersToInsert);
+          await db.execute(
+            `INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status) VALUES ${placeholders}`,
+            params
+          );
           console.log("[Broadcast] Inserção em massa concluída com sucesso");
         } catch (dbError: any) {
           console.error("[Broadcast] Detalhe do Erro no Banco:", dbError.message || dbError);
