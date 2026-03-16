@@ -372,30 +372,6 @@ export async function findOrCreateCustomerByPhone(
   return customer;
 }
 
-  // 🎯 BUSCA AGRESSIVA DE FOTO DE PERFIL (se não foi fornecida)
-  if (!photoUrl && newCustomer[0]?.id) {
-    setImmediate(async () => {
-      try {
-        const profile = await fetchEvolutionProfile(phone);
-        if (profile?.profilePicture) {
-          const db = await getDb();
-          if (db) {
-            await db
-              .update(customers)
-              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
-              .where(eq(customers.id, newCustomer[0].id));
-            console.log(`[Profile] Foto buscada e salva para cliente ${phone}`);
-          }
-        }
-      } catch (err) {
-        console.error(`[Profile] Erro ao buscar foto para ${phone}:`, err);
-      }
-    });
-  }
-
-  return newCustomer[0];
-}
-
 function buildInboundContent(message: {
   messageType: string;
   messageText?: string | null;
