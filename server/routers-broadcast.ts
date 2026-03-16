@@ -419,7 +419,7 @@ export const broadcastRouter = router({
 
         // 4. Insere no banco com segurança e captura de erro detalhada
         try {
-          await db.insert(schema.broadcastMembersSent).values(membersToInsert);
+          await db.insert(broadcastMembersSent).values(membersToInsert);
           console.log("[Broadcast] Inserção em massa concluída com sucesso");
         } catch (dbError: any) {
           console.error("[Broadcast] Detalhe do Erro no Banco:", dbError.message || dbError);
