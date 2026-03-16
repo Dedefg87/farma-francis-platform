@@ -826,6 +826,13 @@ async function processBroadcastSend(messageId: number) {
               else if (mimeType.includes("audio")) mediaTypeEvolution = "audio";
             }
 
+            console.log("[Broadcast][Media] 📎 Sending media:", {
+              fileName,
+              mimeType,
+              mediaTypeEvolution,
+              url: mediaUrl.substring(0, 50) + "...",
+            });
+
             let sendUrl: string;
             let sendData: any;
 
@@ -839,6 +846,11 @@ async function processBroadcastSend(messageId: number) {
                 caption: message.content || "",
                 fileName: fileName,
               };
+
+              console.log("[Broadcast][Media] 📤 Payload:", {
+                url: sendUrl,
+                payload: sendData,
+              });
             } else {
               throw new Error("URL de mídia temporária não suportada no broadcast");
             }
