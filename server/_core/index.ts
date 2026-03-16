@@ -388,10 +388,6 @@ async function startServer() {
   // === FIM ADMIN ROUTES ===
 
 
-  // Admin Routes
-  // POST /api/admin/limpeza-bruta - Limpeza manual de duplicatas (emergência)
-  app.use("/api/admin", limpezaBrutaRouter);
-  // Broadcast File Upload
   // POST /api/broadcast/upload-temp-file
   // Recebe arquivo via FormData, faz upload para storage (R2) e retorna URL pública
   // Acesso: requires authentication (via tRPC context middleware applied below)
