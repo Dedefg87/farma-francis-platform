@@ -522,7 +522,7 @@ export async function ingestInboundConversationMessage(message: {
       console.log("[Ingest] Found existing conversation:", conversationId);
     } else {
       console.log("[Ingest] Creating new conversation");
-      const [newConv] = await db
+      const result = await db
         .insert(conversations)
         .values({
           customerId: customer.id,
@@ -534,9 +534,10 @@ export async function ingestInboundConversationMessage(message: {
           updatedAt: now,
           queueId: defaultQueue?.id || null,
           lastMessageAt: now,
-        })
-        .returning({ id: conversations.id });
-      conversationId = newConv.id;
+        });
+      const newConvId = Array.isArray(result) ? result[0]?.insertId : result?.insertId ?? result?.lastInsertRowid;
+      conversationId = newConvId;
+
       console.log("[Ingest] Created conversation:", conversationId);
     }
 
@@ -548,7 +549,7 @@ export async function ingestInboundConversationMessage(message: {
     const fileType = message.mimeType || null;
     const fileSize = message.fileSize || null;
 
-    const [newMessage] = await db
+    const result = await db
       .insert(conversationMessages)
       .values({
         conversationId,
@@ -564,8 +565,11 @@ export async function ingestInboundConversationMessage(message: {
         remoteJid: normalizedPhone,
         createdAt: now,
         readAt: null,
-      })
-      .returning({ id: conversationMessages.id });
+      });
+
+    // MySQL returns insertId in the result array
+    const newMessageId = Array.isArray(result) ? result[0]?.insertId : result?.insertId ?? result?.lastInsertRowid;
+    const newMessage = { id: newMessageId };
 
     console.log("[Ingest] ✅ Message inserted:", newMessage.id, "senderType:", senderType);
 
