@@ -324,12 +324,16 @@ async function startServer() {
     const db = await getDb();
     if (!db) return res.status(500).json({ error: "Database not available" });
     try {
+      // Query bruta com resultado completo
       const result: any = await (db as any).execute("SELECT COUNT(*) as total FROM customers");
-      const total = result.rows?.[0]?.total || 0;
+      console.log("[check-db] Resultado COUNT:", JSON.stringify(result, null, 2));
+      const total = result?.rows?.[0]?.total || result?.[0]?.total || result?.total || 0;
       const tablesResult: any = await (db as any).execute("SHOW TABLES");
-      const tables = tablesResult.rows?.map((row: any) => Object.values(row)[0]) || [];
-      res.json({ success: true, totalCustomers: total, tables: tables.slice(0,10) });
+      console.log("[check-db] Resultado SHOW TABLES:", JSON.stringify(tablesResult, null, 2));
+      const tables = tablesResult?.rows?.map((row: any) => Object.values(row)[0]) || tablesResult?.map((row: any) => Object.values(row)[0]) || [];
+      res.json({ success: true, totalCustomers: Number(total), tables: tables.slice(0,15), rawCountResult: result, rawTablesResult: tablesResult });
     } catch (err: any) {
+      console.error("[check-db] Erro:", err);
       res.status(500).json({ error: err.message });
     }
   });
