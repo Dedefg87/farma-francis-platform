@@ -420,34 +420,41 @@ export const broadcastRouter = router({
           throw new Error("Nenhum cliente válido sobrou após a filtragem de duplicatas.");
         }
 
-        // Log para debug
-        console.log("[Broadcast] Dados prontos para insert:", membersToInsert);
-
-        // 4. Insere no banco usando SQL direto para total controle da sintaxe
-        const placeholders = membersToInsert.map(() => "(?, ?, ?, ?)").join(",");
-        const params: any[] = [];
-        for (const m of membersToInsert) {
-          params.push(m.messageId, m.customerId, m.phone, m.status);
-        }
-
+        // 4. DEBUG AGRESSIVO - Insere no banco e captura ERRO REAL
         try {
-          await db.execute(
-            `INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status) VALUES ${placeholders}`,
-            params
-          );
-          console.log("[Broadcast] Inserção em massa concluída com sucesso");
+          if (!finalMessageId) {
+            throw new Error("O finalMessageId está nulo ou inválido antes do insert.");
+          }
+
+          // Sanitização final forçada
+          const sanitizedMembers = membersToInsert.map(m => ({
+            messageId: Number(m.messageId),
+            customerId: Number(m.customerId),
+            phone: String(m.phone),
+            status: 'pending' // Confirme se o schema aceita 'pending' (case-sensitive)
+          }));
+
+          console.log("[Broadcast] Dados sanitizados para insert:", sanitizedMembers);
+
+          // Usa Drizzle nativo para melhor captura de erros do driver
+          await db.insert(broadcastMembersSent).values(sanitizedMembers);
+          console.log("[Broadcast] Inserção concluída com sucesso");
         } catch (dbError: any) {
-          console.error("[Broadcast DB Error]:", dbError);
+          console.error("[Broadcast DB Error Completo]:", dbError);
 
-          // Extrai a mensagem real do banco
-          const errorMessage = dbError?.message || dbError?.code || "Erro desconhecido no banco";
+          // Tenta buscar a causa raiz profunda do erro (driver do banco)
+          const realCause = dbError?.cause?.message || dbError?.sqlMessage || dbError?.code || dbError?.message;
 
-          // Lança erro para o tRPC retornar ao frontend
-          throw new Error(`O banco rejeitou os dados. Motivo exato: ${errorMessage}`);
+          // RETORNA OS DADOS NA TELA PARA DEBUG
+          const failedData = membersToInsert.length > 0 ? JSON.stringify(membersToInsert[0]) : "vazio";
+          const errorMsg = `Erro Real: ${realCause} | Dados Tentados: ${failedData}`;
+
+          // Lança erro para o frontend exibir
+          throw new Error(errorMsg);
         }
       } catch (error: any) {
         console.error("[Broadcast] Erro fatal na gravação:", error);
-        throw error; // Deixa o erro subir para o handler tRPC
+        throw error; // Deixa o erro subir para o handler TRPC
       }
 
       // Processar envio em background (não bloquear resposta)
