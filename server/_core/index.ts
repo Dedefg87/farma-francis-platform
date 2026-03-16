@@ -19,6 +19,7 @@ import { startMobileSyncProcessor } from "../queue/mobile-sync";
 import { sdk } from "./sdk";
 import multer from "multer";
 import { uploadToR2 } from "../r2-client";
+import migrationRouter from "../admin/migration-router";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -318,6 +319,7 @@ async function startServer() {
   app.use("/api/media", mediaRouter);
 
   // === ADMIN ROUTES - DIAGNÓSTICO E LIMPEZA ===
+  app.use("/api/admin", migrationRouter);
   // GET /api/admin/check-db - Diagnóstico do banco ativo
   app.get("/api/admin/check-db", async (req, res) => {
     const { getDbRaw } = await import("../db");
@@ -351,41 +353,7 @@ async function startServer() {
     }
   });
 
-  // POST /api/admin/limpeza-bruta - Cirurgia manual de duplicatas
-  app.post("/api/admin/limpeza-bruta", async (req, res) => {
-    const { getDb } = await import("../db");
-    const db = await getDb();
-    if (!db) return res.status(500).json({ error: "Database not available" });
-    function normalize(phone: string): string {
-      if (!phone) return "";
-      let d = phone.replace(/\D/g, '');
-      if (!d.startsWith('55')) return d;
-      if (d.length === 13) d = "55" + d.slice(2,4) + d.slice(5);
-      return d;
-    }
-    try {
-      const all: any[] = await (db as any).execute("SELECT * FROM customers ORDER BY id ASC");
-      const groups = new Map<string, any[]>();
-      for (const c of all) { const n = normalize(c.phone); if (n) { if (!groups.has(n)) groups.set(n, []); groups.get(n)!.push(c); } }
-      const dups = Array.from(groups.values()).filter(g => g.length > 1);
-      const logs: string[] = []; let del = 0;
-      for (const g of dups) {
-        g.sort((a,b) => a.id - b.id);
-        const main = g[0];
-        for (const dup of g.slice(1)) {
-          try {
-            for (const [t,f,w] of [["conversations","customer_id","customer_id"],["conversation_messages","customer_id","customer_id"],["broadcast_members_sent","customer_id","customer_id"],["customer_tags","customer_id","customer_id"],["baby_shower_purchases","guest_customer_id","guest_customer_id"]] as any) {
-              try { await (db as any).execute(`UPDATE ${t} SET ${f} = ? WHERE ${w} = ?`, [main.id, dup.id]); } catch {}
-            }
-            await (db as any).execute("DELETE FROM customers WHERE id = ?", [dup.id]);
-            del++; logs.push(`✅ ID ${dup.id} → ${main.id}`);
-          } catch (e: any) { logs.push(`❌ ID ${dup.id}: ${e.message}`); }
-        }
-      }
-      res.json({ success: true, totalCustomers: all.length, duplicateGroups: dups.length, deleted: del, logs });
-    } catch (err: any) { res.status(500).json({ error: err.message }); }
-  });
-  // === FIM ADMIN ROUTES ===
+
 
 
   // POST /api/broadcast/upload-temp-file
@@ -3730,18 +3698,3 @@ startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
 // FORCE REBUILD: 1772736794
 
-  // GET /api/admin/test-db - Testa usando getAllCustomers() (função oficial)
-  app.get("/api/admin/test-db", async (req, res) => {
-    try {
-      const { getAllCustomers } = await import("../db");
-      const customers = await getAllCustomers();
-      res.json({ 
-        success: true, 
-        count: customers.length,
-        sample: customers.slice(0,3),
-        method: "getAllCustomers()"
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
-    }
-  });
