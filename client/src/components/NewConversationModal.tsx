@@ -8,10 +8,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Keyboard, Search, Loader2, Radio } from "lucide-react";
+import { Keyboard, Search, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { BroadcastListManager } from "./BroadcastListManager";
 
 interface NewConversationModalProps {
   open: boolean;
@@ -24,15 +23,11 @@ export default function NewConversationModal({
   onOpenChange,
   onSuccess,
 }: NewConversationModalProps) {
-  const [mode, setMode] = useState<"input" | "search" | "broadcast" | null>(
-    null
-  );
+  const [mode, setMode] = useState<"input" | "search" | null>(null);
   const [phoneOrEmail, setPhoneOrEmail] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [autoFetchedName, setAutoFetchedName] = useState<string | null>(null);
-  const [channel, setChannel] = useState<
-    "whatsapp" | "instagram" | "telegram" | "email"
-  >("whatsapp");
+  const [channel, setChannel] = useState<"whatsapp" | "instagram">("whatsapp");
 
   // Normalizar número brasileiro (adicionar 55 se necessário, remover 9)
   const normalizePhoneNumber = (value: string): string => {
@@ -176,25 +171,7 @@ export default function NewConversationModal({
                 </div>
               </div>
             </Button>
-
-            <Button
-              variant="outline"
-              className="w-full justify-start h-auto py-4 border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100"
-              onClick={() => setMode("broadcast")}
-            >
-              <Radio className="w-5 h-5 mr-3 text-indigo-600" />
-              <div className="text-left">
-                <div className="font-medium text-indigo-900">
-                  Lista de Transmissão
-                </div>
-                <div className="text-sm text-indigo-600">
-                  Enviar mensagem para até 50 contatos
-                </div>
-              </div>
-            </Button>
           </div>
-        ) : mode === "broadcast" ? (
-          <BroadcastListManager onClose={() => setMode(null)} />
         ) : mode === "input" ? (
           <div className="space-y-4">
             <Button

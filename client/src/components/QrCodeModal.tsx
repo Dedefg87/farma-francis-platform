@@ -24,7 +24,6 @@ interface QrResponse {
   success: boolean;
   qrCode?: string;
   message: string;
-  hint?: string;
   debug?: string;
 }
 
@@ -54,7 +53,7 @@ export default function QrCodeModal({
       } else {
         // Failed
         setQrCode(null);
-        setErrorInfo(data.hint || data.message);
+        setErrorInfo(data.debug || data.message);
         toast.error(data.message);
       }
     },
