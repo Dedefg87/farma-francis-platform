@@ -3733,3 +3733,19 @@ async function startServer() {
 startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
 // FORCE REBUILD: 1772736794
+
+  // GET /api/admin/test-db - Testa usando getAllCustomers() (função oficial)
+  app.get("/api/admin/test-db", async (req, res) => {
+    try {
+      const { getAllCustomers } = await import("../db");
+      const customers = await getAllCustomers();
+      res.json({ 
+        success: true, 
+        count: customers.length,
+        sample: customers.slice(0,3),
+        method: "getAllCustomers()"
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
