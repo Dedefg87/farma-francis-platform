@@ -393,34 +393,37 @@ export const broadcastRouter = router({
           throw new Error("Mensagem salva, mas falha ao recuperar o ID (insertId não encontrado).");
         }
 
-        // 3. Monta o array garantindo a tipagem correta
-        const membersToInsert = validMembers
-          .filter(m => m && m.customerId && m.phone) // Segurança extra
-          .map(member => ({
-            messageId: finalMessageId,
-            customerId: Number(member.customerId),
-            phone: String(member.phone),
-            status: 'pending' as const
-          }));
+        // 3. Filtro Anti-Duplicata (remove customer_id duplicados)
+        const uniqueMembersMap = new Map<number, any>();
+
+        validMembers.forEach(m => {
+          if (m && m.customerId && m.phone) {
+            uniqueMembersMap.set(Number(m.customerId), {
+              messageId: finalMessageId,
+              customerId: Number(m.customerId),
+              phone: String(m.phone),
+              status: 'pending' as const
+            });
+          }
+        });
+
+        const membersToInsert = Array.from(uniqueMembersMap.values());
 
         if (membersToInsert.length === 0) {
-          throw new Error("Após a filtragem, nenhum cliente válido sobrou para envio.");
+          throw new Error("Nenhum cliente válido sobrou após a filtragem de duplicatas.");
         }
 
         // Log para debug no Railway
-        console.log(`[Broadcast] Inserindo ${membersToInsert.length} clientes na fila...`);
+        console.log(`[Broadcast] Inserindo ${membersToInsert.length} clientes na fila (deduplicados)...`);
 
-        // 4. Insere no banco com segurança (SQL direto para controle total)
-        const placeholders = membersToInsert.map(() => "(?, ?, ?, ?)").join(",");
-        const params: any[] = [];
-        for (const m of membersToInsert) {
-          params.push(m.messageId, m.customerId, m.phone, m.status);
+        // 4. Insere no banco com segurança e captura de erro detalhada
+        try {
+          await db.insert(schema.broadcastMembersSent).values(membersToInsert);
+          console.log("[Broadcast] Inserção em massa concluída com sucesso");
+        } catch (dbError: any) {
+          console.error("[Broadcast] Detalhe do Erro no Banco:", dbError.message || dbError);
+          throw new Error(`O banco rejeitou os dados: ${dbError.message || 'Erro de constraint'}`);
         }
-        await db.execute(
-          `INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status) VALUES ${placeholders}`,
-          params
-        );
-        console.log("[Broadcast] Inserção em massa concluída com sucesso");
       } catch (error: any) {
         console.error("[Broadcast] Erro fatal na gravação:", error);
         throw error; // Deixa o erro subir para ser capturado pelo handler TRPC
