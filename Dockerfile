@@ -1,5 +1,5 @@
-# Build: forced rebuild for senderName fix - Wed Mar 11 19:22 GMT-3
-# Rebuild triggered: 2026-03-12 12:11 GMT-3 (force no-cache for COPY layer)
+# Build: forced rebuild for broadcast fixes - Mon Mar 16 10:45 GMT-3
+# Rebuild triggered: 2026-03-16 10:45 GMT-3 (force no-cache for COPY layer)
 FROM node:20-alpine
 
 WORKDIR /app
