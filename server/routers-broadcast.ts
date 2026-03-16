@@ -473,6 +473,47 @@ export const broadcastRouter = router({
       };
     }),
 
+  // 🔧 ROTA TEMPORÁRIA: Criar tabela broadcast_members_sent
+  // USO: Apenas para setup inicial do banco
+  setupDatabase: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Verificar se é admin (pode ser baseado no ctx.user.role ou email)
+    // Por segurança, só permite para email específico ou role admin
+    const allowedEmails = ["anderson@farmacia.com", "admin@farma-francis.com"];
+    if (!allowedEmails.includes(ctx.user.email)) {
+      throw new Error("Acesso negado - apenas administradores");
+    }
+
+    const sql = `
+      CREATE TABLE IF NOT EXISTS \`broadcast_members_sent\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`message_id\` int NOT NULL,
+        \`customer_id\` int NOT NULL,
+        \`phone\` varchar(20) NOT NULL,
+        \`status\` enum('pending','sent','failed') NOT NULL DEFAULT 'pending',
+        \`error\` text,
+        \`sent_at\` timestamp NULL DEFAULT NULL,
+        PRIMARY KEY (\`id\`),
+        FOREIGN KEY (\`message_id\`) REFERENCES \`broadcast_messages\`(\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+        FOREIGN KEY (\`customer_id\`) REFERENCES \`customers\`(\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+        UNIQUE KEY \`broadcast_members_sent_message_id_phone_unique\` (\`message_id\`,\`phone\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `;
+
+    try {
+      await db.execute(sql);
+      return {
+        success: true,
+        message: "Tabela broadcast_members_sent criada ou já existente"
+      };
+    } catch (error: any) {
+      console.error("[SetupDB] Error:", error);
+      throw new Error(`Falha ao criar tabela: ${error.message}`);
+    }
+  }),
+
   // Buscar histórico de mensagens enviadas
   getMessageHistory: protectedProcedure
     .input(z.object({ listId: z.number() }))
