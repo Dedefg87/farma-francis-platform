@@ -512,7 +512,7 @@ export async function ingestInboundConversationMessage(message: {
       .select()
       .from(conversations)
       .where(
-        sql`conversations.customer_id = ${customer.id} AND conversations.channel = ${message.provider} AND conversations.remote_jid IN (${v1}, ${v2})`
+        sql`conversations.customer_id = ${customer.id} AND conversations.channel = ${message.provider} AND conversations.customer_phone IN (${v1}, ${v2})`
       )
       .limit(1);
 
