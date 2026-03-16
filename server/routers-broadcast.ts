@@ -611,6 +611,15 @@ async function getEvolutionConfig(db: Database) {
  */
 async function processBroadcastSend(messageId: number) {
   console.log("[Broadcast][Process] Starting processing for message:", messageId);
+  // DEBUG: Mostrar todas as tabelas disponíveis
+  console.log("[BroadcastWorker] Tabelas disponíveis no schema importado:", {
+    broadcastMembersSent: broadcastMembersSent ? "OK" : "UNDEFINED",
+    broadcastMessages: broadcastMessages ? "OK" : "UNDEFINED",
+    broadcastLists: broadcastLists ? "OK" : "UNDEFINED",
+    broadcastListMembers: broadcastListMembers ? "OK" : "UNDEFINED",
+    customers: customers ? "OK" : "UNDEFINED",
+    integrationSettings: integrationSettings ? "OK" : "UNDEFINED",
+  });
 
   // DEBUG CRÍTICO: Verificar se as tabelas estão definidas no schema importado
   if (!broadcastMembersSent) {
