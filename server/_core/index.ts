@@ -150,6 +150,30 @@ async function startServer() {
   // Auto-migrate media columns
   await runMediaColumnsMigration();
 
+  // 🚨 CRITICAL: Ensure broadcast_messages has file columns (force migration)
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (db) {
+      // Check if columns exist
+      const [check]: any = await db.execute("SHOW COLUMNS FROM broadcast_messages LIKE 'file_url'");
+      if (check.length === 0) {
+        console.log("[BroadcastMigration] file_url column missing - adding all file columns...");
+        await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_url VARCHAR(1000) NULL COMMENT 'URL do arquivo' AFTER content");
+        await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_name VARCHAR(255) NULL COMMENT 'Nome do arquivo' AFTER file_url");
+        await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_type VARCHAR(100) NULL COMMENT 'MIME type' AFTER file_name");
+        await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_size INT NULL COMMENT 'Tamanho em bytes' AFTER file_type");
+        console.log("[BroadcastMigration] ✓ File columns added to broadcast_messages");
+      } else {
+        console.log("[BroadcastMigration] ✓ File columns already exist in broadcast_messages");
+      }
+    } else {
+      console.log("[BroadcastMigration] DB not ready, skipping");
+    }
+  } catch (err) {
+    console.error("[BroadcastMigration] ❌ Failed to add file columns:", err);
+  }
+
   // Iniciar processador de sync de mensagens mobile (background)
   // Auto-migrate broadcast tables (cria tabela broadcast_members_sent se não existir)
   await runBroadcastMigrations();
