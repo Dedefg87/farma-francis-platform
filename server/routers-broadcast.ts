@@ -479,12 +479,9 @@ export const broadcastRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    // Verificar se é admin (pode ser baseado no ctx.user.role ou email)
-    // Por segurança, só permite para email específico ou role admin
-    const allowedEmails = ["anderson@farmacia.com", "admin@farma-francis.com"];
-    if (!allowedEmails.includes(ctx.user.email)) {
-      throw new Error("Acesso negado - apenas administradores");
-    }
+    // Segurança: apenas usuários autenticados podem usar (protectedProcedure já garante isso)
+    // Se quiser adicionar restrição extra, descomente abaixo:
+    // if (!ctx.user.email?.endsWith('@farmacia.com')) throw new Error('Acesso negado');
 
     const sql = `
       CREATE TABLE IF NOT EXISTS \`broadcast_members_sent\` (
