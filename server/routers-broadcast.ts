@@ -617,10 +617,29 @@ async function getEvolutionConfig(db: Database) {
 
     console.log("[Broadcast][getEvolutionConfig] Config data:", JSON.stringify(configData, null, 2));
     
-    // Obter a instância "Meu" ou a primeira
-    const instances = (configData.instances as any[]) || [];
-    console.log("[Broadcast][getEvolutionConfig] Instâncias encontradas:", instances.length);
+    // Suportar ambos os formatos:
+    // Novo: { instances: [{ name, url, apiKey }] }
+    // Antigo: { apiUrl, apiKey, instanceName }
     
+    let instances: any[] = [];
+
+    if (configData.instances && Array.isArray(configData.instances)) {
+      // Formato novo
+      instances = configData.instances;
+      console.log("[Broadcast][getEvolutionConfig] Usando formato novo (instances array)");
+    } else if (configData.apiUrl || configData.apiKey) {
+      // Formato antigo - converter para novo
+      instances = [{
+        name: configData.instanceName || "default",
+        url: configData.apiUrl,
+        apiKey: configData.apiKey,
+      }];
+      console.log("[Broadcast][getEvolutionConfig] Convertido formato antigo para instances array");
+    }
+
+    console.log("[Broadcast][getEvolutionConfig] Instâncias disponíveis:", instances.map(i => i.name));
+    
+    // Obter a instância "Meu" ou a primeira
     const instance = instances.find((i: any) => i.name === "Meu") || instances[0];
     
     if (!instance) {
