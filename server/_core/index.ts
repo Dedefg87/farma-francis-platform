@@ -323,11 +323,20 @@ async function startServer() {
     const { getDbRaw } = await import("../db");
     const dbRaw = await getDbRaw();
     
-    // Mascarar DATABASE_URL para diagnóstico
-    const dbUrl = process.env.DATABASE_URL || "NÃO DEFINIDA";
-    const maskedUrl = dbUrl.replace(/:[^:@]+@/, ":****@");
+    // Coletar TODAS as variáveis de ambiente relacionadas a banco (mascaradas)
+    const envVars: Record<string, string> = {};
+    const dbKeys = Object.keys(process.env).filter(k => 
+      k.includes('DATABASE') || k.includes('DB_') || k.includes('MYSQL') || 
+      k.includes('POSTGRES') || k.includes('R2_') || k.includes('S3_')
+    );
+    for (const key of dbKeys) {
+      const val = process.env[key] || '';
+      envVars[key] = val.length > 50 
+        ? val.substring(0, 30) + '****' + val.substring(val.length - 10)
+        : val.replace(/:[^:@]+@/, ':****@');
+    }
     
-    if (!dbRaw) return res.status(500).json({ error: "Database not available", dbUrl: maskedUrl });
+    if (!dbRaw) return res.status(500).json({ error: "Database not available", envVars });
     try {
       const countResult = await dbRaw.raw("SELECT COUNT(*) as total FROM customers");
       const total = countResult?.[0]?.total || 0;
@@ -342,12 +351,12 @@ async function startServer() {
         totalCustomers: Number(total), 
         tables: tables.slice(0,15),
         sampleCustomers,
-        dbUrl: maskedUrl,
+        envVars,
         dbType: "mysql2-raw"
       });
     } catch (err: any) {
       console.error("[check-db] Erro:", err);
-      res.status(500).json({ error: err.message, dbUrl: maskedUrl });
+      res.status(500).json({ error: err.message, envVars });
     }
   });
 
