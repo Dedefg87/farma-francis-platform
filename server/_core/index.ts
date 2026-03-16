@@ -2403,10 +2403,15 @@ async function startServer() {
         return res.status(500).json({ error: "Database not available" });
       }
 
+      // Formato esperado pelo getEvolutionConfig: { instances: [{ name, url, apiKey }] }
       const config = JSON.stringify({
-        apiUrl: evolutionUrl.replace(/\/$/, ""),
-        apiKey: evolutionApiKey,
-        instanceName: evolutionInstance,
+        instances: [
+          {
+            name: evolutionInstance,
+            url: evolutionUrl.replace(/\/$/, ""),
+            apiKey: evolutionApiKey,
+          },
+        ],
       });
 
       // Check if exists
@@ -2416,7 +2421,7 @@ async function startServer() {
 
       if (existing.length > 0) {
         await db.execute(
-          sql`UPDATE integration_settings SET config = ${config}, is_active = 1 WHERE integration_type = 'evolution_api'`
+          sql`UPDATE integration_settings SET config = ${config}, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE integration_type = 'evolution_api'`
         );
       } else {
         await db.execute(
@@ -2817,6 +2822,53 @@ async function startServer() {
       });
     } catch (error) {
       console.error("Error checking tables:", error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // DEBUG: Check Evolution API settings
+  app.get("/api/debug/evolution-config", async (req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).json({ error: "Database not available" });
+      }
+
+      // Get integration settings
+      const settings = await db
+        .select({
+          id: integrationSettings.id,
+          type: integrationSettings.integrationType,
+          isActive: integrationSettings.isActive,
+          config: integrationSettings.config,
+        })
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "evolution_api"))
+        .limit(1);
+
+      // Also check if tables exist
+      const [broadcastExists]: any = await db.execute(
+        "SHOW TABLES LIKE 'broadcast_messages'"
+      );
+      const [integrationExists]: any = await db.execute(
+        "SHOW TABLES LIKE 'integration_settings'"
+      );
+
+      res.json({
+        settings: settings[0] || null,
+        configParsed: settings[0]?.config 
+          ? (typeof settings[0].config === "string" 
+              ? JSON.parse(settings[0].config) 
+              : settings[0].config)
+          : null,
+        tables: {
+          broadcast_messages: broadcastExists.length > 0,
+          integration_settings: integrationExists.length > 0,
+        },
+      });
+    } catch (error) {
+      console.error("[Debug Evolution Config] Error:", error);
       res.status(500).json({ error: String(error) });
     }
   });

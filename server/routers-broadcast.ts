@@ -587,6 +587,15 @@ async function getEvolutionConfig(db: Database) {
   console.log("[Broadcast][getEvolutionConfig] Buscando configuração Evolution API...");
   
   try {
+    // Verificar se a tabela existe primeiro
+    const [tables]: any = await db.execute("SHOW TABLES LIKE 'integration_settings'");
+    console.log("[Broadcast][getEvolutionConfig] Tabela integration_settings existe?", tables.length > 0);
+    
+    if (tables.length === 0) {
+      console.warn("[Broadcast][getEvolutionConfig] Tabela integration_settings NÃO EXISTE - tentando fallback de env vars");
+      return getEvolutionConfigFromEnv();
+    }
+
     const [configRecord] = await db
       .select()
       .from(integrationSettings)
@@ -594,10 +603,11 @@ async function getEvolutionConfig(db: Database) {
       .limit(1);
 
     console.log("[Broadcast][getEvolutionConfig] Registro encontrado:", configRecord ? "SIM" : "NÃO");
+    console.log("[Broadcast][getEvolutionConfig] Registro bruto:", JSON.stringify(configRecord, null, 2));
     
     if (!configRecord?.config) {
-      console.log("[Broadcast][getEvolutionConfig] configRecord ou config é null/undefined");
-      return null;
+      console.warn("[Broadcast][getEvolutionConfig] configRecord ou config é null/undefined - tentando fallback de env vars");
+      return getEvolutionConfigFromEnv();
     }
 
     const configData =
@@ -605,7 +615,7 @@ async function getEvolutionConfig(db: Database) {
         ? JSON.parse(configRecord.config)
         : configRecord.config;
 
-    console.log("[Broadcast][getEvolutionConfig] Config data:", JSON.stringify(configData).substring(0, 200));
+    console.log("[Broadcast][getEvolutionConfig] Config data:", JSON.stringify(configData, null, 2));
     
     // Obter a instância "Meu" ou a primeira
     const instances = (configData.instances as any[]) || [];
@@ -613,17 +623,49 @@ async function getEvolutionConfig(db: Database) {
     
     const instance = instances.find((i: any) => i.name === "Meu") || instances[0];
     
-    if (instance) {
-      console.log("[Broadcast][getEvolutionConfig] Instância selecionada:", instance.name, "URL:", instance.url || "N/A", "APIKey:", instance.apiKey ? "PRESENTE" : "AUSENTE");
-    } else {
-      console.log("[Broadcast][getEvolutionConfig] Nenhuma instância encontrada no config");
+    if (!instance) {
+      console.warn("[Broadcast][getEvolutionConfig] Nenhuma instância encontrada no config - tentando fallback de env vars");
+      return getEvolutionConfigFromEnv();
     }
     
+    console.log("[Broadcast][getEvolutionConfig] ✅ Instância selecionada:", JSON.stringify(instance, null, 2));
     return instance;
   } catch (err) {
     console.error("[Broadcast][getEvolutionConfig] Erro ao buscar config:", err);
+    return getEvolutionConfigFromEnv(); // fallback em caso de erro
+  }
+}
+
+// Fallback: ler configuração diretamente das variáveis de ambiente
+function getEvolutionConfigFromEnv() {
+  console.log("[Broadcast][EnvFallback] Tentando obter Evolution API de variáveis de ambiente...");
+  
+  const url = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  const instanceName = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
+  
+  console.log("[Broadcast][EnvFallback] ENV check:", {
+    EVOLUTION_API_URL: url ? "✓ SET" : "✗ MISSING",
+    EVOLUTION_API_KEY: apiKey ? "✓ SET" : "✗ MISSING",
+    EVOLUTION_INSTANCE_NAME: instanceName,
+  });
+  
+  if (!url || !apiKey) {
+    console.error("[Broadcast][EnvFallback] ❌ Variáveis de ambiente não configuradas!");
     return null;
   }
+  
+  console.log("[Broadcast][EnvFallback] ✅ Retornando config das env vars");
+  return {
+    name: instanceName,
+    type: "evolution_api" as const,
+    url: url.replace(/\/$/, ""),
+    apiKey: apiKey,
+    status: "connected" as const,
+    lastConnectedAt: new Date().toISOString(),
+    webhookUrl: process.env.EVOLUTION_WEBHOOK_URL || `${process.env.APP_URL}/api/evolution/webhook`,
+    webhookEnabled: true,
+  };
 }
 
 /**
