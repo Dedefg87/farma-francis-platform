@@ -335,9 +335,15 @@ function buildInboundContent(message: {
   messageText?: string | null;
   caption?: string | null;
   text?: string | null;
+  extendedTextMessage?: { text?: string } | null;
 }) {
   if (message.text?.trim()) return message.text;
   
+  // PROBLEMA 2: extendedTextMessage (respostas a status)
+  if (message.extendedTextMessage?.text?.trim()) {
+    return message.extendedTextMessage.text;
+  }
+
   if (message.messageText?.trim()) return message.messageText;
   if (message.caption?.trim()) return message.caption;
 
@@ -353,7 +359,10 @@ function buildInboundContent(message: {
     case "location":
       return "[Localizacao]";
     case "sticker":
+    case "stickerMessage":
       return "[Sticker]";
+    case "extendedTextMessage":
+      return "[Resposta a Status]";
     case "reaction":
       return "[Reacao]";
     case "contact":
@@ -363,6 +372,9 @@ function buildInboundContent(message: {
   }
 }
 
+// ==============================================
+// Ingest inbound conversation message (WhatsApp/Instagram)
+// ==============================================
 export async function ingestInboundConversationMessage(message: {
   provider: "whatsapp" | "instagram";
   fromNumber: string;
@@ -378,6 +390,10 @@ export async function ingestInboundConversationMessage(message: {
   createdAt?: Date;
   fromMe?: boolean;
   remoteJid?: string;
+  // Campos para extendedTextMessage
+  extendedTextMessage?: { text?: string } | null;
+  // Campos para sticker
+  sticker?: any | null;
 }) {
   console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType, "fromMe:", message.fromMe);
   
