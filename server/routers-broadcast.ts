@@ -360,65 +360,74 @@ export const broadcastRouter = router({
         throw new Error("Lista não possui membros com telefone válido");
       }
 
-      // Registrar o envio (com campos de arquivo)
-      const [message] = await db
-        .insert(broadcastMessages)
-        .values({
-          listId: input.listId,
-          content: input.content,
-          fileUrl: input.fileUrl || null,
-          fileName: input.fileName || null,
-          fileType: input.fileType || null,
-          fileSize: input.fileSize || null,
-          sentBy: ctx.user.id,
-          totalRecipients: validMembers.length,
-          successfulSends: 0,
-          failedSends: 0,
-        })
-        .$returningId();
+      // 1. Extraia e valide os dados recebidos do Frontend
+      const { content, fileUrl, fileName, fileType, fileSize } = input;
 
-      console.log(
-        "[Broadcast] Message created with ID:",
-        message.id,
-        "for",
-        validMembers.length,
-        "recipients"
-      );
+      if (!validMembers || validMembers.length === 0) {
+        console.error("[Broadcast] Erro: Lista de destinatários vazia ou inválida", { listId: input.listId, memberCount: validMembers?.length });
+        throw new Error("Nenhum destinatário selecionado para o envio.");
+      }
 
-      // Sanitizar e preparar array para inserção em lote
-      const memberSends = validMembers.map(m => ({
-        messageId: Number(message.id),
-        customerId: Number(m.customerId),
-        phone: String(m.phone),
-        status: "pending" as const,
-      }));
+      try {
+        // 2. Salva a Mensagem Principal Primeiro (Garante a Foreign Key)
+        const [insertedMessage] = await db
+          .insert(broadcastMessages)
+          .values({
+            listId: input.listId,
+            content: content || "",
+            fileUrl: fileUrl || null,
+            fileName: fileName || null,
+            fileType: fileType || null,
+            fileSize: fileSize || null,
+            sentBy: ctx.user.id,
+            totalRecipients: validMembers.length,
+            successfulSends: 0,
+            failedSends: 0,
+          })
+          .returning();
 
-      // Log de segurança para debugar o que está indo para o banco
-      console.log(
-        "[Broadcast] Payload para broadcast_members_sent:",
-        memberSends.slice(0, 3), // Mostra apenas os 3 primeiros para não poluir
-        "... e mais",
-        memberSends.length - 3
-      );
+        if (!insertedMessage || !insertedMessage.id) {
+          throw new Error("Falha ao criar a mensagem principal no banco de dados.");
+        }
 
-      // Inserção manual via SQL para evitar problemas de geração de query do Drizzle
-      if (memberSends.length > 0) {
-        const placeholders = memberSends.map(() => "(?, ?, ?, ?)").join(",");
+        // 3. Monta o array garantindo a tipagem correta e removendo itens inválidos
+        const membersToInsert = validMembers
+          .filter(m => m && m.customerId && m.phone) // Segurança extra
+          .map(member => ({
+            messageId: Number(insertedMessage.id),
+            customerId: Number(member.customerId),
+            phone: String(member.phone),
+            status: 'pending' as const
+          }));
+
+        if (membersToInsert.length === 0) {
+          throw new Error("Após a filtragem, nenhum cliente válido sobrou para envio.");
+        }
+
+        // Log para debug no Railway
+        console.log(`[Broadcast] Inserindo ${membersToInsert.length} clientes na fila...`);
+
+        // 4. Insere no banco com segurança (SQL direto para controle total)
+        const placeholders = membersToInsert.map(() => "(?, ?, ?, ?)").join(",");
         const params: any[] = [];
-        for (const m of memberSends) {
+        for (const m of membersToInsert) {
           params.push(m.messageId, m.customerId, m.phone, m.status);
         }
         await db.execute(
           `INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status) VALUES ${placeholders}`,
           params
         );
-        console.log("[Broadcast] Inserção em massa concluída");
+        console.log("[Broadcast] Inserção em massa concluída com sucesso");
+      } catch (error: any) {
+        console.error("[Broadcast] Erro fatal na gravação:", error);
+        throw error; // Deixa o erro subir para ser capturado pelo handler TRPC
       }
 
       // Processar envio em background (não bloquear resposta)
+      const finalMessageId = insertedMessage.id;
       setImmediate(async () => {
         try {
-          await processBroadcastSend(message.id, db);
+          await processBroadcastSend(finalMessageId, db);
         } catch (error) {
           console.error("[Broadcast] Erro no processamento:", error);
         }
