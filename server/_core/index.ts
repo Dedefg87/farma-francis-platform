@@ -150,6 +150,8 @@ async function startServer() {
   await runMediaColumnsMigration();
 
   // Iniciar processador de sync de mensagens mobile (background)
+  // Auto-migrate broadcast tables (cria tabela broadcast_members_sent se não existir)
+  await runBroadcastMigrations();
   startMobileSyncProcessor();
 
   const app = express();
