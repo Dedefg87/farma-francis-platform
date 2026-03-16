@@ -12,6 +12,7 @@ import {
 import { eq, desc, and, or, sql, like, inArray } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
+import { normalizeWhatsAppNumber } from "./utils/phone";
 
 // Gera todas as variações de número de telefone brasileiro (com/sem 9, com/sem +55)
 function getPhoneVariations(rawPhone: string): string[] {
@@ -313,10 +314,7 @@ export async function findOrCreateCustomerByPhone(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const rawPhone = phone;
-  const cleanPhone = rawPhone.replace(/\D/g, '');
-
-  // Gera todas as variações possíveis do número (com/sem 9, com/sem +55)
+  // Gera todas as variações possíveis do número para busca (com/sem 9, com/sem +55)
   const phoneVariations = getPhoneVariations(phone);
 
   // Selecionar apenas colunas que existem no banco (evitar erro de colunas faltantes)
@@ -333,8 +331,8 @@ export async function findOrCreateCustomerByPhone(
     .where(inArray(customers.phone, phoneVariations))
     .limit(1);
 
-  // Para armazenamento, usar o número limpo (apenas dígitos) como padrão
-  const normalizedPhone = cleanPhone;
+  // Para armazenamento, usar normalização que garante o 9º dígito (padrão único)
+  const normalizedPhone = normalizeWhatsAppNumber(phone);
 
   if (existing.length > 0) {
     const updates: Record<string, unknown> = {};
@@ -353,7 +351,7 @@ export async function findOrCreateCustomerByPhone(
     return existing[0];
   }
 
-  // Create new customer - apenas campos essenciais
+  // Create new customer - campos essenciais
   const result = await db.insert(customers).values({
     name: name || `Cliente ${phone}`,
     phone: normalizedPhone,
@@ -362,6 +360,7 @@ export async function findOrCreateCustomerByPhone(
   });
 
   // Get the newly created customer (use same search condition to be consistent)
+  const searchCondition = inArray(customers.phone, phoneVariations);
   const newCustomer = await db
     .select({
       id: customers.id,

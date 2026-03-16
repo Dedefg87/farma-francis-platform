@@ -10,6 +10,7 @@ import {
   integrationSettings,
 } from "../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { normalizeWhatsAppNumber } from "./utils/phone";
 
 export const broadcastRouter = router({
   // Listar todas as listas de transmissão
@@ -618,8 +619,8 @@ async function processBroadcastSend(messageId: number, db: Database) {
     // 4. Processar cada membro
     for (const member of pendingMembers) {
       try {
-        // Normalizar número (garante formato internacional)
-        const normalizedPhone = normalizePhone(member.phone);
+        // Normalizar número (garante formato com 9º dígito para Brasil)
+        const normalizedPhone = normalizeWhatsAppNumber(member.phone);
         const toNumber = `${normalizedPhone}@s.whatsapp.net`;
 
         // Decidir se envia texto puro ou mídia
@@ -751,34 +752,4 @@ async function processBroadcastSend(messageId: number, db: Database) {
   }
 }
 
-/**
- * Normaliza número do WhatsApp para formato internacional
- * Reutilizado de mobile-sync.ts
- */
-function normalizePhone(value: string): string {
-  let digits = value.replace(/\D/g, "");
-  if (!digits) return value;
-
-  // Se for muito longo (ID do WhatsApp), extrair a parte do telefone
-  if (digits.length >= 20) {
-    const atIndex = value.indexOf("@");
-    if (atIndex > 0) {
-      const cleanNumber = value.substring(0, atIndex).replace(/\D/g, "");
-      if (cleanNumber.length >= 10 && cleanNumber.length <= 15) {
-        digits = cleanNumber;
-      }
-    }
-    if (digits.length > 15) {
-      digits = digits.slice(-15);
-    }
-  }
-
-  // Remover nono dígito brasileiro se presente (após DDD)
-  if (digits.startsWith('55')) {
-    if (digits.length === 13) {
-      digits = digits.slice(0, 4) + digits.slice(5);
-    }
-  }
-
-  return digits.startsWith('+') ? digits : `+${digits}`;
-}
+// Normalização de números feita via utils/phone.ts (normalizeWhatsAppNumber)
