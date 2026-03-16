@@ -442,16 +442,12 @@ export const broadcastRouter = router({
           // Extrai a mensagem real do banco
           const errorMessage = dbError?.message || dbError?.code || "Erro desconhecido no banco";
 
-          // Retorna o erro exato para o frontend exibir
-          return res.status(500).json({
-            error: `O banco rejeitou os dados. Motivo exato: ${errorMessage}`
-          });
+          // Lança erro para o tRPC retornar ao frontend
+          throw new Error(`O banco rejeitou os dados. Motivo exato: ${errorMessage}`);
         }
       } catch (error: any) {
         console.error("[Broadcast] Erro fatal na gravação:", error);
-        return res.status(500).json({
-          error: `Erro interno ao processar o envio: ${error.message || error}`
-        });
+        throw error; // Deixa o erro subir para o handler tRPC
       }
 
       // Processar envio em background (não bloquear resposta)
