@@ -1295,6 +1295,11 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
   successfulSends: int("successful_sends").default(0),
   failedSends: int("failed_sends").default(0),
   sentAt: timestamp("sent_at").defaultNow().notNull(),
+  // Campos opcionais para mídia anexada
+  fileUrl: text("file_url"),
+  fileName: varchar("file_name", { length: 255 }),
+  fileType: varchar("file_type", { length: 100 }),
+  fileSize: int("file_size"),
 });
 
 export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
