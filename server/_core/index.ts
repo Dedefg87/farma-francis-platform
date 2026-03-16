@@ -82,6 +82,7 @@ async function runMediaColumnsMigration() {
 // Auto-migrate broadcast tables and columns
 async function runBroadcastMigrations() {
   try {
+    const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) {
       console.log("[BroadcastMigration] DB not ready, skipping");
