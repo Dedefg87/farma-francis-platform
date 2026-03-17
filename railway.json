@@ -1,5 +1,6 @@
-[build]
-builder = "nixpacks"
-# Força rebuild completo a cada push
-[NIXPACKS]
-builder = "nixpacks"
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "nixpacks"
+  }
+}
