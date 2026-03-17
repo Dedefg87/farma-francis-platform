@@ -6,7 +6,6 @@ import {
   customers,
   leads,
   tickets,
-  notifications,
   visualFlows,
   automationFlows,
   uraMenus,

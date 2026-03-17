@@ -15,6 +15,13 @@
       "when": 1773758014411,
       "tag": "0001_last_mandarin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773758344003,
+      "tag": "0002_careful_bucky",
+      "breakpoints": true
     }
   ]
 }

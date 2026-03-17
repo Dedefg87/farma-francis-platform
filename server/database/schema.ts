@@ -434,5 +434,193 @@ export const uraMenus = pgTable("ura_menus", {
 export type UraMenu = typeof uraMenus.$inferSelect;
 export type InsertUraMenu = typeof uraMenus.$inferInsert;
 
+/**
+ * ApiConfigurations: tokens e configurações de APIs externas (WhatsApp, Instagram)
+ */
+export const apiConfigurations = pgTable("api_configurations", {
+  id: serial("id").primaryKey(),
+  provider: varchar("provider", { length: 16 }).notNull(),
+  token: text("token").notNull(),
+  phoneNumberId: varchar("phone_number_id", { length: 255 }),
+  pageId: varchar("page_id", { length: 255 }),
+  webhookUrl: varchar("webhook_url", { length: 512 }),
+  webhookVerifyToken: varchar("webhook_verify_token", { length: 255 }),
+  appSecret: varchar("app_secret", { length: 255 }),
+  isActive: integer("is_active").default(1).notNull(),
+  lastTestedAt: timestamp("last_tested_at"),
+  testStatus: varchar("test_status", { length: 16 }).default("not_tested"),
+  testMessage: text("test_message"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type ApiConfiguration = typeof apiConfigurations.$inferSelect;
+export type InsertApiConfiguration = typeof apiConfigurations.$inferInsert;
+
+/**
+ * BabyShowerGiftPackages: pacotes de presentes (produtos agrupados)
+ */
+export const babyShowerGiftPackages = pgTable("baby_shower_gift_packages", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => babyShowerEvents.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  productIds: jsonb("product_ids").notNull(), // array de product IDs
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  discountPercent: decimal("discount_percent", { precision: 5, scale: 2 }).default("0"),
+  isActive: integer("is_active").default(1).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type BabyShowerGiftPackage = typeof babyShowerGiftPackages.$inferSelect;
+export type InsertBabyShowerGiftPackage = typeof babyShowerGiftPackages.$inferInsert;
+
+/**
+ * ConversationTags: tags para organizar conversas
+ */
+export const conversationTags = pgTable("conversation_tags", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  tag: varchar("tag", { length: 64 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ConversationTag = typeof conversationTags.$inferSelect;
+export type InsertConversationTag = typeof conversationTags.$inferInsert;
+
+/**
+ * CrmOutboxEvents: fila de eventos de CRM para processamento assíncrono
+ */
+export const crmOutboxEvents = pgTable("crm_outbox_events", {
+  id: serial("id").primaryKey(),
+  eventType: varchar("event_type", { length: 64 }).notNull(),
+  payload: jsonb("payload").notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  lastError: text("last_error"),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CrmOutboxEvent = typeof crmOutboxEvents.$inferSelect;
+export type InsertCrmOutboxEvent = typeof crmOutboxEvents.$inferInsert;
+
+/**
+ * CrmTasks: tarefas de CRM (lembretes, follow-ups)
+ */
+export const crmTasks = pgTable("crm_tasks", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  customerId: integer("customer_id").references(() => customers.id),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  dueDate: timestamp("due_date"),
+  priority: varchar("priority", { length: 16 }).default("medium"),
+  status: varchar("status", { length: 16 }).default("open").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CrmTask = typeof crmTasks.$inferSelect;
+export type InsertCrmTask = typeof crmTasks.$inferInsert;
+
+/**
+ * CustomerTreatments: histórico de tratamentos/atendimentos médicos
+ */
+export const customerTreatments = pgTable("customer_treatments", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  treatmentType: varchar("treatment_type", { length: 100 }).notNull(),
+  description: text("description"),
+  medication: text("medication"),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CustomerTreatment = typeof customerTreatments.$inferSelect;
+export type InsertCustomerTreatment = typeof customerTreatments.$inferInsert;
+
+/**
+ * Employees: funcionários/colaboradores
+ */
+export const employees = pgTable("employees", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").unique().references(() => users.id, { onDelete: "cascade" }),
+  department: varchar("department", { length: 100 }),
+  position: varchar("position", { length: 100 }),
+  hireDate: timestamp("hire_date"),
+  salary: decimal("salary", { precision: 10, scale: 2 }),
+  status: varchar("status", { length: 16 }).default("active").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = typeof employees.$inferInsert;
+
+/**
+ * FrontendTelemetryEvents: eventos de telemetria do frontend
+ */
+export const frontendTelemetryEvents = pgTable("frontend_telemetry_events", {
+  id: serial("id").primaryKey(),
+  eventName: varchar("event_name", { length: 255 }).notNull(),
+  properties: jsonb("properties"),
+  userId: integer("user_id").references(() => users.id),
+  sessionId: varchar("session_id", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type FrontendTelemetryEvent = typeof frontendTelemetryEvents.$inferSelect;
+export type InsertFrontendTelemetryEvent = typeof frontendTelemetryEvents.$inferInsert;
+
+/**
+ * QueueAgents: relacionamento entre filas e agentes
+ */
+export const queueAgents = pgTable("queue_agents", {
+  id: serial("id").primaryKey(),
+  queueId: integer("queue_id").notNull().references(() => queues.id, { onDelete: "cascade" }),
+  agentId: integer("agent_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+});
+
+export type QueueAgent = typeof queueAgents.$inferSelect;
+export type InsertQueueAgent = typeof queueAgents.$inferInsert;
+
+/**
+ * Tags: tags genéricas para customer, tickets, etc.
+ */
+export const tags = pgTable("tags", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  color: varchar("color", { length: 7 }), // hex color
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Tag = typeof tags.$inferSelect;
+export type InsertTag = typeof tags.$inferInsert;
+
+/**
+ * TicketTags: relacionamento many-to-many entre tickets e tags
+ */
+export const ticketTags = pgTable("ticket_tags", {
+  id: serial("id").primaryKey(),
+  ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type TicketTag = typeof ticketTags.$inferSelect;
+export type InsertTicketTag = typeof ticketTags.$inferInsert;
+
+// Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
+// Additional indexes can be added via drizzle if needed.
+
 // Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
 // Additional indexes can be added via drizzle if needed.
