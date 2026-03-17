@@ -174,6 +174,7 @@ export default function AgentMessages() {
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [showNewOptionsModal, setShowNewOptionsModal] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -804,7 +805,7 @@ export default function AgentMessages() {
         {/* Lista de Conversas */}
         <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
           <div className="p-4 border-b border-gray-200 space-y-3">
-            <div className="flex items-center justify-between">
+            <div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
                   Conversas Ativas
@@ -814,14 +815,6 @@ export default function AgentMessages() {
                   atendimentos
                 </p>
               </div>
-              <Button
-                onClick={() => setLocation("/broadcast")}
-                size="sm"
-                className="gap-2"
-              >
-                <Megaphone className="h-4 w-4" />
-                Transmissão
-              </Button>
             </div>
 
             {/* Campo de Busca */}
@@ -877,25 +870,16 @@ export default function AgentMessages() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Nova (Dropdown: Nova Conversa + Lista de Transmissão) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nova
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setShowNewConversation(true)}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nova Conversa
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setShowBroadcastModal(true)}>
-                    <Megaphone className="w-4 h-4 mr-2" />
-                    Lista de Transmissão
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Botão Nova que abre modal de opções */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setShowNewOptionsModal(true)}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Nova
+              </Button>
 
               {/* Puxar Atendimento */}
               <Button
@@ -1502,6 +1486,62 @@ export default function AgentMessages() {
         onOpenChange={setShowPullConversation}
         onSuccess={refetchConversations}
       />
+
+      {/* Modal de Opções "Nova" */}
+      <Dialog open={showNewOptionsModal} onOpenChange={setShowNewOptionsModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setShowNewOptionsModal(false);
+                setShowNewConversation(true);
+              }}
+              className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+            >
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <Keyboard className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <div className="font-medium text-gray-900">Digitar número / email</div>
+                <div className="text-sm text-gray-500">Iniciar conversa com novo contato</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setShowNewOptionsModal(false);
+                setShowNewConversation(true);
+              }}
+              className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+            >
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <Search className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <div className="font-medium text-gray-900">Buscar nos contatos</div>
+                <div className="text-sm text-gray-500">Encontrar cliente existente</div>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setShowNewOptionsModal(false);
+                setShowBroadcastModal(true);
+              }}
+              className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+            >
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <Megaphone className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <div className="font-medium text-gray-900">Lista de Transmissão</div>
+                <div className="text-sm text-gray-500">Enviar mensagem para até 50 contatos</div>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Lista de Transmissão */}
       <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>

@@ -6,35 +6,9 @@
 import { getDb } from "../db";
 import { conversations, conversationMessages, customers, integrationSettings } from "../../drizzle/schema";
 import { eq, and, or, sql } from "drizzle-orm";
+import { generatePhoneVariants } from "../utils/phone";
 
 import { sseManager, EVENTS } from "../_core/sse";
-
-// Gera todas as variações de número brasileiro (com/sem 9, com/sem +55)
-// REUTILIZA a mesma lógica de db-messages.ts para consistência
-function getPhoneVariations(phone: string): string[] {
-  const clean = phone.replace(/\D/g, '');
-
-  if (!clean.startsWith('55') || clean.length < 12) {
-    return [phone, clean, `+${clean}`];
-  }
-
-  const ddd = clean.substring(2, 4);
-  const last8 = clean.slice(-8);
-
-  return [
-    `55${ddd}9${last8}`,          // Padrão com 9
-    `55${ddd}${last8}`,           // Padrão sem 9
-    `+55${ddd}9${last8}`,         // Com + e com 9
-    `+55${ddd}${last8}`,          // Com + e sem 9
-    `${ddd}9${last8}`,            // Sem DDI e com 9
-    `${ddd}${last8}`              // Sem DDI e sem 9
-  ];
-}
-
-// Alias para compatibilidade (usar sempre getPhoneVariations)
-function getPhoneSearchVariants(phone: string): string[] {
-  return getPhoneVariations(phone);
-}
 
 interface MobileSyncJob {
   id: string;
@@ -122,7 +96,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   }
 
   // Buscar cliente com busca flexível (com/sem nono)
-  const phoneVariants = getPhoneSearchVariants(customerPhone);
+  const phoneVariants = generatePhoneVariants(customerPhone);
   const phoneCondition = phoneVariants.length > 1
     ? or(...phoneVariants.map(v => eq(customers.phone, v)))
     : eq(customers.phone, phoneVariants[0]);

@@ -16,6 +16,7 @@ import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
+import { startBroadcastSenderWorker } from "../workers/broadcast-sender";
 import { sdk } from "./sdk";
 import multer from "multer";
 import { uploadToR2 } from "../r2-client";
@@ -144,6 +145,46 @@ async function runBroadcastMigrations() {
   }
 }
 
+// Idempotency: Unique indexes to prevent duplicate messages
+async function runIdempotencyConstraints() {
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    if (!db) {
+      console.log("[Idempotency] DB not ready, skipping");
+      return;
+    }
+
+    // Índice único em received_messages (provider, externalId)
+    try {
+      await db.execute(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_received_messages_provider_externalid 
+        ON received_messages (provider, externalId)
+      `);
+      console.log("[Idempotency] ✓ Unique index on received_messages (provider, externalId)");
+    } catch (e: any) {
+      if (!e.message.includes('already exists') && !e.message.includes('Duplicate key name')) {
+        console.error("[Idempotency] Failed to create index on received_messages:", e);
+      }
+    }
+
+    // Índice único em conversation_messages (provider, externalId)
+    try {
+      await db.execute(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_messages_provider_externalid 
+        ON conversation_messages (provider, externalId)
+      `);
+      console.log("[Idempotency] ✓ Unique index on conversation_messages (provider, externalId)");
+    } catch (e: any) {
+      if (!e.message.includes('already exists') && !e.message.includes('Duplicate key name')) {
+        console.error("[Idempotency] Failed to create index on conversation_messages:", e);
+      }
+    }
+  } catch (err) {
+    console.error("[Idempotency] ❌ Failed:", err);
+  }
+}
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -265,7 +306,17 @@ async function startServer() {
   // Iniciar processador de sync de mensagens mobile (background)
   // Auto-migrate broadcast tables (cria tabela broadcast_members_sent se não existir)
   await runBroadcastMigrations();
+  // Garantir índices únicos para idempotência (evitar mensagens duplicadas)
+  await runIdempotencyConstraints();
   startMobileSyncProcessor();
+
+  // Iniciar worker de envio de broadcast com retry de 4 variações
+  try {
+    startBroadcastSenderWorker(5000); // a cada 5 segundos
+    console.log("[BroadcastWorker] ✅ Worker de broadcast iniciado");
+  } catch (err) {
+    console.error("[BroadcastWorker] ❌ Falha ao iniciar worker:", err);
+  }
 
   const app = express();
 

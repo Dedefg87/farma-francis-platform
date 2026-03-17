@@ -12,7 +12,7 @@ import {
 import { eq, desc, and, or, sql, like, inArray } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
-import { normalizeWhatsAppNumber, getPhoneSearchVariants, formatPhoneBR } from "./utils/phone";
+import { normalizeWhatsAppNumber, generatePhoneVariants, formatPhoneBR } from "./utils/phone";
 
 // Cache para evitar queries repetitivas de agent assignment
 const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
@@ -213,20 +213,7 @@ export async function getConversationHistory(
     .limit(limit);
 }
 
-// Gera variações de números para busca flexível (com/sem nono para Brasil)
-export function getPhoneSearchVariants(normalizedPhone: string): string[] {
-  const variants: string[] = [normalizedPhone];
-  const digits = normalizedPhone.replace(/\D/g, '');
-  
-  if (digits.startsWith('55')) {
-    if (digits.length === 12) {
-      const withNon = digits.slice(0, 4) + '9' + digits.slice(4);
-      variants.push(normalizedPhone.startsWith('+') ? `+${withNon}` : withNon);
-    }
-  }
-  
-  return variants;
-}
+// Função removida — usar generatePhoneVariants de utils/phone.ts
 
 export async function findOrCreateCustomerByPhone(
   phone: string,
@@ -245,7 +232,8 @@ export async function findOrCreateCustomerByPhone(
   }
 
   // Busca por qualquer variação que possa existir no banco (com/sem 9, com +, etc.)
-  const searchVariants = getPhoneSearchVariants(phone);
+  // Usa TODAS as 6 variações possíveis para evitar duplicação
+  const searchVariants = generatePhoneVariants(phone);
 
   let existing = await db
     .select({
@@ -483,8 +471,8 @@ export async function ingestInboundConversationMessage(message: {
 
     // 5. Find existing conversation (com busca por variações de número) - SQL CRU
     console.log("[Ingest] Step 5: Find existing conversation");
-    // Usar getPhoneSearchVariants para gerar todas as variantes de busca
-    const phoneVariants = getPhoneSearchVariants(normalizedPhone);
+    // Usar generatePhoneVariants para gerar todas as variações de busca (6 variações)
+    const phoneVariants = generatePhoneVariants(normalizedPhone);
     const [existingConversation] = await db
       .select()
       .from(conversations)
@@ -554,13 +542,13 @@ export async function ingestInboundConversationMessage(message: {
     sseManager.emitToAdmins(EVENTS.NEW_MESSAGE, {
       messageId: newMessage.id,
       conversationId,
-      senderType,
+      senderType: "customer",
       content,
       fileUrl,
       fileName,
-      fileType,
+      fileType: insertMessage.mimeType,
       fileSize,
-      fromMe: senderType === "agent",
+      fromMe: false,
       timestamp: now.toISOString(),
     });
 

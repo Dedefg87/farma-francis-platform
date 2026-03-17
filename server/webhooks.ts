@@ -731,36 +731,45 @@ async function processWhatsAppWebhook(body: any) {
             continue;
           }
 
-          // Save to database
-          await db.insert(receivedMessages).values({
-            provider: "whatsapp",
-            externalId: messageId,
-            fromNumber: from,
-            fromName: fromName,
-            messageType: [
-              "text",
-              "image",
-              "audio",
-              "video",
-              "document",
-              "location",
-              "contact",
-              "sticker",
-              "reaction",
-            ].includes(type)
-              ? (type as any)
-              : "unknown",
-            messageText,
-            mediaUrl,
-            mediaId,
-            mimeType,
-            caption,
-            latitude: latitude ? latitude.toString() : null,
-            longitude: longitude ? longitude.toString() : null,
-            timestamp,
-            rawPayload: JSON.stringify(message),
-            processed: 0,
-          });
+          // Save to database (idempotent - ignore duplicates)
+          try {
+            await db.insert(receivedMessages).values({
+              provider: "whatsapp",
+              externalId: messageId,
+              fromNumber: from,
+              fromName: fromName,
+              messageType: [
+                "text",
+                "image",
+                "audio",
+                "video",
+                "document",
+                "location",
+                "contact",
+                "sticker",
+                "reaction",
+              ].includes(type)
+                ? (type as any)
+                : "unknown",
+              messageText,
+              mediaUrl,
+              mediaId,
+              mimeType,
+              caption,
+              latitude: latitude ? latitude.toString() : null,
+              longitude: longitude ? longitude.toString() : null,
+              timestamp,
+              rawPayload: JSON.stringify(message),
+              processed: 0,
+            }).onConflict({
+              target: [receivedMessages.provider, receivedMessages.externalId],
+            }).doNothing();
+          } catch (e: any) {
+            if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
+              throw e;
+            }
+            console.log(`[WhatsApp] Duplicate message ${messageId} ignored (onConflict)`);
+          }
 
           // Check if this might be a survey response (single digit 1-5)
           // Survey responses should NOT be inserted into conversationMessages
@@ -882,24 +891,34 @@ async function processInstagramWebhook(body: any) {
           continue;
         }
 
-        // Save to database
-        await db.insert(receivedMessages).values({
-          provider: "instagram",
-          externalId: messageId,
-          fromNumber: sender,
-          fromName: null, // Instagram doesn't provide name in webhook
-          messageType,
-          messageText: text,
-          mediaUrl,
-          mediaId,
-          mimeType,
-          caption: null,
-          latitude: null,
-          longitude: null,
-          timestamp,
-          rawPayload: JSON.stringify(event),
-          processed: 0,
-        });
+        // Save to database (idempotent - ignore duplicates)
+        try {
+          await db.insert(receivedMessages).values({
+            provider: "instagram",
+            externalId: messageId,
+            fromNumber: sender,
+            fromName: null, // Instagram doesn't provide name in webhook
+            messageType,
+            messageText: text,
+            mediaUrl,
+            mediaId,
+            mimeType,
+            caption: null,
+            latitude: null,
+            longitude: null,
+            timestamp,
+            rawPayload: JSON.stringify(event),
+            processed: 0,
+          }).onConflict({
+            target: [receivedMessages.provider, receivedMessages.externalId],
+          }).doNothing();
+        } catch (e: any) {
+          // Se erro de duplicidade e onConflict não suportado ou falhou, ignorar silenciosamente
+          if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
+            throw e;
+          }
+          console.log(`[Instagram] Duplicate message ${messageId} ignored (onConflict)`);
+        }
 
         // Check if this might be a survey response (single digit 1-5)
         const isPossibleSurveyResponse =

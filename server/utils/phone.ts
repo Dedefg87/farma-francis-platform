@@ -52,66 +52,99 @@ export function normalizeWhatsAppNumberWithPlus(rawNumber: string): string {
 }
 
 /**
- * Gera variantes de busca para encontrar um número no banco
- * Agora compatível com formatPhoneBR (armazenamento sem o 9)
- * Gera tanto a versão com 9 quanto sem 9 para garantir compatibilidade
+ * (Função removida — use generatePhoneVariants)
  */
-export function getPhoneSearchVariants(rawNumber: string): string[] {
-  const variants: string[] = [];
-
-  // Obter o número no formato de armazenamento (sem o 9)
-  const normalized = formatPhoneBR(rawNumber);
-  variants.push(normalized);
-
-  // Se for brasileiro e正常 (12 dígitos após normalize), gerar também a variante com o 9
-  // Isso permite que buscas encontrem números antigos que possam ter sido salvos com 9
-  if (normalized.startsWith('55') && normalized.length === 12) {
-    // Adiciona o 9 após o DDD (posição 4)
-    const with9 = normalized.slice(0, 4) + '9' + normalized.slice(4);
-    variants.push(with9);
-    // Também com + prefix
-    variants.push(`+${normalized}`);
-    variants.push(`+${with9}`);
-  }
-
-  // Deduplica
-  return [...new Set(variants)];
-}
 
 /**
- * Retorna as duas variações principais de um número brasileiro:
- * - Variação original (com ou sem 9)
- * - Variação oposta (se tiver 9,remove; se não tiver, adiciona)
+ * (Função removida — use generatePhoneVariants)
+ */
+
+/**
+ * Gera as 6 variações possíveis de número de telefone brasileiro
+ * para busca de contatos (evitar duplicação).
  *
- * Usado para queries exatas (IN) no banco
+ * A partir de um número recebido (qualquer formato), extrai o núcleo
+ * DDD + número e gera todas as combinações de prefixos e com/sem 9.
+ *
+ * Variações geradas (ex: 31 8633-7081):
+ *  1. +55 31 98633 7081  → "+55" + DDD + 9 + número
+ *  2. +55 31 8633 7081   → "+55" + DDD + número (sem 9)
+ *  3. 55 31 98633 7081   → "55" + DDD + 9 + número
+ *  4. 55 31 8633 7081    → "55" + DDD + número (sem 9)
+ *  5. 31 98633 7081      → DDD + 9 + número
+ *  6. 31 8633 7081       → DDD + número (sem 9)
+ *
+ * Todas as variações são no formato de apenas dígitos (sem espaços, +, etc.)
+ *
+ * @param phone - Número em qualquer formato (com +, espaços, traços, etc.)
+ * @returns Array com as 6 variações (deduplicadas)
  */
-export function getBrazilianPhoneVariations(phone: string): string[] {
-  if (!phone.startsWith('55')) return [phone];
+export function generatePhoneVariants(phone: string): string[] {
+  if (!phone) return [];
 
-  const withoutCountry = phone.slice(2);
+  // 1. Extrair apenas dígitos
+  let digits = phone.replace(/\D/g, '');
 
-  if (withoutCountry.length === 10) {
-    // Sem o 9: 55 + DDD (2) + numero (8) = 12 dígitos
-    const ddd = withoutCountry.slice(0, 2);
-    const number = withoutCountry.slice(2);
-    return [phone, `55${ddd}9${number}`];
-  } else if (withoutCountry.length === 11) {
-    // Com o 9: 55 + DDD (2) + 9 + numero (8) = 13 dígitos
-    const ddd = withoutCountry.slice(0, 2);
-    const number = withoutCountry.slice(3);
-    return [phone, `55${ddd}${number}`];
+  // 2. Se contém @ (WhatsApp ID), usar apenas parte antes do @
+  if (phone.includes('@')) {
+    const atIndex = phone.indexOf('@');
+    const beforeAt = phone.substring(0, atIndex).replace(/\D/g, '');
+    if (beforeAt.length >= 10) {
+      digits = beforeAt;
+    }
   }
 
-  return [phone];
-}
+  // Se não tem dígitos suficientes, retorna o próprio
+  if (digits.length < 10) return [digits];
 
-/**
- * Retorna todas as variações de busca (normalizadas) para um número.
- * Compatível com formatPhoneBR (armazenamento sem 9).
- * Inclui: número formatado (sem 9), com 9, com +, etc.
- */
-export function getAllPhoneSearchVariants(rawPhone: string): string[] {
-  return getPhoneSearchVariants(rawPhone);
+  // 3. Identificar se tem DDI 55 no início
+  let hasCountryCode = false;
+  if (digits.startsWith('55')) {
+    hasCountryCode = true;
+    digits = digits.slice(2); // remove 55
+  }
+
+  // Agora digits deve ter DDD(2) + número (8 ou 9 dígitos)
+  if (digits.length < 10) return [phone];
+
+  const ddd = digits.slice(0, 2);
+  const numberPart = digits.slice(2);
+
+  // 4. Determinar se já tem o 9º dígito
+  const has9 = numberPart.length === 9; // DDD + 9 + 8 dígitos = 11 dígitos sem DDI, ou 13 com DDI
+  const base8 = numberPart.length === 8 || (has9 && numberPart.length === 9);
+
+  let number8: string;
+  let number9: string;
+
+  if (has9) {
+    // Tem 9 dígitos: DDD + 9 + 8
+    number9 = numberPart;
+    number8 = numberPart.slice(0, 1) + numberPart.slice(2); // remove o 9 (posição 1 do numberPart)
+  } else {
+    // Tem 8 dígitos (sem 9)
+    number8 = numberPart;
+    number9 = numberPart.length === 8 ? `9${numberPart}` : numberPart;
+  }
+
+  // 5. Montar as 6 variações (somente dígitos, sem +)
+  const variants = new Set<string>();
+
+  // Com +55 (mas sem o +, porque o campo phone armazena apenas dígitos)
+  // Na busca, usamos apenas números, então adicionamos variações com 55
+  variants.add(`55${ddd}${number9}`); // 55 + DDD + 9 + 8
+  variants.add(`55${ddd}${number8}`); // 55 + DDD + 8
+
+  // Sem 55 (apenas DDD + número)
+  variants.add(`${ddd}${number9}`); // DDD + 9 + 8
+  variants.add(`${ddd}${number8}`); // DDD + 8
+
+  // Se o número original tinha +55, também podemos tentar com + (embora a busca no banco use apenas dígitos)
+  // Mas para garantir, não incluímos o +, pois o campo phone não tem +
+
+  // Se o número original tinha 55, já incluímos as com 55. Se não tinha, também incluímos (pois pode estar armazenado com 55)
+
+  return [...variants];
 }
 
 /**

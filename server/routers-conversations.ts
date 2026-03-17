@@ -24,8 +24,7 @@ import {
 } from "./messaging";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
-import { getPhoneSearchVariants } from "./db-messages";
-import { formatPhoneBR } from "./utils/phone";
+import { generatePhoneVariants, formatPhoneBR } from "./utils/phone";
 
 /**
  * Verificar se dois números são o mesmo contato brasileiro
@@ -60,8 +59,8 @@ export const conversationsRouter = router({
 
         if (!isEmail) {
           // É telefone - gerar variantes de busca a partir do número bruto
-          // A função getPhoneSearchVariants normaliza internamente e gera com/sem 9, com +, etc.
-          const phoneVariants = getPhoneSearchVariants(input.phoneOrEmail);
+          // A função generatePhoneVariants retorna as 6 variações possíveis
+          const phoneVariants = generatePhoneVariants(input.phoneOrEmail);
           const normalizedPhone = formatPhoneBR(input.phoneOrEmail); // Formato estrito para salvar
 
           console.log("[Conversations] Número processado:", {

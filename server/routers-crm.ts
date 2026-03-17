@@ -29,7 +29,7 @@ import {
   appendCrmAuditLog,
   enqueueCrmOutboxEvent,
 } from "./crm-core";
-import { formatPhoneBR, getPhoneSearchVariants } from "./utils/phone";
+import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
 
 const calculateEndDate = (
   purchaseDate: Date,
@@ -83,7 +83,7 @@ export const crmRouter = router({
       const normalizedPhone = formatPhoneBR(input.phone);
 
       // Verificar se já existe com busca flexível (variantes)
-      const phoneVariants = getPhoneSearchVariants(input.phone);
+      const phoneVariants = generatePhoneVariants(input.phone);
       const phoneCondition = phoneVariants.length > 1
         ? or(...phoneVariants.map(v => eq(customers.phone, v)))
         : eq(customers.phone, phoneVariants[0]);

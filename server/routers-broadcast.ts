@@ -9,7 +9,7 @@ import {
 import { eq, asc, desc, sql, and, or } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
-import { formatPhoneBR, getPhoneSearchVariants } from "./utils/phone";
+import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
 
 /**
  * Broadcast Lists Router
@@ -255,7 +255,7 @@ export const broadcastRouter = router({
       if (!db) throw new Error("Database not available");
 
       const searchTerm = `%${input.query}%`;
-      const phoneVariants = getPhoneSearchVariants(input.query);
+      const phoneVariants = generatePhoneVariants(input.query);
 
       const whereClause = or(
         sql`LOWER(${customers.name}) LIKE LOWER(${searchTerm})`,
