@@ -145,7 +145,7 @@ async function runBroadcastMigrations() {
   }
 }
 
-// Idempotency: Unique indexes to prevent duplicate messages
+// Idempotency: Unique indexes to prevent duplicate messages (MySQL compatible)
 async function runIdempotencyConstraints() {
   try {
     const { getDb } = await import("../db");
@@ -155,30 +155,49 @@ async function runIdempotencyConstraints() {
       return;
     }
 
-    // Índice único em received_messages (provider, externalId)
-    try {
-      await db.execute(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_received_messages_provider_externalid 
-        ON received_messages (provider, externalId)
-      `);
-      console.log("[Idempotency] ✓ Unique index on received_messages (provider, externalId)");
-    } catch (e: any) {
-      if (!e.message.includes('already exists') && !e.message.includes('Duplicate key name')) {
-        console.error("[Idempotency] Failed to create index on received_messages:", e);
-      }
+    // Helper: check if index exists
+    async function indexExists(tableName: string, indexName: string): Promise<boolean> {
+      const [rows] = await db.execute(`
+        SELECT COUNT(*) as cnt 
+        FROM information_schema.statistics 
+        WHERE table_schema = DATABASE() 
+          AND table_name = ? 
+          AND index_name = ?
+      `, [tableName, indexName]);
+      const count = (rows as any[])[0]?.cnt || 0;
+      return count > 0;
     }
 
-    // Índice único em conversation_messages (provider, externalId)
-    try {
-      await db.execute(`
-        CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_messages_provider_externalid 
-        ON conversation_messages (provider, externalId)
-      `);
-      console.log("[Idempotency] ✓ Unique index on conversation_messages (provider, externalId)");
-    } catch (e: any) {
-      if (!e.message.includes('already exists') && !e.message.includes('Duplicate key name')) {
+    // Índice único em received_messages (provider, external_id)
+    const idx1 = "uq_received_messages_provider_externalid";
+    if (!(await indexExists("received_messages", idx1))) {
+      try {
+        await db.execute(`
+          CREATE UNIQUE INDEX ${idx1} 
+          ON received_messages (provider, external_id)
+        `);
+        console.log("[Idempotency] ✓ Unique index created on received_messages (provider, external_id)");
+      } catch (e: any) {
+        console.error("[Idempotency] Failed to create index on received_messages:", e);
+      }
+    } else {
+      console.log("[Idempotency] ✓ Index already exists on received_messages (provider, external_id)");
+    }
+
+    // Índice único em conversation_messages (provider, external_id)
+    const idx2 = "uq_conversation_messages_provider_externalid";
+    if (!(await indexExists("conversation_messages", idx2))) {
+      try {
+        await db.execute(`
+          CREATE UNIQUE INDEX ${idx2} 
+          ON conversation_messages (provider, external_id)
+        `);
+        console.log("[Idempotency] ✓ Unique index created on conversation_messages (provider, external_id)");
+      } catch (e: any) {
         console.error("[Idempotency] Failed to create index on conversation_messages:", e);
       }
+    } else {
+      console.log("[Idempotency] ✓ Index already exists on conversation_messages (provider, external_id)");
     }
   } catch (err) {
     console.error("[Idempotency] ❌ Failed:", err);

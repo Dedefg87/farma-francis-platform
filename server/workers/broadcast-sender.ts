@@ -28,7 +28,7 @@ async function getEvolutionConfig() {
   const [config] = await db
     .select()
     .from(integrationSettings)
-    .where(eq(integrationSettings.integrationType, "evolution_api"))
+    .where(sql`integration_type = ${"evolution_api"}`)
     .limit(1);
 
   if (!config || !config.isActive) {
