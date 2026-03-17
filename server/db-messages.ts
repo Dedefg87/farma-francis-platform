@@ -12,7 +12,7 @@ import {
 import { eq, desc, and, or, sql, like, inArray } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
-import { normalizeWhatsAppNumber, getBrazilianPhoneVariations } from "./utils/phone";
+import { normalizeWhatsAppNumber, getPhoneSearchVariants, formatPhoneBR } from "./utils/phone";
 
 // Cache para evitar queries repetitivas de agent assignment
 const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
@@ -228,25 +228,6 @@ export function getPhoneSearchVariants(normalizedPhone: string): string[] {
   return variants;
 }
 
-export function getBrazilianPhoneVariations(phone: string): string[] {
-  if (!phone) return [];
-  if (!phone.startsWith('55')) return [phone];
-
-  const withoutCountry = phone.slice(2);
-
-  if (withoutCountry.length === 10) {
-    const ddd = withoutCountry.slice(0, 2);
-    const number = withoutCountry.slice(2);
-    return [phone, `55${ddd}9${number}`];
-  } else if (withoutCountry.length === 11) {
-    const ddd = withoutCountry.slice(0, 2);
-    const number = withoutCountry.slice(3);
-    return [phone, `55${ddd}${number}`];
-  }
-
-  return [phone];
-}
-
 export async function findOrCreateCustomerByPhone(
   phone: string,
   name?: string,
@@ -255,14 +236,16 @@ export async function findOrCreateCustomerByPhone(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const rawPhone = phone;
-  const cleanPhone = rawPhone.replace(/\D/g, '');
+  // 🚨 PONTO CRÍTICO: Normalização estrita com formatPhoneBR
+  // Esta função garante que TODOS os números no banco tenham o mesmo formato
+  const normalizedPhone = formatPhoneBR(phone);
 
-  if (cleanPhone.length < 8) {
-    throw new Error(`Número muito curto para busca: ${phone}`);
+  if (normalizedPhone.length < 10) {
+    throw new Error(`Número muito curto após normalização: ${phone} → ${normalizedPhone}`);
   }
 
-  const phoneVariations = getBrazilianPhoneVariations(cleanPhone);
+  // Busca por qualquer variação que possa existir no banco (com/sem 9, com +, etc.)
+  const searchVariants = getPhoneSearchVariants(phone);
 
   let existing = await db
     .select({
@@ -274,23 +257,18 @@ export async function findOrCreateCustomerByPhone(
       photoUrl: customers.photoUrl,
     })
     .from(customers)
-    .where(inArray(customers.phone, phoneVariations))
+    .where(inArray(customers.phone, searchVariants))
     .limit(1);
 
   if (!existing || existing.length === 0) {
     const pushName = name;
     const finalName = (pushName && pushName.trim() !== '')
       ? pushName
-      : `Cliente ${cleanPhone.slice(-4)}`;
-
-    let phoneToSave = cleanPhone;
-    if (phoneToSave.startsWith('55') && phoneToSave.length === 12) {
-      phoneToSave = `${phoneToSave.slice(0,4)}9${phoneToSave.slice(4)}`;
-    }
+      : `Cliente ${normalizedPhone.slice(-4)}`;
 
     const result = await db.insert(customers).values({
       name: finalName,
-      phone: phoneToSave,
+      phone: normalizedPhone, // Sempre salvo no formato normalizado
       photoUrl: photoUrl || null,
       status: "active",
     });
@@ -306,7 +284,7 @@ export async function findOrCreateCustomerByPhone(
       id: newId,
       name: finalName,
       email: null,
-      phone: phoneToSave,
+      phone: normalizedPhone,
       status: "active",
       photoUrl: photoUrl || null,
     } as any];
@@ -314,6 +292,7 @@ export async function findOrCreateCustomerByPhone(
 
   const customer = existing[0];
 
+  // Se criamos agora ou encontramos existente, garantir que o nome/foto estejam atualizados
   if (name && customer.name !== name) {
     await db
       .update(customers)
@@ -504,15 +483,13 @@ export async function ingestInboundConversationMessage(message: {
 
     // 5. Find existing conversation (com busca por variações de número) - SQL CRU
     console.log("[Ingest] Step 5: Find existing conversation");
-    const phoneVariants = getBrazilianPhoneVariations(normalizedPhone);
-    const v1 = phoneVariants[0];
-    const v2 = phoneVariants[1] || phoneVariants[0];
-    
+    // Usar getPhoneSearchVariants para gerar todas as variantes de busca
+    const phoneVariants = getPhoneSearchVariants(normalizedPhone);
     const [existingConversation] = await db
       .select()
       .from(conversations)
       .where(
-        sql`conversations.customer_id = ${customer.id} AND conversations.channel = ${message.provider} AND conversations.customer_phone IN (${v1}, ${v2})`
+        sql`conversations.customer_id = ${customer.id} AND conversations.channel = ${message.provider} AND conversations.customer_phone IN (${sql.join(phoneVariants.map(v => sql`${v}`), sql`, `)})`
       )
       .limit(1);
 

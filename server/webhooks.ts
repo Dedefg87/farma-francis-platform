@@ -18,6 +18,7 @@ import {
 import { enqueueMobileSyncJob } from "./queue/mobile-sync";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
+import { formatPhoneBR } from "./utils/phone";
 
 // Import debug module
 let debugModule: any = null;
@@ -218,9 +219,25 @@ function extractEvolutionRemoteJid(body: any): string | null {
 
 /**
  * Normalizar número para busca no banco (sem +)
+ * DEPRECATED: Use formatPhoneBR em vez disso
  */
 function normalizeForDb(value: string): string {
   return value.replace(/\D/g, "");
+}
+
+/**
+ * Normalizar número de entrada do webhook (com +)
+ * Usa formatPhoneBR internamente e adiciona + se necessário para consistência
+ */
+function normalizeInboundNumber(value: string | undefined | null) {
+  if (!value) return null;
+  // Remove sufixo WhatsApp (@s.whatsapp.net) se houver
+  const stripped = value.split("@")[0];
+  if (!stripped) return null;
+
+  // Usar a função de normalização estrita
+  const normalized = formatPhoneBR(stripped);
+  return normalized.startsWith('+') ? normalized : `+${normalized}`;
 }
 
 /**

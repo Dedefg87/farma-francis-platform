@@ -11,6 +11,7 @@ import {
   automationFlows,
   uraMenus,
 } from "../drizzle/schema";
+import { formatPhoneBR } from "./utils/phone";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _dbHealthCheck: number = 0; // timestamp do último health check bem-sucedido
@@ -200,10 +201,13 @@ export async function createCustomer(data: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  // Normalizar telefone se fornecido
+  const normalizedPhone = data.phone ? formatPhoneBR(data.phone) : null;
+
   const result: any = await db.insert(customers).values({
     name: data.name,
     email: data.email || null,
-    phone: data.phone || null,
+    phone: normalizedPhone,
     cpfCnpj: data.cpfCnpj || null,
     address: data.address || null,
     city: data.city || null,

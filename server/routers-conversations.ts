@@ -25,36 +25,7 @@ import {
 import { sseManager, EVENTS } from "./_core/sse";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
 import { getPhoneSearchVariants } from "./db-messages";
-
-/**
- * Normalizar número de telefone brasileiro
- * Remove o 9 do celular se presente (padroniza para DDD + número fixo)
- * Adiciona o + no início para consistência
- *
- * Exemplo:
- * +5531986337081 → +5531986337081 (mantém)
- * +5531986337081 com 9 → +5531986337081 (remove o 9)
- */
-function normalizeBrazilianNumber(value: string): string {
-  const cleaned = value.replace(/\D/g, "");
-
-  let normalized = cleaned;
-
-  // Adicionar 55 se não tiver
-  if (!normalized.startsWith("55")) {
-    normalized = "55" + normalized;
-  }
-
-  // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), remover o 9
-  // 55 31 9 86337081 → 55 31 86337081
-  if (normalized.length === 13 && normalized.startsWith("55")) {
-    // Manter 55 + DDD (2 dígitos) + remover o 9 + resto
-    normalized = normalized.substring(0, 4) + normalized.substring(5);
-  }
-
-  // Sempre adicionar o + no início
-  return "+" + normalized;
-}
+import { formatPhoneBR } from "./utils/phone";
 
 /**
  * Verificar se dois números são o mesmo contato brasileiro
@@ -88,15 +59,17 @@ export const conversationsRouter = router({
         const isEmail = input.phoneOrEmail.includes("@");
 
         if (!isEmail) {
-          // É telefone - normalizar número brasileiro
-          const normalizedPhone = normalizeBrazilianNumber(input.phoneOrEmail);
-          console.log("[Conversations] Número normalizado:", {
+          // É telefone - gerar variantes de busca a partir do número bruto
+          // A função getPhoneSearchVariants normaliza internamente e gera com/sem 9, com +, etc.
+          const phoneVariants = getPhoneSearchVariants(input.phoneOrEmail);
+          const normalizedPhone = formatPhoneBR(input.phoneOrEmail); // Formato estrito para salvar
+
+          console.log("[Conversations] Número processado:", {
             original: input.phoneOrEmail,
             normalized: normalizedPhone,
+            variantsCount: phoneVariants.length,
           });
 
-          // Buscar customer com busca flexível (com/sem nono) usando variantes
-          const phoneVariants = getPhoneSearchVariants(normalizedPhone);
           const phoneCondition = phoneVariants.length > 1
             ? or(...phoneVariants.map(v => eq(customers.phone, v)))
             : eq(customers.phone, phoneVariants[0]);
@@ -150,16 +123,17 @@ export const conversationsRouter = router({
           }
 
           const customerName = fetchedName || input.phoneOrEmail;
+          const phoneToSave = formatPhoneBR(input.phoneOrEmail);
           const newCustomer = await db
             .insert(customers)
             .values({
               name: customerName,
-              phone: normalizeBrazilianNumber(input.phoneOrEmail),
+              phone: phoneToSave,
               email: isEmail ? input.phoneOrEmail : null,
             })
             .$returningId();
           customerId = newCustomer[0].id;
-          console.log("[Conversations] Novo customer criado:", customerName);
+          console.log("[Conversations] Novo customer criado:", customerName, "phone:", phoneToSave);
         }
       }
 

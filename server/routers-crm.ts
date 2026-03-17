@@ -29,6 +29,7 @@ import {
   appendCrmAuditLog,
   enqueueCrmOutboxEvent,
 } from "./crm-core";
+import { formatPhoneBR, getPhoneSearchVariants } from "./utils/phone";
 
 const calculateEndDate = (
   purchaseDate: Date,
@@ -46,21 +47,21 @@ export const crmRouter = router({
   // CLIENTES (CUSTOMERS)
   // ========================================
 
-  // Buscar cliente por telefone
+  // Buscar cliente por telefone (normalizado)
   getByPhone: publicProcedure
     .input(z.object({ phone: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const phone = input.phone.replace(/\D/g, "");
+      // Normalizar número para busca
+      const normalizedPhone = formatPhoneBR(input.phone);
 
+      // Buscar exatamente pelo número normalizado (ou variantes se necessário)
       const customer = await db
         .select()
         .from(customers)
-        .where(
-          sql`REPLACE(REPLACE(${customers.phone}, '+', ''), ' ', '') LIKE ${"%" + phone + "%"}`
-        )
+        .where(eq(customers.phone, normalizedPhone))
         .limit(1);
 
       return customer[0] || null;
@@ -78,26 +79,30 @@ export const crmRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const phone = input.phone.replace(/\D/g, "");
+      // Normalizar número
+      const normalizedPhone = formatPhoneBR(input.phone);
 
-      // Verificar se já existe
+      // Verificar se já existe com busca flexível (variantes)
+      const phoneVariants = getPhoneSearchVariants(input.phone);
+      const phoneCondition = phoneVariants.length > 1
+        ? or(...phoneVariants.map(v => eq(customers.phone, v)))
+        : eq(customers.phone, phoneVariants[0]);
+
       const existing = await db
         .select()
         .from(customers)
-        .where(
-          sql`REPLACE(REPLACE(${customers.phone}, '+', ''), ' ', '') LIKE ${"%" + phone.replace(/\D/g, "") + "%"}`
-        )
+        .where(phoneCondition)
         .limit(1);
 
       if (existing[0]) {
         return existing[0];
       }
 
-      // Criar novo cliente
+      // Criar novo cliente com número normalizado
       const newCustomer = await db
         .insert(customers)
         .values({
-          phone: input.phone,
+          phone: normalizedPhone,
           name: input.name || "Cliente",
           status: "active",
         })
