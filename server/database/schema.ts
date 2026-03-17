@@ -435,6 +435,271 @@ export type UraMenu = typeof uraMenus.$inferSelect;
 export type InsertUraMenu = typeof uraMenus.$inferInsert;
 
 /**
+ * WorkflowExecutions: execuções de fluxos visuais
+ */
+export const workflowExecutions = pgTable("workflow_executions", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => visualFlows.id),
+  status: varchar("status", { length: 16 }).notNull(), // running, success, error, waiting, canceled
+  mode: varchar("mode", { length: 16 }).notNull(), // manual, trigger, webhook, schedule
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  executionTime: integer("execution_time"), // Milliseconds
+  error: text("error"),
+  triggeredBy: integer("triggered_by").references(() => users.id),
+  triggerData: text("trigger_data"), // JSON
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type WorkflowExecution = typeof workflowExecutions.$inferSelect;
+export type InsertWorkflowExecution = typeof workflowExecutions.$inferInsert;
+
+/**
+ * ExecutionData: dados de cada nó executado em um workflow
+ */
+export const executionData = pgTable("execution_data", {
+  id: serial("id").primaryKey(),
+  executionId: integer("execution_id").notNull().references(() => workflowExecutions.id),
+  nodeId: varchar("node_id", { length: 255 }).notNull(),
+  nodeName: varchar("node_name", { length: 255 }).notNull(),
+  nodeType: varchar("node_type", { length: 100 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull(), // success, error, skipped
+  startedAt: timestamp("started_at").notNull(),
+  finishedAt: timestamp("finished_at"),
+  executionTime: integer("execution_time"), // Milliseconds
+  inputData: text("input_data"), // JSON
+  outputData: text("output_data"), // JSON
+  error: text("error"),
+  retryCount: integer("retry_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ExecutionData = typeof executionData.$inferSelect;
+export type InsertExecutionData = typeof executionData.$inferInsert;
+
+/**
+ * SurveyResponses: respostas de pesquisas de satisfação
+ */
+export const surveyResponses = pgTable("survey_responses", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").references(() => conversations.id, { onDelete: "set null" }),
+  customerId: integer("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  rating: integer("rating").notNull(), // 1-5
+  feedback: text("feedback"),
+  closeReason: varchar("close_reason", { length: 50 }).notNull(), // venda, orcamento, etc
+  agentId: integer("agent_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type InsertSurveyResponse = typeof surveyResponses.$inferInsert;
+
+/**
+ * QuickReplies: respostas rápidas pré-definidas
+ */
+export const quickReplies = pgTable("quick_replies", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  category: varchar("category", { length: 100 }), // saudacao, endereco, pagamento
+  createdBy: integer("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type QuickReply = typeof quickReplies.$inferSelect;
+export type InsertQuickReply = typeof quickReplies.$inferInsert;
+
+export const crmAuditLogs = pgTable("crm_audit_logs", {
+  id: serial("id").primaryKey(),
+  action: varchar("action", { length: 255 }).notNull(),
+  entityType: varchar("entity_type", { length: 100 }).notNull(),
+  entityId: integer("entity_id"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  userId: integer("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CrmAuditLog = typeof crmAuditLogs.$inferSelect;
+export type InsertCrmAuditLog = typeof crmAuditLogs.$inferInsert;
+
+export const crmActivities = pgTable("crm_activities", {
+  id: serial("id").primaryKey(),
+  subject: varchar("subject", { length: 255 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  customerId: integer("customer_id").references(() => customers.id),
+  relatedEntity: jsonb("related_entity"), // { type: "ticket"|"lead", id: number }
+  reminderSentAt: timestamp("reminder_sent_at"),
+  completedAt: timestamp("completed_at"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CrmActivity = typeof crmActivities.$inferSelect;
+export type InsertCrmActivity = typeof crmActivities.$inferInsert;
+
+export const customerTags = pgTable("customer_tags", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  tagId: integer("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type CustomerTag = typeof customerTags.$inferSelect;
+export type InsertCustomerTag = typeof customerTags.$inferInsert;
+
+export const crmScripts = pgTable("crm_scripts", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  script: text("script").notNull(),
+  isActive: integer("is_active").default(1).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CrmScript = typeof crmScripts.$inferSelect;
+export type InsertCrmScript = typeof crmScripts.$inferInsert;
+
+export const pharmaProducts = pgTable("pharma_products", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  price: decimal("price", { precision: 10, scale: 2 }),
+  stock: integer("stock").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type PharmaProduct = typeof pharmaProducts.$inferSelect;
+export type InsertPharmaProduct = typeof pharmaProducts.$inferInsert;
+
+export const pharmaPurchases = pgTable("pharma_purchases", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").references(() => customers.id),
+  productId: integer("product_id").notNull().references(() => pharmaProducts.id),
+  quantity: integer("quantity").default(1).notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  purchaseDate: timestamp("purchase_date").defaultNow().notNull(),
+});
+
+export type PharmaPurchase = typeof pharmaPurchases.$inferSelect;
+export type InsertPharmaPurchase = typeof pharmaPurchases.$inferInsert;
+
+export const pharmaPurchaseItems = pgTable("pharma_purchase_items", {
+  id: serial("id").primaryKey(),
+  purchaseId: integer("purchase_id").notNull().references(() => pharmaPurchases.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => pharmaProducts.id),
+  quantity: integer("quantity").default(1).notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+});
+
+export type PharmaPurchaseItem = typeof pharmaPurchaseItems.$inferSelect;
+export type InsertPharmaPurchaseItem = typeof pharmaPurchaseItems.$inferInsert;
+
+export const accounts = pgTable("accounts", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 32 }),
+  address: text("address"),
+  industry: varchar("industry", { length: 100 }),
+  ownerId: integer("owner_id").references(() => users.id),
+  accountNumber: varchar("account_number", { length: 50 }),
+  isActive: integer("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Account = typeof accounts.$inferSelect;
+export type InsertAccount = typeof accounts.$inferInsert;
+
+export const accountContacts = pgTable("account_contacts", {
+  id: serial("id").primaryKey(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
+  contactId: integer("contact_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 100 }),
+  isPrimary: integer("is_primary").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AccountContact = typeof accountContacts.$inferSelect;
+export type InsertAccountContact = typeof accountContacts.$inferInsert;
+
+export const dealPipelines = pgTable("deal_pipelines", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  isActive: integer("is_active").default(1).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type DealPipeline = typeof dealPipelines.$inferSelect;
+export type InsertDealPipeline = typeof dealPipelines.$inferInsert;
+
+export const dealStages = pgTable("deal_stages", {
+  id: serial("id").primaryKey(),
+  pipelineId: integer("pipeline_id").notNull().references(() => dealPipelines.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  orderIndex: integer("order_index").notNull(),
+  description: text("description"),
+  probability: integer("probability"), // 0-100
+  color: varchar("color", { length: 7 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type DealStage = typeof dealStages.$inferSelect;
+export type InsertDealStage = typeof dealStages.$inferInsert;
+
+export const deals = pgTable("deals", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  accountId: integer("account_id").references(() => accounts.id),
+  stageId: integer("stage_id").references(() => dealStages.id),
+  value: decimal("value", { precision: 10, scale: 2 }),
+  closeDate: timestamp("close_date"),
+  description: text("description"),
+  ownerId: integer("owner_id").references(() => users.id),
+  status: varchar("status", { length: 16 }).default("open").notNull(),
+  priority: varchar("priority", { length: 16 }).default("medium"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Deal = typeof deals.$inferSelect;
+export type InsertDeal = typeof deals.$inferInsert;
+
+// Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
+
+/**
+ * FlowExecutionLogs: logs detalhados de execução de fluxos
+ */
+export const flowExecutionLogs = pgTable("flow_execution_logs", {
+  id: serial("id").primaryKey(),
+  executionId: integer("execution_id").notNull().references(() => workflowExecutions.id, { onDelete: "cascade" }),
+  level: varchar("level", { length: 16 }).notNull(), // info, warn, error
+  message: text("message").notNull(),
+  nodeId: varchar("node_id", { length: 255 }),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
+export type FlowExecutionLog = typeof flowExecutionLogs.$inferSelect;
+export type InsertFlowExecutionLog = typeof flowExecutionLogs.$inferInsert;
+
+// Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
+
+/**
  * ApiConfigurations: tokens e configurações de APIs externas (WhatsApp, Instagram)
  */
 export const apiConfigurations = pgTable("api_configurations", {
