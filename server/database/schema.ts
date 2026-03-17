@@ -309,6 +309,24 @@ export type BabyShowerPurchase = typeof babyShowerPurchases.$inferSelect;
 export type InsertBabyShowerPurchase = typeof babyShowerPurchases.$inferInsert;
 
 /**
+ * BabyShowerWithdrawals: saques de fraldas do estoque do evento
+ */
+export const babyShowerWithdrawals = pgTable("baby_shower_withdrawals", {
+  id: serial("id").primaryKey(),
+  eventId: integer("event_id").notNull().references(() => babyShowerEvents.id, { onDelete: "cascade" }),
+  relatedTaskId: integer("related_task_id").references(() => crmTasks.id),
+  withdrawalType: varchar("withdrawal_type", { length: 50 }).notNull(),
+  diaperSize: varchar("diaper_size", { length: 50 }),
+  quantity: integer("quantity").notNull(),
+  deliveryMethod: varchar("delivery_method", { length: 50 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type BabyShowerWithdrawal = typeof babyShowerWithdrawals.$inferSelect;
+export type InsertBabyShowerWithdrawal = typeof babyShowerWithdrawals.$inferInsert;
+
+/**
  * Leads: prospecção e qualificação de clientes
  */
 export const leads = pgTable("leads", {
@@ -567,6 +585,40 @@ export const crmScripts = pgTable("crm_scripts", {
 export type CrmScript = typeof crmScripts.$inferSelect;
 export type InsertCrmScript = typeof crmScripts.$inferInsert;
 
+/**
+ * CustomFieldDefinitions: definições de campos personalizados para entidades
+ */
+export const customFieldDefinitions = pgTable("custom_field_definitions", {
+  id: serial("id").primaryKey(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  fieldName: varchar("field_name", { length: 100 }).notNull(),
+  fieldType: varchar("field_type", { length: 20 }).notNull(), // text, number, date, etc
+  label: varchar("label", { length: 255 }).notNull(),
+  isActive: integer("is_active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type CustomFieldDefinition = typeof customFieldDefinitions.$inferSelect;
+export type InsertCustomFieldDefinition = typeof customFieldDefinitions.$inferInsert;
+
+/**
+ * CustomFieldValues: valores de campos personalizados para entidades
+ */
+export const customFieldValues = pgTable("custom_field_values", {
+  id: serial("id").primaryKey(),
+  entityType: varchar("entity_type", { length: 40 }).notNull(),
+  entityId: integer("entity_id").notNull(),
+  fieldDefinitionId: integer("field_definition_id").notNull().references(() => customFieldDefinitions.id, { onDelete: "cascade" }),
+  valueText: text("value_text"),
+  updatedBy: integer("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // Unique constraint for (entityType, entityId, fieldDefinitionId) can be added via migration if needed
+});
+
+export type CustomFieldValue = typeof customFieldValues.$inferSelect;
+export type InsertCustomFieldValue = typeof customFieldValues.$inferInsert;
+
 export const pharmaProducts = pgTable("pharma_products", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -682,20 +734,7 @@ export type InsertDeal = typeof deals.$inferInsert;
 
 // Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
 
-/**
- * FlowExecutionLogs: logs detalhados de execução de fluxos
- */
-export const flowExecutionLogs = pgTable("flow_execution_logs", {
-  id: serial("id").primaryKey(),
-  executionId: integer("execution_id").notNull().references(() => workflowExecutions.id, { onDelete: "cascade" }),
-  level: varchar("level", { length: 16 }).notNull(), // info, warn, error
-  message: text("message").notNull(),
-  nodeId: varchar("node_id", { length: 255 }),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-});
 
-export type FlowExecutionLog = typeof flowExecutionLogs.$inferSelect;
-export type InsertFlowExecutionLog = typeof flowExecutionLogs.$inferInsert;
 
 // Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
 
