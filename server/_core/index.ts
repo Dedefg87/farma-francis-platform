@@ -20,6 +20,7 @@ import { sdk } from "./sdk";
 import multer from "multer";
 import { uploadToR2 } from "../r2-client";
 import migrationRouter from "../admin/migration-router";
+import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
