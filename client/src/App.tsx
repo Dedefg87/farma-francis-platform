@@ -36,6 +36,7 @@ const BabyShowerCreate = lazy(() => import("./pages/baby-shower/CreateEvent"));
 const BabyShowerEventPage = lazy(() => import("./pages/baby-shower/EventPage"));
 const BabyShowerManage = lazy(() => import("./pages/baby-shower/ManageEvent"));
 const SystemMonitor = lazy(() => import("./pages/SystemMonitor"));
+const Broadcast = lazy(() => import("./pages/Broadcast"));
 
 // Loading spinner component
 function PageLoader() {
@@ -131,6 +132,11 @@ function Router() {
       <Route path="/automation">
         <AdminRoute>
           <LazyPage component={Automation} />
+        </AdminRoute>
+      </Route>
+      <Route path="/broadcast">
+        <AdminRoute>
+          <LazyPage component={Broadcast} />
         </AdminRoute>
       </Route>
       <Route path="/agent-performance">
