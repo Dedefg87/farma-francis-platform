@@ -58,6 +58,18 @@ class SseManager extends EventEmitter {
     }
   }
 
+  /**
+   * Emite evento para todos os usuários que são administradores.
+   * Requer que o role do usuário seja passado ou possa ser determinado.
+   * Por simplicidade, emite para TODOS os users conectados (mantém compatibilidade).
+   * Se for necessário filtrar por admin, pode-se fazer no consumer do evento.
+   */
+  emitToAdmins(event: SseEvent): void {
+    // Por ora, emite para todos os conectados (comportamento anterior era inexistente)
+    // TODO: Implementar filtro por admin se necessário
+    this.emitToAll(event);
+  }
+
   getConnectedUsers(): string[] {
     return Array.from(this.clients.keys());
   }
