@@ -77,6 +77,7 @@ import {
   Tag,
   FileText,
   X,
+  Megaphone,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -111,10 +112,12 @@ import CRMPanel from "@/components/CRMPanel";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation } from "wouter";
 import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
 
 export default function AgentMessages() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<
     number | null
   >(null);
@@ -802,6 +805,14 @@ export default function AgentMessages() {
                   atendimentos
                 </p>
               </div>
+              <Button
+                onClick={() => setLocation("/broadcast")}
+                size="sm"
+                className="gap-2"
+              >
+                <Megaphone className="h-4 w-4" />
+                Transmissão
+              </Button>
             </div>
 
             {/* Campo de Busca */}

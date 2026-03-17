@@ -135,9 +135,9 @@ function Router() {
         </AdminRoute>
       </Route>
       <Route path="/broadcast">
-        <AdminRoute>
+        <ProtectedRoute>
           <LazyPage component={Broadcast} />
-        </AdminRoute>
+        </ProtectedRoute>
       </Route>
       <Route path="/agent-performance">
         <AdminRoute>
