@@ -9,9 +9,17 @@ import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { BroadcastListManager } from "@/components/BroadcastListManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderContentWithLinks } from "@/utils/text-format";
 
@@ -165,6 +173,7 @@ export default function AgentMessages() {
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -868,27 +877,25 @@ export default function AgentMessages() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* Nova Conversa */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => setShowNewConversation(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Nova
-              </Button>
-
-              {/* Lista de Transmissão */}
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
-                onClick={() => setLocation("/broadcast")}
-              >
-                <Megaphone className="w-4 h-4 mr-2" />
-                Transmissão
-              </Button>
+              {/* Nova (Dropdown: Nova Conversa + Lista de Transmissão) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => setShowNewConversation(true)}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nova Conversa
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowBroadcastModal(true)}>
+                    <Megaphone className="w-4 h-4 mr-2" />
+                    Lista de Transmissão
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Puxar Atendimento */}
               <Button
@@ -1495,6 +1502,21 @@ export default function AgentMessages() {
         onOpenChange={setShowPullConversation}
         onSuccess={refetchConversations}
       />
+
+      {/* Modal de Lista de Transmissão */}
+      <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Lista de Transmissão</DialogTitle>
+            <DialogDescription>
+              Crie e gerencie listas de transmissão para envio de mensagens em massa via WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <BroadcastListManager onClose={() => setShowBroadcastModal(false)} />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {showCRMPanel && crmCustomerId ? (
         <CRMPanel

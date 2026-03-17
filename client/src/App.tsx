@@ -36,7 +36,6 @@ const BabyShowerCreate = lazy(() => import("./pages/baby-shower/CreateEvent"));
 const BabyShowerEventPage = lazy(() => import("./pages/baby-shower/EventPage"));
 const BabyShowerManage = lazy(() => import("./pages/baby-shower/ManageEvent"));
 const SystemMonitor = lazy(() => import("./pages/SystemMonitor"));
-const Broadcast = lazy(() => import("./pages/Broadcast"));
 
 // Loading spinner component
 function PageLoader() {
@@ -134,11 +133,7 @@ function Router() {
           <LazyPage component={Automation} />
         </AdminRoute>
       </Route>
-      <Route path="/broadcast">
-        <ProtectedRoute>
-          <LazyPage component={Broadcast} />
-        </ProtectedRoute>
-      </Route>
+      {/* Broadcast foi movido para modal dentro de AgentMessages */}
       <Route path="/agent-performance">
         <AdminRoute>
           <LazyPage component={AgentPerformance} />
