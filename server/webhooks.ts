@@ -75,16 +75,6 @@ function normalizeBrazilianNumber(value: string): string {
   return normalized;
 }
 
-function normalizeInboundNumber(value: string | undefined | null) {
-  if (!value) return null;
-  const stripped = value.split("@")[0].replace(/\D/g, "");
-  if (!stripped) return null;
-
-  // Usar normalização brasileira
-  const normalized = normalizeBrazilianNumber(stripped);
-  return normalized.startsWith("+") ? normalized : `+${normalized}`;
-}
-
 /**
  * Limpa URL do R2 para obter apenas o caminho relativo dentro do bucket.
  * Remove query string, nome do bucket e deixa o path (ex: evolution-api/.../file.jpg)
