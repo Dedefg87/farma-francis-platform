@@ -879,6 +879,17 @@ export default function AgentMessages() {
                 Nova
               </Button>
 
+              {/* Lista de Transmissão */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setLocation("/broadcast")}
+              >
+                <Megaphone className="w-4 h-4 mr-2" />
+                Transmissão
+              </Button>
+
               {/* Puxar Atendimento */}
               <Button
                 variant="outline"
