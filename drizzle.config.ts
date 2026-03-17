@@ -6,7 +6,7 @@ if (!connectionString) {
 }
 
 export default defineConfig({
-  schema: "./server/database/schema.ts",
+  schema: "./drizzle/schema.ts",
   out: "./server/database/migrations",
   dialect: "postgresql",
   dbCredentials: {
