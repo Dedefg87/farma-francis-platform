@@ -3,7 +3,6 @@ import {
   boolean,
   date,
   decimal,
-  index,
   integer,
   jsonb,
   primaryKey,
@@ -12,7 +11,6 @@ import {
   timestamp,
   varchar,
   pgTable,
-  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // Export execution and analytics tables
@@ -309,6 +307,132 @@ export const babyShowerPurchases = pgTable("baby_shower_purchases", {
 
 export type BabyShowerPurchase = typeof babyShowerPurchases.$inferSelect;
 export type InsertBabyShowerPurchase = typeof babyShowerPurchases.$inferInsert;
+
+/**
+ * Leads: prospecção e qualificação de clientes
+ */
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").references(() => customers.id),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 20 }),
+  source: varchar("source", { length: 100 }), // whatsapp, instagram, website, etc
+  stage: varchar("stage", { length: 32 }).default("prospect").notNull(),
+  value: integer("value"),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  followUpDate: timestamp("follow_up_date"),
+  notes: text("notes"),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = typeof leads.$inferInsert;
+
+/**
+ * Tickets: sistema de atendimento/suporte
+ */
+export const tickets = pgTable("tickets", {
+  id: serial("id").primaryKey(),
+  ticketNumber: varchar("ticket_number", { length: 50 }).notNull().unique(),
+  customerId: integer("customer_id").references(() => customers.id),
+  subject: varchar("subject", { length: 255 }).notNull(),
+  description: text("description"),
+  status: varchar("status", { length: 32 }).default("open").notNull(),
+  priority: varchar("priority", { length: 16 }).default("medium").notNull(),
+  category: varchar("category", { length: 100 }),
+  channel: varchar("channel", { length: 16 }),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  slaDeadline: timestamp("sla_deadline"),
+  resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
+  timeSpentMinutes: integer("time_spent_minutes").default(0),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type Ticket = typeof tickets.$inferSelect;
+export type InsertTicket = typeof tickets.$inferInsert;
+
+/**
+ * Messages: mensagens de WhatsApp/Instagram (outras que não conversation_messages)
+ */
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").references(() => customers.id),
+  ticketId: integer("ticket_id").references(() => tickets.id),
+  channel: varchar("channel", { length: 16 }).notNull(),
+  direction: varchar("direction", { length: 16 }).notNull(),
+  content: text("content").notNull(),
+  messageId: varchar("message_id", { length: 255 }),
+  status: varchar("status", { length: 32 }),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = typeof messages.$inferInsert;
+
+/**
+ * AutomationFlows: regras de automação por canal
+ */
+export const automationFlows = pgTable("automation_flows", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  channel: varchar("channel", { length: 16 }).notNull(),
+  trigger: text("trigger").notNull(),
+  response: text("response").notNull(),
+  isActive: integer("is_active").default(1).notNull(),
+  responseCount: integer("response_count").default(0).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type AutomationFlow = typeof automationFlows.$inferSelect;
+export type InsertAutomationFlow = typeof automationFlows.$inferInsert;
+
+/**
+ * VisualFlows: fluxos visuais (nodes/edges)
+ */
+export const visualFlows = pgTable("visual_flows", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  flowData: text("flow_data").notNull(),
+  isActive: integer("is_active").default(0).notNull(),
+  isTestMode: integer("is_test_mode").default(0).notNull(),
+  executionCount: integer("execution_count").default(0).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type VisualFlow = typeof visualFlows.$inferSelect;
+export type InsertVisualFlow = typeof visualFlows.$inferInsert;
+
+/**
+ * URA (Interactive Voice Response) menus
+ */
+export const uraMenus = pgTable("ura_menus", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  welcomeMessage: text("welcome_message").notNull(),
+  menuData: text("menu_data").notNull(),
+  workingHours: text("working_hours"),
+  offHoursMessage: text("off_hours_message"),
+  isActive: integer("is_active").default(1).notNull(),
+  createdBy: integer("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type UraMenu = typeof uraMenus.$inferSelect;
+export type InsertUraMenu = typeof uraMenus.$inferInsert;
 
 // Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
 // Additional indexes can be added via drizzle if needed.
