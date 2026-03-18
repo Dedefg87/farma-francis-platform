@@ -128,16 +128,18 @@ export const customers = mysqlTable("customers", {
 
 export const conversations = mysqlTable("conversations", {
   id: autoincrement().primaryKey(),
-  customerId: int("customer_id").notNull(),
-  customerPhone: varchar("customer_phone", { length: 32 }).notNull(),
-  channel: varchar("channel", { length: 16 }).notNull(),
+  customerId: int("customer_id"),
+  channel: varchar("channel", { length: 32 }).notNull(),
   status: varchar("status", { length: 16 }).default("open").notNull(),
   assignedTo: int("assigned_to"),
-  queueId: int("queue_id"),
-  lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
+  openedAt: timestamp("opened_at").defaultNow().notNull(),
   closedAt: timestamp("closed_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  closeReason: varchar("close_reason", { length: 32 }),
+  lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+  unreadCount: int("unread_count").default(0).notNull(),
+  queueId: int("queue_id"),
+  customerName: varchar("customer_name", { length: 255 }),
+  customerPhone: varchar("customer_phone", { length: 50 }),
 });
 
 export const leads = mysqlTable("leads", {
