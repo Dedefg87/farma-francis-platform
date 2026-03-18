@@ -1265,7 +1265,12 @@ async function processEvolutionWebhook(body: any) {
         const key = data?.key || messageData?.key || {};
         const messageContent = messageData?.message || messageData;
 
-        const messageId = key?.id || data?.id || messageData?.id || `evo-${Date.now()}`;
+        // 🎯 Garantir messageId NUNCA nulo/undefined - fallback robusto
+        let messageId = key?.id || data?.id || messageData?.id;
+        if (!messageId) {
+          messageId = `evo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          console.warn("[Evolution Webhook] ⚠️ Message ID missing, using generated fallback:", messageId);
+        }
         const remoteJid = key?.remoteJid || data?.remoteJid || messageData?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
         const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName || body?.sender?.name || body?.sender?.pushName || body?.data?.sender?.name;
         const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
