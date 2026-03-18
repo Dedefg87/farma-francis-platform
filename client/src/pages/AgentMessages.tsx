@@ -112,7 +112,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import EmojiPicker from "emoji-picker-react";
+const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
 import QuickRepliesModal from "@/components/QuickRepliesModal";
 import NewConversationModal from "@/components/NewConversationModal";
 import PullConversationModal from "@/components/PullConversationModal";
@@ -1250,7 +1250,7 @@ export default function AgentMessages() {
                     </Button>
                     {showEmojiPicker && (
                       <div className="absolute bottom-12 left-0 z-50">
-                        <EmojiPicker onEmojiClick={handleEmojiClick} />
+                        <React.Suspense fallback={null}><EmojiPicker onEmojiClick={handleEmojiClick} /></React.Suspense>
                       </div>
                     )}
                   </div>
