@@ -353,211 +353,204 @@ export async function ingestInboundConversationMessage(message: {
   mimeType?: string | null;
   fileName?: string | null;
   fileSize?: number | null;
-  externalId?: string | null;
+  externalId?: string | null; // Evolution API message ID
   createdAt?: Date;
-  fromMe?: boolean;
-  remoteJid?: string;
-  // Campos para extendedTextMessage
-  extendedTextMessage?: { text?: string } | null;
-  // Campos para sticker
-  sticker?: any | null;
 }) {
-  console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType, "fromMe:", message.fromMe);
+  console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
   
   const db = await getDb();
   if (!db) {
-    console.error("[ingestInbound] ❌ Database not available!");
+    console.error("[ingestInbound] Database not available!");
     return null;
   }
 
-  try {
-    // Determinar número do cliente e tipo do remetente (PROBLEMA 2)
-    let customerPhoneNumber: string;
-    let senderType: "agent" | "customer";
-    let senderName: string | undefined;
+  // 1. Find or create customer
+  const customer = await findOrCreateCustomerByPhone(
+    message.fromNumber,
+    message.fromName || undefined
+  );
 
-    if (message.fromMe) {
-      if (!message.remoteJid) {
-        console.error("[Ingest] ❌ fromMe=true but remoteJid missing!");
-        return null;
-      }
-      customerPhoneNumber = message.remoteJid;
-      senderType = "agent";
-      senderName = "Anderson"; // TODO: buscar nome dinamicamente
-      console.log("[Ingest] 📱 fromMe=true - customer is remoteJid:", customerPhoneNumber);
-    } else {
-      customerPhoneNumber = message.fromNumber;
-      senderType = "customer";
-      senderName = message.fromName || undefined;
-      console.log("[Ingest] 📥 fromMe=false - customer is fromNumber");
-    }
-
-    // Normalizar número (PROBLEMA 1)
-    const normalizedPhone = normalizeWhatsAppNumber(customerPhoneNumber);
-    console.log("[Ingest] Normalized phone:", normalizedPhone);
-
-    // 0. IDEMPOTÊNCIA
-    if (message.externalId) {
-      console.log("[Ingest] Step 0: Checking idempotency for externalId:", message.externalId);
-      const existing = await db
-        .select()
-        .from(conversationMessages)
-        .where(
-          and(
-            eq(conversationMessages.externalId, message.externalId),
-            eq(conversationMessages.provider, message.provider)
-          )
-        )
-        .limit(1);
-
-      if (existing.length > 0) {
-        console.log("[Ingest] ⏭️ Duplicate detected, skipping.");
-        return { conversationId: existing[0].conversationId, customerId: null };
-      }
-      console.log("[Ingest] ✅ New message, proceeding");
-    }
-
-    // 1. Find or create customer (USANDO NÚMERO NORMALIZADO)
-    console.log("[Ingest] Step 1: findOrCreateCustomerByPhone");
-    const customer = await findOrCreateCustomerByPhone(
-      normalizedPhone,
-      senderName
-    );
-    console.log("[Ingest] Customer:", { id: customer.id, name: customer.name, phone: customer.phone });
-
-    // 2. Fetch profile picture (apenas para mensagens do cliente)
-    if (message.provider === "whatsapp" && !customer?.photoUrl && !message.fromMe) {
-      setImmediate(async () => {
-        try {
-          const profile = await fetchEvolutionProfile(normalizedPhone);
-          if (profile?.profilePicture) {
-            const db = await getDb();
-            if (db && customer?.id) {
-              await db
-                .update(customers)
-                .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
-                .where(eq(customers.id, customer.id));
-            }
+  // 2. Fetch profile picture in background (non-blocking)
+  if (message.provider === "whatsapp" && !customer?.photoUrl) {
+    setImmediate(async () => {
+      try {
+        const profile = await fetchEvolutionProfile(message.fromNumber);
+        if (profile?.profilePicture) {
+          const db = await getDb();
+          if (db && customer?.id) {
+            await db
+              .update(customers)
+              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
+              .where(eq(customers.id, customer.id));
           }
-        } catch (err) {
-          // Silently fail
         }
-      });
-    }
+      } catch (err) {
+        // Silently fail - photo is not critical
+      }
+    });
+  }
 
-    const now = message.createdAt ?? new Date();
+  const now = message.createdAt ?? new Date();
 
-    // 3. Pick least loaded online agent
-    console.log("[Ingest] Step 3: pickLeastLoadedOnlineAgent");
-    let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
-    let assignedUserId: number | null = null;
-    
-    if (senderType === "agent") {
-      assignedUserId = 1;
-    } else if (picked && Number.isFinite(picked.userId) && picked.userId > 0) {
-      assignedUserId = picked.userId;
-    }
-    console.log("[Ingest] Agent pick result:", { picked: picked?.userId, assignedUserId });
+  // 3. Pick least loaded online agent
+  let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
+  const assignedUserId = picked && Number.isFinite(picked.userId) && picked.userId > 0
+    ? picked.userId
+    : null;
 
-    // 4. Get default queue
-    console.log("[Ingest] Step 4: Get default queue");
-    const [defaultQueue] = await db
-      .select()
-      .from(queues)
-      .where(eq(queues.status, "active"))
-      .orderBy(desc(queues.priority))
-      .limit(1);
-    console.log("[Ingest] Default queue:", defaultQueue?.id || "none");
+  console.log("[ingestInbound] 🎯 Agent pick result:", { picked: picked?.userId, assignedUserId, customerPhone: customer.phone });
 
-    // 5. Find existing conversation (com busca por variações de número) - SQL CRU
-    console.log("[Ingest] Step 5: Find existing conversation");
-    // Usar generatePhoneVariants para gerar todas as variações de busca (6 variações)
-    const phoneVariants = generatePhoneVariants(normalizedPhone);
-    const [existingConversation] = await db
-      .select()
-      .from(conversations)
-      .where(
-        sql`conversations.customer_id = ${customer.id} AND conversations.channel = ${message.provider} AND conversations.customer_phone IN (${sql.join(phoneVariants.map(v => sql`${v}`), sql`, `)})`
+  // 4. Get default queue
+  const [defaultQueue] = await db
+    .select()
+    .from(queues)
+    .where(eq(queues.status, "active"))
+    .orderBy(desc(queues.priority))
+    .limit(1);
+
+  // 5. Find existing conversation (open or assigned)
+  const [existingConversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.customerId, customer.id),
+        eq(conversations.channel, message.provider),
+        or(
+          eq(conversations.status, "open"),
+          eq(conversations.status, "assigned")
+        )
       )
-      .limit(1);
+    )
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(1);
 
-    let conversationId: number;
-    if (existingConversation) {
-      conversationId = existingConversation.id;
-      console.log("[Ingest] Found existing conversation:", conversationId);
-    } else {
-      console.log("[Ingest] Creating new conversation");
-      const result = await db
-        .insert(conversations)
-        .values({
-          customerId: customer.id,
-          channel: message.provider,
-          remoteJid: normalizedPhone,
-          assignedTo: assignedUserId,
-          status: "open",
-          createdAt: now,
-          updatedAt: now,
-          queueId: defaultQueue?.id || null,
-          lastMessageAt: now,
-        });
-      const newConvId = Array.isArray(result) ? result[0]?.insertId : result?.insertId ?? result?.lastInsertRowid;
-      conversationId = newConvId;
+  let conversationId = existingConversation?.id;
 
-      console.log("[Ingest] Created conversation:", conversationId);
-    }
-
-    // 6. Insert the message (COM senderType CORRETO)
-    console.log("[Ingest] Step 6: Insert message");
-    const content = buildInboundContent(message);
-    const fileUrl = message.mediaUrl || null;
-    const fileName = message.fileName || null;
-    const fileType = message.mimeType || null;
-    const fileSize = message.fileSize || null;
-
-    const result = await db
-      .insert(conversationMessages)
-      .values({
-        conversationId,
-        externalId: message.externalId || null,
-        senderId: assignedUserId,
-        senderType,
-        content,
-        fileUrl,
-        fileName,
-        fileType,
-        fileSize,
-        provider: message.provider,
-        remoteJid: normalizedPhone,
-        createdAt: now,
-        readAt: null,
-      });
-
-    // MySQL returns insertId in the result array
-    const newMessageId = Array.isArray(result) ? result[0]?.insertId : result?.insertId ?? result?.lastInsertRowid;
-    const newMessage = { id: newMessageId };
-
-    console.log("[Ingest] ✅ Message inserted:", newMessage.id, "senderType:", senderType);
-
-    // 7. Broadcast SSE event
-    sseManager.emitToAdmins(EVENTS.NEW_MESSAGE, {
-      messageId: newMessage.id,
-      conversationId,
-      senderType: "customer",
-      content,
-      fileUrl,
-      fileName,
-      fileType: insertMessage.mimeType,
-      fileSize,
-      fromMe: false,
-      timestamp: now.toISOString(),
+  // 6. Create or update conversation
+  if (!conversationId) {
+    // Create new conversation
+    await db.insert(conversations).values({
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      channel: message.provider,
+      status: assignedUserId ? "assigned" : "open",
+      assignedTo: assignedUserId,
+      queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
+      openedAt: now,
+      lastMessageAt: now,
+      unreadCount: 1,
     });
 
-    return { conversationId, customerId: customer.id };
-  } catch (err) {
-    console.error("[Ingest] ❌ Error:", err);
-    throw err;
+    const [newConversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.customerId, customer.id))
+      .orderBy(desc(conversations.id))
+      .limit(1);
+
+    conversationId = newConversation?.id;
+  } else {
+    // Update existing conversation
+    const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
+    await db
+      .update(conversations)
+      .set({
+        lastMessageAt: now,
+        unreadCount: sql<number>`unread_count + 1`,
+        ...(shouldAssign
+          ? {
+              assignedTo: assignedUserId,
+              status: "assigned",
+              queueId: null,
+            }
+          : {}),
+      })
+      .where(eq(conversations.id, conversationId));
   }
+
+  // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
+  // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
+  const fileUrlToSave = message.mediaUrl || null;
+
+  // 8. Insert conversation message
+  const insertResult = await db.insert(conversationMessages).values({
+    conversationId,
+    externalId: message.externalId || null,
+    senderId: null,
+    senderType: "customer",
+    content: buildInboundContent(message),
+    fileUrl: fileUrlToSave,
+    fileName: message.fileName || null,
+    fileType: message.mimeType || null,
+    fileSize: message.fileSize || null,
+    createdAt: now,
+  });
+
+  const messageDbId = insertResult.insertId as number;
+
+  // 9. If it's a WhatsApp media message with a temporary URL, trigger Evolution download to upload to R2
+  if (
+    message.provider === "whatsapp" &&
+    message.externalId &&
+    fileUrlToSave &&
+    fileUrlToSave.includes("mmg.whatsapp.net")
+  ) {
+    try {
+      console.log("[S3] Triggering Evolution download for R2 upload, messageId:", message.externalId);
+      
+      const [configRecord] = await db
+        .select()
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "evolution_api"))
+        .limit(1);
+      
+      if (configRecord?.settings) {
+        const settings = JSON.parse(configRecord.settings as string);
+        const instance = settings.instances?.find((i: any) => i.name === "Meu") || settings.instances?.[0];
+
+        if (instance?.url && instance?.apiKey) {
+          const downloadUrl = `${instance.url}/message/download/${message.externalId}`;
+          console.log("[S3] Calling Evolution download endpoint:", downloadUrl);
+          
+          const response = await fetch(downloadUrl, {
+            headers: {
+              "apikey": instance.apiKey,
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log("[S3] Download response:", data);
+            
+            const r2Url = data?.url || data?.mediaUrl || null;
+            if (r2Url && r2Url.includes("r2.dev")) {
+              console.log("[S3] ✅ Got R2 URL, updating message:", r2Url);
+              
+              await db
+                .update(conversationMessages)
+                .set({ fileUrl: r2Url })
+                .where(eq(conversationMessages.id, messageDbId));
+              
+              console.log("[S3] Message updated with R2 URL");
+            }
+          } else {
+            console.log("[S3] ❌ Download failed:", response.status, response.statusText);
+          }
+        }
+      }
+    } catch (error) {
+      console.log("[S3] Error during R2 upload:", error);
+      // Non-critical - message still saved with original URL
+    }
+  }
+
+  console.log("[Ingest] ✅ Message ingested successfully:", { conversationId, messageDbId });
+  return { conversationId, customerId: customer.id };
 }
+
 
 export async function listReceivedMessages(filters?: {
   provider?: string;
