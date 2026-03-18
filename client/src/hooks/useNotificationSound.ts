@@ -18,12 +18,17 @@ export function useNotificationSound() {
     try {
       // Criar AudioContext se não existir
       if (!audioContextRef.current) {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioCtx = (window as any).AudioContext ?? (window as any).webkitAudioContext ?? null;
         if (!AudioCtx) {
           console.warn("[NotificationSound] AudioContext não suportado neste browser.");
           return;
         }
-        audioContextRef.current = new AudioCtx();
+        try {
+          audioContextRef.current = new AudioCtx();
+        } catch (ctxErr) {
+          console.warn("[NotificationSound] Falha ao criar AudioContext:", ctxErr);
+          return;
+        }
       }
 
       const audioContext = audioContextRef.current;
