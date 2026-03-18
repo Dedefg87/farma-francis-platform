@@ -352,10 +352,9 @@ router.post("/webhooks/whatsapp", async (req: Request, res: Response) => {
     // Acknowledge receipt immediately
     res.status(200).send("EVENT_RECEIVED");
 
-    // Process the webhook asynchronously
-    processWhatsAppWebhook(body).catch(error => {
-      console.error("[WhatsApp Webhook] Processing error:", error);
-    });
+    // Handler antigo desativado — Evolution API usa /evolution
+    // processWhatsAppWebhook(body) — DESATIVADO para evitar duplicação
+    console.log("[WhatsApp Webhook] ⛔ Handler antigo desativado — usando /evolution");
   } catch (error) {
     console.error("[WhatsApp Webhook] Handler error:", error);
     res.status(500).send("Internal server error");

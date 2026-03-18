@@ -474,7 +474,24 @@ export async function ingestInboundConversationMessage(message: {
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
   const fileUrlToSave = message.mediaUrl || null;
 
-  // 8. Insert conversation message
+  // 8. Insert conversation message — guard contra duplicata por externalId
+  if (message.externalId) {
+    const [already] = await db
+      .select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.externalId, message.externalId),
+          eq(conversationMessages.senderType, "customer")
+        )
+      )
+      .limit(1);
+    if (already) {
+      console.log("[Ingest] ⛔ Duplicate externalId, skipping insert:", message.externalId);
+      return null;
+    }
+  }
+
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId || null,
