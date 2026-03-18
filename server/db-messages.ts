@@ -475,21 +475,34 @@ export async function ingestInboundConversationMessage(message: {
   const fileUrlToSave = message.mediaUrl || null;
 
   // 8. Insert conversation message — guard contra duplicata por externalId
+  let duplicateCheck;
   if (message.externalId) {
-    const [already] = await db
-      .select({ id: conversationMessages.id })
-      .from(conversationMessages)
-      .where(
-        and(
-          eq(conversationMessages.externalId, message.externalId),
-          eq(conversationMessages.senderType, "customer")
-        )
-      )
-      .limit(1);
-    if (already) {
-      console.log("[Ingest] ⛔ Duplicate externalId, skipping insert:", message.externalId);
-      return null;
-    }
+    duplicateCheck = and(
+      eq(conversationMessages.externalId, message.externalId),
+      eq(conversationMessages.senderType, "customer")
+    );
+  } else {
+    // Fallback: mensagens sem externalId (raro) — verificar por conteúdo + timestamp within 5s
+    const timeWindowMs = 5000;
+    const now = new Date();
+    duplicateCheck = and(
+      eq(conversationMessages.conversationId, conversationId),
+      eq(conversationMessages.senderType, "customer"),
+      eq(conversationMessages.content, message.messageText || message.caption || ""),
+      gte(conversationMessages.createdAt, new Date(now.getTime() - timeWindowMs)),
+      lte(conversationMessages.createdAt, new Date(now.getTime() + timeWindowMs))
+    );
+  }
+
+  const [already] = await db
+    .select({ id: conversationMessages.id })
+    .from(conversationMessages)
+    .where(duplicateCheck)
+    .limit(1);
+  if (already) {
+    console.log("[Ingest] ⛔ Duplicate message detected, skipping insert:", 
+      message.externalId ? `extID=${message.externalId}` : `content match`);
+    return null;
   }
 
   const insertResult = await db.insert(conversationMessages).values({
