@@ -4,19 +4,21 @@ import {
   date,
   decimal,
   int,
-  jsonb,
+  json,
   mysqlTable,
   primaryKey,
-  serial,
   text,
   timestamp,
   varchar,
 } from "drizzle-orm/mysql-core";
 
+// Helper para autoincrement
+const autoincrement = () => int().autoincrement();
+
 // ==================== CORE MESSAGING TABLES ====================
 
 export const receivedMessages = mysqlTable("received_messages", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   provider: varchar("provider", { length: 16, enum: ["whatsapp", "instagram"] }),
   externalId: varchar("external_id", { length: 255 }),
   fromNumber: varchar("from_number", { length: 100 }),
@@ -35,14 +37,14 @@ export const receivedMessages = mysqlTable("received_messages", {
   mimeType: varchar("mime_type", { length: 100 }),
   fileName: varchar("file_name", { length: 255 }),
   fileSize: int("file_size"),
-  rawPayload: jsonb("raw_payload"),
+  rawPayload: json("raw_payload"),
   processed: int("processed").default(0),
   processedAt: timestamp("processed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const conversationMessages = mysqlTable("conversation_messages", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   externalId: varchar("external_id", { length: 255 }),
   remoteJid: varchar("remote_jid", { length: 255 }),
   provider: varchar("provider", { length: 16, enum: ["whatsapp", "instagram"] }).default("whatsapp"),
@@ -59,7 +61,7 @@ export const conversationMessages = mysqlTable("conversation_messages", {
 });
 
 export const broadcastMessages = mysqlTable("broadcast_messages", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   listId: int("list_id"),
   content: text("content"),
   fileUrl: varchar("file_url", { length: 1000 }),
@@ -74,7 +76,7 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
 });
 
 export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   messageId: int("message_id"),
   customerId: int("customer_id"),
   phone: varchar("phone", { length: 32 }),
@@ -84,13 +86,13 @@ export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
 });
 
 export const crmOutboxEvents = mysqlTable("crm_outbox_events", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   eventName: varchar("event_name", { length: 120 }),
   eventType: varchar("event_type", { length: 64 }),
   entityType: varchar("entity_type", { length: 40 }),
   entityId: int("entity_id"),
   actorUserId: int("actor_user_id"),
-  payload: jsonb("payload"),
+  payload: json("payload"),
   payloadJson: text("payload_json"),
   idempotencyKey: varchar("idempotency_key", { length: 120 }),
   status: varchar("status", { length: 16, enum: ["pending", "processed", "failed"] }).default("pending"),
@@ -103,7 +105,7 @@ export const crmOutboxEvents = mysqlTable("crm_outbox_events", {
 // ==================== REFERENCE TABLES ====================
 
 export const users = mysqlTable("users", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -116,7 +118,7 @@ export const users = mysqlTable("users", {
 });
 
 export const customers = mysqlTable("customers", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: text("name").notNull(),
   phone: varchar("phone", { length: 32 }).notNull().unique(),
   email: varchar("email", { length: 255 }),
@@ -129,7 +131,7 @@ export const customers = mysqlTable("customers", {
 });
 
 export const conversations = mysqlTable("conversations", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   customerId: int("customer_id").notNull(),
   customerPhone: varchar("customer_phone", { length: 32 }).notNull(),
   channel: varchar("channel", { length: 16 }).notNull(),
@@ -143,7 +145,7 @@ export const conversations = mysqlTable("conversations", {
 });
 
 export const leads = mysqlTable("leads", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   customerId: int("customer_id"),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
@@ -160,7 +162,7 @@ export const leads = mysqlTable("leads", {
 });
 
 export const tickets = mysqlTable("tickets", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   ticketNumber: varchar("ticket_number", { length: 50 }).notNull().unique(),
   customerId: int("customer_id"),
   subject: varchar("subject", { length: 255 }).notNull(),
@@ -180,7 +182,7 @@ export const tickets = mysqlTable("tickets", {
 });
 
 export const visualFlows = mysqlTable("visual_flows", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   flowData: text("flow_data").notNull(),
@@ -193,7 +195,7 @@ export const visualFlows = mysqlTable("visual_flows", {
 });
 
 export const automationFlows = mysqlTable("automation_flows", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   channel: varchar("channel", { length: 16 }).notNull(),
@@ -207,7 +209,7 @@ export const automationFlows = mysqlTable("automation_flows", {
 });
 
 export const uraMenus = mysqlTable("ura_menus", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   welcomeMessage: text("welcome_message").notNull(),
   menuData: text("menu_data").notNull(),
@@ -220,7 +222,7 @@ export const uraMenus = mysqlTable("ura_menus", {
 });
 
 export const queues = mysqlTable("queues", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   channel: varchar("channel", { length: 16 }).notNull(),
@@ -238,7 +240,7 @@ export const agentStatus = mysqlTable("agent_status", {
 });
 
 export const agentPauses = mysqlTable("agent_pauses", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   agentId: int("agent_id").notNull(),
   reason: varchar("reason", { length: 255 }),
   status: varchar("status", { length: 16 }).default("active").notNull(),
@@ -247,7 +249,7 @@ export const agentPauses = mysqlTable("agent_pauses", {
 });
 
 export const broadcastLists = mysqlTable("broadcast_lists", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   createdBy: int("created_by").notNull(),
@@ -257,7 +259,7 @@ export const broadcastLists = mysqlTable("broadcast_lists", {
 });
 
 export const broadcastListMembers = mysqlTable("broadcast_list_members", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   listId: int("list_id").notNull(),
   customerId: int("customer_id").notNull(),
   addedAt: timestamp("added_at").defaultNow().notNull(),
@@ -266,7 +268,7 @@ export const broadcastListMembers = mysqlTable("broadcast_list_members", {
 // ==================== ADDITIONAL TABLES ====================
 
 export const apiConfigurations = mysqlTable("api_configurations", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   provider: varchar("provider", { length: 16 }).notNull(),
   token: text("token").notNull(),
   phoneNumberId: varchar("phone_number_id", { length: 255 }),
@@ -284,16 +286,16 @@ export const apiConfigurations = mysqlTable("api_configurations", {
 });
 
 export const integrationSettings = mysqlTable("integration_settings", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   integrationType: varchar("integration_type", { length: 64 }).notNull(),
   isActive: boolean("is_active").default(true).notNull(),
-  config: jsonb("config").notNull(),
+  config: json("config").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const babyShowerEvents = mysqlTable("baby_shower_events", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   eventDate: timestamp("event_date").notNull(),
@@ -302,7 +304,7 @@ export const babyShowerEvents = mysqlTable("baby_shower_events", {
 });
 
 export const babyShowerProducts = mysqlTable("baby_shower_products", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   eventId: int("event_id").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
@@ -315,7 +317,7 @@ export const babyShowerProducts = mysqlTable("baby_shower_products", {
 });
 
 export const babyShowerPurchases = mysqlTable("baby_shower_purchases", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   eventId: int("event_id"),
   productId: int("product_id").notNull(),
   customerId: int("customer_id"),
@@ -332,11 +334,11 @@ export const babyShowerPurchases = mysqlTable("baby_shower_purchases", {
 });
 
 export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   eventId: int("event_id").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  productIds: jsonb("product_ids").notNull(),
+  productIds: json("product_ids").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   discountPercent: decimal("discount_percent", { precision: 5, scale: 2 }).default("0"),
   isActive: int("is_active").default(1).notNull(),
@@ -346,7 +348,7 @@ export const babyShowerGiftPackages = mysqlTable("baby_shower_gift_packages", {
 });
 
 export const babyShowerWithdrawals = mysqlTable("baby_shower_withdrawals", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   eventId: int("event_id").notNull(),
   relatedTaskId: int("related_task_id"),
   withdrawalType: varchar("withdrawal_type", { length: 50 }).notNull(),
@@ -358,7 +360,7 @@ export const babyShowerWithdrawals = mysqlTable("baby_shower_withdrawals", {
 });
 
 export const crmTasks = mysqlTable("crm_tasks", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   customerId: int("customer_id"),
@@ -371,7 +373,7 @@ export const crmTasks = mysqlTable("crm_tasks", {
 });
 
 export const pharmaProducts = mysqlTable("pharma_products", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }),
@@ -381,7 +383,7 @@ export const pharmaProducts = mysqlTable("pharma_products", {
 });
 
 export const pharmaPurchases = mysqlTable("pharma_purchases", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   customerId: int("customer_id"),
   productId: int("product_id").notNull(),
   quantity: int("quantity").default(1).notNull(),
@@ -391,7 +393,7 @@ export const pharmaPurchases = mysqlTable("pharma_purchases", {
 });
 
 export const pharmaPurchaseItems = mysqlTable("pharma_purchase_items", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   purchaseId: int("purchase_id").notNull(),
   productId: int("product_id").notNull(),
   quantity: int("quantity").default(1).notNull(),
@@ -400,7 +402,7 @@ export const pharmaPurchaseItems = mysqlTable("pharma_purchase_items", {
 });
 
 export const accounts = mysqlTable("accounts", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
   phone: varchar("phone", { length: 32 }),
@@ -414,7 +416,7 @@ export const accounts = mysqlTable("accounts", {
 });
 
 export const accountContacts = mysqlTable("account_contacts", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   accountId: int("account_id").notNull(),
   contactId: int("contact_id").notNull(),
   role: varchar("role", { length: 100 }),
@@ -423,7 +425,7 @@ export const accountContacts = mysqlTable("account_contacts", {
 });
 
 export const dealPipelines = mysqlTable("deal_pipelines", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
   isActive: int("is_active").default(1).notNull(),
@@ -433,7 +435,7 @@ export const dealPipelines = mysqlTable("deal_pipelines", {
 });
 
 export const dealStages = mysqlTable("deal_stages", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   pipelineId: int("pipeline_id").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   orderIndex: int("order_index").notNull(),
@@ -445,7 +447,7 @@ export const dealStages = mysqlTable("deal_stages", {
 });
 
 export const deals = mysqlTable("deals", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   accountId: int("account_id"),
   stageId: int("stage_id"),
@@ -460,21 +462,21 @@ export const deals = mysqlTable("deals", {
 });
 
 export const tags = mysqlTable("tags", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 100 }).notNull().unique(),
   color: varchar("color", { length: 7 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const customerTags = mysqlTable("customer_tags", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   customerId: int("customer_id").notNull(),
   tagId: int("tag_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const crmAuditLogs = mysqlTable("crm_audit_logs", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   action: varchar("action", { length: 255 }).notNull(),
   entityType: varchar("entity_type", { length: 100 }).notNull(),
   entityId: int("entity_id"),
@@ -485,7 +487,7 @@ export const crmAuditLogs = mysqlTable("crm_audit_logs", {
 });
 
 export const crmActivities = mysqlTable("crm_activities", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   subject: varchar("subject", { length: 255 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(),
   description: text("description"),
@@ -493,7 +495,7 @@ export const crmActivities = mysqlTable("crm_activities", {
   status: varchar("status", { length: 16 }).default("pending").notNull(),
   assignedTo: int("assigned_to"),
   customerId: int("customer_id"),
-  relatedEntity: jsonb("related_entity"),
+  relatedEntity: json("related_entity"),
   reminderSentAt: timestamp("reminder_sent_at"),
   completedAt: timestamp("completed_at"),
   createdBy: int("created_by"),
@@ -502,7 +504,7 @@ export const crmActivities = mysqlTable("crm_activities", {
 });
 
 export const crmScripts = mysqlTable("crm_scripts", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   script: text("script").notNull(),
   isActive: int("is_active").default(1).notNull(),
@@ -512,7 +514,7 @@ export const crmScripts = mysqlTable("crm_scripts", {
 });
 
 export const customFieldDefinitions = mysqlTable("custom_field_definitions", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   entityType: varchar("entity_type", { length: 40 }).notNull(),
   fieldName: varchar("field_name", { length: 100 }).notNull(),
   fieldType: varchar("field_type", { length: 20 }).notNull(),
@@ -523,7 +525,7 @@ export const customFieldDefinitions = mysqlTable("custom_field_definitions", {
 });
 
 export const customFieldValues = mysqlTable("custom_field_values", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   entityType: varchar("entity_type", { length: 40 }).notNull(),
   entityId: int("entity_id").notNull(),
   fieldDefinitionId: int("field_definition_id").notNull(),
@@ -533,7 +535,7 @@ export const customFieldValues = mysqlTable("custom_field_values", {
 });
 
 export const workflowExecutions = mysqlTable("workflow_executions", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   workflowId: int("workflow_id").notNull(),
   status: varchar("status", { length: 16 }).notNull(),
   mode: varchar("mode", { length: 16 }).notNull(),
@@ -547,7 +549,7 @@ export const workflowExecutions = mysqlTable("workflow_executions", {
 });
 
 export const executionData = mysqlTable("execution_data", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   executionId: int("execution_id").notNull(),
   nodeId: varchar("node_id", { length: 255 }).notNull(),
   nodeName: varchar("node_name", { length: 255 }).notNull(),
@@ -564,7 +566,7 @@ export const executionData = mysqlTable("execution_data", {
 });
 
 export const surveyResponses = mysqlTable("survey_responses", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   conversationId: int("conversation_id"),
   customerId: int("customer_id").notNull(),
   rating: int("rating").notNull(),
@@ -575,7 +577,7 @@ export const surveyResponses = mysqlTable("survey_responses", {
 });
 
 export const quickReplies = mysqlTable("quick_replies", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   content: text("content").notNull(),
   category: varchar("category", { length: 100 }),
@@ -585,7 +587,7 @@ export const quickReplies = mysqlTable("quick_replies", {
 });
 
 export const messages = mysqlTable("messages", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   customerId: int("customer_id"),
   ticketId: int("ticket_id"),
   channel: varchar("channel", { length: 16 }).notNull(),
@@ -598,7 +600,7 @@ export const messages = mysqlTable("messages", {
 });
 
 export const employees = mysqlTable("employees", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   userId: int("user_id").unique(),
   department: varchar("department", { length: 100 }),
   position: varchar("position", { length: 100 }),
@@ -610,37 +612,37 @@ export const employees = mysqlTable("employees", {
 });
 
 export const frontendTelemetryEvents = mysqlTable("frontend_telemetry_events", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   eventName: varchar("event_name", { length: 255 }).notNull(),
-  properties: jsonb("properties"),
+  properties: json("properties"),
   userId: int("user_id"),
   sessionId: varchar("session_id", { length: 255 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const queueAgents = mysqlTable("queue_agents", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   queueId: int("queue_id").notNull(),
   agentId: int("agent_id").notNull(),
   assignedAt: timestamp("assigned_at").defaultNow().notNull(),
 });
 
 export const ticketTags = mysqlTable("ticket_tags", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   ticketId: int("ticket_id").notNull(),
   tagId: int("tag_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const conversationTags = mysqlTable("conversation_tags", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   conversationId: int("conversation_id").notNull(),
   tag: varchar("tag", { length: 64 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const customerTreatments = mysqlTable("customer_treatments", {
-  id: serial("id").primaryKey(),
+  id: autoincrement().primaryKey(),
   customerId: int("customer_id").notNull(),
   treatmentType: varchar("treatment_type", { length: 100 }).notNull(),
   description: text("description"),
