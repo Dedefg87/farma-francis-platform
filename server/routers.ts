@@ -8,7 +8,7 @@ import {
   router,
 } from "./_core/trpc";
 import { z } from "zod";
-import { like, or } from "drizzle-orm";
+import { like, or, sql } from "drizzle-orm";
 import { inboxRouter } from "./routers-inbox";
 import { dashboardRouter } from "./routers-dashboard";
 import { executionsRouter } from "./routers-executions";
@@ -71,11 +71,12 @@ export const appRouter = router({
 
         console.log("[LOGIN] Tentativa de login:", { email: input.email });
 
-        // Buscar usuário por email (aceita username ou email)
-        const [user] = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, input.email));
+        // Buscar usuário por email via SQL raw (evita bug alias Drizzle 0.44)
+        const rawResult = await db.execute(
+          sql`SELECT * FROM users WHERE email = ${input.email} LIMIT 1`
+        );
+        const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+        const [user] = Array.isArray(rows) ? rows : [];
 
         console.log(
           "[LOGIN] Usuário encontrado:",
