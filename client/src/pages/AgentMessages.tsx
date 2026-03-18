@@ -1511,6 +1511,53 @@ export default function AgentMessages() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Opções "Nova" - TESTE SIMPLIFICADO (sem Radix Dialog) */}
+      {showNewOptionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+            <h2 className="text-lg font-semibold mb-4">Nova</h2>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowNewOptionsModal(false);
+                  setShowNewConversation(true);
+                }}
+                className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+              >
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Keyboard className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900">Digitar número / email</div>
+                  <div className="text-sm text-gray-500">Iniciar conversa com novo contato</div>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setShowNewOptionsModal(false);
+                  setShowNewConversation(true);
+                }}
+                className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+              >
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <Search className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <div className="font-medium text-gray-900">Buscar nos contatos</div>
+                  <div className="text-sm text-gray-500">Encontrar cliente existente</div>
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowNewOptionsModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {showCRMPanel && crmCustomerId ? (
         <CRMPanel
           open={showCRMPanel}
