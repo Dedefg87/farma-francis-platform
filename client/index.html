@@ -15,6 +15,24 @@
   </head>
 
   <body>
+    <!-- Fallback para navegadores antigos -->
+    <script>
+      (function() {
+        var ua = window.navigator.userAgent;
+        var isIE11 = !!window.MSInputMethodContext && !!document.documentMode;
+        var isLegacyEdge = ua.includes('Edge/') && !ua.includes('Edg/');
+        var isOldIE = !!document.all && !window.atob;
+        var isIE = /* @cc_on!@*/false || isIE11 || isLegacyEdge || isOldIE;
+
+        // Detectar falta de suporte a features modernas
+        var lacksModernFeatures = !window.Promise || !window.fetch || !window.ResizeObserver || !window.Map || !window.Set;
+
+        if (isIE || lacksModernFeatures) {
+          console.warn('[Browser Check] Navegador antigo detectado. Redirecionando para fallback...');
+          window.location.href = '/fallback.html';
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
