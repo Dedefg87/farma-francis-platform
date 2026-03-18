@@ -172,6 +172,23 @@ export default defineConfig({
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
+  optimizeDeps: {
+    exclude: [
+      "bcrypt",
+      "sharp",
+      "better-sqlite3",
+      "multer",
+      "express",
+      "mysql2",
+      "pg",
+      "jsdom",
+      "drizzle-kit",
+      "drizzle-orm",
+      "pino",
+      "node-fetch",
+      "cloudinary",
+    ],
+  },
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
