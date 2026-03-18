@@ -1,10 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+// Dialog nativo — sem Radix (evita Illegal constructor)
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -135,12 +130,24 @@ export default function NewConversationModal({
     });
   };
 
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Nova Conversa</DialogTitle>
-        </DialogHeader>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}
+    >
+      <div className="absolute inset-0 bg-black/50" />
+      <div className="relative bg-white rounded-lg shadow-xl p-6 w-full sm:max-w-md mx-4 z-10">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Nova Conversa</h2>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold"
+          >
+            ×
+          </button>
+        </div>
 
         {mode === null ? (
           <div className="space-y-3">
@@ -310,7 +317,7 @@ export default function NewConversationModal({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
