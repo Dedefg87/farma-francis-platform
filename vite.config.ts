@@ -187,6 +187,11 @@ export default defineConfig({
       "pino",
       "node-fetch",
       "cloudinary",
+      "cookie-parser",
+      "dotenv",
+      "express-rate-limit",
+      "jsonwebtoken",
+      "jose",
     ],
   },
   build: {
