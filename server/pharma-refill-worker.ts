@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, desc, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { crmTasks, customerTreatments, customers } from "../drizzle/schema";
+import { crmTasks, customers } from "../drizzle/schema";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
 
 let refillTimer: any = null;
@@ -29,20 +29,36 @@ export function startPharmaRefillWorker(
     const now = new Date();
     const future = addDays(now, daysAhead);
 
-    const upcoming = await db
-      .select({
-        treatment: customerTreatments,
-        customer: customers,
-      })
-      .from(customerTreatments)
-      .innerJoin(customers, eq(customerTreatments.customerId, customers.id))
-      .where(
-        and(
-          gte(customerTreatments.endDate, now),
-          lte(customerTreatments.endDate, future)
-        )
-      )
-      .orderBy(desc(customerTreatments.endDate));
+    const session = (db as any).session;
+    const client = session?.client;
+    if (!client) return;
+    const [upcomingRaw] = await client.execute(
+      `SELECT ct.*, c.name as customer_name, c.phone as customer_phone
+       FROM customer_treatments ct
+       INNER JOIN customers c ON ct.customer_id = c.id
+       WHERE ct.is_active = 1
+         AND ct.data_fim_previsto >= ?
+         AND ct.data_fim_previsto <= ?
+       ORDER BY ct.data_fim_previsto DESC`,
+      [now, future]
+    );
+    const upcoming = (upcomingRaw as any[]).map(row => ({
+      treatment: {
+        id: row.id,
+        customerId: row.customer_id,
+        nomeMedicamento: row.nome_medicamento,
+        posologiaDiaria: row.posologia_diaria,
+        qtdCaixa: row.qtd_caixa,
+        dataFimPrevisto: row.data_fim_previsto,
+        dataUltimaCompra: row.data_ultima_compra,
+        isActive: row.is_active,
+      },
+      customer: {
+        id: row.customer_id,
+        name: row.customer_name,
+        phone: row.customer_phone,
+      }
+    }));
 
     for (const row of upcoming) {
       const endAt = row.treatment.endDate
@@ -73,7 +89,7 @@ export function startPharmaRefillWorker(
 
       if (existing?.[0]) continue;
 
-      const title = `Reposicao: ${row.customer.name} - ${row.treatment.medication ?? row.treatment.treatmentType}`;
+      const title = `Reposicao: ${row.customer.name} - ${row.treatment.nomeMedicamento}`;
       const description =
         `Tratamento perto do fim (safety ${safetyDays}d). ` +
         `Fim previsto: ${endAt.toISOString().slice(0, 10)}.`;

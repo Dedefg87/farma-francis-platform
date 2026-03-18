@@ -1,6 +1,6 @@
 import { getDb } from '../db';
 import { agentPauses } from '../../drizzle/schema';
-import { eq, and, isNotNull, lt } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 /**
  * Worker para finalizar automaticamente pausas que excederam sua duração planejada
@@ -16,13 +16,25 @@ export async function checkAndFinishExpiredPauses() {
 
     const now = new Date();
     
-    // Buscar pausas ativas
-    const activePauses = await db
-      .select()
-      .from(agentPauses)
-      .where(
-        eq(agentPauses.status, 'active')
-      );
+    // Buscar pausas ativas via SQL raw (evita colunas inexistentes no schema)
+    const session = (db as any).session;
+    const client = session?.client;
+    if (!client) {
+      console.error('[PauseAutoFinisher] Raw client not available');
+      return { finishedCount: 0, error: 'Raw client not available' };
+    }
+    const [rawPauses] = await client.execute(
+      "SELECT id, agent_id, status, started_at, ended_at FROM agent_pauses WHERE status = ?",
+      ['active']
+    );
+    const activePauses = (rawPauses as any[]).map(r => ({
+      id: r.id,
+      agentId: r.agent_id,
+      status: r.status,
+      startedAt: r.started_at,
+      endedAt: r.ended_at,
+      durationMinutes: null,
+    }));
 
     let finishedCount = 0;
 
