@@ -112,7 +112,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
+// const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
 import QuickRepliesModal from "@/components/QuickRepliesModal";
 import NewConversationModal from "@/components/NewConversationModal";
 import PullConversationModal from "@/components/PullConversationModal";
@@ -133,7 +133,6 @@ export default function AgentMessages() {
   const [crmCustomerName, setCrmCustomerName] = useState<string>("");
   const [crmCustomerPhone, setCrmCustomerPhone] = useState<string>("");
   const [message, setMessage] = useState("");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [sortOrder, setSortOrder] = useState<string>(() => {
     return localStorage.getItem("conversationSortOrder") || "newest_last";
@@ -699,11 +698,6 @@ export default function AgentMessages() {
     }
   };
 
-  const handleEmojiClick = (emojiData: any) => {
-    setMessage(prev => prev + emojiData.emoji);
-    setShowEmojiPicker(false);
-  };
-
   const handleQuickReplySelect = (content: string) => {
     setMessage(applyQuickReplyVariables(content, { agentName: user?.name }));
     setShowQuickReplies(false);
@@ -1240,19 +1234,7 @@ export default function AgentMessages() {
                   </Button>
 
                   <div className="relative">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      title="Emojis"
-                    >
-                      <Smile className="w-4 h-4" />
-                    </Button>
-                    {showEmojiPicker && (
-                      <div className="absolute bottom-12 left-0 z-50">
-                        <React.Suspense fallback={null}><EmojiPicker onEmojiClick={handleEmojiClick} /></React.Suspense>
-                      </div>
-                    )}
+                    {/* Emoji picker removido temporariamente para debugging */}
                   </div>
 
                   <Input
