@@ -1133,6 +1133,7 @@ export const appRouter = router({
   // Módulo Chá de Bebê
   babyShower: babyShowerRouter,
   migration: migrationRouter,
+  broadcast: broadcastRouter,
 });
 
 export type AppRouter = typeof appRouter;
