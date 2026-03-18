@@ -11,6 +11,7 @@ import {
   timestamp,
   varchar,
   mysqlEnum,
+  datetime,
 } from "drizzle-orm/mysql-core";
 
 // Helper para autoincrement
