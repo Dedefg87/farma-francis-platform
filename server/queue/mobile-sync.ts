@@ -160,7 +160,12 @@ async function processMobileSyncJob(job: MobileSyncJob) {
       lastMessageAt: new Date(),
       unreadCount: 1,
     });
-    conversationId = insertResult.insertId as number;
+    // Drizzle MySQL retorna [ResultSetHeader, fields] — insertId fica em [0]
+    conversationId = (insertResult as any)?.[0]?.insertId ?? (insertResult as any)?.insertId;
+    if (!conversationId) {
+      console.error("[MobileSync] insertId undefined após insert de conversa!");
+      return;
+    }
     console.log("[MobileSync] Created new conversation:", conversationId, "for phone:", customerPhone);
   } else {
     conversationId = conv.id;
