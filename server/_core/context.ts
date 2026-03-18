@@ -40,7 +40,10 @@ export async function createContext(
           }
         }
       } catch (jwtError) {
-        console.log('[Auth] JWT local inválido, tentando OAuth...');
+        const err = jwtError as any;
+        console.log('[Auth] JWT ERRO:', err?.message ?? String(err));
+        console.log('[Auth] cookieSecret length:', (process.env.JWT_SECRET ?? '').length);
+        console.log('[Auth] cookie preview:', sessionCookie?.substring(0, 30));
       }
     }
     
