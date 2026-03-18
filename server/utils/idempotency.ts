@@ -3,24 +3,19 @@
  * Creates unique indexes if they don't exist (check via information_schema)
  */
 
-import { getDb, sql } from "../db.js";
+import { getDb, sql, getDbRaw } from "../db.js";
 
 /**
  * Check if an index exists on a table
  */
 export async function indexExists(tableName: string, indexName: string): Promise<boolean> {
-  const db = await getDb();
-  if (!db) return false;
-
   try {
-    const [rows] = await db.execute(
-      `SELECT COUNT(*) as cnt 
-       FROM information_schema.statistics 
-       WHERE table_schema = DATABASE() 
-         AND table_name = '${tableName}' 
-         AND index_name = '${indexName}'`
+    const db = await getDbRaw();
+    if (!db || !db.raw) return false;
+    const rows = await db.raw(
+      "SELECT COUNT(*) as cnt FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
+      [tableName, indexName]
     );
-
     const count = (rows as any[])[0]?.cnt || 0;
     return count > 0;
   } catch (err) {
