@@ -10,7 +10,7 @@ import {
   text,
   timestamp,
   varchar,
-} from "drizzle-orm/mysql-core";
+, mysqlEnum } from "drizzle-orm/mysql-core";
 
 // Helper para autoincrement
 const autoincrement = () => int().autoincrement();
