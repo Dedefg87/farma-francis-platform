@@ -9,7 +9,8 @@ import { Streamdown } from 'streamdown';
  * When building pages, remember your instructions in Frontend Workflow, Frontend Best Practices, Design Guide and Common Pitfalls
  */
 export default function Home() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, isLoading: loading } = useAuth();
+  const isAuthenticated = !!user;
 
   // Redirect based on role if authenticated
   if (isAuthenticated && user) {
