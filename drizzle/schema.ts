@@ -31,7 +31,7 @@ export const receivedMessages = mysqlTable("received_messages", {
   caption: text("caption"),
   latitude: decimal("latitude", { precision: 10, scale: 8 }),
   longitude: decimal("longitude", { precision: 11, scale: 8 }),
-  timestamp: bigint("timestamp"),
+  timestamp: bigint("timestamp", { mode: 'number' }),
   mediaUrl: text("media_url"),
   mediaId: varchar("media_id", { length: 255 }),
   mimeType: varchar("mime_type", { length: 100 }),
