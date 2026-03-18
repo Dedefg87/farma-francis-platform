@@ -72,6 +72,7 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
   totalRecipients: int("total_recipients"),
   successfulSends: int("successful_sends").default(0),
   failedSends: int("failed_sends").default(0),
+  status: varchar("status", { length: 50 }).notNull().default("pending"),
   sentAt: timestamp("sent_at").defaultNow(),
 });
 
@@ -108,8 +109,8 @@ export const users = mysqlTable("users", {
   passwordHash: varchar("passwordHash", { length: 255 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: varchar("role", { length: 16 }).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
@@ -121,9 +122,8 @@ export const customers = mysqlTable("customers", {
   photoUrl: varchar("photo_url", { length: 500 }),
   status: varchar("status", { length: 32 }).default("active").notNull(),
   notes: text("notes"),
-  source: varchar("source", { length: 64 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const conversations = mysqlTable("conversations", {
