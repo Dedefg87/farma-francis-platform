@@ -23,7 +23,11 @@ export default function AgentTopBar() {
   const { user, logout } = useAuth();
   const { playNotificationSound } = useNotificationSound();
   const [notificationsMuted, setNotificationsMuted] = useState<boolean>(() => {
-    return localStorage.getItem("notificationsMuted") === "true";
+    try {
+      return typeof window !== "undefined" && localStorage.getItem("notificationsMuted") === "true";
+    } catch {
+      return false;
+    }
   });
 
   // Ref para rastrear mensagens anteriores
