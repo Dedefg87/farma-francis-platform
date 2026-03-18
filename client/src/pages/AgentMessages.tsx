@@ -9,9 +9,17 @@ import { trpc } from "@/lib/trpc";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { BroadcastListManager } from "@/components/BroadcastListManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderContentWithLinks } from "@/utils/text-format";
 
@@ -135,6 +143,7 @@ export default function AgentMessages() {
   });
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showPullConversation, setShowPullConversation] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [channelFilter, setChannelFilter] = useState<string>("all");
   const [showMessageSearch, setShowMessageSearch] = useState(false);
@@ -165,7 +174,6 @@ export default function AgentMessages() {
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
-  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [showNewOptionsModal, setShowNewOptionsModal] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1499,57 +1507,24 @@ export default function AgentMessages() {
                 <div className="text-sm text-gray-500">Encontrar cliente existente</div>
               </div>
             </button>
-            {/* Botão de transmissão removido temporariamente para debug */}
+            <button
+              onClick={() => {
+                setShowNewOptionsModal(false);
+                setShowBroadcastModal(true);
+              }}
+              className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+            >
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <Megaphone className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <div className="font-medium text-gray-900">Lista de Transmissão</div>
+                <div className="text-sm text-gray-500">Enviar mensagem para até 50 contatos</div>
+              </div>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Modal de Opções "Nova" - TESTE SIMPLIFICADO (sem Radix Dialog) */}
-      {showNewOptionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
-            <h2 className="text-lg font-semibold mb-4">Nova</h2>
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  setShowNewOptionsModal(false);
-                  setShowNewConversation(true);
-                }}
-                className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
-              >
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Keyboard className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">Digitar número / email</div>
-                  <div className="text-sm text-gray-500">Iniciar conversa com novo contato</div>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setShowNewOptionsModal(false);
-                  setShowNewConversation(true);
-                }}
-                className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
-              >
-                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Search className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">Buscar nos contatos</div>
-                  <div className="text-sm text-gray-500">Encontrar cliente existente</div>
-                </div>
-              </button>
-            </div>
-            <button
-              onClick={() => setShowNewOptionsModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {showCRMPanel && crmCustomerId ? (
         <CRMPanel
