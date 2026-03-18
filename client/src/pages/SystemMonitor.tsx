@@ -452,7 +452,7 @@ export default function SystemMonitor() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Ambiente</span>
-                <span>{process.env.NODE_ENV || "development"}</span>
+                <span>{import.meta.env.MODE || "development"}</span>
               </div>
             </div>
           </CardContent>
