@@ -3,6 +3,7 @@ import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { COOKIE_NAME } from "@shared/const";
 import { parse as parseCookieHeader } from "cookie";
+import * as db from "../db";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -23,7 +24,7 @@ export async function createContext(
       try {
         const session = await sdk.verifySession(sessionCookie);
         if (session?.openId) {
-          const foundUser = await sdk.getUserByOpenId(session.openId);
+          const foundUser = await db.getUserByOpenId(session.openId);
           if (foundUser) {
             user = foundUser;
             console.log('[Auth] Usuário autenticado:', user.email);
