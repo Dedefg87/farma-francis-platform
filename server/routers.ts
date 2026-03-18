@@ -75,8 +75,18 @@ export const appRouter = router({
         const rawResult = await db.execute(
           sql`SELECT * FROM users WHERE email = ${input.email} LIMIT 1`
         );
-        const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-        const [user] = Array.isArray(rows) ? rows : [];
+        const rawRows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+        const rawUser = Array.isArray(rawRows) ? rawRows[0] : undefined;
+        // SQL raw retorna snake_case — mapear para camelCase
+        const user = rawUser ? {
+          id: rawUser.id,
+          openId: rawUser.openId ?? rawUser.open_id,
+          name: rawUser.name,
+          email: rawUser.email,
+          passwordHash: rawUser.passwordHash ?? rawUser.password_hash,
+          loginMethod: rawUser.loginMethod ?? rawUser.login_method,
+          role: rawUser.role,
+        } : undefined;
 
         console.log(
           "[LOGIN] Usuário encontrado:",
