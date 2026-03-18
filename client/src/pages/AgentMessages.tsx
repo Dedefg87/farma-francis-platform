@@ -78,6 +78,7 @@ import {
   FileText,
   X,
   Megaphone,
+  Keyboard,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
