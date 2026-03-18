@@ -164,15 +164,20 @@ async function runIdempotencyConstraints() {
 
     // Helper: check if index exists
     async function indexExists(tableName: string, indexName: string): Promise<boolean> {
-      const [rows] = await db.execute(`
-        SELECT COUNT(*) as cnt 
-        FROM information_schema.statistics 
-        WHERE table_schema = DATABASE() 
-          AND table_name = ? 
-          AND index_name = ?
-      `, [tableName, indexName]);
-      const count = (rows as any[])[0]?.cnt || 0;
-      return count > 0;
+      try {
+        const session = (db as any).session;
+        const client = session?.client;
+        if (!client) return false;
+        const [rows] = await client.execute(
+          "SELECT COUNT(*) as cnt FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
+          [tableName, indexName]
+        );
+        const count = (rows as any[])[0]?.cnt || 0;
+        return count > 0;
+      } catch (err: any) {
+        console.error("[Idempotency] indexExists error:", err.message);
+        return false;
+      }
     }
 
     // Índice único em received_messages (provider, external_id)
