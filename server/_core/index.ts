@@ -60,6 +60,13 @@ async function runMediaColumnsMigration() {
       console.log("[Migration] Added provider column");
     }
 
+    // Check lastSignedIn in users
+    const [cols4]: any = await db.execute("SHOW COLUMNS FROM users LIKE 'lastSignedIn'");
+    if (cols4.length === 0) {
+      await db.execute("ALTER TABLE users ADD COLUMN lastSignedIn timestamp DEFAULT now() NOT NULL");
+      console.log("[Migration] Added lastSignedIn column to users");
+    }
+
     // Indexes (ignore if exists)
     try {
       await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id)");
