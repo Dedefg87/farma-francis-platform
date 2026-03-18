@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { Home, MessageSquare, Users, Settings } from "lucide-react";
+import { Home, MessageSquare, Users, Settings, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TabItem {
@@ -13,6 +13,12 @@ const tabs: TabItem[] = [
   { id: "home", label: "Home", icon: Home, path: "/" },
   { id: "messages", label: "Mensagens", icon: MessageSquare, path: "/messages" },
   { id: "contacts", label: "Contatos", icon: Users, path: "/crm" },
+  {
+    id: "broadcast",
+    label: "Transmissão",
+    icon: Megaphone,
+    path: "/broadcast",
+  },
   {
     id: "settings",
     label: "Configurações",
