@@ -38,16 +38,15 @@ export function startPharmaRefillWorker(
       .innerJoin(customers, eq(customerTreatments.customerId, customers.id))
       .where(
         and(
-          eq(customerTreatments.isActive, 1),
-          gte(customerTreatments.dataFimPrevisto, now),
-          lte(customerTreatments.dataFimPrevisto, future)
+          gte(customerTreatments.endDate, now),
+          lte(customerTreatments.endDate, future)
         )
       )
-      .orderBy(desc(customerTreatments.dataFimPrevisto));
+      .orderBy(desc(customerTreatments.endDate));
 
     for (const row of upcoming) {
-      const endAt = row.treatment.dataFimPrevisto
-        ? new Date(row.treatment.dataFimPrevisto as any)
+      const endAt = row.treatment.endDate
+        ? new Date(row.treatment.endDate as any)
         : null;
       if (!endAt || Number.isNaN(endAt.getTime())) continue;
 
@@ -74,7 +73,7 @@ export function startPharmaRefillWorker(
 
       if (existing?.[0]) continue;
 
-      const title = `Reposicao: ${row.customer.name} - ${row.treatment.nomeMedicamento}`;
+      const title = `Reposicao: ${row.customer.name} - ${row.treatment.medication ?? row.treatment.treatmentType}`;
       const description =
         `Tratamento perto do fim (safety ${safetyDays}d). ` +
         `Fim previsto: ${endAt.toISOString().slice(0, 10)}.`;

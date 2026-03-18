@@ -16,28 +16,25 @@ export async function checkAndFinishExpiredPauses() {
 
     const now = new Date();
     
-    // Buscar pausas ativas que têm duração planejada
+    // Buscar pausas ativas
     const activePauses = await db
       .select()
       .from(agentPauses)
       .where(
-        and(
-          eq(agentPauses.status, 'active'),
-          isNotNull(agentPauses.durationMinutes)
-        )
+        eq(agentPauses.status, 'active')
       );
 
     let finishedCount = 0;
 
     for (const pause of activePauses) {
-      if (!pause.durationMinutes) continue;
+      
 
       // Calcular tempo decorrido em minutos
       const startedAt = new Date(pause.startedAt);
       const elapsedMinutes = (now.getTime() - startedAt.getTime()) / (1000 * 60);
 
       // Se o tempo decorrido excedeu a duração planejada, finalizar a pausa
-      if (elapsedMinutes >= pause.durationMinutes) {
+      if (elapsedMinutes >= 60) { // Auto-finish after 60 min by default
         await db
           .update(agentPauses)
           .set({
@@ -50,7 +47,7 @@ export async function checkAndFinishExpiredPauses() {
 
         console.log(
           `[PauseAutoFinisher] Pausa ${pause.id} do agente ${pause.agentId} finalizada automaticamente ` +
-          `(${elapsedMinutes.toFixed(1)} min / ${pause.durationMinutes} min)`
+          `(${elapsedMinutes.toFixed(1)} min / 60 min)`
         );
       }
     }
