@@ -310,7 +310,7 @@ async function processPendingBroadcasts() {
   if (!db) return;
 
   // Buscar mensagens em status 'sending' que ainda têm pendentes
-  const [messages] = await db
+  const messages = await db
     .select({ id: broadcastMessages.id })
     .from(broadcastMessages)
     .where(eq(broadcastMessages.status, "sending"))

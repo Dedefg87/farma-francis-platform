@@ -14,11 +14,11 @@ export async function indexExists(tableName: string, indexName: string): Promise
 
   try {
     const [rows] = await db.execute(
-      sql`SELECT COUNT(*) as cnt 
-           FROM information_schema.statistics 
-           WHERE table_schema = DATABASE() 
-             AND table_name = ${tableName} 
-             AND index_name = ${indexName}`
+      `SELECT COUNT(*) as cnt 
+       FROM information_schema.statistics 
+       WHERE table_schema = DATABASE() 
+         AND table_name = '${tableName}' 
+         AND index_name = '${indexName}'`
     );
 
     const count = (rows as any[])[0]?.cnt || 0;
