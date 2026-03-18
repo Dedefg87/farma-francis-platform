@@ -1,4 +1,4 @@
-# Build: forced rebuild for check-db fix - Mon Mar 16 19:28 GMT-3
+# Build: forced rebuild - Wed Mar 18 17:55 GMT+0000
 # Rebuild triggered: 2026-03-16 19:28 GMT-3 (force no-cache for COPY layer)
 FROM node:20-alpine
 
