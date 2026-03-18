@@ -240,12 +240,13 @@ export const agentStatus = mysqlTable("agent_status", {
 });
 
 export const agentPauses = mysqlTable("agent_pauses", {
-  id: autoincrement().primaryKey(),
+  id: int("id").autoincrement().primaryKey(),
   agentId: int("agent_id").notNull(),
-  reason: varchar("reason", { length: 255 }),
-  status: varchar("status", { length: 16 }).default("active").notNull(),
+  pauseType: mysqlEnum("pause_type", ["lunch","snack","bathroom","other"]).notNull(),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
+  durationMinutes: int("duration_minutes"),
+  status: mysqlEnum("status", ["active","completed"]).default("active").notNull(),
 });
 
 export const broadcastLists = mysqlTable("broadcast_lists", {
@@ -642,14 +643,15 @@ export const conversationTags = mysqlTable("conversation_tags", {
 });
 
 export const customerTreatments = mysqlTable("customer_treatments", {
-  id: autoincrement().primaryKey(),
+  id: int("id").autoincrement().primaryKey(),
   customerId: int("customer_id").notNull(),
-  treatmentType: varchar("treatment_type", { length: 100 }).notNull(),
-  description: text("description"),
-  medication: text("medication"),
-  startDate: timestamp("start_date"),
-  endDate: timestamp("end_date"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  nomeMedicamento: varchar("nome_medicamento", { length: 255 }).notNull(),
+  posologiaDiaria: int("posologia_diaria").notNull(),
+  qtdCaixa: int("qtd_caixa").notNull(),
+  dataUltimaCompra: datetime("data_ultima_compra"),
+  dataFimPrevisto: datetime("data_fim_previsto"),
+  observacoes: text("observacoes"),
+  isActive: int("is_active").default(1).notNull(),
+  createdAt: datetime("created_at").notNull(),
+  updatedAt: datetime("updated_at").notNull(),
 });

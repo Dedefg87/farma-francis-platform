@@ -16,7 +16,7 @@ export async function checkAndFinishExpiredPauses() {
 
     const now = new Date();
     
-    // Buscar pausas ativas via SQL raw (evita colunas inexistentes no schema)
+    // Buscar pausas ativas via SQL raw
     const session = (db as any).session;
     const client = session?.client;
     if (!client) {
@@ -24,7 +24,7 @@ export async function checkAndFinishExpiredPauses() {
       return { finishedCount: 0, error: 'Raw client not available' };
     }
     const [rawPauses] = await client.execute(
-      "SELECT id, agent_id, status, started_at, ended_at FROM agent_pauses WHERE status = ?",
+      "SELECT id, agent_id, status, started_at, ended_at, duration_minutes FROM agent_pauses WHERE status = ?",
       ['active']
     );
     const activePauses = (rawPauses as any[]).map(r => ({
@@ -33,7 +33,7 @@ export async function checkAndFinishExpiredPauses() {
       status: r.status,
       startedAt: r.started_at,
       endedAt: r.ended_at,
-      durationMinutes: null,
+      durationMinutes: r.duration_minutes,
     }));
 
     let finishedCount = 0;
