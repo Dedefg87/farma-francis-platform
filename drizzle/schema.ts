@@ -221,11 +221,13 @@ export const uraMenus = mysqlTable("ura_menus", {
 
 export const queues = mysqlTable("queues", {
   id: autoincrement().primaryKey(),
-  name: varchar("name", { length: 100 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  channel: varchar("channel", { length: 16 }).notNull(),
-  priority: int("priority").default(0).notNull(),
   status: varchar("status", { length: 16 }).default("active").notNull(),
+  maxConcurrentChats: int("max_concurrent_chats").default(3).notNull(),
+  priority: int("priority").default(0).notNull(),
+  color: varchar("color", { length: 7 }),
+  createdBy: int("created_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
