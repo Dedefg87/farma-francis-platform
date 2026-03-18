@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { ENV } from "./_core/env";
 import {
@@ -18,14 +18,25 @@ let _dbHealthCheck: number = 0; // timestamp do último health check bem-sucedid
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return null;
-
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.openId, openId))
-    .limit(1);
-
-  return result.length > 0 ? result[0] : null;
+  // SQL raw para evitar bug alias Drizzle 0.44 (snake_case vs camelCase)
+  const rawResult = await db.execute(
+    sql`SELECT * FROM users WHERE open_id = ${openId} LIMIT 1`
+  );
+  const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+  const rawUser = Array.isArray(rows) ? rows[0] : undefined;
+  if (!rawUser) return null;
+  return {
+    id: rawUser.id,
+    openId: rawUser.openId ?? rawUser.open_id,
+    name: rawUser.name,
+    email: rawUser.email,
+    passwordHash: rawUser.passwordHash ?? rawUser.password_hash,
+    loginMethod: rawUser.loginMethod ?? rawUser.login_method,
+    role: rawUser.role,
+    createdAt: rawUser.createdAt ?? rawUser.created_at,
+    updatedAt: rawUser.updatedAt ?? rawUser.updated_at,
+    lastSignedIn: rawUser.lastSignedIn ?? rawUser.last_signed_in,
+  };
 }
 
 export async function upsertUser(userData: {
