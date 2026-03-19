@@ -16,9 +16,10 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderContentWithLinks } from "@/utils/text-format";
@@ -90,14 +91,6 @@ import {
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,

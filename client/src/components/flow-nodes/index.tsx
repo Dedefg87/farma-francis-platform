@@ -1,11 +1,12 @@
 import { memo } from "react";
-import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Handle, Position, Node } from "@xyflow/react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 
-// Tipos para os dados dos nós
-interface FlowNodeData {
+// Tipos para os dados dos nós - deve corresponder ao FlowNodeData em types/flowBuilder.ts
+export interface FlowNodeData {
   label?: string;
+  description?: string;
   config?: {
     message?: string;
     condition?: string;
@@ -31,88 +32,104 @@ interface FlowNodeData {
   [key: string]: unknown;
 }
 
+// Tipo completo do node (com id, position, etc)
+export type FlowNode = Node<FlowNodeData>;
+
+// Helper para type assertion nos componentes
+const asFlowNodeData = (data: unknown): FlowNodeData => data as FlowNodeData;
+
 // Trigger Node
-export const TriggerNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
-  <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">⚡</span>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">Trigger</div>
-          <div className="text-xs text-muted-foreground">
-            Inicia o fluxo
+export const TriggerNode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
+  return (
+    <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">⚡</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Trigger</div>
+            <div className="text-xs text-muted-foreground">
+              Inicia o fluxo
+            </div>
           </div>
+          <Badge className="bg-green-600">Início</Badge>
         </div>
-        <Badge className="bg-green-600">Início</Badge>
+        <div className="text-xs text-muted-foreground mt-2">
+          Acionado quando uma mensagem é recebida
+        </div>
       </div>
-      <div className="text-xs text-muted-foreground mt-2">
-        Acionado quando uma mensagem é recebida
-      </div>
-    </div>
-    <Handle type="source" position={Position.Bottom} className="!bg-green-600" />
-  </Card>
-));
+      <Handle type="source" position={Position.Bottom} className="!bg-green-600" />
+    </Card>
+  );
+});
 
 // Message Node
-export const MessageNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
-  <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">💬</span>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">Enviar Mensagem</div>
-          <div className="text-xs text-muted-foreground">
-            {data.config?.message || "Configure a mensagem"}
+export const MessageNode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
+  return (
+    <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">💬</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Enviar Mensagem</div>
+            <div className="text-xs text-muted-foreground">
+              {flowData.config?.message || "Configure a mensagem"}
+            </div>
           </div>
+          <Badge className="bg-blue-600">Ação</Badge>
         </div>
-        <Badge className="bg-blue-600">Ação</Badge>
       </div>
-    </div>
-    <Handle type="target" position={Position.Top} className="!bg-blue-600" />
-    <Handle type="source" position={Position.Bottom} className="!bg-blue-600" />
-  </Card>
-));
+      <Handle type="target" position={Position.Top} className="!bg-blue-600" />
+      <Handle type="source" position={Position.Bottom} className="!bg-blue-600" />
+    </Card>
+  );
+});
 
 // Condition Node
-export const ConditionNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
-  <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">🔀</span>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">Condição</div>
-          <div className="text-xs text-muted-foreground">
-            {data.config?.condition || "Configure a condição"}
+export const ConditionNode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
+  return (
+    <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">🔀</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Condição</div>
+            <div className="text-xs text-muted-foreground">
+              {flowData.config?.condition || "Configure a condição"}
+            </div>
           </div>
+          <Badge className="bg-amber-600">Lógica</Badge>
         </div>
-        <Badge className="bg-amber-600">Lógica</Badge>
       </div>
-    </div>
-    <Handle type="target" position={Position.Top} className="!bg-amber-600" />
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      id="true"
-      style={{ left: "30%" }}
-      className="!bg-green-600"
-    />
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      id="false"
-      style={{ left: "70%" }}
-      className="!bg-red-600"
-    />
-  </Card>
-));
+      <Handle type="target" position={Position.Top} className="!bg-amber-600" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="true"
+        style={{ left: "30%" }}
+        className="!bg-green-600"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="false"
+        style={{ left: "70%" }}
+        className="!bg-red-600"
+      />
+    </Card>
+  );
+});
 
 // AI Node - Professional version with agent selection
-export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
+export const AINode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
   // Get agent info from data if configured
-  const agentId = data.aiAgent?.agentId;
-  const agentName = data.aiAgent?.agentName || 'AI Assistant';
-  const agentIcon = data.aiAgent?.agentIcon || '🤖';
-  const agentColor = data.aiAgent?.agentColor || '#ec4899';
+  const agentId = flowData.aiAgent?.agentId;
+  const agentName = flowData.aiAgent?.agentName || 'AI Assistant';
+  const agentIcon = flowData.aiAgent?.agentIcon || '🤖';
+  const agentColor = flowData.aiAgent?.agentColor || '#ec4899';
   const isConfigured = !!agentId;
 
   return (
@@ -130,7 +147,7 @@ export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm truncate">{agentName}</div>
             <div className="text-xs text-muted-foreground truncate">
-              {isConfigured ? data.aiAgent?.agentModel || 'Configurado' : 'Clique para configurar'}
+              {isConfigured ? flowData.aiAgent?.agentModel || 'Configurado' : 'Clique para configurar'}
             </div>
           </div>
           <Badge 
@@ -166,60 +183,69 @@ export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
 });
 
 // API Node
-export const APINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
-  <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">🔌</span>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">Chamada API</div>
-          <div className="text-xs text-muted-foreground">
-            {data.config?.method || "GET"} {data.config?.url || "Configure URL"}
+export const APINode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
+  return (
+    <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">🔌</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Chamada API</div>
+            <div className="text-xs text-muted-foreground">
+              {flowData.config?.method || "GET"} {flowData.config?.url || "Configure URL"}
+            </div>
           </div>
+          <Badge className="bg-cyan-600">API</Badge>
         </div>
-        <Badge className="bg-cyan-600">API</Badge>
       </div>
-    </div>
-    <Handle type="target" position={Position.Top} className="!bg-cyan-600" />
-    <Handle type="source" position={Position.Bottom} className="!bg-cyan-600" />
-  </Card>
-));
+      <Handle type="target" position={Position.Top} className="!bg-cyan-600" />
+      <Handle type="source" position={Position.Bottom} className="!bg-cyan-600" />
+    </Card>
+  );
+});
 
 // Delay Node
-export const DelayNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
-  <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">⏱️</span>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">Aguardar</div>
-          <div className="text-xs text-muted-foreground">
-            {data.config?.delay || "5"} segundos
+export const DelayNode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
+  return (
+    <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">⏱️</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Aguardar</div>
+            <div className="text-xs text-muted-foreground">
+              {flowData.config?.delay || "5"} segundos
+            </div>
           </div>
+          <Badge className="bg-purple-600">Tempo</Badge>
         </div>
-        <Badge className="bg-purple-600">Tempo</Badge>
       </div>
-    </div>
-    <Handle type="target" position={Position.Top} className="!bg-purple-600" />
-    <Handle type="source" position={Position.Bottom} className="!bg-purple-600" />
-  </Card>
-));
+      <Handle type="target" position={Position.Top} className="!bg-purple-600" />
+      <Handle type="source" position={Position.Bottom} className="!bg-purple-600" />
+    </Card>
+  );
+});
 
 // Transfer Node
-export const TransferNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
-  <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
-    <div className="p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-xl">👤</span>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">Transferir Humano</div>
-          <div className="text-xs text-muted-foreground">
-            {data.config?.department || "Suporte"}
+export const TransferNode = memo(({ data, selected }: Node) => {
+  const flowData = asFlowNodeData(data);
+  return (
+    <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
+      <div className="p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xl">👤</span>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">Transferir Humano</div>
+            <div className="text-xs text-muted-foreground">
+              {flowData.config?.department || "Suporte"}
+            </div>
           </div>
+          <Badge className="bg-red-600">Humano</Badge>
         </div>
-        <Badge className="bg-red-600">Humano</Badge>
       </div>
-    </div>
-    <Handle type="target" position={Position.Top} className="!bg-red-600" />
-  </Card>
-));
+      <Handle type="target" position={Position.Top} className="!bg-red-600" />
+    </Card>
+  );
+});

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Filter, X } from "lucide-react";
+import type { TagStats } from "@/server/drizzle/schema";
 
 interface TagFilterProps {
   onFilterChange: (tagIds: number[]) => void;
@@ -29,10 +30,13 @@ export function TagFilter({ onFilterChange, selectedTags = [] }: TagFilterProps)
   const { data: tagStats } = trpc.tags.getTagStats.useQuery();
   
   // Criar mapa de contadores
-  const tagCounts = tagStats?.reduce((acc, stat) => {
-    acc[stat.tagId] = stat.conversationCount;
-    return acc;
-  }, {} as Record<number, number>) || {};
+  const tagCounts = tagStats?.reduce(
+    (acc: Record<number, number>, stat: TagStats) => {
+      acc[stat.tagId] = stat.conversationCount;
+      return acc;
+    },
+    {} as Record<number, number>
+  ) || {};
 
   useEffect(() => {
     setLocalSelectedTags(selectedTags);
@@ -82,7 +86,7 @@ export function TagFilter({ onFilterChange, selectedTags = [] }: TagFilterProps)
                 <div className="flex items-center gap-2">
                   <div
                     className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: tag.color }}
+                    style={{ backgroundColor: tag.color || '#94a3b8' }}
                   />
                   <span>{tag.name}</span>
                   {tagCounts[tag.id] !== undefined && tagCounts[tag.id] > 0 && (
@@ -105,7 +109,7 @@ export function TagFilter({ onFilterChange, selectedTags = [] }: TagFilterProps)
           {selectedTagsData.map((tag) => (
             <Badge
               key={tag.id}
-              style={{ backgroundColor: tag.color }}
+              style={{ backgroundColor: tag.color || '#94a3b8' }}
               className="text-white cursor-pointer"
               onClick={() => handleToggleTag(tag.id)}
             >

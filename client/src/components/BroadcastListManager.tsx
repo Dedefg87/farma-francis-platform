@@ -63,7 +63,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   } | null>(null);
 
   // Queries
-  const { data: lists, refetch: refetchLists } = trpc.broadcast.list.useQuery();
+  const { data: lists, refetch: refetchLists } = trpc.broadcast.list.useQuery({});
   const { data: listDetail, refetch: refetchDetail } =
     trpc.broadcast.getById.useQuery(
       { listId: selectedListId! },
@@ -160,8 +160,9 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
     setView("detail");
   };
 
-  const handleRemoveMember = (memberId: number) => {
-    removeMember.mutate({ memberId });
+  const handleRemoveMember = (customerId: number) => {
+    if (!selectedListId) return;
+    removeMember.mutate({ listId: selectedListId, customerId });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -275,14 +276,14 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
         </div>
 
         <div className="space-y-2">
-          {lists?.length === 0 ? (
+          {lists?.lists?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Radio className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p>Nenhuma lista criada</p>
               <p className="text-sm">Crie sua primeira lista de transmissão</p>
             </div>
           ) : (
-            lists?.map(list => (
+            lists?.lists?.map(list => (
               <button
                 key={list.id}
                 onClick={() => {
@@ -503,7 +504,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
                     <div className="flex items-center gap-3">
                       <Avatar className="w-8 h-8">
                         <AvatarFallback className="bg-indigo-100 text-indigo-600 text-xs">
-                          {member.customerName
+                          {member.customer?.name
                             ?.split(" ")
                             .map(n => n[0])
                             .join("")
@@ -513,17 +514,17 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
                       </Avatar>
                       <div>
                         <p className="text-sm font-medium">
-                          {member.customerName}
+                          {member.customer?.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {member.customerPhone}
+                          {member.customer?.phone}
                         </p>
                       </div>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleRemoveMember(member.id)}
+                      onClick={() => handleRemoveMember(member.customerId)}
                       disabled={removeMember.isPending}
                     >
                       <X className="w-4 h-4 text-destructive" />

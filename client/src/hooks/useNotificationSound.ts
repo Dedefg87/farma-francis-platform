@@ -31,7 +31,8 @@ export function useNotificationSound() {
         }
       }
 
-      const audioContext = audioContextRef.current;
+      // Use non-null assertion - we just created it above
+      const audioContext = audioContextRef.current!;
       const now = audioContext.currentTime;
 
       // Criar oscilador para o som
