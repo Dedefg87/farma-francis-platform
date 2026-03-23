@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS `broadcast_lists` (
   `last_sent_at` timestamp NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_created_by` (`created_by`),
+  KEY `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 --> statement-breakpoint
 
@@ -76,13 +78,6 @@ CREATE TABLE IF NOT EXISTS `broadcast_members_sent` (
   CONSTRAINT `broadcast_members_sent_ibfk_1` FOREIGN KEY (`broadcast_message_id`) REFERENCES `broadcast_messages` (`id`) ON DELETE CASCADE,
   CONSTRAINT `broadcast_members_sent_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
---> statement-breakpoint
-
--- Índices adicionais para performance
-ALTER TABLE `broadcast_lists` ADD INDEX `idx_created_by` (`created_by`);
---> statement-breakpoint
-
-ALTER TABLE `broadcast_lists` ADD INDEX `idx_created_at` (`created_at`);
 --> statement-breakpoint
 
 -- Fim da migração
