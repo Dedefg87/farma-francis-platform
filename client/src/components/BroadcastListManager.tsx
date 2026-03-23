@@ -63,9 +63,8 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   } | null>(null);
 
   // Queries
+  const { data: lists, refetch: refetchLists } = trpc.broadcast.list.useQuery();
   const { data: listDetail, refetch: refetchDetail } =
-  const { data, refetch: refetchLists } = trpc.broadcast.list.useQuery();
-  const lists = data?.lists;
     trpc.broadcast.getById.useQuery(
       { listId: selectedListId! },
       { enabled: selectedListId !== null && view === "detail" }
@@ -276,14 +275,14 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
         </div>
 
         <div className="space-y-2">
-          {data?.lists?.length === 0 ? (
+          {lists?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Radio className="w-12 h-12 mx-auto mb-2 opacity-50" />
               <p>Nenhuma lista criada</p>
               <p className="text-sm">Crie sua primeira lista de transmissão</p>
             </div>
           ) : (
-            data?.lists?.map(list => (
+            lists?.map(list => (
               <button
                 key={list.id}
                 onClick={() => {
