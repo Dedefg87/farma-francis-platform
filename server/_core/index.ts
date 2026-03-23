@@ -22,9 +22,8 @@ import multer from "multer";
 import { uploadToR2 } from "../r2-client";
 import migrationRouter from "../admin/migration-router";
 import checkDuplicatesRouter from "../admin/check-duplicates-router";
-import debugRouter from "../admin/debug-router";
 import executeSqlRouter from "../admin/execute-sql-router";
-import broadcastCheckRouter from "../admin/broadcast-check-router.ts";
+import broadcastCheckRouter from "../admin/broadcast-check-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
