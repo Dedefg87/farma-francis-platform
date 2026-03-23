@@ -25,11 +25,20 @@ router.post("/execute-sql", async (req, res) => {
     
     let response: any = { success: true, message: "SQL executado com sucesso" };
     
+    // Se for SELECT, retornar as rows
     if (Array.isArray(result)) {
+      // multipleStatements: array de resultados
       response.results = result.map((r: any) => ({
+        rows: r[0] || [],
         affectedRows: r.affectedRows,
-        insertId: r.insertId
+        insertId: r.insertId,
+        fieldCount: r.fieldCount
       }));
+    } else if (result.rows) {
+      // SELECT single statement
+      response.rows = result.rows;
+      response.affectedRows = result.affectedRows || 0;
+      response.fieldCount = result.fieldCount || 0;
     } else {
       response.affectedRows = result?.affectedRows || 0;
       response.insertId = result?.insertId || null;
