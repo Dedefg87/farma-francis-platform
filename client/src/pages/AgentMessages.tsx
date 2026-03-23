@@ -312,7 +312,7 @@ export default function AgentMessages() {
     data: conversations,
     isLoading: loadingConversations,
     refetch: refetchConversations,
-  } = trpc.conversations.listActive.useQuery(undefined, {
+  } = trpc.conversations.listActive.useQuery(), {
     refetchInterval: 1000, // Atualizar a cada 1 segundo
   });
 

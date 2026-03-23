@@ -101,7 +101,7 @@ export default function AgentChat() {
 
   // Queries
   const { data: conversations, isLoading: conversationsLoading } =
-    trpc.conversations.listActive.useQuery(undefined, {
+    trpc.conversations.listActive.useQuery(), {
       refetchInterval: 5000, // Atualizar a cada 5 segundos
     });
 
