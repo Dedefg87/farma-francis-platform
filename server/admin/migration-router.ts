@@ -51,18 +51,18 @@ router.post("/run-migrations", async (req, res) => {
         } catch (err: any) {
           // Se for erro de tabela já existe, ignorar (idempotente)
           if (err.message.includes("already exists") || err.message.includes("Duplicate")) {
-            console.log(`[Migration] Tabela/coluna já existe: ${file}`);
+            console.log(`[Migration] Tabela/coluna já existe: ${item.file}`);
           } else {
             fileSuccess = false;
-            console.error(`[Migration] Erro em ${file}:`, err.message);
-            results.push({ file, statements: statements.length, success: false, error: err.message });
+            console.error(`[Migration] Erro em ${item.file}:`, err.message);
+            results.push({ file: item.file, statements: statements.length, success: false, error: err.message });
             break;
           }
         }
       }
       
       if (fileSuccess) {
-        results.push({ file, statements: statements.length, success: true });
+        results.push({ file: item.file, statements: statements.length, success: true });
       }
     }
 
