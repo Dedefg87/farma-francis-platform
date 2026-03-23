@@ -63,9 +63,9 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   } | null>(null);
 
   // Queries
-  const { data, refetch: refetchLists } = trpc.broadcast.list.useQuery();
-  const lists = data?.lists, refetch: refetchLists } = trpc.broadcast.list.useQuery();
   const { data: listDetail, refetch: refetchDetail } =
+  const { data, refetch: refetchLists } = trpc.broadcast.list.useQuery();
+  const lists = data?.lists;
     trpc.broadcast.getById.useQuery(
       { listId: selectedListId! },
       { enabled: selectedListId !== null && view === "detail" }
