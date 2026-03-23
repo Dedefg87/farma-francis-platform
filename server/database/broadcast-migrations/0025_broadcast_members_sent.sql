@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `broadcast_members_sent` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `broadcast_message_id` int NOT NULL,
+  `customer_id` int NOT NULL,
+  `provider` enum('whatsapp','instagram') NOT NULL DEFAULT 'whatsapp',
+  `external_id` varchar(255) DEFAULT NULL,
+  `status` enum('pending','sent','delivered','read','failed') NOT NULL DEFAULT 'pending',
+  `sent_at` timestamp NULL,
+  `delivered_at` timestamp NULL,
+  `read_at` timestamp NULL,
+  `error_message` text,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_message_customer` (`broadcast_message_id`, `customer_id`),
+  KEY `idx_broadcast_message_id` (`broadcast_message_id`),
+  KEY `idx_customer_id` (`customer_id`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `broadcast_members_sent_ibfk_1` FOREIGN KEY (`broadcast_message_id`) REFERENCES `broadcast_messages` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `broadcast_members_sent_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
