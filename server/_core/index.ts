@@ -365,13 +365,13 @@ async function startServer() {
     
     if (!dbRaw) return res.status(500).json({ error: "Database not available", dbUrl: maskedUrl });
     try {
-      const countResult = await dbRaw.raw("SELECT COUNT(*) as total FROM customers");
+      const [countResult] = await dbRaw.execute("SELECT COUNT(*) as total FROM customers");
       const total = countResult?.[0]?.total || 0;
       
-      const tablesResult = await dbRaw.raw("SHOW TABLES");
+      const [tablesResult] = await dbRaw.execute("SHOW TABLES");
       const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
       
-      const sampleCustomers = await dbRaw.raw("SELECT id, name, phone FROM customers LIMIT 5");
+      const [sampleCustomers] = await dbRaw.execute("SELECT id, name, phone FROM customers LIMIT 5");
       
       res.json({ 
         success: true, 
