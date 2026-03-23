@@ -7,8 +7,10 @@ const router = Router();
 
 /**
  * POST /api/admin/run-migrations
- * Executa todas as migrações Drizzle SQL (arquivos .sql em drizzle/)
+ * Executa todas as migrações Drizzle SQL (arquivos .sql em drizzle/ e server/database/broadcast-migrations/)
  * USO DE EMERGÊNCIA - apenas quando o banco está vazio
+ * 
+ * v2 - Suporta migrações de broadcast em pasta separada
  */
 router.post("/run-migrations", async (req, res) => {
   const dbRaw = await getDbRaw();
