@@ -29,8 +29,6 @@ import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
-import { runCRMMigration } from "../crm-migration";
-import { runBabyShowerMigration } from "../baby-shower-migration";
 import { runBroadcastMigrations } from "../broadcast-migration";
 
 // Auto-migrate media columns if missing
