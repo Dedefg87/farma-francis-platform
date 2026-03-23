@@ -64,28 +64,33 @@ export const conversationMessages = mysqlTable("conversation_messages", {
 
 export const broadcastMessages = mysqlTable("broadcast_messages", {
   id: autoincrement().primaryKey(),
-  listId: int("list_id"),
-  content: text("content"),
-  fileUrl: varchar("file_url", { length: 1000 }),
+  listId: int("list_id").notNull(),
+  messageText: text("message_text").notNull(),
+  caption: text("caption"),
+  fileUrl: text("file_url"),
   fileName: varchar("file_name", { length: 255 }),
   fileType: varchar("file_type", { length: 100 }),
   fileSize: int("file_size"),
-  sentBy: int("sent_by"),
-  totalRecipients: int("total_recipients"),
-  successfulSends: int("successful_sends").default(0),
-  failedSends: int("failed_sends").default(0),
-  status: varchar("status", { length: 50 }).notNull().default("pending"),
-  sentAt: timestamp("sent_at").defaultNow(),
+  senderId: int("sender_id").notNull(),
+  senderType: varchar("sender_type", { length: 16, enum: ["agent", "system"] }).default("agent"),
+  status: varchar("status", { length: 16, enum: ["draft", "sending", "sent", "failed", "partial"] }).default("draft"),
+  sentAt: timestamp("sent_at"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
   id: autoincrement().primaryKey(),
-  messageId: int("message_id"),
-  customerId: int("customer_id"),
-  phone: varchar("phone", { length: 32 }),
-  status: varchar("status", { length: 16, enum: ["pending", "sent", "failed"] }).default("pending"),
-  error: text("error"),
+  broadcastMessageId: int("broadcast_message_id").notNull(),
+  customerId: int("customer_id").notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  status: varchar("status", { length: 16, enum: ["pending", "sent", "delivered", "read", "failed"] }).default("pending"),
   sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const crmOutboxEvents = mysqlTable("crm_outbox_events", {
