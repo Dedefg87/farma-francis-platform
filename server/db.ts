@@ -162,8 +162,21 @@ export async function getDbRaw() {
     await client.execute("SELECT 1");
 
     return {
-      raw: async (sql: string, values?: any[]) => {
-        // Use mysql2's execute method for prepared statements with parameters
+      raw: async (sql: string, values?: any[], options?: any) => {
+        // Use mysql2's query method when multipleStatements is needed
+        // If options.multipleStatements is true, use query() which supports multiple statements
+        if (options?.multipleStatements) {
+          return new Promise((resolve, reject) => {
+            client.query(
+              { sql, values, nestTables: true, multipleStatements: true },
+              (err: any, results: any) => {
+                if (err) reject(err);
+                else resolve(results);
+              }
+            );
+          });
+        }
+        // Default: use execute for single prepared statement
         const [rows] = await client.execute(sql, values);
         return rows;
       },
