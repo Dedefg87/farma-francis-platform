@@ -24,6 +24,7 @@ import migrationRouter from "../admin/migration-router";
 import checkDuplicatesRouter from "../admin/check-duplicates-router";
 import debugRouter from "../admin/debug-router";
 import executeSqlRouter from "../admin/execute-sql-router";
+import testBroadcastRouter from "../admin/test-broadcast-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
@@ -408,6 +409,7 @@ async function startServer() {
   app.use("/api/admin", migrationRouter);
   app.use("/api/admin", checkDuplicatesRouter);
   app.use("/api/admin", debugRouter);
+  app.use("/api/admin", testBroadcastRouter);
   app.use("/api/admin", executeSqlRouter);
   // GET /api/admin/check-db - Diagnóstico do banco ativo
   app.get("/api/admin/check-db", async (req, res) => {
