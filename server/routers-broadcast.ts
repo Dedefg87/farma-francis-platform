@@ -32,15 +32,15 @@ export const broadcastRouter = router({
 
       const lists = await db.execute(sql`
         SELECT 
-          id,
-          name,
-          description,
+          bl.id,
+          bl.name,
+          bl.description,
           COUNT(DISTINCT blm.customer_id) as memberCount,
-          last_sent_at,
-          created_at
+          bl.last_sent_at,
+          bl.created_at
         FROM broadcast_lists bl
         LEFT JOIN broadcast_list_members blm ON bl.id = blm.list_id
-        GROUP BY bl.id
+        GROUP BY bl.id, bl.name, bl.description, bl.last_sent_at, bl.created_at
         ORDER BY bl.created_at DESC
         LIMIT ${input.limit}
         OFFSET ${offset}
