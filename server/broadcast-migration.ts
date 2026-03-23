@@ -137,22 +137,19 @@ export async function runBroadcastMigrations(db?: MySqlConnection) {
     // Add created_by column to users if not exists
     // ==============================
     try {
-      const ensureUserColumn = async (columnName: string, ddl: string) => {
-        const [r] = await db.execute(
-          `SELECT COUNT(*) as count FROM information_schema.columns
-           WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = ?`,
-          [columnName]
-        ) as any[];
-        const exists = r && Number(r[0]?.count || 0) > 0;
-        if (!exists) {
-          console.log(`[Broadcast Migration] Adding users.${columnName}`);
-          await db.execute(`ALTER TABLE users ADD COLUMN ${ddl}`);
-        }
-      };
-
-      await ensureUserColumn("created_by", "created_by INT DEFAULT NULL");
+      // Check if column exists using simple query (no prepared statement for compatibility)
+      const [cols] = await db.execute(
+        `SELECT COUNT(*) as count FROM information_schema.columns ` +
+        `WHERE table_schema = DATABASE() AND table_name = 'users' AND column_name = 'created_by'`
+      ) as any[];
+      const exists = cols && Number(cols[0]?.count || 0) > 0;
+      if (!exists) {
+        console.log(`[Broadcast Migration] Adding users.created_by`);
+        await db.execute(`ALTER TABLE users ADD COLUMN created_by INT DEFAULT NULL`);
+      }
     } catch (err) {
       console.error("[Broadcast Migration] ❌ users.created_by failed:", err);
+      // Non-critical, ignore
     }
 
     console.log("[Broadcast Migration] 🎉 All broadcast tables processed (check logs for errors)");
