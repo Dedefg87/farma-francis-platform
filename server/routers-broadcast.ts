@@ -30,7 +30,8 @@ export const broadcastRouter = router({
 
       const offset = (input.page - 1) * input.limit;
 
-      const lists = await db.execute(sql`
+      // Usar sql com interpolação CORRETA
+      const lists = await db.all(sql`
         SELECT 
           bl.id,
           bl.name,
@@ -46,14 +47,14 @@ export const broadcastRouter = router({
         OFFSET ${offset}
       `);
 
-      const totalResult = await db.execute(sql`
+      const totalResult = await db.all(sql`
         SELECT COUNT(*) as total FROM broadcast_lists
       `);
 
-      const total = (totalResult as any)?.[0]?.total || 0;
+      const total = totalResult?.[0]?.total || 0;
 
       return {
-        lists: (lists as any) || [],
+        lists: lists || [],
         pagination: {
           page: input.page,
           limit: input.limit,
