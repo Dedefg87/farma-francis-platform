@@ -1535,6 +1535,12 @@ export default function AgentMessages() {
           customerPhone={crmCustomerPhone}
         />
       ) : null}
+      {/* Broadcast List Modal */}
+      <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>
+        <DialogContent className="max-w-4xl h-[90vh] overflow-y-auto">
+          <BroadcastListManager onClose={() => setShowBroadcastModal(false)} />
+        </DialogContent>
+      </Dialog>
 
       {/* Image Lightbox */}
       <ImageLightbox
