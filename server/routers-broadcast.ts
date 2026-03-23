@@ -241,9 +241,9 @@ export const broadcastRouter = router({
       const messageResult = await db.execute(
         sql`
           INSERT INTO broadcast_messages 
-          (list_id, content, file_url, file_name, file_type, file_size, sent_by, sent_at, total_recipients, status)
-          VALUES (${input.listId}, ${input.content}, ${input.fileUrl || null}, ${input.fileName || null},
-                  ${input.fileType || null}, ${input.fileSize || 0}, ${ctx.user.id}, NOW(), ${members.length}, 'sending')
+          (list_id, message_text, caption, file_url, file_name, file_type, file_size, sender_id, sender_type, status, sent_at, total_recipients, error_message, created_at, updated_at)
+          VALUES (${input.listId}, ${input.content}, ${input.caption || null}, ${input.fileUrl || null}, ${input.fileName || null},
+                  ${input.fileType || null}, ${input.fileSize || 0}, ${ctx.user.id}, 'agent', 'sending', NOW(), ${members.length}, NULL, NOW(), NOW())
         `
       );
 
@@ -253,16 +253,16 @@ export const broadcastRouter = router({
       for (let i = 0; i < members.length; i += batchSize) {
         const batch = members.slice(i, i + batchSize);
         const valuesSql = batch.map(m =>
-          `(${Number(messageId)}, ${m.customerId}, '${m.phone.replace(/'/g, "''")}', 'pending', NULL, NULL)`
+          `(${Number(messageId)}, ${m.customerId}, '${m.phone.replace(/'/g, "''")}', 'pending', NULL, NULL, NOW(), NOW(), NOW())`
         ).join(',');
-        await db.execute(sql`INSERT INTO broadcast_members_sent (message_id, customer_id, phone, status, error, sent_at) VALUES ${valuesSql}`);
+        await db.execute(sql`INSERT INTO broadcast_members_sent (broadcast_message_id, customer_id, phone, status, error_message, delivered_at, read_at, sent_at, created_at) VALUES ${valuesSql}`);
       }
 
       await db.update(broadcastLists)
         .set({ lastSentAt: new Date() })
         .where(eq(broadcastLists.id, input.listId));
 
-      return { messageId: Number(messageId), totalRecipients: members.length, status: 'sending' };
+      return { messageId: Number(messageId), status: 'sending' };
     }),
 
   getMessageStats: protectedProcedure
@@ -278,15 +278,22 @@ export const broadcastRouter = router({
 
       if (!message.length) throw new Error("Mensagem não encontrada");
 
+      // Total de destinatários (da lista)
+      const [[{ total }]] = await db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(broadcastListMembers)
+        .where(eq(broadcastListMembers.listId, message[0].listId));
+
+      // Estatísticas por status
       const stats = await db.select({
         status: broadcastMembersSent.status,
         count: sql<number>`COUNT(*)`,
       })
         .from(broadcastMembersSent)
-        .where(eq(broadcastMembersSent.messageId, input.messageId))
+        .where(eq(broadcastMembersSent.broadcastMessageId, input.messageId))
         .groupBy(broadcastMembersSent.status);
 
-      const result: any = { total: message[0].totalRecipients || 0, sent: 0, failed: 0, pending: 0 };
+      const result: any = { total, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0 };
       stats.forEach(s => { result[s.status] = Number(s.count); });
 
       return result;
@@ -307,15 +314,12 @@ export const broadcastRouter = router({
       const messages = await db
         .select({
           id: broadcastMessages.id,
-          content: broadcastMessages.content,
+          messageText: broadcastMessages.messageText,
           fileUrl: broadcastMessages.fileUrl,
           fileName: broadcastMessages.fileName,
           fileType: broadcastMessages.fileType,
           fileSize: broadcastMessages.fileSize,
-          sentBy: broadcastMessages.sentBy,
-          totalRecipients: broadcastMessages.totalRecipients,
-          successfulSends: broadcastMessages.successfulSends,
-          failedSends: broadcastMessages.failedSends,
+          senderId: broadcastMessages.senderId,
           status: broadcastMessages.status,
           sentAt: broadcastMessages.sentAt,
           createdAt: broadcastMessages.createdAt,
