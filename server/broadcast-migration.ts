@@ -1,12 +1,27 @@
-export async function runBroadcastMigrations() {
-  const db = await getDbRaw();
+import { type MySqlConnection } from "mysql2/promise";
+
+export async function runBroadcastMigrations(db?: MySqlConnection) {
+  // If db not provided, try to get it (but this may fail in bundled builds)
   if (!db) {
-    console.error("[Broadcast Migration] Database not available");
-    return false;
+    try {
+      const { getDb } = await import("./db");
+      const drizzleDb = await getDb();
+      if (!drizzleDb) {
+        console.error("[Broadcast Migration] Database not available");
+        return false;
+      }
+      // @ts-ignore - drizzleDb has execute method compatible with mysql2
+      db = drizzleDb as MySqlConnection;
+    } catch (err) {
+      console.error("[Broadcast Migration] Failed to get DB:", err);
+      return false;
+    }
   }
 
   try {
     console.log("[Broadcast Migration] 🚀 Starting broadcast migrations...");
+
+    // ... reste do código permanece igual, usando db.execute(...)
 
     // ==============================
     // broadcast_lists table

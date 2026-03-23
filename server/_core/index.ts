@@ -30,6 +30,7 @@ import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runBroadcastMigrations } from "../broadcast-migration";
+import { getDb } from "../db";
 
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
@@ -282,7 +283,12 @@ async function startServer() {
 
   // Iniciar processador de sync de mensagens mobile (background)
   // Auto-migrate broadcast tables (cria tabela broadcast_members_sent se não existir)
-  await runBroadcastMigrations();
+  const db = await getDb();
+  if (db) {
+    await runBroadcastMigrations(db);
+  } else {
+    console.error("[Server] Database not available for broadcast migration");
+  }
   // Garantir índices únicos para idempotência (evitar mensagens duplicadas)
   await runIdempotencyConstraints();
   startMobileSyncProcessor();
