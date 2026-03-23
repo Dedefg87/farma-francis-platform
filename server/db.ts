@@ -151,32 +151,27 @@ export async function getDbRaw() {
   }
 
   try {
-    // Access the underlying mysql2 connection through drizzle's session
     const session = (db as any).session;
     if (!session || !session.client) {
       throw new Error("Could not access underlying database connection");
     }
     const client = session.client;
 
-    // Test the connection
     await client.execute("SELECT 1");
 
     return {
-      raw: async (sql: string, values?: any[], options?: any) => {
-        // Use mysql2's query method when multipleStatements is needed
-        // If options.multipleStatements is true, use query() which supports multiple statements
-        if (options?.multipleStatements) {
-          return new Promise((resolve, reject) => {
-            client.query(
-              { sql, values, nestTables: true, multipleStatements: true },
-              (err: any, results: any) => {
-                if (err) reject(err);
-                else resolve(results);
-              }
-            );
+      raw: async (sql: string, values?: any[], options: any = {}) => {
+        const { multipleStatements = false } = options;
+        
+        if (multipleStatements) {
+          // Use query() com promise diretamente (sem callback)
+          return await client.query({
+            sql,
+            values,
+            nestTables: true,
+            multipleStatements: true
           });
         }
-        // Default: use execute for single prepared statement
         const [rows] = await client.execute(sql, values);
         return rows;
       },
