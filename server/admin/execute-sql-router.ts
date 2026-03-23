@@ -19,26 +19,14 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    // Usar execute (mais confiável para DDL e múltiplos statements)
-    const result: any = await db.execute(sql);
+    // Usar execute que retorna [rows, fields] para SELECT
+    const result = await db.execute(sql);
     
-    const response: any = { success: true, message: "SQL executado com sucesso" };
-    
-    if (Array.isArray(result)) {
-      response.results = result.map((r: any) => ({
-        rows: r[0] || [],
-        affectedRows: r.affectedRows || 0,
-        insertId: r.insertId || null,
-        fieldCount: r.fieldCount || 0
-      }));
-    } else {
-      response.rows = result.rows || [];
-      response.affectedRows = result.affectedRows || 0;
-      response.insertId = result.insertId || null;
-      response.fieldCount = result.fieldCount || 0;
-    }
-    
-    res.json(response);
+    res.json({
+      success: true,
+      message: "SQL executado com sucesso",
+      result // retorna完整 para debug
+    });
   } catch (err: any) {
     console.error("[ExecuteSQL] Erro:", err.message);
     res.status(500).json({ success: false, error: err.message });
