@@ -657,3 +657,4 @@ export const customerTreatments = mysqlTable("customer_treatments", {
   createdAt: datetime("created_at").notNull(),
   updatedAt: datetime("updated_at").notNull(),
 });
+// Force rebuild - broadcast tables
