@@ -27,49 +27,18 @@ export const broadcastRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-
       const offset = (input.page - 1) * input.limit;
-
-      // Usar sql com interpolação CORRETA
-      const lists = await db.execute(sql`
-        SELECT 
-          bl.id,
-          bl.name,
-          bl.description,
-          COUNT(DISTINCT blm.customer_id) as memberCount,
-          bl.last_sent_at,
-          bl.created_at
-        FROM broadcast_lists bl
-        LEFT JOIN broadcast_list_members blm ON bl.id = blm.list_id
-        GROUP BY bl.id, bl.name, bl.description, bl.last_sent_at, bl.created_at
-        ORDER BY bl.created_at DESC
-        LIMIT ${input.limit}
-        OFFSET ${offset}
-      `);
-
-      const totalResult = await db.execute(sql`
-        SELECT COUNT(*) as total FROM broadcast_lists
-      `);
-
-      const total = totalResult?.[0]?.total || 0;
-
-      return {
-        lists: lists || [],
-        pagination: {
-          page: input.page,
-          limit: input.limit,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / input.limit),
-        },
-      };
+      const lists = await db.select({
+        id: broadcastLists.id,
+        name: broadcastLists.name,
+        description: broadcastLists.description,
+        memberCount: sql`COUNT(DISTINCT blm.customer_id)`,
+        lastSentAt: broadcastLists.lastSentAt,
+        createdAt: broadcastLists.createdAt,
+      }).from(broadcastLists).leftJoin(broadcastListMembers, eq(broadcastLists.id, broadcastListMembers.listId)).groupBy(broadcastLists.id).orderBy(desc(broadcastLists.createdAt)).limit(input.limit).offset(offset);
+      const [{ total }] = await db.select({ total: sql`COUNT(*)` }).from(broadcastLists);
+      return { lists, pagination: { page: input.page, limit: input.limit, total: Number(total), totalPages: Math.ceil(Number(total) / input.limit) } };
     }),
-  getById: protectedProcedure
-    .input(z.object({
-      listId: z.number().int().positive(),
-    }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
 
       // Buscar lista
       const [list] = await db
