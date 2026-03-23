@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS `broadcast_lists` (
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--> statement-breakpoint
 
 -- Tabela: broadcast_list_members
 CREATE TABLE IF NOT EXISTS `broadcast_list_members` (
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS `broadcast_list_members` (
   CONSTRAINT `broadcast_list_members_ibfk_1` FOREIGN KEY (`list_id`) REFERENCES `broadcast_lists` (`id`) ON DELETE CASCADE,
   CONSTRAINT `broadcast_list_members_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--> statement-breakpoint
 
 -- Tabela: broadcast_messages
 CREATE TABLE IF NOT EXISTS `broadcast_messages` (
@@ -51,6 +53,7 @@ CREATE TABLE IF NOT EXISTS `broadcast_messages` (
   CONSTRAINT `broadcast_messages_ibfk_1` FOREIGN KEY (`list_id`) REFERENCES `broadcast_lists` (`id`) ON DELETE CASCADE,
   CONSTRAINT `broadcast_messages_ibfk_2` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--> statement-breakpoint
 
 -- Tabela: broadcast_members_sent
 CREATE TABLE IF NOT EXISTS `broadcast_members_sent` (
@@ -73,7 +76,11 @@ CREATE TABLE IF NOT EXISTS `broadcast_members_sent` (
   CONSTRAINT `broadcast_members_sent_ibfk_1` FOREIGN KEY (`broadcast_message_id`) REFERENCES `broadcast_messages` (`id`) ON DELETE CASCADE,
   CONSTRAINT `broadcast_members_sent_ibfk_2` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+--> statement-breakpoint
 
 -- Índices adicionais para performance
 ALTER TABLE `broadcast_lists` ADD INDEX `idx_created_by` (`created_by`);
 ALTER TABLE `broadcast_lists` ADD INDEX `idx_created_at` (`created_at`);
+--> statement-breakpoint
+
+-- Fim da migração
