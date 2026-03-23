@@ -30,43 +30,45 @@ export const broadcastRouter = router({
 
       const offset = (input.page - 1) * input.limit;
 
-      // Query com SQL raw para evitar bug do Drizzle
-      const listsResult = await db.execute(sql`
-        SELECT 
-          bl.id,
-          bl.name,
-          bl.description,
-          COUNT(DISTINCT blm.customer_id) as memberCount,
-          bl.last_sent_at as lastSentAt,
-          bl.created_at as createdAt
-        FROM broadcast_lists bl
-        LEFT JOIN broadcast_list_members blm ON bl.id = blm.list_id
-        GROUP BY bl.id, bl.name, bl.description, bl.last_sent_at, bl.created_at
-        ORDER BY bl.created_at DESC
-        LIMIT ${input.limit}
-        OFFSET ${offset}
-      `);
+      try {
+        // Usar raw query sem prepared statement
+        const listsResult = await (db as any).execute(sql`
+          SELECT 
+            \`bl\`.\`id\`,
+            \`bl\`.\`name\`,
+            \`bl\`.\`description\`,
+            COUNT(DISTINCT \`blm\`.\`customer_id\`) as memberCount,
+            \`bl\`.\`last_sent_at\` as lastSentAt,
+            \`bl\`.\`created_at\` as createdAt
+          FROM broadcast_lists \`bl\`
+          LEFT JOIN broadcast_list_members \`blm\` ON \`bl\`.\`id\` = \`blm\`.\`list_id\`
+          GROUP BY \`bl\`.\`id\`, \`bl\`.\`name\`, \`bl\`.\`description\`, \`bl\`.\`last_sent_at\`, \`bl\`.\`created_at\`
+          ORDER BY \`bl\`.\`created_at\` DESC
+          LIMIT ${input.limit}
+          OFFSET ${offset}
+        `);
 
-      const totalResult = await db.execute(sql`
-        SELECT COUNT(*) as total FROM broadcast_lists
-      `);
+        const totalResult = await (db as any).execute(sql`
+          SELECT COUNT(*) as total FROM broadcast_lists
+        `);
 
-      const lists = (listsResult as any).rows || listsResult || [];
-      const total = (totalResult as any).rows?.[0]?.total || 0;
+        const lists = Array.isArray(listsResult) ? listsResult : (listsResult as any).rows || [];
+        const total = Array.isArray(totalResult) ? totalResult[0]?.total : (totalResult as any).rows?.[0]?.total || 0;
 
-      return {
-        lists,
-        pagination: {
-          page: input.page,
-          limit: input.limit,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / input.limit),
-        },
-      };
+        return {
+          lists,
+          pagination: {
+            page: input.page,
+            limit: input.limit,
+            total: Number(total),
+            totalPages: Math.ceil(Number(total) / input.limit),
+          },
+        };
+      } catch (error) {
+        console.error("[broadcast.list] Query error:", error);
+        throw error;
+      }
     }),
-  getById: protectedProcedure
-    .input(z.object({
-      listId: z.number().int().positive(),
     }))
     .query(async ({ input }) => {
       const db = await getDb();
