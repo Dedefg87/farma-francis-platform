@@ -9,8 +9,12 @@ router.get("/test-broadcast-tables", async (req, res) => {
 
   try {
     // Verificar se as tabelas de broadcast existem
-    const [tables] = await db.raw("SHOW TABLES LIKE 'broadcast_%'");
-    const broadcastTables = tables.map((row: any) => Object.values(row)[0]);
+    const [rows] = await db.raw("SHOW TABLES LIKE 'broadcast_%'");
+    // rows é um array de objetos, extrair o nome da tabela
+    const broadcastTables = rows.map((row: any) => {
+      const tableName = Object.values(row)[0];
+      return tableName;
+    });
 
     // Contar registros em cada tabela se existir
     const counts = {};
