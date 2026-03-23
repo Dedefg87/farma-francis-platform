@@ -17,21 +17,25 @@ router.post("/run-migrations", async (req, res) => {
   }
 
   try {
-    // Determinar caminho do diretório drizzle
+    // Determinar caminhos dos diretórios de migração
     const drizzleDir = join(process.cwd(), "drizzle");
+    const broadcastDir = join(process.cwd(), "server/database/broadcast-migrations");
     
-    // Ler todos os arquivos .sql e ordenar
-    const files = await readdir(drizzleDir);
-    const sqlFiles = files
-      .filter(f => f.endsWith(".sql") && /^\d+_/.test(f))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    // Ler todos os arquivos .sql e ordenar, mantendo origem
+    const drizzleFiles = (await readdir(drizzleDir).catch(() => [])).map(f => ({ file: f, dir: drizzleDir }));
+    const broadcastFiles = (await readdir(broadcastDir).catch(() => [])).map(f => ({ file: f, dir: broadcastDir }));
+    
+    const sqlFiles = [
+      ...drizzleFiles.filter(f => f.file.endsWith(".sql") && /^\d+_/.test(f.file)),
+      ...broadcastFiles.filter(f => f.file.endsWith(".sql") && /^\d+_/.test(f.file))
+    ].sort((a, b) => a.file.localeCompare(b.file, undefined, { numeric: true }));
 
     console.log(`[Migration] Executando ${sqlFiles.length} arquivos SQL...`);
 
     const results: { file: string; statements: number; success: boolean; error?: string }[] = [];
     
-    for (const file of sqlFiles) {
-      const filePath = join(drizzleDir, file);
+    for (const item of sqlFiles) {
+      const filePath = join(item.dir, item.file);
       const content = await readFile(filePath, "utf-8");
       
       // Dividir por statement-breakpoint
