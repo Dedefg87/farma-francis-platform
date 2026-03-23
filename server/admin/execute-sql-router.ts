@@ -19,13 +19,15 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    // Usar execute que retorna [rows, fields] para SELECT
-    const result = await db.execute(sql);
+    // db.execute retorna [rows, fields] para single statement
+    const [rows, fields] = await db.execute(sql);
     
     res.json({
       success: true,
       message: "SQL executado com sucesso",
-      result // retorna完整 para debug
+      rows,
+      fieldsCount: fields?.length || 0,
+      affectedRows: fields?.affectedRows || rows?.affectedRows || 0
     });
   } catch (err: any) {
     console.error("[ExecuteSQL] Erro:", err.message);
