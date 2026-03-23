@@ -6,7 +6,6 @@ const router = Router();
 /**
  * POST /api/admin/execute-sql
  * Executa SQL raw no banco (APENAS PARA MANUTENÇÃO)
- * Nota: Usa multipleStatements=true para permitir múltiplos comandos
  */
 router.post("/execute-sql", async (req, res) => {
   const db = await getDbRaw();
@@ -20,14 +19,23 @@ router.post("/execute-sql", async (req, res) => {
   }
 
   try {
-    //Executa com multipleStatements=true para suportar múltiplos comandos
-    const [result] = await db.raw(sql, [], { multipleStatements: true });
-    res.json({
-      success: true,
-      affectedRows: result?.affectedRows || 0,
-      insertId: result?.insertId || null,
-      message: "SQL executado com sucesso"
-    });
+    // Detecta se há múltiplos statements separados por ;;
+    const hasMultiple = (sql.match(/;;+/g) || []).length > 0;
+    const result: any = await db.raw(sql, [], { multipleStatements: hasMultiple });
+    
+    let response: any = { success: true, message: "SQL executado com sucesso" };
+    
+    if (Array.isArray(result)) {
+      response.results = result.map((r: any) => ({
+        affectedRows: r.affectedRows,
+        insertId: r.insertId
+      }));
+    } else {
+      response.affectedRows = result?.affectedRows || 0;
+      response.insertId = result?.insertId || null;
+    }
+    
+    res.json(response);
   } catch (err: any) {
     console.error("[ExecuteSQL] Erro:", err);
     res.status(500).json({ success: false, error: err.message });
