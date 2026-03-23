@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getDb } from "../db";
+import { getDbRaw } from "../db";
 
 const router = Router();
 
@@ -8,7 +8,7 @@ const router = Router();
  * Verifica se existem números duplicados no sistema
  */
 router.get("/check-duplicates", async (req, res) => {
-  const db = await getDb();
+  const db = await getDbRaw();
   if (!db) {
     return res.status(500).json({ success: false, error: "Database not available" });
   }
@@ -143,44 +143,49 @@ router.get("/check-duplicates", async (req, res) => {
  * Verifica se a normalização de telefones está funcionando corretamente
  */
 router.get("/verify-normalization", async (req, res) => {
-  const db = await getDb();
+  const db = await getDbRaw();
   if (!db) {
     return res.status(500).json({ success: false, error: "Database not available" });
   }
 
   try {
     // Buscar amostra de customers com diferentes formatos
-    const result: any = await (db as any).execute(`
-      SELECT id, name, phone,
-        -- Extrair dígitos apenas
-        REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', '') as digits,
-        -- Verificar se tem 13 dígitos (55 + DDD + 9 + 8 dígitos)
-        CASE 
-          WHEN LENGTH(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', '')) = 13 
-          THEN 'COM_9' 
-          ELSE 'SEM_9' 
-        END as has9
+    const [rows] = await db.execute(`
+      SELECT id, name, phone
       FROM customers
       WHERE phone IS NOT NULL
       ORDER BY RAND()
       LIMIT 20
     `);
 
-    const sample = result.rows || [];
+    const sample = rows || [];
     
-    // Contar por formato
-    const with9 = sample.filter((c: any) => c.has9 === 'COM_9').length;
-    const without9 = sample.filter((c: any) => c.has9 === 'SEM_9').length;
+    // Análise manual dos formatos
+    const analysis = sample.map((c: any) => {
+      const digitsOnly = c.phone.replace(/\D/g, '');
+      const has9 = digitsOnly.length >= 12; // 55 + DDD + 9 + 8 dígitos = 13, ou DDD + 9 + 8 = 11
+      return {
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        digits: digitsOnly,
+        length: digitsOnly.length,
+        format: has9 ? 'COM_9' : 'SEM_9'
+      };
+    });
+
+    const with9 = analysis.filter((c: any) => c.format === 'COM_9').length;
+    const without9 = analysis.filter((c: any) => c.format === 'SEM_9').length;
 
     res.json({
       success: true,
-      sample,
+      sample: analysis,
       stats: {
-        total: sample.length,
+        total: analysis.length,
         with9,
         without9,
       },
-      message: `Amostra de ${sample.length} customers: ${with9} com 9º dígito, ${without9} sem 9º dígito`,
+      message: `Amostra de ${analysis.length} customers: ${with9} com 9º dígito, ${without9} sem 9º dígito`,
     });
   } catch (err: any) {
     console.error("[VerifyNormalization] Erro:", err);
