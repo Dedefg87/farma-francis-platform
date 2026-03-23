@@ -5,7 +5,7 @@
  */
 import { getDb } from "../db";
 import { conversations, conversationMessages, customers, integrationSettings } from "../../drizzle/schema";
-import { eq, and, or, sql } from "drizzle-orm";
+import { eq, and, or, sql, gte } from "drizzle-orm";
 import { generatePhoneVariants } from "../utils/phone";
 
 import { sseManager, EVENTS } from "../_core/sse";
