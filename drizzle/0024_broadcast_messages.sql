@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS `broadcast_messages` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `list_id` int NOT NULL,
+  `message_text` text NOT NULL,
+  `caption` text,
+  `file_url` text,
+  `file_name` varchar(255) DEFAULT NULL,
+  `file_type` varchar(100) DEFAULT NULL,
+  `file_size` int DEFAULT NULL,
+  `sender_id` int NOT NULL,
+  `sender_type` enum('agent','system') NOT NULL DEFAULT 'agent',
+  `status` enum('draft','sending','sent','failed','partial') NOT NULL DEFAULT 'draft',
+  `sent_at` timestamp NULL,
+  `error_message` text,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_list_id` (`list_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_sender_id` (`sender_id`),
+  CONSTRAINT `broadcast_messages_ibfk_1` FOREIGN KEY (`list_id`) REFERENCES `broadcast_lists` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `broadcast_messages_ibfk_2` FOREIGN KEY (`sender_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
