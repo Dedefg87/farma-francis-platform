@@ -30,28 +30,29 @@ export const broadcastRouter = router({
 
       const offset = (input.page - 1) * input.limit;
 
-      const [lists] = await db
-        .select({
-          id: broadcastLists.id,
-          name: broadcastLists.name,
-          description: broadcastLists.description,
-          memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
-          lastSentAt: broadcastLists.lastSentAt,
-          createdAt: broadcastLists.createdAt,
-        })
-        .from(broadcastLists)
-        .leftJoin(
-          broadcastListMembers,
-          eq(broadcastLists.id, broadcastListMembers.listId)
-        )
-        .groupBy(broadcastLists.id)
-        .orderBy(desc(broadcastLists.createdAt))
-        .limit(input.limit)
-        .offset(offset);
+      // Query com SQL raw para evitar bug do Drizzle
+      const listsResult = await db.execute(sql`
+        SELECT 
+          bl.id,
+          bl.name,
+          bl.description,
+          COUNT(DISTINCT blm.customer_id) as memberCount,
+          bl.last_sent_at as lastSentAt,
+          bl.created_at as createdAt
+        FROM broadcast_lists bl
+        LEFT JOIN broadcast_list_members blm ON bl.id = blm.list_id
+        GROUP BY bl.id, bl.name, bl.description, bl.last_sent_at, bl.created_at
+        ORDER BY bl.created_at DESC
+        LIMIT ${input.limit}
+        OFFSET ${offset}
+      `);
 
-      const [[{ total }]] = await db
-        .select({ total: sql<number>`COUNT(*)` })
-        .from(broadcastLists);
+      const totalResult = await db.execute(sql`
+        SELECT COUNT(*) as total FROM broadcast_lists
+      `);
+
+      const lists = (listsResult as any).rows || listsResult || [];
+      const total = (totalResult as any).rows?.[0]?.total || 0;
 
       return {
         lists,
@@ -63,10 +64,6 @@ export const broadcastRouter = router({
         },
       };
     }),
-
-  /**
-   * Obter detalhes de uma lista (incluindo membros)
-   */
   getById: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
