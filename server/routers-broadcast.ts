@@ -1,10 +1,10 @@
-import { protectedProcedure, router } from "@/server/trpc";
-import { getDb } from "@/server/db";
+import { protectedProcedure, router } from "./_core/trpc";
+import { getDb } from "./db";
 import { z } from "zod";
 import {
   broadcastLists,
   broadcastListMembers,
-} from "@/server/schema";
+} from "../drizzle/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
 export const broadcastRouter = router({
