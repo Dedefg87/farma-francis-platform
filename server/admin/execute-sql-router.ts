@@ -5,7 +5,8 @@ const router = Router();
 
 /**
  * POST /api/admin/execute-sql
- * Executa SQL raw no banco (APENAS PARA MANUTENÇÃO - skipping auth temporariamente)
+ * Executa SQL raw no banco (APENAS PARA MANUTENÇÃO)
+ * Nota: Usa multipleStatements=true para permitir múltiplos comandos
  */
 router.post("/execute-sql", async (req, res) => {
   const db = await getDbRaw();
@@ -19,11 +20,12 @@ router.post("/execute-sql", async (req, res) => {
   }
 
   try {
-    const [result] = await db.raw(sql);
+    //Executa com multipleStatements=true para suportar múltiplos comandos
+    const [result] = await db.raw(sql, [], { multipleStatements: true });
     res.json({
       success: true,
-      affectedRows: result.affectedRows,
-      insertId: result.insertId,
+      affectedRows: result?.affectedRows || 0,
+      insertId: result?.insertId || null,
       message: "SQL executado com sucesso"
     });
   } catch (err: any) {
