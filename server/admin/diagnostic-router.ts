@@ -38,11 +38,46 @@ router.get("/check-db", async (req, res) => {
     
     const sampleCustomers = await dbRaw.raw("SELECT id, name, phone FROM customers LIMIT 5");
     
+    // 🔍 Verificação de variações de telefone
+    const [phoneVarRows] = await dbRaw.raw(`
+      SELECT 
+        last8,
+        COUNT(*) as count,
+        GROUP_CONCAT(DISTINCT phone ORDER BY phone SEPARATOR ' | ') as phones,
+        GROUP_CONCAT(DISTINCT id) as ids
+      FROM (
+        SELECT 
+          id,
+          phone,
+          SUBSTRING(
+            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''),
+            -8
+          ) as last8
+        FROM customers
+        WHERE phone IS NOT NULL
+      ) AS normalized
+      GROUP BY last8
+      HAVING COUNT(*) > 1
+      ORDER BY count DESC
+      LIMIT 5
+    `);
+    
+    // 🔍 Teste específico: IDs 2,3,4 do check-db anterior
+    const [testRows] = await dbRaw.raw(`
+      SELECT id, name, phone,
+        SUBSTRING(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), -8) as last8
+      FROM customers
+      WHERE id IN (2, 3, 4) OR id BETWEEN 1 AND 10
+      ORDER BY id
+    `);
+
     res.json({ 
       success: true, 
       totalCustomers: Number(total), 
       tables: tables.slice(0, 15),
       sampleCustomers,
+      phoneVariationsSample: phoneVarRows,
+      phoneTest: testRows,
       envVars,
       dbType: "mysql2-raw"
     });
