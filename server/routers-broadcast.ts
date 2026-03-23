@@ -30,31 +30,30 @@ export const broadcastRouter = router({
 
       const offset = (input.page - 1) * input.limit;
 
-      const [lists] = await db
-        .select({
-          id: broadcastLists.id,
-          name: broadcastLists.name,
-          description: broadcastLists.description,
-          memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
-          lastSentAt: broadcastLists.lastSentAt,
-          createdAt: broadcastLists.createdAt,
-        })
-        .from(broadcastLists)
-        .leftJoin(
-          broadcastListMembers,
-          eq(broadcastLists.id, broadcastListMembers.listId)
-        )
-        .groupBy(broadcastLists.id)
-        .orderBy(desc(broadcastLists.createdAt))
-        .limit(input.limit)
-        .offset(offset);
+      const lists = await db.execute(sql`
+        SELECT 
+          id,
+          name,
+          description,
+          COUNT(DISTINCT blm.customer_id) as memberCount,
+          last_sent_at,
+          created_at
+        FROM broadcast_lists bl
+        LEFT JOIN broadcast_list_members blm ON bl.id = blm.list_id
+        GROUP BY bl.id
+        ORDER BY bl.created_at DESC
+        LIMIT ${input.limit}
+        OFFSET ${offset}
+      `);
 
-      const [[{ total }]] = await db
-        .select({ total: sql<number>`COUNT(*)` })
-        .from(broadcastLists);
+      const totalResult = await db.execute(sql`
+        SELECT COUNT(*) as total FROM broadcast_lists
+      `);
+
+      const total = (totalResult as any)?.[0]?.total || 0;
 
       return {
-        lists,
+        lists: (lists as any) || [],
         pagination: {
           page: input.page,
           limit: input.limit,
@@ -63,10 +62,6 @@ export const broadcastRouter = router({
         },
       };
     }),
-
-  /**
-   * Obter detalhes de uma lista (incluindo membros)
-   */
   getById: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
