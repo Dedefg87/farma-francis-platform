@@ -409,7 +409,6 @@ async function startServer() {
   app.use("/api/admin", migrationRouter);
   app.use("/api/admin", checkDuplicatesRouter);
   app.use("/api/admin", debugRouter);
-  app.use("/api/admin", testBroadcastRouter);
   app.use("/api/admin", executeSqlRouter);
   // GET /api/admin/check-db - Diagnóstico do banco ativo
   app.get("/api/admin/check-db", async (req, res) => {
