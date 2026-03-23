@@ -76,14 +76,24 @@ router.get("/check-duplicates", async (req, res) => {
     results.details.duplicateConversationMessages = duplicateConversations;
 
     // 4. Verificar variações de telefone (últimos 8 dígitos iguais)
+    // Normaliza removendo +, espaços, traços, parênteses antes de extrair
     const phoneVarResult: any = await (db as any).execute(`
       SELECT 
-        SUBSTRING(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), -8) as last8,
+        last8,
         COUNT(*) as count,
         GROUP_CONCAT(DISTINCT phone ORDER BY phone SEPARATOR ' | ') as phones,
         GROUP_CONCAT(DISTINCT id) as ids
-      FROM customers
-      WHERE phone REGEXP '^[0-9]{10,12}$'
+      FROM (
+        SELECT 
+          id,
+          phone,
+          SUBSTRING(
+            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''),
+            -8
+          ) as last8
+        FROM customers
+        WHERE phone IS NOT NULL
+      ) AS normalized
       GROUP BY last8
       HAVING COUNT(*) > 1
       ORDER BY count DESC
