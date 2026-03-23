@@ -1,11 +1,9 @@
 import { memo } from "react";
-import { Handle, Position, Node } from "@xyflow/react";
+import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
-import type { FlowNodeData } from "./index";
 
-function MessageNode({ data, selected }: Node) {
-  const flowData = data as FlowNodeData;
+function MessageNode({ data, selected }: NodeProps) {
   return (
     <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
       <div className="p-3">
@@ -14,7 +12,7 @@ function MessageNode({ data, selected }: Node) {
           <div className="flex-1">
             <div className="font-semibold text-sm">Enviar Mensagem</div>
             <div className="text-xs text-muted-foreground">
-              {flowData.config?.message || "Configure a mensagem"}
+              {data.config?.message || "Configure a mensagem"}
             </div>
           </div>
           <Badge className="bg-blue-600">Ação</Badge>

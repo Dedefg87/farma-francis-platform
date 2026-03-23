@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
 function getImageSrc(url: string | null | undefined, filename?: string | null): string {
@@ -91,13 +91,7 @@ export default function AgentChat() {
     messageId?: number;
   }>({ open: false, url: null });
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
-
-  const handleScroll = useCallback(() => {
-    // Pode-se adicionar lógica de infinite scroll ou detecção de scroll bottom
-    // Por enquanto apenas声明 para evitar erros de tipo
-  }, []);
 
   // Queries
   const { data: conversations, isLoading: conversationsLoading } =

@@ -447,13 +447,13 @@ export default function APISettings() {
 
                     {whatsappConfig && (
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                        {(whatsappConfig.config as any)?.testStatus === "success" ? (
+                        {whatsappConfig.testStatus === "success" ? (
                           <Check className="h-4 w-4 text-green-600" />
-                        ) : (whatsappConfig.config as any)?.testStatus === "failed" ? (
+                        ) : whatsappConfig.testStatus === "failed" ? (
                           <X className="h-4 w-4 text-red-600" />
                         ) : null}
                         <span className="text-sm">
-                          {(whatsappConfig.config as any)?.testMessage ||
+                          {whatsappConfig.testMessage ||
                             "Configuração não testada"}
                         </span>
                       </div>
@@ -585,13 +585,13 @@ export default function APISettings() {
 
                     {instagramConfig && (
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                        {(instagramConfig.config as any)?.testStatus === "success" ? (
+                        {instagramConfig.testStatus === "success" ? (
                           <Check className="h-4 w-4 text-green-600" />
-                        ) : (instagramConfig.config as any)?.testStatus === "failed" ? (
+                        ) : instagramConfig.testStatus === "failed" ? (
                           <X className="h-4 w-4 text-red-600" />
                         ) : null}
                         <span className="text-sm">
-                          {(instagramConfig.config as any)?.testMessage ||
+                          {instagramConfig.testMessage ||
                             "Configuração não testada"}
                         </span>
                       </div>
@@ -689,13 +689,13 @@ export default function APISettings() {
 
                     {evolutionConfig && (
                       <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                        {(evolutionConfig.config as any)?.testStatus === "success" ? (
+                        {evolutionConfig.testStatus === "success" ? (
                           <Check className="h-4 w-4 text-green-600" />
-                        ) : (evolutionConfig.config as any)?.testStatus === "failed" ? (
+                        ) : evolutionConfig.testStatus === "failed" ? (
                           <X className="h-4 w-4 text-red-600" />
                         ) : null}
                         <span className="text-sm">
-                          {(evolutionConfig.config as any)?.testMessage ||
+                          {evolutionConfig.testMessage ||
                             "Configuração não testada"}
                         </span>
                       </div>

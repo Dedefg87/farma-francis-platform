@@ -30,7 +30,7 @@ export const broadcastRouter = router({
 
       const offset = (input.page - 1) * input.limit;
 
-      const lists = await db
+      const [lists] = await db
         .select({
           id: broadcastLists.id,
           name: broadcastLists.name,

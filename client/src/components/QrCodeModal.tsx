@@ -22,11 +22,9 @@ interface QrCodeModalProps {
 
 interface QrResponse {
   success: boolean;
-  qrCode?: string | null;
+  qrCode?: string;
   message: string;
   debug?: string;
-  justCreated?: boolean;
-  hint?: string;
 }
 
 export default function QrCodeModal({ 

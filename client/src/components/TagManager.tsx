@@ -136,7 +136,7 @@ export function TagManager({ conversationId, ticketId, selectedTags = [], onTags
                 return (
                   <Badge
                     key={tag.id}
-                    style={{ backgroundColor: tag.color || '#94a3b8' }}
+                    style={{ backgroundColor: tag.color }}
                     className="cursor-pointer text-white relative pr-8"
                     onClick={() => handleToggleTag(tag.id)}
                   >
