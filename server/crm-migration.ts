@@ -1,4 +1,5 @@
 import { getDbRaw } from "./db";
+import { sql } from "drizzle-orm";
 
 export async function runCRMMigration() {
   const db = await getDbRaw();
@@ -15,12 +16,11 @@ export async function runCRMMigration() {
     // ==============================
 
     const ensureCustomerColumn = async (columnName: string, ddl: string) => {
-      const r = await db.raw(
-        `
+      const r = await db.execute(
+        sql`
         SELECT COUNT(*) as count FROM information_schema.columns
-        WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = ?
-      `,
-        [columnName]
+        WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = ${columnName}
+      `
       );
       const exists =
         Array.isArray(r) &&
@@ -28,7 +28,7 @@ export async function runCRMMigration() {
         Number((r[0] as any)?.count || 0) > 0;
       if (!exists) {
         console.log(`[CRM Migration] Adding customers.${columnName}`);
-        await db.raw(`ALTER TABLE customers ADD COLUMN ${ddl}`);
+        await db.execute(sql`ALTER TABLE customers ADD COLUMN ${ddl}`);
       }
     };
 
@@ -59,7 +59,7 @@ export async function runCRMMigration() {
     // Tags (shared across system)
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS tags (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE,
@@ -72,7 +72,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS conversation_tags (
         id INT AUTO_INCREMENT PRIMARY KEY,
         conversationId VARCHAR(200) NOT NULL,
@@ -84,7 +84,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS ticket_tags (
         id INT AUTO_INCREMENT PRIMARY KEY,
         ticketId INT NOT NULL,
@@ -98,7 +98,7 @@ export async function runCRMMigration() {
 
     // Ensure columns exist for older installations
     const ensureTagsColumn = async (columnName: string, ddl: string) => {
-      const r = await db.raw(
+      const r = await db.execute(sql`
         `
         SELECT COUNT(*) as count FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = 'tags' AND column_name = ?
@@ -111,7 +111,7 @@ export async function runCRMMigration() {
         Number((r[0] as any)?.count || 0) > 0;
       if (!exists) {
         console.log(`[CRM Migration] Adding tags.${columnName}`);
-        await db.raw(`ALTER TABLE tags ADD COLUMN ${ddl}`);
+        await db.execute(sql``ALTER TABLE tags ADD COLUMN ${ddl}`);
       }
     };
 
@@ -126,7 +126,7 @@ export async function runCRMMigration() {
     // Deduplicate tags by name (older installs may have duplicates)
     try {
       // Ensure unique index exists (after cleanup)
-      const dupRows = await db.raw(
+      const dupRows = await db.execute(sql`
         `
         SELECT name, MIN(id) AS keep_id, GROUP_CONCAT(id) AS ids, COUNT(*) AS cnt
         FROM tags
@@ -140,7 +140,7 @@ export async function runCRMMigration() {
 
         const safeExec = async (sqlText: string, params: any[]) => {
           try {
-            await db.raw(sqlText, params);
+            await db.execute(sqlText, params);
           } catch (e) {
             // ignore missing tables/columns
           }
@@ -172,36 +172,30 @@ export async function runCRMMigration() {
             [keepId, ...toDelete]
           );
           await safeExec(
-            `UPDATE ticket_tags SET tagId = ? WHERE tagId IN (${toDelete
-              .map(() => "?")
-              .join(",")})`,
-            [keepId, ...toDelete]
+            `UPDATE ticket_tags SET tagId = ${keepId} WHERE tagId IN (${toDelete.map(() => "?").join(",")})`,
+            toDelete
           );
 
           // Delete duplicates
-          await db.raw(
-            `DELETE FROM tags WHERE id IN (${toDelete
-              .map(() => "?")
-              .join(",")})`,
+          await db.execute(
+            sql`DELETE FROM tags WHERE id IN (${toDelete.map(() => "?").join(",")})`,
             toDelete
           );
         }
       }
 
-      const uniqIdx = await db.raw(
-        `
+      const uniqIdx = await db.execute(sql`
         SELECT COUNT(*) AS count
         FROM information_schema.statistics
         WHERE table_schema = DATABASE() AND table_name = 'tags' AND index_name = 'uq_tags_name'
-      `
-      );
+      `);
       const hasIdx =
         Array.isArray(uniqIdx) &&
         uniqIdx.length > 0 &&
         Number((uniqIdx[0] as any)?.count || 0) > 0;
       if (!hasIdx) {
         try {
-          await db.raw(`ALTER TABLE tags ADD UNIQUE KEY uq_tags_name (name)`);
+          await db.execute(sql``ALTER TABLE tags ADD UNIQUE KEY uq_tags_name (name)`);
         } catch {
           // ignore
         }
@@ -213,7 +207,7 @@ export async function runCRMMigration() {
       );
     }
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS customer_treatments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
@@ -234,7 +228,7 @@ export async function runCRMMigration() {
     // PharmaCore - purchase history + products (idempotent)
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS pharma_products (
         ean VARCHAR(32) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -246,7 +240,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS pharma_purchases (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
@@ -261,7 +255,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS pharma_purchase_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         purchase_id INT NOT NULL,
@@ -275,7 +269,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS customer_tags (
         id INT AUTO_INCREMENT PRIMARY KEY,
         customer_id INT NOT NULL,
@@ -291,7 +285,7 @@ export async function runCRMMigration() {
     // CRM Scripts (mensagens prontas)
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS crm_scripts (
         code VARCHAR(50) PRIMARY KEY,
         name VARCHAR(120) NOT NULL,
@@ -307,7 +301,7 @@ export async function runCRMMigration() {
 
     // Seed default scripts (idempotent)
     try {
-      const existing = await db.raw(
+      const existing = await db.execute(sql`
         `SELECT COUNT(*) as count FROM crm_scripts`,
         []
       );
@@ -354,7 +348,7 @@ export async function runCRMMigration() {
         ];
 
         for (const s of defaults) {
-          await db.raw(
+          await db.execute(sql`
             `INSERT INTO crm_scripts (code, name, template, variables_json, is_active) VALUES (?, ?, ?, ?, 1)`,
             [s.code, s.name, s.template, JSON.stringify(s.variables)]
           );
@@ -371,7 +365,7 @@ export async function runCRMMigration() {
     // Enterprise CRM foundation
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS crm_outbox_events (
         id INT AUTO_INCREMENT PRIMARY KEY,
         event_name VARCHAR(120) NOT NULL,
@@ -390,7 +384,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS crm_audit_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         action VARCHAR(80) NOT NULL,
@@ -408,7 +402,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS crm_activities (
         id INT AUTO_INCREMENT PRIMARY KEY,
         entity_type VARCHAR(40) NOT NULL,
@@ -425,7 +419,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS frontend_telemetry_events (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NULL,
@@ -443,7 +437,7 @@ export async function runCRMMigration() {
     // Survey responses (satisfaction)
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS survey_responses (
         id INT AUTO_INCREMENT PRIMARY KEY,
         conversation_id INT NULL,
@@ -466,7 +460,7 @@ export async function runCRMMigration() {
     // Quick replies (mensagens rapidas)
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS quick_replies (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -485,7 +479,7 @@ export async function runCRMMigration() {
     // Accounts / Deals / Tasks / Custom Fields
     // ==============================
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS accounts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -509,7 +503,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS account_contacts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         account_id INT NOT NULL,
@@ -525,7 +519,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS deal_pipelines (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(120) NOT NULL,
@@ -537,7 +531,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS deal_stages (
         id INT AUTO_INCREMENT PRIMARY KEY,
         pipeline_id INT NOT NULL,
@@ -552,7 +546,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS deals (
         id INT AUTO_INCREMENT PRIMARY KEY,
         account_id INT NULL,
@@ -578,7 +572,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS crm_tasks (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,
@@ -598,7 +592,7 @@ export async function runCRMMigration() {
       )
     `);
 
-    await db.raw(
+    await db.execute(sql`
       `
       CREATE TABLE IF NOT EXISTS custom_field_definitions (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -622,7 +616,7 @@ export async function runCRMMigration() {
     `
     );
 
-    await db.raw(`
+    await db.execute(sql``
       CREATE TABLE IF NOT EXISTS custom_field_values (
         id INT AUTO_INCREMENT PRIMARY KEY,
         entity_type VARCHAR(40) NOT NULL,
@@ -639,7 +633,7 @@ export async function runCRMMigration() {
 
     // Seed a default pipeline + stages (idempotent)
     try {
-      const existingP = await db.raw(
+      const existingP = await db.execute(sql`
         `SELECT id FROM deal_pipelines WHERE name = ? LIMIT 1`,
         ["Vendas"]
       );
@@ -648,11 +642,11 @@ export async function runCRMMigration() {
         pipelineId = Number((existingP[0] as any).id);
       }
       if (!pipelineId) {
-        await db.raw(
+        await db.execute(sql`
           `INSERT INTO deal_pipelines (name, is_active) VALUES (?, 1)`,
           ["Vendas"]
         );
-        const p2 = await db.raw(
+        const p2 = await db.execute(sql`
           `SELECT id FROM deal_pipelines WHERE name = ? LIMIT 1`,
           ["Vendas"]
         );
@@ -671,13 +665,13 @@ export async function runCRMMigration() {
         ];
 
         for (const s of stages) {
-          const ex = await db.raw(
+          const ex = await db.execute(sql`
             `SELECT id FROM deal_stages WHERE pipeline_id = ? AND name = ? LIMIT 1`,
             [pipelineId, s.name]
           );
           const exists = Array.isArray(ex) && ex.length > 0;
           if (!exists) {
-            await db.raw(
+            await db.execute(sql`
               `INSERT INTO deal_stages (pipeline_id, name, sort_order, probability, is_won, is_lost) VALUES (?, ?, ?, ?, ?, ?)`,
               [
                 pipelineId,
@@ -810,7 +804,7 @@ export async function runCRMMigration() {
         }
 
         // Check if tag already exists
-        const existingResult = await db.raw(
+        const existingResult = await db.execute(sql`
           `SELECT id FROM tags WHERE name = ? LIMIT 1`,
           [tagName]
         );
@@ -827,7 +821,7 @@ export async function runCRMMigration() {
 
         if (!tagExists) {
           // Insert only if doesn't exist
-          await db.raw(
+          await db.execute(sql`
             `INSERT INTO tags (name, color, icon, description) VALUES (?, ?, ?, ?)`,
             [
               tagName,
@@ -861,20 +855,20 @@ export async function runCRMMigration() {
       const adminPasswordHash = await bcrypt.hash("admin", 10);
 
       // Check if admin user exists
-      const adminExists = await db.raw(
+      const adminExists = await db.execute(sql`
         `SELECT id FROM users WHERE email = 'admin' LIMIT 1`
       );
 
       if (Array.isArray(adminExists) && adminExists.length > 0) {
         // Update existing admin password
-        await db.raw(
+        await db.execute(sql`
           `UPDATE users SET passwordHash = ? WHERE email = 'admin'`,
           [adminPasswordHash]
         );
         console.log("[CRM Migration] Admin password updated to 'admin'");
       } else {
         // Create admin user
-        await db.raw(
+        await db.execute(sql`
           `INSERT INTO users (openId, name, email, passwordHash, role, loginMethod) VALUES (?, ?, ?, ?, ?, ?)`,
           [
             `admin-${Date.now()}`,
@@ -896,4 +890,16 @@ export async function runCRMMigration() {
     console.error("[CRM Migration] Error:", error);
     return false;
   }
+}
+ }
+}
+  return false;
+  }
+}
+ }
+}
+se;
+  }
+}
+ }
 }

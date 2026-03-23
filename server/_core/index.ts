@@ -31,6 +31,7 @@ console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runCRMMigration } from "../crm-migration";
 import { runBabyShowerMigration } from "../baby-shower-migration";
+import { runBroadcastMigrations } from "../broadcast-migration";
 
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
@@ -96,62 +97,6 @@ async function runMediaColumnsMigration() {
     console.log("[Migration] Media columns migration completed");
   } catch (err) {
     console.error("[Migration] Failed:", err);
-  }
-}
-
-// Auto-migrate broadcast tables and columns
-async function runBroadcastMigrations() {
-  try {
-    const { getDb } = await import("../db");
-    const db = await getDb();
-    if (!db) {
-      console.log("[BroadcastMigration] DB not ready, skipping");
-      return;
-    }
-
-    // Tabela broadcast_members_sent
-    const [table1]: any = await db.execute("SHOW TABLES LIKE 'broadcast_members_sent'");
-    if (table1.length === 0) {
-      await db.execute(`
-        CREATE TABLE broadcast_members_sent (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          message_id INT NOT NULL,
-          customer_id INT NOT NULL,
-          phone VARCHAR(20) NOT NULL,
-          status ENUM('pending','sent','failed') DEFAULT 'pending' NOT NULL,
-          error TEXT,
-          sent_at TIMESTAMP NULL,
-          FOREIGN KEY (message_id) REFERENCES broadcast_messages(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE ON UPDATE CASCADE,
-          UNIQUE KEY broadcast_members_sent_message_id_phone_unique (message_id, phone)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-      `);
-      await db.execute("CREATE INDEX idx_broadcast_members_sent_message_id ON broadcast_members_sent(message_id)");
-      await db.execute("CREATE INDEX idx_broadcast_members_sent_status ON broadcast_members_sent(status)");
-      await db.execute("CREATE INDEX idx_broadcast_members_sent_customer_id ON broadcast_members_sent(customer_id)");
-      console.log("[BroadcastMigration] Created table broadcast_members_sent");
-    }
-
-    // Colunas de arquivo em broadcast_messages
-    const [cols]: any = await db.execute("SHOW COLUMNS FROM broadcast_messages LIKE 'file_url'");
-    if (cols.length === 0) {
-      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_url VARCHAR(500) NULL COMMENT 'URL do arquivo no R2/Cloudflare' AFTER content");
-      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_name VARCHAR(255) NULL COMMENT 'Nome original do arquivo' AFTER file_url");
-      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_type VARCHAR(100) NULL COMMENT 'MIME type do arquivo' AFTER file_name");
-      await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_size INT NULL COMMENT 'Tamanho do arquivo em bytes' AFTER file_type");
-      console.log("[BroadcastMigration] Added file columns to broadcast_messages");
-    }
-
-    // Coluna provider em conversation_messages (para webhook)
-    const [provCol]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'provider'");
-    if (provCol.length === 0) {
-      await db.execute("ALTER TABLE conversation_messages ADD COLUMN provider ENUM('whatsapp','instagram') NOT NULL DEFAULT 'whatsapp' COMMENT 'Provedor da mensagem' AFTER remote_jid");
-      console.log("[BroadcastMigration] Added provider column to conversation_messages");
-    }
-
-    console.log("[BroadcastMigration] Migration completed");
-  } catch (err) {
-    console.error("[BroadcastMigration] Failed:", err);
   }
 }
 
@@ -3588,11 +3533,8 @@ async function startServer() {
   server.listen(port, "0.0.0.0", async () => {
     console.log(`Server running on http://localhost:${port}/`);
 
-    // Run CRM and Broadcast migrations on startup
-    console.log("[Server] Running CRM migration...");
-    await runCRMMigration();
-    await runBabyShowerMigration();
-    await runBroadcastMigrations();
+    // Migrations já executadas no início do startServer()
+    console.log("[Server] All migrations completed earlier");
 
     // Start simple chatbot after server is running
     import("../chatbot")

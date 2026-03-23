@@ -1,4 +1,5 @@
 import { getDbRaw } from "./db";
+import { sql } from "drizzle-orm";
 
 export async function runBabyShowerMigration() {
   const db = await getDbRaw();
@@ -13,7 +14,7 @@ export async function runBabyShowerMigration() {
     // ==============================
     // baby_shower_events table
     // ==============================
-    const eventsTableExists = await db.raw(`
+    const eventsTableExists = await db.execute(sql`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_events'
     `);
@@ -24,7 +25,7 @@ export async function runBabyShowerMigration() {
     
     if (!eventsExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_events table");
-      await db.raw(`
+      await db.execute(sql`
         CREATE TABLE baby_shower_events (
           id INT AUTO_INCREMENT PRIMARY KEY,
           mother_customer_id INT NULL,
@@ -51,7 +52,7 @@ export async function runBabyShowerMigration() {
       // Tabela já existe - verificar e adicionar colunas faltantes
       console.log("[Baby Shower Migration] Checking baby_shower_events columns...");
       
-      const columns = await db.raw(`
+      const columns = await db.execute(sql`
         SELECT COLUMN_NAME FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = 'baby_shower_events'
       `);
@@ -63,29 +64,29 @@ export async function runBabyShowerMigration() {
       // Adicionar colunas que faltam
       if (!columnNames.includes('whatsapp_number')) {
         console.log("[Baby Shower Migration] Adding whatsapp_number column");
-        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN whatsapp_number VARCHAR(20) NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_events ADD COLUMN whatsapp_number VARCHAR(20) NULL`);
       }
       
       if (!columnNames.includes('welcome_message')) {
         console.log("[Baby Shower Migration] Adding welcome_message column");
-        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN welcome_message TEXT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_events ADD COLUMN welcome_message TEXT NULL`);
       }
       
       if (!columnNames.includes('baby_name')) {
         console.log("[Baby Shower Migration] Adding baby_name column");
-        await db.raw(`ALTER TABLE baby_shower_events ADD COLUMN baby_name VARCHAR(255) NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_events ADD COLUMN baby_name VARCHAR(255) NULL`);
       }
     }
 
     // ==============================
     // baby_shower_gift_packages table
     // ==============================
-    const oldPackagesTableExists = await db.raw(`
+    const oldPackagesTableExists = await db.execute(sql`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_packages'
     `);
     
-    const newPackagesTableExists = await db.raw(`
+    const newPackagesTableExists = await db.execute(sql`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_gift_packages'
     `);
@@ -100,12 +101,12 @@ export async function runBabyShowerMigration() {
 
     if (oldExists && !newExists) {
       console.log("[Baby Shower Migration] Renaming baby_shower_packages to baby_shower_gift_packages");
-      await db.raw(`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
+      await db.execute(sql`RENAME TABLE baby_shower_packages TO baby_shower_gift_packages`);
     }
 
     if (!newExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_gift_packages table");
-      await db.raw(`
+      await db.execute(sql`
         CREATE TABLE baby_shower_gift_packages (
           id INT AUTO_INCREMENT PRIMARY KEY,
           event_id INT NOT NULL,
@@ -127,7 +128,7 @@ export async function runBabyShowerMigration() {
       // Tabela existe - verificar e adicionar colunas faltantes
       console.log("[Baby Shower Migration] Checking baby_shower_gift_packages columns...");
       
-      const giftPkgColumns = await db.raw(`
+      const giftPkgColumns = await db.execute(sql`
         SELECT COLUMN_NAME FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = 'baby_shower_gift_packages'
       `);
@@ -139,40 +140,40 @@ export async function runBabyShowerMigration() {
       // Renomear coluna 'name' para 'package_name' se existir
       if (giftPkgColumnNames.includes('name') && !giftPkgColumnNames.includes('package_name')) {
         console.log("[Baby Shower Migration] Renaming 'name' column to 'package_name'");
-        await db.raw(`ALTER TABLE baby_shower_gift_packages CHANGE COLUMN name package_name VARCHAR(255) NOT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_gift_packages CHANGE COLUMN name package_name VARCHAR(255) NOT NULL`);
       }
 
       // Adicionar colunas que faltam
       if (!giftPkgColumnNames.includes('image_url')) {
         console.log("[Baby Shower Migration] Adding image_url column");
-        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN image_url TEXT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN image_url TEXT NULL`);
       }
       
       if (!giftPkgColumnNames.includes('gift_type')) {
         console.log("[Baby Shower Migration] Adding gift_type column");
-        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN gift_type ENUM('diapers', 'wipes', 'money', 'product') NOT NULL DEFAULT 'diapers'`);
+        await db.execute(sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN gift_type ENUM('diapers', 'wipes', 'money', 'product') NOT NULL DEFAULT 'diapers'`);
       }
       
       if (!giftPkgColumnNames.includes('quantity_represented')) {
         console.log("[Baby Shower Migration] Adding quantity_represented column");
-        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN quantity_represented INT DEFAULT 1`);
+        await db.execute(sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN quantity_represented INT DEFAULT 1`);
       }
       
       if (!giftPkgColumnNames.includes('size_label')) {
         console.log("[Baby Shower Migration] Adding size_label column");
-        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN size_label VARCHAR(20) NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN size_label VARCHAR(20) NULL`);
       }
       
       if (!giftPkgColumnNames.includes('is_active')) {
         console.log("[Baby Shower Migration] Adding is_active column");
-        await db.raw(`ALTER TABLE baby_shower_gift_packages ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true`);
+        await db.execute(sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true`);
       }
     }
 
     // ==============================
     // baby_shower_purchases table
     // ==============================
-    const purchasesTableExists = await db.raw(`
+    const purchasesTableExists = await db.execute(sql`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_purchases'
     `);
@@ -183,7 +184,7 @@ export async function runBabyShowerMigration() {
     
     if (!purchasesExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_purchases table");
-      await db.raw(`
+      await db.execute(sql`
         CREATE TABLE baby_shower_purchases (
           id INT AUTO_INCREMENT PRIMARY KEY,
           event_id INT NOT NULL,
@@ -210,7 +211,7 @@ export async function runBabyShowerMigration() {
       // Tabela existe - verificar e adicionar colunas faltantes
       console.log("[Baby Shower Migration] Checking baby_shower_purchases columns...");
       
-      const columns = await db.raw(`
+      const columns = await db.execute(sql`
         SELECT COLUMN_NAME FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = 'baby_shower_purchases'
       `);
@@ -222,48 +223,48 @@ export async function runBabyShowerMigration() {
       // Renomear colunas para corresponder ao schema
       if (columnNames.includes('status') && !columnNames.includes('payment_status')) {
         console.log("[Baby Shower Migration] Renaming 'status' column to 'payment_status'");
-        await db.raw(`ALTER TABLE baby_shower_purchases CHANGE COLUMN status payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending'`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases CHANGE COLUMN status payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending'`);
       }
       
       if (columnNames.includes('amount') && !columnNames.includes('amount_paid')) {
         console.log("[Baby Shower Migration] Renaming 'amount' column to 'amount_paid'");
-        await db.raw(`ALTER TABLE baby_shower_purchases CHANGE COLUMN amount amount_paid DECIMAL(10,2) NOT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases CHANGE COLUMN amount amount_paid DECIMAL(10,2) NOT NULL`);
       }
 
       // Adicionar colunas que faltam
       if (!columnNames.includes('guest_customer_id')) {
         console.log("[Baby Shower Migration] Adding guest_customer_id column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN guest_customer_id INT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases ADD COLUMN guest_customer_id INT NULL`);
       }
       
       if (!columnNames.includes('message_to_parents')) {
         console.log("[Baby Shower Migration] Adding message_to_parents column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN message_to_parents TEXT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases ADD COLUMN message_to_parents TEXT NULL`);
       }
       
       if (!columnNames.includes('notification_sent')) {
         console.log("[Baby Shower Migration] Adding notification_sent column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent INT DEFAULT 0`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases ADD COLUMN notification_sent INT DEFAULT 0`);
       }
       
       if (!columnNames.includes('message_to_parents')) {
         console.log("[Baby Shower Migration] Adding message_to_parents column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN message_to_parents TEXT NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases ADD COLUMN message_to_parents TEXT NULL`);
       }
       if (!columnNames.includes('confirmation_token')) {
         console.log("[Baby Shower Migration] Adding confirmation_token column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN confirmation_token VARCHAR(64) UNIQUE NULL`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases ADD COLUMN confirmation_token VARCHAR(64) UNIQUE NULL`);
       }
       if (!columnNames.includes('created_at')) {
         console.log("[Baby Shower Migration] Adding created_at column");
-        await db.raw(`ALTER TABLE baby_shower_purchases ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        await db.execute(sql`ALTER TABLE baby_shower_purchases ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
       }
     }
 
     // ==============================
     // baby_shower_withdrawals table
     // ==============================
-    const withdrawalsTableExists = await db.raw(`
+    const withdrawalsTableExists = await db.execute(sql`
       SELECT COUNT(*) as count FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = 'baby_shower_withdrawals'
     `);
@@ -274,7 +275,7 @@ export async function runBabyShowerMigration() {
     
     if (!withdrawalsExists) {
       console.log("[Baby Shower Migration] Creating baby_shower_withdrawals table");
-      await db.raw(`
+      await db.execute(sql`
         CREATE TABLE baby_shower_withdrawals (
           id INT AUTO_INCREMENT PRIMARY KEY,
           event_id INT NOT NULL,
