@@ -19,27 +19,16 @@ router.post("/execute-sql", async (req, res) => {
   }
 
   try {
-    const result: any = await db.raw(sql);
+    const result = await db.raw(sql);
     
-    const response: any = { success: true, message: "SQL executado com sucesso" };
-    
-    // mysql2 retorna { rows, fieldCount, affectedRows, insertId } para single statement
-    // ou array de tais objetos para multipleStatements
-    if (Array.isArray(result)) {
-      response.results = result.map((r: any) => ({
-        rows: r[0] || r.rows || [],
-        affectedRows: r.affectedRows,
-        insertId: r.insertId,
-        fieldCount: r.fieldCount
-      }));
-    } else {
-      response.rows = result.rows || [];
-      response.affectedRows = result.affectedRows || 0;
-      response.insertId = result.insertId || null;
-      response.fieldCount = result.fieldCount || 0;
-    }
-    
-    res.json(response);
+    // Retorna resultado bruto para debug
+    res.json({ 
+      success: true, 
+      message: "SQL executado com sucesso", 
+      rawResult: result,
+      resultType: typeof result,
+      isArray: Array.isArray(result)
+    });
   } catch (err: any) {
     console.error("[ExecuteSQL] Erro:", err);
     res.status(500).json({ success: false, error: err.message });
