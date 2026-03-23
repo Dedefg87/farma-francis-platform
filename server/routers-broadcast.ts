@@ -36,32 +36,29 @@ export const broadcastRouter = router({
         lastSentAt: broadcastLists.lastSentAt,
         createdAt: broadcastLists.createdAt,
       }).from(broadcastLists).leftJoin(broadcastListMembers, eq(broadcastLists.id, broadcastListMembers.listId)).groupBy(broadcastLists.id).orderBy(desc(broadcastLists.createdAt)).limit(input.limit).offset(offset);
-      const [{ total }] = await db.select({ total: sql`COUNT(*)` }).from(broadcastLists);
-      return { lists, pagination: { page: input.page, limit: input.limit, total: Number(total), totalPages: Math.ceil(Number(total) / input.limit) } };
+      const countResult = await db.select({ total: sql`COUNT(*)` }).from(broadcastLists);
+      const total = countResult[0]?.total || 0;
+      return {
+        lists: lists || [],
+        pagination: {
+          page: input.page,
+          limit: input.limit,
+          total: Number(total),
+          totalPages: Math.ceil(Number(total) / input.limit),
+        },
+      };
     }),
 
-      // Buscar lista
-      const [list] = await db
-        .select({
-          id: broadcastLists.id,
-          name: broadcastLists.name,
-          description: broadcastLists.description,
-          createdAt: broadcastLists.createdAt,
-          updatedAt: broadcastLists.updatedAt,
-        })
-        .from(broadcastLists)
-        .where(eq(broadcastLists.id, input.listId))
-        .limit(1);
-
-      if (!list) {
-        throw new Error("Lista não encontrada");
-      }
-
-      // Buscar membros da lista
-      const members = await db
-        .select({
-          id: broadcastListMembers.id,
-          customerId: broadcastListMembers.customerId,
+  getById: protectedProcedure
+    .input(z.object({
+      listId: z.number().int().positive(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const lists = await db.select().from(broadcastLists).where(eq(broadcastLists.id, input.listId));
+      return lists[0] || null;
+    }),
           addedAt: broadcastListMembers.addedAt,
           customer: {
             id: customers.id,
