@@ -129,23 +129,28 @@ export const broadcastRouter = router({
       description: z.string().max(500).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+  create: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(255),
+      description: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const result = await db
-        .insert(broadcastLists)
-        .values({
-          name: input.name,
-          description: input.description || null,
-          createdBy: ctx.user.id,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .$returningId();
+      // Insert manual via SQL para evitar bug do Drizzle com default
+      const result = await db.execute(
+        sql`
+          INSERT INTO broadcast_lists (name, description, created_by, created_at, updated_at)
+          VALUES (${input.name}, ${input.description || null}, ${ctx.user.id}, NOW(), NOW())
+        `
+      );
 
-      return { id: result[0].id };
+      // Pegar o ID inserido
+      const insertId = (result as any).insertId || (result as any).ids?.[0];
+
+      return { id: Number(insertId) };
     }),
-
   /**
    * Deletar lista de broadcast
    */
