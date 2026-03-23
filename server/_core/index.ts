@@ -375,12 +375,16 @@ async function startServer() {
       const [tablesResult] = await dbRaw.execute("SHOW TABLES");
       const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
       
+      // Check specifically for broadcast tables
+      const broadcastTables = tables.filter((t: string) => t.includes('broadcast'));
+      
       const [sampleCustomers] = await dbRaw.execute("SELECT id, name, phone FROM customers LIMIT 5");
       
       res.json({ 
         success: true, 
         totalCustomers: Number(total), 
-        tables: tables.slice(0,15),
+        tables: tables, // full list, not sliced
+        broadcastTables, // explicit list
         sampleCustomers,
         dbUrl: maskedUrl,
         dbType: "mysql2-raw"
