@@ -9,11 +9,12 @@ export async function runBroadcastMigrations() {
   }
 
   try {
-    console.log("[Broadcast Migration] Starting...");
+    console.log("[Broadcast Migration] 🚀 Starting broadcast migrations...");
 
     // ==============================
     // broadcast_lists table
     // ==============================
+    console.log("[Broadcast Migration] 📋 Creating broadcast_lists...");
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS broadcast_lists (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -27,6 +28,7 @@ export async function runBroadcastMigrations() {
         KEY idx_created_at (created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    console.log("[Broadcast Migration] ✅ broadcast_lists ready");
 
     // ==============================
     // broadcast_list_members table
