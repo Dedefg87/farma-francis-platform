@@ -3821,9 +3821,27 @@ async function startServer() {
 
     console.log(`🚀 Server listening on port ${port}`);
   });
-}
 
-startServer().catch(console.error);
+  // Global error handler para logs detalhados
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("❌ Unhandled error:", {
+      method: req.method,
+      url: req.url,
+      query: req.query,
+      body: req.body,
+      error: err.message,
+      stack: err.stack,
+      sql: err.sql,
+      sqlMessage: err.sqlMessage,
+      code: err.code
+    });
+    res.status(500).json({ 
+      error: "Internal Server Error", 
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    });
+  });
+
+  startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
 // FORCE REBUILD: 1772736794
 
