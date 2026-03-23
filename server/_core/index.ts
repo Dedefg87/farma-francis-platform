@@ -407,7 +407,6 @@ async function startServer() {
   // === ADMIN ROUTES - DIAGNÓSTICO E LIMPEZA ===
   app.use("/api/admin", migrationRouter);
   app.use("/api/admin", checkDuplicatesRouter);
-  app.use("/api/admin", debugRouter);
   app.use("/api/admin", broadcastCheckRouter);
   app.use("/api/admin", executeSqlRouter);
   // GET /api/admin/check-db - Diagnóstico do banco ativo
