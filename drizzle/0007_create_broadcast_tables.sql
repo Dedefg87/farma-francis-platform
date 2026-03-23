@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS `broadcast_members_sent` (
 
 -- Índices adicionais para performance
 ALTER TABLE `broadcast_lists` ADD INDEX `idx_created_by` (`created_by`);
+--> statement-breakpoint
+
 ALTER TABLE `broadcast_lists` ADD INDEX `idx_created_at` (`created_at`);
 --> statement-breakpoint
 
