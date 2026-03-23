@@ -19,29 +19,24 @@ router.post("/execute-sql", async (req, res) => {
   }
 
   try {
-    // Detecta se há múltiplos statements separados por ;;
-    const hasMultiple = (sql.match(/;;+/g) || []).length > 0;
-    const result: any = await db.raw(sql, [], { multipleStatements: hasMultiple });
+    const result: any = await db.raw(sql);
     
-    let response: any = { success: true, message: "SQL executado com sucesso" };
+    const response: any = { success: true, message: "SQL executado com sucesso" };
     
-    // Se for SELECT, retornar as rows
+    // mysql2 retorna { rows, fieldCount, affectedRows, insertId } para single statement
+    // ou array de tais objetos para multipleStatements
     if (Array.isArray(result)) {
-      // multipleStatements: array de resultados
       response.results = result.map((r: any) => ({
-        rows: r[0] || [],
+        rows: r[0] || r.rows || [],
         affectedRows: r.affectedRows,
         insertId: r.insertId,
         fieldCount: r.fieldCount
       }));
-    } else if (result.rows) {
-      // SELECT single statement
-      response.rows = result.rows;
-      response.affectedRows = result.affectedRows || 0;
-      response.fieldCount = result.fieldCount || 0;
     } else {
-      response.affectedRows = result?.affectedRows || 0;
-      response.insertId = result?.insertId || null;
+      response.rows = result.rows || [];
+      response.affectedRows = result.affectedRows || 0;
+      response.insertId = result.insertId || null;
+      response.fieldCount = result.fieldCount || 0;
     }
     
     res.json(response);
