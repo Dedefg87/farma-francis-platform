@@ -157,19 +157,25 @@ export const broadcastRouter = router({
       try {
         console.log(`[BroadcastDelete] Starting deletion for list ID: ${input.listId}`);
 
-        // 1. Obter IDs das mensagens relacionadas a esta lista
+        // 1. Obter IDs das mensagens relacionadas a esta lista (para logging)
         const messageIdsResult = await db
           .select({ id: broadcastMessages.id })
           .from(broadcastMessages)
           .where(eq(broadcastMessages.listId, input.listId));
 
-        const idsToDelete = messageIdsResult.map(m => m.id);
-        console.log(`[BroadcastDelete] Found message IDs: ${idsToDelete.join(', ')}`);
+        console.log(`[BroadcastDelete] Found ${messageIdsResult.length} messages for list ${input.listId}`);
 
-        if (idsToDelete.length > 0) {
-          // 2. Deletar registros em broadcast_members_sent
-          console.log(`[BroadcastDelete] Deleting broadcast_members_sent...`);
-          await db.delete(broadcastMembersSent).where(inArray(broadcastMembersSent.broadcastMessageId, idsToDelete));
+        if (messageIdsResult.length > 0) {
+          // 2. Deletar registros em broadcast_members_sent usando subquery (evita limite de placeholders IN)
+          console.log(`[BroadcastDelete] Deleting broadcast_members_sent via subquery...`);
+          await db.delete(broadcastMembersSent).where(
+            inArray(
+              broadcastMembersSent.broadcastMessageId,
+              db.select({ id: broadcastMessages.id })
+                .from(broadcastMessages)
+                .where(eq(broadcastMessages.listId, input.listId))
+            )
+          );
         }
 
         // 3. Deletar as mensagens em broadcast_messages
@@ -261,13 +267,19 @@ export const broadcastRouter = router({
             .from(broadcastMessages)
             .where(eq(broadcastMessages.listId, listId));
 
-          const idsToDelete = messageIdsResult.map(m => m.id);
-          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${idsToDelete.length} messages`);
+          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${messageIdsResult.length} messages`);
 
-          if (idsToDelete.length > 0) {
-            // 2. Delete broadcast_members_sent
-            await db.delete(broadcastMembersSent).where(inArray(broadcastMembersSent.broadcastMessageId, idsToDelete));
-            console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_members_sent`);
+          if (messageIdsResult.length > 0) {
+            // 2. Delete broadcast_members_sent using subquery to avoid IN placeholder limit
+            await db.delete(broadcastMembersSent).where(
+              inArray(
+                broadcastMembersSent.broadcastMessageId,
+                db.select({ id: broadcastMessages.id })
+                  .from(broadcastMessages)
+                  .where(eq(broadcastMessages.listId, listId))
+              )
+            );
+            console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_members_sent via subquery`);
           }
 
           // 3. Delete broadcast_messages
