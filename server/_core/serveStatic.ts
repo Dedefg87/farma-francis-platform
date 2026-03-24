@@ -3,8 +3,10 @@ import fs from "fs";
 import path from "path";
 
 export function serveStatic(app: Express) {
-  // Determinar o caminho da build: em produção, o Vite gera em ../../dist/public
-  const distPath = path.resolve(import.meta.dirname, "..", "..", "dist", "public");
+  // Usar process.cwd() como base (raiz do projeto)
+  const distPath = path.join(process.cwd(), "dist", "public");
+
+  console.log(`[serveStatic] Serving static files from: ${distPath}`);
 
   if (!fs.existsSync(distPath)) {
     console.error(
@@ -17,7 +19,7 @@ export function serveStatic(app: Express) {
 
   // Fallback para SPA: se o arquivo não existir, retorna index.html
   app.use("*", (_req, res) => {
-    const indexPath = path.resolve(distPath, "index.html");
+    const indexPath = path.join(distPath, "index.html");
     if (fs.existsSync(indexPath)) {
       res.sendFile(indexPath);
     } else {
