@@ -22,34 +22,47 @@ export async function createContext(
     // Tentar autenticação local primeiro
     const cookies = parseCookieHeader(opts.req.headers.cookie || '');
     const sessionCookie = cookies[COOKIE_NAME];
-    
+
+    console.log('[AuthDebug] Path:', opts.req.path, '| Cookie present:', !!sessionCookie);
+
     if (sessionCookie) {
       try {
         // Verificar JWT local
         const secret = new TextEncoder().encode(ENV.cookieSecret);
+        console.log('[AuthDebug] JWT secret length:', secret.length);
         const { payload } = await jwtVerify(sessionCookie, secret, {
           algorithms: ["HS256"],
         });
-        
+
+        console.log('[AuthDebug] JWT payload:', payload);
+
         const openId = payload.openId as string;
         if (openId) {
           const foundUser = await db.getUserByOpenId(openId);
+          console.log('[AuthDebug] User lookup result:', foundUser ? 'FOUND' : 'NOT FOUND', '| openId:', openId);
           if (foundUser) {
             user = foundUser;
-            console.log('[Auth] Usuário autenticado via JWT local:', user.email);
+            console.log('[AuthDebug] Usuário autenticado via JWT local:', user.email, '| id:', user.id);
           }
+        } else {
+          console.log('[AuthDebug] JWT payload has no openId');
         }
-      } catch (jwtError) {
-        console.log('[Auth] JWT local inválido, tentando OAuth...');
+      } catch (jwtError: any) {
+        console.log('[AuthDebug] JWT local inválido:', jwtError.message);
       }
+    } else {
+      console.log('[AuthDebug] No session cookie found, will try OAuth fallback');
     }
-    
+
     // Se não conseguiu com JWT local, tentar OAuth
     if (!user) {
+      console.log('[AuthDebug] Falling back to OAuth SDK...');
       user = await sdk.authenticateRequest(opts.req);
+      console.log('[AuthDebug] OAuth result:', user ? 'SUCCESS' : 'FAILED');
     }
-  } catch (error) {
+  } catch (error: any) {
     // Authentication is optional for public procedures.
+    console.log('[AuthDebug] Context creation error:', error.message);
     user = null;
   }
 
