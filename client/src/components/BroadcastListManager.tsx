@@ -69,6 +69,11 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       { listId: selectedListId! },
       { enabled: selectedListId !== null && view === "detail" }
     );
+  const { data: listMembers, refetch: refetchMembers } =
+    trpc.broadcast.listMembers.useQuery(
+      { listId: selectedListId! },
+      { enabled: selectedListId !== null && view === "detail" }
+    );
   const { data: availableCustomers } = trpc.broadcast.searchCustomers.useQuery(
     { query: searchQuery, excludeListId: selectedListId || undefined },
     { enabled: view === "add-members" }
@@ -92,6 +97,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
     onSuccess: () => {
       toast.success("Contato adicionado!");
       refetchDetail();
+      refetchMembers();
       refetchLists();
     },
     onError: error => {
@@ -103,6 +109,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
     onSuccess: () => {
       toast.success("Contato removido!");
       refetchDetail();
+      refetchMembers();
       refetchLists();
     },
     onError: error => {
@@ -377,7 +384,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
             <div>
               <h3 className="text-lg font-semibold">{listDetail.name}</h3>
               <p className="text-sm text-muted-foreground">
-                {listDetail.members?.length || 0} de 50 contatos
+                {listMembers?.length || 0} de 50 contatos
               </p>
             </div>
           </div>
@@ -459,7 +466,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
             <Send className="w-4 h-4 mr-2" />
             {sendMessage.isPending
               ? "Enviando..."
-              : `Enviar para Lista (${listDetail?.members?.length || 0})`}
+              : `Enviar para Lista (${listMembers?.length || 0})`}
           </Button>
         </div>
 
@@ -467,7 +474,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <h4 className="font-medium">Contatos</h4>
-            {(listDetail.members?.length || 0) < 50 && (
+            {(listMembers?.length || 0) < 50 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -481,7 +488,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
 
           <ScrollArea className="h-[300px]">
             <div className="space-y-2">
-              {listDetail.members?.length === 0 ? (
+              {listMembers?.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
                   <p>Nenhum contato na lista</p>
@@ -495,7 +502,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
                   </Button>
                 </div>
               ) : (
-                listDetail.members?.map(member => (
+                listMembers?.map(member => (
                   <div
                     key={member.id}
                     className="flex items-center justify-between p-3 rounded-lg border"
@@ -503,7 +510,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
                     <div className="flex items-center gap-3">
                       <Avatar className="w-8 h-8">
                         <AvatarFallback className="bg-indigo-100 text-indigo-600 text-xs">
-                          {member.customerName
+                          {member.name
                             ?.split(" ")
                             .map(n => n[0])
                             .join("")
@@ -513,10 +520,10 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
                       </Avatar>
                       <div>
                         <p className="text-sm font-medium">
-                          {member.customerName}
+                          {member.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {member.customerPhone}
+                          {member.phone}
                         </p>
                       </div>
                     </div>
