@@ -65,7 +65,7 @@ export const conversationMessages = mysqlTable("conversation_messages", {
 export const broadcastMessages = mysqlTable("broadcast_messages", {
   id: autoincrement().primaryKey(),
   listId: int("list_id").notNull(),
-  messageText: text("message_text").notNull(),
+  messageText: text("message_text"),
   caption: text("caption"),
   fileUrl: text("file_url"),
   fileName: varchar("file_name", { length: 255 }),

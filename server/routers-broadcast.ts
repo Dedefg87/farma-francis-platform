@@ -391,11 +391,11 @@ export const broadcastRouter = router({
 
       const messageResult = await db.insert(broadcastMessages).values({
         listId: input.listId,
-        messageText: input.content,
-        caption: input.caption || null,
-        fileUrl: input.fileUrl || null,
-        fileName: input.fileName || null,
-        fileType: input.fileType || null,
+        messageText: input.content?.trim() || null,
+        caption: input.caption?.trim() || null,
+        fileUrl: input.fileUrl?.trim() || null,
+        fileName: input.fileName?.trim() || null,
+        fileType: input.fileType?.trim() || null,
         fileSize: input.fileSize ?? null,
         senderId: ctx.user.id,
         senderType: "agent",
