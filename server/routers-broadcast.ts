@@ -419,11 +419,10 @@ export const broadcastRouter = router({
         senderType: "agent",
         status: "sending",
         sentAt: new Date(),
-        errorMessage: normalizeEmptyStringToNull(null), // zawsze null no insert inicial
+        errorMessage: null,
       };
 
-      console.log('[BroadcastMessageInsert] Normalized values:', JSON.stringify(values, null, 2));
-
+      console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
       const messageResult = await db.insert(broadcastMessages).values(values);
 
       const rawId = (messageResult as any).insertId || (messageResult as any).ids?.[0] || (messageResult as any).lastInsertRowid;
