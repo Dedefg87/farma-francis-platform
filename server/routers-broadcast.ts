@@ -161,38 +161,42 @@ export const broadcastRouter = router({
       }
 
       try {
-        console.log(`[BroadcastDelete] Starting deletion for list ID: ${input.listId}`);
+        const listId = input.listId;
+        console.log(`[BroadcastDelete] Starting deletion for list ID: ${listId}`);
 
-        // 1. Obter IDs das mensagens relacionadas a esta lista
+        // 1. Selecionar IDs das mensagens associadas a esta lista
         const messageIds = await db
           .select({ id: broadcastMessages.id })
           .from(broadcastMessages)
-          .where(eq(broadcastMessages.listId, input.listId));
+          .where(eq(broadcastMessages.listId, listId));
 
         const idsToDelete = messageIds.map(m => m.id);
-        console.log(`[BroadcastDelete] Found ${idsToDelete.length} messages for list ${input.listId}`);
+        console.log(`[BroadcastDelete] Found ${idsToDelete.length} message IDs for list ${listId}`);
 
-        // 2. Deletar broadcast_members_sent em chunks (evita erro MySQL 1093)
+        // 2. Deletar broadcast_members_sent em chunks (evita SIGTERM e MySQL 1093)
         if (idsToDelete.length > 0) {
           const chunkSize = 50;
           for (let i = 0; i < idsToDelete.length; i += chunkSize) {
             const chunk = idsToDelete.slice(i, i + chunkSize);
+            console.log(`[BroadcastDelete] Deleting broadcast_members_sent chunk: ${chunk.length} items (batch ${Math.floor(i / chunkSize) + 1})`);
             await db.delete(broadcastMembersSent).where(
               inArray(broadcastMembersSent.broadcastMessageId, chunk)
             );
-            console.log(`[BroadcastDelete] Deleted chunk ${i / chunkSize + 1} of broadcast_members_sent`);
           }
+          console.log(`[BroadcastDelete] Completed deletion of broadcast_members_sent (${idsToDelete.length} total)`);
+        } else {
+          console.log(`[BroadcastDelete] No messages found, skipping broadcast_members_sent deletion`);
         }
 
-        // 3. Deletar as mensagens em broadcast_messages
-        console.log(`[BroadcastDelete] Deleting broadcast_messages...`);
-        await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, input.listId));
+        // 3. Deletar as mensagens
+        console.log(`[BroadcastDelete] Deleting broadcastMessages for listId: ${listId}`);
+        await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, listId));
 
-        // 4. Deletar a lista em broadcast_lists
-        console.log(`[BroadcastDelete] Deleting broadcast_lists...`);
-        await db.delete(broadcastLists).where(eq(broadcastLists.id, input.listId));
+        // 4. Deletar a lista
+        console.log(`[BroadcastDelete] Deleting broadcastLists for listId: ${listId}`);
+        await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
 
-        console.log(`[BroadcastDelete] List ID ${input.listId} deleted successfully.`);
+        console.log(`[BroadcastDelete] List ${listId} and associated data deleted successfully.`);
         return { success: true };
       } catch (err: any) {
         console.error(`[BroadcastDelete] Failed to delete list ${input.listId}:`, err.message);
