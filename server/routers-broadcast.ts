@@ -128,7 +128,7 @@ export const broadcastRouter = router({
       if (!db) throw new Error("Database not available");
 
       await db.delete(broadcastMembersSent).where(
-        sql`message_id IN (SELECT id FROM ${broadcastMessages} WHERE list_id = ${input.listId})`
+        sql`broadcast_message_id IN (SELECT id FROM ${broadcastMessages} WHERE list_id = ${input.listId})`
       );
       await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, input.listId));
       await db.delete(broadcastListMembers).where(eq(broadcastListMembers.listId, input.listId));
@@ -220,6 +220,7 @@ export const broadcastRouter = router({
     .input(z.object({
       listId: z.number().int().positive(),
       content: z.string().optional().default(''),
+      caption: z.string().optional().default(''),
       fileUrl: z.string().url().optional().or(z.string().max(0).optional()),
       fileName: z.string().optional().default(''),
       fileType: z.string().optional().default(''),
@@ -242,9 +243,9 @@ export const broadcastRouter = router({
       const messageResult = await db.execute(
         sql`
           INSERT INTO broadcast_messages 
-          (list_id, message_text, caption, file_url, file_name, file_type, file_size, sender_id, sender_type, status, sent_at, total_recipients, error_message, created_at, updated_at)
+          (list_id, message_text, caption, file_url, file_name, file_type, file_size, sender_id, sender_type, status, sent_at, error_message, created_at, updated_at)
           VALUES (${input.listId}, ${input.content}, ${input.caption || null}, ${input.fileUrl || null}, ${input.fileName || null},
-                  ${input.fileType || null}, ${input.fileSize || 0}, ${ctx.user.id}, 'agent', 'sending', NOW(), ${members.length}, NULL, NOW(), NOW())
+                  ${input.fileType || null}, ${input.fileSize || 0}, ${ctx.user.id}, 'agent', 'sending', NOW(), NULL, NOW(), NOW())
         `
       );
 
