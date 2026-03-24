@@ -39,7 +39,7 @@ export const broadcastRouter = router({
         )
         .groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt)
         .orderBy(desc(broadcastLists.createdAt))
-        .limit(sql`${Number(input.limit)}`)
+        .limit(Number(input.limit))
         .offset(offset);
 
       const [[{ total }]] = await db
@@ -248,7 +248,7 @@ export const broadcastRouter = router({
         `
       );
 
-      const messageId = (messageResult as any).insertId || (result as any).ids?.[0];
+      const messageId = (messageResult as any).insertId || (messageResult as any).ids?.[0];
 
       const batchSize = 1000;
       for (let i = 0; i < members.length; i += batchSize) {
@@ -327,7 +327,7 @@ export const broadcastRouter = router({
         .from(broadcastMessages)
         .where(eq(broadcastMessages.listId, input.listId))
         .orderBy(desc(broadcastMessages.createdAt))
-        .limit(sql`${Number(input.limit)}`)
+        .limit(Number(input.limit))
         .offset(offset);
 
       const [[{ total }]] = await db
