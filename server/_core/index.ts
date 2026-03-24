@@ -469,7 +469,15 @@ async function startServer() {
     try {
       console.log("[AuthTest] Endpoint called");
       const results: any = {};
-      const cookies = parseCookieHeader(req.headers.cookie || '');
+      // Parse cookies manually to avoid dynamic require issues
+      const cookieHeader = req.headers.cookie || '';
+      const cookies: Record<string, string> = {};
+      if (cookieHeader) {
+        cookieHeader.split(';').forEach(pair => {
+          const [name, ...rest] = pair.trim().split('=');
+          if (name) cookies[name] = rest.join('=');
+        });
+      }
       const sessionCookie = cookies['farma-francis-auth'];
 
       results.cookiePresent = !!sessionCookie;
