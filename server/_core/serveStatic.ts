@@ -4,7 +4,6 @@ import path from "path";
 
 export function serveStatic(app: Express) {
   // Determinar o caminho da build: em produção, o Vite gera em ../../dist/public
-  // Em desenvolvimento, o Vite serve via自己的 dev server, então não usamos estático.
   const distPath = path.resolve(import.meta.dirname, "..", "..", "dist", "public");
 
   if (!fs.existsSync(distPath)) {
@@ -18,6 +17,12 @@ export function serveStatic(app: Express) {
 
   // Fallback para SPA: se o arquivo não existir, retorna index.html
   app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    const indexPath = path.resolve(distPath, "index.html");
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      console.error(`[serveStatic] index.html não encontrado em ${indexPath}`);
+      res.status(404).json({ error: "Not found" });
+    }
   });
 }
