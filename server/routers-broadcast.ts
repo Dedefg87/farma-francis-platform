@@ -10,7 +10,7 @@ import { eq, sql, asc, desc, and, or, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
-import { normalize } from "./utils/normalize";
+import { normalize, normalizeEmptyStringToNull } from "./utils/normalize";
 
 export const broadcastRouter = router({
   list: protectedProcedure
@@ -409,11 +409,11 @@ export const broadcastRouter = router({
 
       const values = {
         listId: input.listId,
-        messageText: normalize(input.content),
-        caption: normalize(input.caption),
-        fileUrl: normalize(input.fileUrl),
-        fileName: normalize(input.fileName),
-        fileType: normalize(input.fileType),
+        messageText: normalizeEmptyStringToNull(input.content),
+        caption: normalizeEmptyStringToNull(input.caption),
+        fileUrl: normalizeEmptyStringToNull(input.fileUrl),
+        fileName: normalizeEmptyStringToNull(input.fileName),
+        fileType: normalizeEmptyStringToNull(input.fileType),
         fileSize: input.fileSize ?? null,
         senderId: ctx.user.id,
         senderType: "agent",
