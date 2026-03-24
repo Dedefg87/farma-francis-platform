@@ -10,7 +10,7 @@ import { eq, sql, asc, desc, and, or, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
-import { normalizeEmptyStringToNull } from "./utils/helpers";
+import { normalize } from "./utils/normalize";
 
 export const broadcastRouter = router({
   list: protectedProcedure
@@ -385,12 +385,12 @@ export const broadcastRouter = router({
   sendMessage: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
-      content: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
-      caption: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
-      fileUrl: z.string().url().optional().or(z.string().max(0).optional()).transform(e => normalizeEmptyStringToNull(e)),
-      fileName: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
-      fileType: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
-      fileSize: z.number().int().optional().default(0),
+      content: z.string().optional().nullable().transform(normalize),
+      caption: z.string().optional().nullable().transform(normalize),
+      fileUrl: z.string().optional().nullable().transform(normalize),
+      fileName: z.string().optional().nullable().transform(normalize),
+      fileType: z.string().optional().nullable().transform(normalize),
+      fileSize: z.number().int().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       console.log('[BroadcastSendMessage] 🚀 Mutation iniciada - input:', JSON.stringify(input, null, 2));
@@ -409,11 +409,11 @@ export const broadcastRouter = router({
 
       const values = {
         listId: input.listId,
-        messageText: normalizeEmptyStringToNull(input.content),
-        caption: normalizeEmptyStringToNull(input.caption),
-        fileUrl: normalizeEmptyStringToNull(input.fileUrl),
-        fileName: normalizeEmptyStringToNull(input.fileName),
-        fileType: normalizeEmptyStringToNull(input.fileType),
+        messageText: normalize(input.content),
+        caption: normalize(input.caption),
+        fileUrl: normalize(input.fileUrl),
+        fileName: normalize(input.fileName),
+        fileType: normalize(input.fileType),
         fileSize: input.fileSize ?? null,
         senderId: ctx.user.id,
         senderType: "agent",
@@ -431,14 +431,25 @@ export const broadcastRouter = router({
         throw new Error("Falha ao obter ID da mensagem broadcast");
       }
 
+      // Inserir membros em lote usando Drizzle (sem SQL raw)
       const batchSize = 1000;
       for (let i = 0; i < members.length; i += batchSize) {
         const batch = members.slice(i, i + batchSize);
-        const valuesSql = batch.map(m =>
-          `(${Number(messageId)}, ${m.customerId}, '${m.phone.replace(/'/g, "''")}', 'pending', NULL, NULL, NOW(), NOW(), NOW())`
-        ).join(',');
-        
-        await db.execute(sql`INSERT INTO broadcast_members_sent (broadcast_message_id, customer_id, phone, status, error_message, delivered_at, read_at, sent_at, created_at) VALUES ${sql.raw(valuesSql)}`);
+        const valuesToInsert = batch.map(m => ({
+          broadcastMessageId: messageId,
+          customerId: m.customerId,
+          phone: normalize(m.phone),
+          status: "pending",
+          errorMessage: null,
+          deliveredAt: null,
+          readAt: null,
+          sentAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }));
+
+        console.log(`[BroadcastSendMessage] Inserting batch of ${valuesToInsert.length} members`);
+        await db.insert(broadcastMembersSent).values(valuesToInsert);
       }
 
       await db.update(broadcastLists)

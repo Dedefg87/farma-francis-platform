@@ -945,5 +945,10 @@ export const ticketTags = mysqlTable("ticket_tags", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+});
+
 export type TicketTag = typeof ticketTags.$inferSelect;
 export type InsertTicketTag = typeof ticketTags.$inferInsert;

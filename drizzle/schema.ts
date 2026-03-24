@@ -662,4 +662,10 @@ export const customerTreatments = mysqlTable("customer_treatments", {
   createdAt: datetime("created_at").notNull(),
   updatedAt: datetime("updated_at").notNull(),
 });
+
+// Tabela para deduplicação de webhooks (evita processamento duplicado)
+export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
+  id: varchar("id", { length: 64 }).primaryKey(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+});
 // Force rebuild - broadcast tables

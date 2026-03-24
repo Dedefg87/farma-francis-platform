@@ -8,6 +8,7 @@ import {
   agentPauses,
   queues,
   users,
+  processedWebhookMessages,
 } from "../drizzle/schema";
 import { eq, desc, and, or, sql, like, inArray, gte, lte } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
@@ -362,6 +363,24 @@ export async function ingestInboundConversationMessage(message: {
   if (!db) {
     console.error("[ingestInbound] Database not available!");
     return null;
+  }
+
+  // 0. Deduplicação: verificar se mensagem já foi processada
+  if (message.externalId) {
+    const existing = await db
+      .select()
+      .from(processedWebhookMessages)
+      .where(eq(processedWebhookMessages.id, message.externalId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      console.log(`[Webhook] Duplicate message ignored: ${message.externalId}`);
+      return null;
+    }
+
+    // Marcar como processada
+    await db.insert(processedWebhookMessages).values({ id: message.externalId });
+    console.log(`[Webhook] New message registered: ${message.externalId}`);
   }
 
   // 1. Find or create customer
