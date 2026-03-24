@@ -3810,7 +3810,9 @@ async function startServer() {
     });
   });
 
-  startServer().catch(console.error);
+}
+
+startServer().catch(console.error);
 // rebuild Tue Mar  3 20:02:39 -03 2026
 // FORCE REBUILD: 1772736794
 
