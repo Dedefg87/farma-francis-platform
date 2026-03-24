@@ -467,6 +467,7 @@ async function startServer() {
   // GET /api/debug/auth-test - Diagnóstico completo de autenticação JWT
   app.get("/api/debug/auth-test", async (req, res) => {
     try {
+      console.log("[AuthTest] Endpoint called");
       const results: any = {};
       const cookies = parseCookieHeader(req.headers.cookie || '');
       const sessionCookie = cookies['farma-francis-auth'];
