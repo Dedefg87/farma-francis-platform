@@ -55,13 +55,27 @@ export const broadcastRouter = router({
 
         console.log('[BroadcastList] Query built successfully. Executing...');
         const lists = await query;
-        console.log('[BroadcastList] Main query raw result:', lists, '| type:', typeof lists, '| isArray:', Array.isArray(lists));
+        console.log('[BroadcastList] Main query raw result length:', lists.length);
+        console.log('[BroadcastList] Main query raw result sample:', lists.length > 0 ? lists[0] : 'empty');
 
         if (!Array.isArray(lists)) {
           throw new Error(`Expected array from Drizzle query, got ${typeof lists}`);
         }
 
         console.log('[BroadcastList] Main query returned', lists.length, 'rows');
+
+        // Log first item details
+        if (lists.length > 0) {
+          const first = lists[0];
+          console.log('[BroadcastList] First item keys:', Object.keys(first));
+          for (const [key, val] of Object.entries(first)) {
+            console.log(`[BroadcastList] field ${key}:`, {
+              type: typeof val,
+              value: val,
+              instanceofDate: val instanceof Date,
+            });
+          }
+        }
 
         console.log('[BroadcastList] Executing count query...');
         const countQuery = db
@@ -73,8 +87,19 @@ export const broadcastRouter = router({
         const [[{ total }]] = countResult as any;
         console.log('[BroadcastList] Count query returned total:', total);
 
+        // Convert Dates to strings to avoid serialization issues
+        const sanitizedLists = lists.map(item => {
+          const { createdAt, lastSentAt, ...rest } = item as any;
+          return {
+            ...rest,
+            createdAt: createdAt instanceof Date ? createdAt.toISOString() : createdAt,
+            lastSentAt: lastSentAt instanceof Date ? lastSentAt.toISOString() : lastSentAt,
+            memberCount: Number(item.memberCount),
+          };
+        });
+
         const result = {
-          lists,
+          lists: sanitizedLists,
           pagination: {
             page: input.page,
             limit: input.limit,
@@ -83,29 +108,15 @@ export const broadcastRouter = router({
           },
         };
 
-        console.log('[BroadcastList] result structure:', {
-          listsType: typeof lists,
-          listsLength: lists.length,
-          firstItem: lists[0] ? { ...lists[0], memberCount: lists[0].memberCount } : null,
-          pagination: result.pagination,
-        });
+        console.log('[BroadcastList] result built. lists sanitized, dates converted to ISO strings');
 
-        // Validate serializability
+        // Final serialization test
         try {
           const testJson = JSON.stringify(result);
           console.log('[BroadcastList] serialization ok, size:', testJson.length);
         } catch (serErr: any) {
           console.error('[BroadcastList] serialization failed:', serErr.message);
-          // Try to identify problematic fields
-          if (lists[0]) {
-            for (const [key, val] of Object.entries(lists[0])) {
-              try {
-                JSON.stringify(val);
-              } catch (e) {
-                console.error(`[BroadcastList] field "${key}" cannot be stringified:`, { type: typeof val, value: val });
-              }
-            }
-          }
+          console.error('[BroadcastList] Error stack:', serErr.stack);
           throw serErr;
         }
 
