@@ -28,13 +28,8 @@ export const broadcastRouter = router({
       try {
         const offset = (input.page - 1) * input.limit;
 
-        console.log('[BroadcastList] Tables check:', {
-          broadcastLists: !!broadcastLists,
-          broadcastListMembers: !!broadcastListMembers,
-        });
-
-        console.log('[BroadcastList] Executing main query...');
-        const query = db
+        console.log('[BroadcastList] Executing main query with groupBy...');
+        const lists = await db
           .select({
             id: broadcastLists.id,
             name: broadcastLists.name,
@@ -44,50 +39,21 @@ export const broadcastRouter = router({
             createdAt: broadcastLists.createdAt,
           })
           .from(broadcastLists)
-          .leftJoin(
-            broadcastListMembers,
-            eq(broadcastLists.id, broadcastListMembers.listId)
-          )
+          .leftJoin(broadcastListMembers, eq(broadcastLists.id, broadcastListMembers.listId))
           .groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt)
           .orderBy(desc(broadcastLists.createdAt))
           .limit(Number(input.limit))
           .offset(offset);
 
-        console.log('[BroadcastList] Query built successfully. Executing...');
-        const lists = await query;
-        console.log('[BroadcastList] Main query raw result length:', lists.length);
-        console.log('[BroadcastList] Main query raw result sample:', lists.length > 0 ? lists[0] : 'empty');
-
-        if (!Array.isArray(lists)) {
-          throw new Error(`Expected array from Drizzle query, got ${typeof lists}`);
-        }
-
         console.log('[BroadcastList] Main query returned', lists.length, 'rows');
 
-        // Log first item details
-        if (lists.length > 0) {
-          const first = lists[0];
-          console.log('[BroadcastList] First item keys:', Object.keys(first));
-          for (const [key, val] of Object.entries(first)) {
-            console.log(`[BroadcastList] field ${key}:`, {
-              type: typeof val,
-              value: val,
-              instanceofDate: val instanceof Date,
-            });
-          }
-        }
-
         console.log('[BroadcastList] Executing count query...');
-        const countQuery = db
+        const [[{ total }]] = await db
           .select({ total: sql<number>`COUNT(*)` })
           .from(broadcastLists);
-        const countResult = await countQuery;
-        console.log('[BroadcastList] Count query raw result:', countResult);
+        console.log('[BroadcastList] Count returned total:', total);
 
-        const [[{ total }]] = countResult as any;
-        console.log('[BroadcastList] Count query returned total:', total);
-
-        // Convert Dates to strings to avoid serialization issues
+        // Sanitize: convert Date objects to ISO strings
         const sanitizedLists = lists.map(item => {
           const { createdAt, lastSentAt, ...rest } = item as any;
           return {
@@ -98,7 +64,9 @@ export const broadcastRouter = router({
           };
         });
 
-        const result = {
+        console.log('[BroadcastList] Sanitized dates, returning', sanitizedLists.length, 'items');
+
+        return {
           lists: sanitizedLists,
           pagination: {
             page: input.page,
@@ -107,21 +75,6 @@ export const broadcastRouter = router({
             totalPages: Math.ceil(Number(total) / input.limit),
           },
         };
-
-        console.log('[BroadcastList] result built. lists sanitized, dates converted to ISO strings');
-
-        // Final serialization test
-        try {
-          const testJson = JSON.stringify(result);
-          console.log('[BroadcastList] serialization ok, size:', testJson.length);
-        } catch (serErr: any) {
-          console.error('[BroadcastList] serialization failed:', serErr.message);
-          console.error('[BroadcastList] Error stack:', serErr.stack);
-          throw serErr;
-        }
-
-        console.log('[BroadcastList] query completed successfully. Returning', result.lists.length, 'lists');
-        return result;
       } catch (err: any) {
         console.error('[BroadcastList] Query failed:', err.message, 'stack:', err.stack);
         throw err;
