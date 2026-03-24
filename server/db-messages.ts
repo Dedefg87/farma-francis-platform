@@ -9,7 +9,7 @@ import {
   queues,
   users,
 } from "../drizzle/schema";
-import { eq, desc, and, or, sql, like, inArray } from "drizzle-orm";
+import { eq, desc, and, or, sql, like, inArray, gte, lte } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
 import { normalizeWhatsAppNumber, generatePhoneVariants, formatPhoneBR } from "./utils/phone";
