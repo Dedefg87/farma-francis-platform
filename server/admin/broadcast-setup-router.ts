@@ -47,9 +47,14 @@ router.post("/", async (req, res) => {
 
   try {
     await db.execute(sql);
+    // Adicional: verificar estrutura das tabelas
+    const [cols] = await db.execute("DESCRIBE broadcast_lists");
+    const [cols2] = await db.execute("DESCRIBE broadcast_list_members");
     res.json({
       success: true,
-      message: "Tabelas broadcast criadas/verificadas com sucesso"
+      message: "Tabelas broadcast criadas/verificadas com sucesso",
+      broadcast_lists_columns: cols,
+      broadcast_list_members_columns: cols2
     });
   } catch (error: any) {
     console.error("[broadcast-setup] Error:", error);
