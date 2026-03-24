@@ -53,6 +53,8 @@ export async function getDb() {
         queueLimit: 0,
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
+        charset: 'utf8mb4',
+        timezone: 'Z',
       });
 
       _db = drizzle(_pool, { mode: "default" });
