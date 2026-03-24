@@ -11,6 +11,12 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
 
+function normalizeEmptyStringToNull(value: any): any {
+  if (value === undefined || value === null) return null;
+  const trimmedValue = typeof value === 'string' ? value.trim() : value;
+  return trimmedValue === '' ? null : trimmedValue;
+}
+
 export const broadcastRouter = router({
   list: protectedProcedure
     .input(z.object({
@@ -401,20 +407,24 @@ export const broadcastRouter = router({
 
       if (members.length === 0) throw new Error("Lista não tem membros");
 
-      const messageResult = await db.insert(broadcastMessages).values({
+      const values = {
         listId: input.listId,
-        messageText: input.content?.trim() || null,
-        caption: input.caption?.trim() || null,
-        fileUrl: input.fileUrl?.trim() || null,
-        fileName: input.fileName?.trim() || null,
-        fileType: input.fileType?.trim() || null,
+        messageText: normalizeEmptyStringToNull(input.content),
+        caption: normalizeEmptyStringToNull(input.caption),
+        fileUrl: normalizeEmptyStringToNull(input.fileUrl),
+        fileName: normalizeEmptyStringToNull(input.fileName),
+        fileType: normalizeEmptyStringToNull(input.fileType),
         fileSize: input.fileSize ?? null,
         senderId: ctx.user.id,
         senderType: "agent",
         status: "sending",
         sentAt: new Date(),
         errorMessage: null,
-      });
+      };
+
+      console.log('[BroadcastMessageInsert] Normalized values:', JSON.stringify(values, null, 2));
+
+      const messageResult = await db.insert(broadcastMessages).values(values);
 
       const rawId = (messageResult as any).insertId || (messageResult as any).ids?.[0] || (messageResult as any).lastInsertRowid;
       const messageId = Number(rawId);
