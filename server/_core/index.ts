@@ -4,9 +4,18 @@ import { config } from "dotenv";
 config();
 
 // 🔍 Debug JWT_SECRET carregamento
-console.log("[STARTUP] JWT_SECRET length:", process.env.JWT_SECRET?.length);
-console.log("[STARTUP] JWT_SECRET defined:", !!process.env.JWT_SECRET);
+const jwtSecret = process.env.JWT_SECRET;
+console.log("[STARTUP] JWT_SECRET length:", jwtSecret?.length);
+console.log("[STARTUP] JWT_SECRET defined:", !!jwtSecret);
 console.log("[STARTUP] NODE_ENV:", process.env.NODE_ENV);
+
+// ⚠️ Validar comprimento mínimo da secret
+if (!jwtSecret || jwtSecret.length < 16) {
+  console.warn("[STARTUP] ⚠️ JWT_SECRET está muito curta ou não definida! Auth pode falhar. Comprimento atual:", jwtSecret?.length);
+} else {
+  console.log("[STARTUP] ✅ JWT_SECRET tem comprimentoadequado");
+}
+
 console.log("[Server] Starting initialization...");
 
 import express from "express";
