@@ -468,7 +468,7 @@ async function startServer() {
   app.get("/api/debug/auth-test", async (req, res) => {
     try {
       const results: any = {};
-      const cookies = require('cookie').parse(req.headers.cookie || '');
+      const cookies = parseCookieHeader(req.headers.cookie || '');
       const sessionCookie = cookies['farma-francis-auth'];
 
       results.cookiePresent = !!sessionCookie;
