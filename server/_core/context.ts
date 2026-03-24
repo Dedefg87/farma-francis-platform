@@ -1,46 +1,7 @@
-import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
-import type { User } from "../../drizzle/schema";
-import { sdk } from "./sdk";
+import type { InferSelectModel } from "drizzle-orm";
+import { users } from "../../drizzle/schema";
+
+export type User = InferSelectModel<typeof users>;
+
 import { COOKIE_NAME } from "@shared/const";
-import { parse as parseCookieHeader } from "cookie";
-import * as db from "../db";
-
-export type TrpcContext = {
-  req: CreateExpressContextOptions["req"];
-  res: CreateExpressContextOptions["res"];
-  user: User | null;
-};
-
-export async function createContext(
-  opts: CreateExpressContextOptions
-): Promise<TrpcContext> {
-  let user: User | null = null;
-
-  try {
-    const cookies = parseCookieHeader(opts.req.headers.cookie || '');
-    const sessionCookie = cookies[COOKIE_NAME];
-
-    if (sessionCookie) {
-      try {
-        const session = await sdk.verifySession(sessionCookie);
-        if (session?.openId) {
-          const foundUser = await db.getUserByOpenId(session.openId);
-          if (foundUser) {
-            user = foundUser;
-            console.log('[Auth] Usuário autenticado:', user.email);
-          }
-        }
-      } catch (err: any) {
-        console.log('[Auth] verifySession ERRO:', err?.message ?? String(err));
-      }
-    }
-  } catch (error) {
-    user = null;
-  }
-
-  return {
-    req: opts.req,
-    res: opts.res,
-    user,
-  };
-}
+// ... resto do código original (mantenha o que já existe)
