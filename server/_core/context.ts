@@ -18,6 +18,8 @@ export async function createContext(
 ): Promise<TrpcContext> {
   let user: User | null = null;
 
+  console.log('[CreateContext] ENTRY path:', opts.req.path, 'method:', opts.req.method);
+
   try {
     // Tentar autenticação local primeiro
     const cookies = parseCookieHeader(opts.req.headers.cookie || '');
