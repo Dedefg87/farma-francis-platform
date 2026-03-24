@@ -155,7 +155,7 @@ export async function processBroadcastMessage(messageId: number) {
     const [message] = await db
       .select({
         id: broadcastMessages.id,
-        content: broadcastMessages.content,
+        messageText: broadcastMessages.messageText,
         fileUrl: broadcastMessages.fileUrl,
         fileName: broadcastMessages.fileName,
         fileType: broadcastMessages.fileType,
@@ -182,7 +182,7 @@ export async function processBroadcastMessage(messageId: number) {
       .leftJoin(customers, eq(broadcastMembersSent.customerId, customers.id))
       .where(
         and(
-          eq(broadcastMembersSent.messageId, messageId),
+          eq(broadcastMembersSent.broadcastMessageId, messageId),
           eq(broadcastMembersSent.status, "pending")
         )
       );
@@ -215,7 +215,7 @@ export async function processBroadcastMessage(messageId: number) {
 
       const result = await sendWhatsAppMessageWithRetry(
         targetPhone,
-        message.content,
+        message.messageText,
         fileAttachment
       );
 
@@ -225,7 +225,7 @@ export async function processBroadcastMessage(messageId: number) {
           .set({
             status: "sent",
             sentAt: new Date(),
-            error: null,
+            errorMessage: null,
           })
           .where(eq(broadcastMembersSent.id, sent.id));
         successCount++;
@@ -234,7 +234,7 @@ export async function processBroadcastMessage(messageId: number) {
           .update(broadcastMembersSent)
           .set({
             status: "failed",
-            error: result.error || "Erro desconhecido",
+            errorMessage: result.error || "Erro desconhecido",
             sentAt: null,
           })
           .where(eq(broadcastMembersSent.id, sent.id));
