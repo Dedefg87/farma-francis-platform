@@ -28,8 +28,13 @@ export const broadcastRouter = router({
       try {
         const offset = (input.page - 1) * input.limit;
 
+        console.log('[BroadcastList] Tables check:', {
+          broadcastLists: !!broadcastLists,
+          broadcastListMembers: !!broadcastListMembers,
+        });
+
         console.log('[BroadcastList] Executing main query...');
-        const [lists] = await db
+        const query = db
           .select({
             id: broadcastLists.id,
             name: broadcastLists.name,
@@ -48,13 +53,24 @@ export const broadcastRouter = router({
           .limit(Number(input.limit))
           .offset(offset);
 
+        console.log('[BroadcastList] Query built successfully. Executing...');
+        const lists = await query;
+        console.log('[BroadcastList] Main query raw result:', lists, '| type:', typeof lists, '| isArray:', Array.isArray(lists));
+
+        if (!Array.isArray(lists)) {
+          throw new Error(`Expected array from Drizzle query, got ${typeof lists}`);
+        }
+
         console.log('[BroadcastList] Main query returned', lists.length, 'rows');
 
         console.log('[BroadcastList] Executing count query...');
-        const [[{ total }]] = await db
+        const countQuery = db
           .select({ total: sql<number>`COUNT(*)` })
           .from(broadcastLists);
+        const countResult = await countQuery;
+        console.log('[BroadcastList] Count query raw result:', countResult);
 
+        const [[{ total }]] = countResult as any;
         console.log('[BroadcastList] Count query returned total:', total);
 
         const result = {
