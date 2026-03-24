@@ -41,6 +41,7 @@ import { uploadToR2 } from "../r2-client";
 import migrationRouter from "../admin/migration-router";
 import checkDuplicatesRouter from "../admin/check-duplicates-router";
 import executeSqlRouter from "../admin/execute-sql-router";
+import encodingFixRouter from "../admin/encoding-fix-router";
 import broadcastCheckRouter from "../admin/broadcast-check-router";
 import broadcastSetupRouter from "../admin/broadcast-setup-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
@@ -377,6 +378,7 @@ async function startServer() {
   app.use("/api/admin", broadcastCheckRouter);
   app.use("/api/admin/setup-broadcast-tables", broadcastSetupRouter);
   app.use("/api/admin", executeSqlRouter);
+  app.use("/api/admin/fix-encoding", encodingFixRouter);
   // DEBUG: Force create broadcast tables
   if (process.env.NODE_ENV !== 'production' || process.env.FORCE_MIGRATION === 'true') {
     app.get("/api/admin/force-create-broadcast", async (req, res) => {
