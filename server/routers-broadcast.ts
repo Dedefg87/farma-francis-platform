@@ -233,6 +233,46 @@ export const broadcastRouter = router({
       return { success: true };
     }),
 
+  listMembers: protectedProcedure
+    .input(z.object({
+      listId: z.number().int().positive(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      console.log(`[BroadcastListMembers] Fetching members for listId: ${input.listId}`);
+
+      // Buscar membros com JOIN à tabela customers para obter nome e telefone
+      const members = await db
+        .select({
+          id: broadcastListMembers.id,
+          customerId: broadcastListMembers.customerId,
+          addedAt: broadcastListMembers.addedAt,
+          name: customers.name,
+          phone: customers.phone,
+        })
+        .from(broadcastListMembers)
+        .leftJoin(customers, eq(broadcastListMembers.customerId, customers.id))
+        .where(eq(broadcastListMembers.listId, input.listId))
+        .orderBy(asc(broadcastListMembers.addedAt));
+
+      console.log(`[BroadcastListMembers] Raw members found: ${members.length}`);
+
+      // Deduplicar por telefone (manter apenas 1 contato por número)
+      const uniqueMembersMap = new Map<string, any>();
+      for (const member of members) {
+        if (member.phone && !uniqueMembersMap.has(member.phone)) {
+          uniqueMembersMap.set(member.phone, member);
+        }
+      }
+      const deduplicatedMembers = Array.from(uniqueMembersMap.values());
+
+      console.log(`[BroadcastListMembers] Unique members (by phone): ${deduplicatedMembers.length}`);
+
+      return deduplicatedMembers;
+    }),
+
   searchCustomers: protectedProcedure
     .input(z.object({
       query: z.string().default(""),
