@@ -26,13 +26,12 @@ import checkDuplicatesRouter from "../admin/check-duplicates-router";
 import executeSqlRouter from "../admin/execute-sql-router";
 import broadcastCheckRouter from "../admin/broadcast-check-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
-import { broadcastLists, broadcastListMembers } from "../drizzle/schema";
+import { broadcastLists as broadcastLists2, broadcastListMembers as broadcastListMembers2 } from "../drizzle/schema";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runBroadcastMigrations } from "../broadcast-migration";
-import { getDb } from "../db";
 
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
