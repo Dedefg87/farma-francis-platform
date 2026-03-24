@@ -163,25 +163,25 @@ export const broadcastRouter = router({
       try {
         console.log(`[BroadcastDelete] Starting deletion for list ID: ${input.listId}`);
 
-        // 1. Obter IDs das mensagens relacionadas a esta lista (para logging)
-        const messageIdsResult = await db
+        // 1. Obter IDs das mensagens relacionadas a esta lista
+        const messageIds = await db
           .select({ id: broadcastMessages.id })
           .from(broadcastMessages)
           .where(eq(broadcastMessages.listId, input.listId));
 
-        console.log(`[BroadcastDelete] Found ${messageIdsResult.length} messages for list ${input.listId}`);
+        const idsToDelete = messageIds.map(m => m.id);
+        console.log(`[BroadcastDelete] Found ${idsToDelete.length} messages for list ${input.listId}`);
 
-        if (messageIdsResult.length > 0) {
-          // 2. Deletar registros em broadcast_members_sent usando subquery (evita limite de placeholders IN)
-          console.log(`[BroadcastDelete] Deleting broadcast_members_sent via subquery...`);
-          await db.delete(broadcastMembersSent).where(
-            inArray(
-              broadcastMembersSent.broadcastMessageId,
-              db.select({ id: broadcastMessages.id })
-                .from(broadcastMessages)
-                .where(eq(broadcastMessages.listId, input.listId))
-            )
-          );
+        // 2. Deletar broadcast_members_sent em chunks (evita erro MySQL 1093)
+        if (idsToDelete.length > 0) {
+          const chunkSize = 50;
+          for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+            const chunk = idsToDelete.slice(i, i + chunkSize);
+            await db.delete(broadcastMembersSent).where(
+              inArray(broadcastMembersSent.broadcastMessageId, chunk)
+            );
+            console.log(`[BroadcastDelete] Deleted chunk ${i / chunkSize + 1} of broadcast_members_sent`);
+          }
         }
 
         // 3. Deletar as mensagens em broadcast_messages
@@ -268,24 +268,24 @@ export const broadcastRouter = router({
           console.log(`[BroadcastDeleteMany] Processing list ID: ${listId}`);
 
           // 1. Get message IDs for this list
-          const messageIdsResult = await db
+          const messageIds = await db
             .select({ id: broadcastMessages.id })
             .from(broadcastMessages)
             .where(eq(broadcastMessages.listId, listId));
 
-          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${messageIdsResult.length} messages`);
+          const idsToDelete = messageIds.map(m => m.id);
+          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${idsToDelete.length} messages`);
 
-          if (messageIdsResult.length > 0) {
-            // 2. Delete broadcast_members_sent using subquery to avoid IN placeholder limit
-            await db.delete(broadcastMembersSent).where(
-              inArray(
-                broadcastMembersSent.broadcastMessageId,
-                db.select({ id: broadcastMessages.id })
-                  .from(broadcastMessages)
-                  .where(eq(broadcastMessages.listId, listId))
-              )
-            );
-            console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_members_sent via subquery`);
+          // 2. Delete broadcast_members_sent in chunks (avoids MySQL 1093 error)
+          if (idsToDelete.length > 0) {
+            const chunkSize = 50;
+            for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+              const chunk = idsToDelete.slice(i, i + chunkSize);
+              await db.delete(broadcastMembersSent).where(
+                inArray(broadcastMembersSent.broadcastMessageId, chunk)
+              );
+              console.log(`[BroadcastDeleteMany] List ${listId}: Deleted chunk ${i / chunkSize + 1} of broadcast_members_sent`);
+            }
           }
 
           // 3. Delete broadcast_messages
