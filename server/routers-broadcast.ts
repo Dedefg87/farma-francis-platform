@@ -170,7 +170,7 @@ export const broadcastRouter = router({
 
         // 2. Deletar broadcast_members_sent em chunks (evita SIGTERM e MySQL 1093)
         if (idsToDelete.length > 0) {
-          const chunkSize = 50;
+          const chunkSize = 20; // chunk menor para evitar timeout/lock
           for (let i = 0; i < idsToDelete.length; i += chunkSize) {
             const chunk = idsToDelete.slice(i, i + chunkSize);
             console.log(`[BroadcastDelete] Deleting broadcast_members_sent chunk: ${chunk.length} items (batch ${Math.floor(i / chunkSize) + 1})`);
@@ -277,7 +277,7 @@ export const broadcastRouter = router({
 
           // 2. Delete broadcast_members_sent in chunks (avoids MySQL 1093 error)
           if (idsToDelete.length > 0) {
-            const chunkSize = 50;
+            const chunkSize = 20; // chunk menor para evitar timeout/lock
             for (let i = 0; i < idsToDelete.length; i += chunkSize) {
               const chunk = idsToDelete.slice(i, i + chunkSize);
               await db.delete(broadcastMembersSent).where(
@@ -393,6 +393,7 @@ export const broadcastRouter = router({
       fileSize: z.number().int().optional().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
+      console.log('[BroadcastSendMessage] 🚀 Mutation iniciada - input:', JSON.stringify(input, null, 2));
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
