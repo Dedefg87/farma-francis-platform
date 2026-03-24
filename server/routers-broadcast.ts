@@ -6,7 +6,7 @@ import {
   broadcastMembersSent,
   customers,
 } from "../drizzle/schema";
-import { eq, sql, asc, desc, and, or } from "drizzle-orm";
+import { eq, sql, asc, desc, and, or, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
@@ -147,18 +147,45 @@ export const broadcastRouter = router({
 
   delete: protectedProcedure
     .input(z.object({ listId: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) {
+        console.error('[BroadcastDelete] Database not available');
+        throw new Error("Database not available");
+      }
 
-      await db.delete(broadcastMembersSent).where(
-        sql`broadcast_message_id IN (SELECT id FROM ${broadcastMessages} WHERE list_id = ${input.listId})`
-      );
-      await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, input.listId));
-      await db.delete(broadcastListMembers).where(eq(broadcastListMembers.listId, input.listId));
-      await db.delete(broadcastLists).where(eq(broadcastLists.id, input.listId));
+      try {
+        console.log(`[BroadcastDelete] Starting deletion for list ID: ${input.listId}`);
 
-      return { success: true };
+        // 1. Obter IDs das mensagens relacionadas a esta lista
+        const messageIdsResult = await db
+          .select({ id: broadcastMessages.id })
+          .from(broadcastMessages)
+          .where(eq(broadcastMessages.listId, input.listId));
+
+        const idsToDelete = messageIdsResult.map(m => m.id);
+        console.log(`[BroadcastDelete] Found message IDs: ${idsToDelete.join(', ')}`);
+
+        if (idsToDelete.length > 0) {
+          // 2. Deletar registros em broadcast_members_sent
+          console.log(`[BroadcastDelete] Deleting broadcast_members_sent...`);
+          await db.delete(broadcastMembersSent).where(inArray(broadcastMembersSent.broadcastMessageId, idsToDelete));
+        }
+
+        // 3. Deletar as mensagens em broadcast_messages
+        console.log(`[BroadcastDelete] Deleting broadcast_messages...`);
+        await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, input.listId));
+
+        // 4. Deletar a lista em broadcast_lists
+        console.log(`[BroadcastDelete] Deleting broadcast_lists...`);
+        await db.delete(broadcastLists).where(eq(broadcastLists.id, input.listId));
+
+        console.log(`[BroadcastDelete] List ID ${input.listId} deleted successfully.`);
+        return { success: true };
+      } catch (err: any) {
+        console.error(`[BroadcastDelete] Failed to delete list ${input.listId}:`, err.message);
+        throw err;
+      }
     }),
 
   addMember: protectedProcedure
