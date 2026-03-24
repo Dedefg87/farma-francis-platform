@@ -1,4 +1,11 @@
 import "dotenv/config";
+import { config } from "dotenv";
+
+config();
+
+// 🔍 Debug JWT_SECRET carregamento
+console.log("[STARTUP] JWT_SECRET length:", process.env.JWT_SECRET?.length);
+console.log("[STARTUP] JWT_SECRET defined:", !!process.env.JWT_SECRET);
 console.log("[Server] Starting initialization...");
 
 import express from "express";
