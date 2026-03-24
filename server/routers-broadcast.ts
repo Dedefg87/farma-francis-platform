@@ -208,7 +208,7 @@ export const broadcastRouter = router({
 
   searchCustomers: protectedProcedure
     .input(z.object({
-      query: z.string().min(1),
+      query: z.string().default(""),
       excludeListId: z.number().int().positive().optional(),
     }))
     .query(async ({ input }) => {
