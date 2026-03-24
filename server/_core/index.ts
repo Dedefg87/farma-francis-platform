@@ -7,7 +7,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
-import { sql, SQL } from "drizzle-orm";
+import { sql, SQL, eq, desc } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
@@ -25,6 +25,7 @@ import checkDuplicatesRouter from "../admin/check-duplicates-router";
 import executeSqlRouter from "../admin/execute-sql-router";
 import broadcastCheckRouter from "../admin/broadcast-check-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
+import { broadcastLists, broadcastListMembers } from "../drizzle/schema";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -377,17 +378,12 @@ async function startServer() {
   // DEBUG: Test broadcast list query directly
   app.get("/api/debug/broadcast-list", async (req, res) => {
     try {
-      const { getDb } = await import("../db");
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-
-      // Import schema tables
-      const { broadcastLists, broadcastListMembers } = await import("../drizzle/schema");
-      const { eq, desc, sql } = await import("drizzle-orm");
-
+  
       const offset = 0;
       const limit = 20;
-
+  
       const [lists] = await db
         .select({
           id: broadcastLists.id,
@@ -403,7 +399,7 @@ async function startServer() {
         .orderBy(desc(broadcastLists.createdAt))
         .limit(limit)
         .offset(offset);
-
+  
       res.json({ success: true, lists, count: lists.length });
     } catch (err: any) {
       console.error("[debug/broadcast-list] Error:", err);
@@ -412,7 +408,6 @@ async function startServer() {
         sql: err.sql,
         stack: err.stack,
         sqlMessage: err.sqlMessage,
-        code: err.code 
       });
     }
   });
