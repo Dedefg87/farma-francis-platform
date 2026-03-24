@@ -48,7 +48,7 @@ export const broadcastRouter = router({
         console.log('[BroadcastList] Main query returned', lists.length, 'rows');
 
         console.log('[BroadcastList] Executing count query...');
-        const [[{ total }]] = await db
+        const [{ total }] = await db
           .select({ total: sql<number>`COUNT(*)` })
           .from(broadcastLists);
         console.log('[BroadcastList] Count returned total:', total);
