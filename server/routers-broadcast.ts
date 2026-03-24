@@ -240,16 +240,22 @@ export const broadcastRouter = router({
 
       if (members.length === 0) throw new Error("Lista não tem membros");
 
-      const messageResult = await db.execute(
-        sql`
-          INSERT INTO broadcast_messages 
-          (list_id, message_text, caption, file_url, file_name, file_type, file_size, sender_id, sender_type, status, sent_at, error_message, created_at, updated_at)
-          VALUES (${input.listId}, ${input.content}, ${input.caption || null}, ${input.fileUrl || null}, ${input.fileName || null},
-                  ${input.fileType || null}, ${input.fileSize || 0}, ${ctx.user.id}, 'agent', 'sending', NOW(), NULL, NOW(), NOW())
-        `
-      );
+      const messageResult = await db.insert(broadcastMessages).values({
+        listId: input.listId,
+        messageText: input.content,
+        caption: input.caption || null,
+        fileUrl: input.fileUrl || null,
+        fileName: input.fileName || null,
+        fileType: input.fileType || null,
+        fileSize: input.fileSize || 0,
+        senderId: ctx.user.id,
+        senderType: "agent",
+        status: "sending",
+        sentAt: new Date(),
+        errorMessage: null,
+      });
 
-      const messageId = (messageResult as any).insertId || (messageResult as any).ids?.[0];
+      const messageId = Number(messageResult.insertId || messageResult.ids?.[0]);
 
       const batchSize = 1000;
       for (let i = 0; i < members.length; i += batchSize) {
