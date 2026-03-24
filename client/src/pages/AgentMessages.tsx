@@ -1512,14 +1512,14 @@ export default function AgentMessages() {
                 setShowNewOptionsModal(false);
                 setShowBroadcastModal(true);
               }}
-              className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-lg text-left"
+              className="flex items-center gap-3 w-full p-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-left"
             >
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <Megaphone className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                <Megaphone className="w-5 h-5 text-white" />
               </div>
               <div>
-                <div className="font-medium text-gray-900">Lista de Transmissão</div>
-                <div className="text-sm text-gray-500">Enviar mensagem para até 50 contatos</div>
+                <div className="font-medium text-white">Lista de Transmissão</div>
+                <div className="text-sm text-blue-100">Enviar mensagem para até 50 contatos</div>
               </div>
             </button>
           </div>
