@@ -1,7 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, splitLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -37,48 +37,37 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
-// Link que usa GET para queries
-const getQueryLink = () => {
-  return {
-    async request(op: any) {
-      if (op.type !== "query") {
-        return op.next(op);
-      }
-      const url = new URL("/api/trpc/" + op.path, window.location.origin);
-      if (op.input) {
-        url.searchParams.set("input", JSON.stringify(op.input));
-      }
-      const response = await fetch(url.toString(), {
-        method: "GET",
+// Link customizado que faz dispatch baseado no tipo da operação
+const customLink = (op: any) => {
+  // Para queries: usar GET
+  if (op.type === "query") {
+    const url = new URL("/api/trpc/" + op.path, window.location.origin);
+    if (op.input) {
+      url.searchParams.set("input", JSON.stringify(op.input));
+    }
+    return fetch(url.toString(), {
+      method: "GET",
+      credentials: "include",
+    }).then(response => ({ ...op, response }));
+  }
+
+  // Para mutations: usar POST com httpBatchLink (batch)
+  const mutationLink = httpBatchLink({
+    url: "/api/trpc",
+    transformer: superjson,
+    fetch(input, init) {
+      return globalThis.fetch(input, {
+        ...(init ?? {}),
         credentials: "include",
       });
-      return { ...op, response };
     },
-    merge() {},
-  };
+  });
+
+  return mutationLink(op);
 };
 
-// Link padrão para mutations (POST)
-const mutationLink = httpBatchLink({
-  url: "/api/trpc",
-  transformer: superjson,
-  fetch(input, init) {
-    return globalThis.fetch(input, {
-      ...(init ?? {}),
-      credentials: "include",
-    });
-  },
-});
-
-// Combinar links: query → GET, mutation → POST
 const trpcClient = trpc.createClient({
-  links: [
-    splitLink({
-      condition: (op) => op.type === "query",
-      true: getQueryLink(),
-      false: mutationLink,
-    }),
-  ],
+  links: [customLink],
 });
 
 createRoot(document.getElementById("root")!).render(
