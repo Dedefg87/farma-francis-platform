@@ -358,8 +358,8 @@ async function startServer() {
   app.use("/api/admin", migrationRouter);
   app.use("/api/admin", checkDuplicatesRouter);
   app.use("/api/admin", broadcastCheckRouter);
+  app.use("/api/admin/setup-broadcast-tables", broadcastSetupRouter);
   app.use("/api/admin", executeSqlRouter);
-  app.use("/api/admin", broadcastSetupRouter);
   // DEBUG: Force create broadcast tables
   if (process.env.NODE_ENV !== 'production' || process.env.FORCE_MIGRATION === 'true') {
     app.get("/api/admin/force-create-broadcast", async (req, res) => {
