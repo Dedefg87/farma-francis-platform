@@ -6,7 +6,7 @@ import {
   broadcastMembersSent,
   customers,
 } from "../drizzle/schema";
-import { eq, asc, desc, sql, and, or } from "drizzle-orm";
+import { eq, sql, asc, desc, sql, and, or } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
@@ -38,7 +38,7 @@ export const broadcastRouter = router({
         )
         .groupBy(broadcastLists.id)
         .orderBy(desc(broadcastLists.createdAt))
-        .limit(input.limit)
+        .limit(sql(`${Number(input.limit)}`))
         .offset(offset);
 
       const [[{ total }]] = await db
@@ -327,7 +327,7 @@ export const broadcastRouter = router({
         .from(broadcastMessages)
         .where(eq(broadcastMessages.listId, input.listId))
         .orderBy(desc(broadcastMessages.createdAt))
-        .limit(input.limit)
+        .limit(sql(`${Number(input.limit)}`))
         .offset(offset);
 
       const [[{ total }]] = await db
