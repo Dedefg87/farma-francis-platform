@@ -57,10 +57,17 @@ router.post("/", async (req, res) => {
       broadcast_list_members_columns: cols2
     });
   } catch (error: any) {
-    console.error("[broadcast-setup] Error:", error);
+    console.error("[broadcast-setup] Error:", {
+      message: error.message,
+      sqlMessage: error.sqlMessage,
+      code: error.code,
+      errno: error.errno,
+      sql: sql.substring(0, 500)
+    });
     res.status(500).json({
       success: false,
-      error: error.message || "Erro ao criar tabelas broadcast"
+      error: error.message || "Erro ao criar tabelas broadcast",
+      details: error.sqlMessage || ""
     });
   }
 });
