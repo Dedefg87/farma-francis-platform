@@ -237,6 +237,60 @@ export const broadcastRouter = router({
       return { success: true };
     }),
 
+  deleteMany: protectedProcedure
+    .input(z.object({
+      listIds: z.array(z.number().int().positive()),
+    }))
+    .mutation(async ({ input }) => {
+      console.log(`[BroadcastDeleteMany] Starting bulk deletion for ${input.listIds.length} lists:`, input.listIds);
+
+      const db = await getDb();
+      if (!db) {
+        console.error('[BroadcastDeleteMany] Database not available');
+        throw new Error("Database not available");
+      }
+
+      try {
+        // Process each list deletion sequentially to maintain order
+        for (const listId of input.listIds) {
+          console.log(`[BroadcastDeleteMany] Processing list ID: ${listId}`);
+
+          // 1. Get message IDs for this list
+          const messageIdsResult = await db
+            .select({ id: broadcastMessages.id })
+            .from(broadcastMessages)
+            .where(eq(broadcastMessages.listId, listId));
+
+          const idsToDelete = messageIdsResult.map(m => m.id);
+          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${idsToDelete.length} messages`);
+
+          if (idsToDelete.length > 0) {
+            // 2. Delete broadcast_members_sent
+            await db.delete(broadcastMembersSent).where(inArray(broadcastMembersSent.broadcastMessageId, idsToDelete));
+            console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_members_sent`);
+          }
+
+          // 3. Delete broadcast_messages
+          await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, listId));
+          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_messages`);
+
+          // 4. Delete broadcast_list_members
+          await db.delete(broadcastListMembers).where(eq(broadcastListMembers.listId, listId));
+          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_list_members`);
+
+          // 5. Delete the list itself
+          await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
+          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_lists`);
+        }
+
+        console.log(`[BroadcastDeleteMany] Successfully deleted ${input.listIds.length} lists`);
+        return { success: true, deletedCount: input.listIds.length };
+      } catch (err: any) {
+        console.error(`[BroadcastDeleteMany] Failed:`, err.message);
+        throw err;
+      }
+    }),
+
   listMembers: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
