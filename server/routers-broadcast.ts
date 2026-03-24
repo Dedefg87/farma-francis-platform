@@ -218,18 +218,22 @@ export const broadcastRouter = router({
 
   removeMember: protectedProcedure
     .input(z.object({
-      listId: z.number().int().positive(),
-      customerId: z.number().int().positive(),
+      memberId: z.number().int().positive(),
     }))
     .mutation(async ({ input }) => {
+      console.log(`[BroadcastRemoveMember] Removing memberId: ${input.memberId}`);
+
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) {
+        console.error('[BroadcastRemoveMember] Database not available');
+        throw new Error("Database not available");
+      }
 
-      await db.delete(broadcastListMembers).where(and(
-        eq(broadcastListMembers.listId, input.listId),
-        eq(broadcastListMembers.customerId, input.customerId)
-      ));
+      await db.delete(broadcastListMembers).where(
+        eq(broadcastListMembers.id, input.memberId)
+      );
 
+      console.log(`[BroadcastRemoveMember] MemberId ${input.memberId} removed successfully.`);
       return { success: true };
     }),
 
