@@ -394,7 +394,13 @@ async function startServer() {
         })
         .from(broadcastLists2)
         .leftJoin(broadcastListMembers2, eq(broadcastLists2.id, broadcastListMembers2.listId))
-        .groupBy(broadcastLists2.id)
+        .groupBy(
+          broadcastLists2.id,
+          broadcastLists2.name,
+          broadcastLists2.description,
+          broadcastLists2.lastSentAt,
+          broadcastLists2.createdAt
+        )
         .orderBy(desc(broadcastLists2.createdAt))
         .limit(limit)
         .offset(offset);
