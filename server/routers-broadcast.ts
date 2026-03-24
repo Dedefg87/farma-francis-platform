@@ -6,7 +6,7 @@ import {
   broadcastMembersSent,
   customers,
 } from "../drizzle/schema";
-import { eq, sql, asc, desc, sql, and, or } from "drizzle-orm";
+import { eq, sql, asc, desc, and, or } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
@@ -20,6 +20,7 @@ export const broadcastRouter = router({
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
       const offset = (input.page - 1) * input.limit;
 
       const [lists] = await db
@@ -38,7 +39,7 @@ export const broadcastRouter = router({
         )
         .groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt)
         .orderBy(desc(broadcastLists.createdAt))
-        .limit(sql(`${Number(input.limit)}`))
+        .limit(sql`${Number(input.limit)}`)
         .offset(offset);
 
       const [[{ total }]] = await db
@@ -115,7 +116,7 @@ export const broadcastRouter = router({
           VALUES (${input.name}, ${input.description || null}, ${ctx.user.id}, NOW(), NOW())
         `
       );
-
+      
       const insertId = (result as any).insertId || (result as any).ids?.[0];
       return { id: Number(insertId) };
     }),
@@ -132,6 +133,7 @@ export const broadcastRouter = router({
       await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, input.listId));
       await db.delete(broadcastListMembers).where(eq(broadcastListMembers.listId, input.listId));
       await db.delete(broadcastLists).where(eq(broadcastLists.id, input.listId));
+
       return { success: true };
     }),
 
@@ -190,7 +192,6 @@ export const broadcastRouter = router({
       if (!db) throw new Error("Database not available");
 
       const searchPattern = `%${input.query}%`;
-
       const query = db.select({
         id: customers.id,
         name: customers.name,
@@ -247,7 +248,7 @@ export const broadcastRouter = router({
         `
       );
 
-      const messageId = (messageResult as any).insertId || (messageResult as any).ids?.[0];
+      const messageId = (messageResult as any).insertId || (result as any).ids?.[0];
 
       const batchSize = 1000;
       for (let i = 0; i < members.length; i += batchSize) {
@@ -255,7 +256,8 @@ export const broadcastRouter = router({
         const valuesSql = batch.map(m =>
           `(${Number(messageId)}, ${m.customerId}, '${m.phone.replace(/'/g, "''")}', 'pending', NULL, NULL, NOW(), NOW(), NOW())`
         ).join(',');
-        await db.execute(sql`INSERT INTO broadcast_members_sent (broadcast_message_id, customer_id, phone, status, error_message, delivered_at, read_at, sent_at, created_at) VALUES ${valuesSql}`);
+        
+        await db.execute(sql`INSERT INTO broadcast_members_sent (broadcast_message_id, customer_id, phone, status, error_message, delivered_at, read_at, sent_at, created_at) VALUES ${sql.raw(valuesSql)}`);
       }
 
       await db.update(broadcastLists)
@@ -278,13 +280,11 @@ export const broadcastRouter = router({
 
       if (!message.length) throw new Error("Mensagem não encontrada");
 
-      // Total de destinatários (da lista)
       const [[{ total }]] = await db
         .select({ total: sql<number>`COUNT(*)` })
         .from(broadcastListMembers)
         .where(eq(broadcastListMembers.listId, message[0].listId));
 
-      // Estatísticas por status
       const stats = await db.select({
         status: broadcastMembersSent.status,
         count: sql<number>`COUNT(*)`,
@@ -327,7 +327,7 @@ export const broadcastRouter = router({
         .from(broadcastMessages)
         .where(eq(broadcastMessages.listId, input.listId))
         .orderBy(desc(broadcastMessages.createdAt))
-        .limit(sql(`${Number(input.limit)}`))
+        .limit(sql`${Number(input.limit)}`)
         .offset(offset);
 
       const [[{ total }]] = await db
