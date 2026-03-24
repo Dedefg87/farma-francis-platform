@@ -6,6 +6,7 @@ config();
 // 🔍 Debug JWT_SECRET carregamento
 console.log("[STARTUP] JWT_SECRET length:", process.env.JWT_SECRET?.length);
 console.log("[STARTUP] JWT_SECRET defined:", !!process.env.JWT_SECRET);
+console.log("[STARTUP] NODE_ENV:", process.env.NODE_ENV);
 console.log("[Server] Starting initialization...");
 
 import express from "express";
@@ -460,6 +461,82 @@ async function startServer() {
     } catch (err: any) {
       console.error("[check-db] Erro:", err);
       res.status(500).json({ error: err.message, dbUrl: maskedUrl });
+    }
+  });
+
+  // GET /api/debug/auth-test - Diagnóstico completo de autenticação JWT
+  app.get("/api/debug/auth-test", async (req, res) => {
+    try {
+      const results: any = {};
+      const cookies = require('cookie').parse(req.headers.cookie || '');
+      const sessionCookie = cookies['farma-francis-auth'];
+
+      results.cookiePresent = !!sessionCookie;
+      results.cookieLength = sessionCookie?.length || 0;
+      results.cookieSecretLength = process.env.JWT_SECRET?.length || 0;
+      results.cookieSecretDefined = !!process.env.JWT_SECRET;
+
+      if (!sessionCookie) {
+        return res.json({
+          success: false,
+          message: "Cookie farma-francis-auth não encontrado",
+          results
+        });
+      }
+
+      // Passo 1: Verificar JWT
+      const { jwtVerify } = await import("jose");
+      const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+
+      try {
+        const { payload } = await jwtVerify(sessionCookie, secret, {
+          algorithms: ["HS256"],
+        });
+        results.jwtVerify = "SUCCESS";
+        results.payload = payload;
+
+        const openId = payload.openId as string;
+        results.openId = openId;
+
+        if (!openId) {
+          results.error = "openId não encontrado no payload do JWT";
+          return res.json({ success: false, results });
+        }
+
+        // Passo 2: Buscar usuário no banco
+        const { getUserByOpenId } = await import("../db");
+        const user = await getUserByOpenId(openId);
+
+        results.userFound = !!user;
+        if (user) {
+          results.user = { id: user.id, openId: user.openId, name: user.name, email: user.email, role: user.role };
+        } else {
+          results.error = "Usuário com openId não encontrado no banco";
+        }
+
+        // Passo 3: Verificar se appId corresponde
+        results.appIdInToken = payload.appId;
+        results.expectedAppId = process.env.APP_ID;
+
+        res.json({
+          success: !!user,
+          message: user ? "Autenticação OK" : "Usuário não encontrado no banco",
+          results
+        });
+
+      } catch (jwtError: any) {
+        results.jwtVerify = "FAILED";
+        results.jwtError = jwtError.message || String(jwtError);
+        res.json({
+          success: false,
+          message: "JWT verification falhou",
+          results
+        });
+      }
+
+    } catch (err: any) {
+      console.error("[AuthTest] Error:", err);
+      res.status(500).json({ error: err.message, stack: process.env.NODE_ENV === "development" ? err.stack : undefined });
     }
   });
 
