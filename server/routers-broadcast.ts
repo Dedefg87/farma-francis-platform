@@ -396,7 +396,7 @@ export const broadcastRouter = router({
         fileUrl: input.fileUrl || null,
         fileName: input.fileName || null,
         fileType: input.fileType || null,
-        fileSize: input.fileSize || 0,
+        fileSize: input.fileSize ?? null,
         senderId: ctx.user.id,
         senderType: "agent",
         status: "sending",
@@ -404,7 +404,11 @@ export const broadcastRouter = router({
         errorMessage: null,
       });
 
-      const messageId = Number(messageResult.insertId || messageResult.ids?.[0]);
+      const rawId = (messageResult as any).insertId || (messageResult as any).ids?.[0] || (messageResult as any).lastInsertRowid;
+      const messageId = Number(rawId);
+      if (!messageId || isNaN(messageId)) {
+        throw new Error("Falha ao obter ID da mensagem broadcast");
+      }
 
       const batchSize = 1000;
       for (let i = 0; i < members.length; i += batchSize) {
