@@ -10,12 +10,7 @@ import { eq, sql, asc, desc, and, or, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
-
-function normalizeEmptyStringToNull(value: any): any {
-  if (value === undefined || value === null) return null;
-  const trimmedValue = typeof value === 'string' ? value.trim() : value;
-  return trimmedValue === '' ? null : trimmedValue;
-}
+import { normalizeEmptyStringToNull } from "./utils/helpers";
 
 export const broadcastRouter = router({
   list: protectedProcedure
@@ -390,11 +385,11 @@ export const broadcastRouter = router({
   sendMessage: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
-      content: z.string().optional().default('').transform(e => e === '' ? null : e),
-      caption: z.string().optional().default('').transform(e => e === '' ? null : e),
-      fileUrl: z.string().url().optional().or(z.string().max(0).optional()).transform(e => e === '' ? null : e),
-      fileName: z.string().optional().default('').transform(e => e === '' ? null : e),
-      fileType: z.string().optional().default('').transform(e => e === '' ? null : e),
+      content: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
+      caption: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
+      fileUrl: z.string().url().optional().or(z.string().max(0).optional()).transform(e => normalizeEmptyStringToNull(e)),
+      fileName: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
+      fileType: z.string().optional().default('').transform(e => normalizeEmptyStringToNull(e)),
       fileSize: z.number().int().optional().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
