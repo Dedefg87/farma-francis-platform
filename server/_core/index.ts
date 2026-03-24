@@ -25,6 +25,7 @@ import migrationRouter from "../admin/migration-router";
 import checkDuplicatesRouter from "../admin/check-duplicates-router";
 import executeSqlRouter from "../admin/execute-sql-router";
 import broadcastCheckRouter from "../admin/broadcast-check-router";
+import broadcastSetupRouter from "../admin/broadcast-setup-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
@@ -358,6 +359,7 @@ async function startServer() {
   app.use("/api/admin", checkDuplicatesRouter);
   app.use("/api/admin", broadcastCheckRouter);
   app.use("/api/admin", executeSqlRouter);
+  app.use("/api/admin", broadcastSetupRouter);
   // DEBUG: Force create broadcast tables
   if (process.env.NODE_ENV !== 'production' || process.env.FORCE_MIGRATION === 'true') {
     app.get("/api/admin/force-create-broadcast", async (req, res) => {
@@ -388,7 +390,7 @@ async function startServer() {
           id: broadcastLists2.id,
           name: broadcastLists2.name,
           description: broadcastLists2.description,
-          memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers2.customerId})`.as("memberCount"),
+          memberCount: sql`COUNT(DISTINCT ${broadcastListMembers2.customerId})`.as("memberCount"),
           lastSentAt: broadcastLists2.lastSentAt,
           createdAt: broadcastLists2.createdAt,
         })
