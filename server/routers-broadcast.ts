@@ -17,44 +17,62 @@ export const broadcastRouter = router({
       page: z.number().int().min(1).optional().default(1),
       limit: z.number().int().min(1).max(100).optional().default(20),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      console.log('[BroadcastList] query started. input:', JSON.stringify(input), 'user:', ctx.user?.id);
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) {
+        console.error('[BroadcastList] Database not available');
+        throw new Error("Database not available");
+      }
 
-      const offset = (input.page - 1) * input.limit;
+      try {
+        const offset = (input.page - 1) * input.limit;
 
-      const [lists] = await db
-        .select({
-          id: broadcastLists.id,
-          name: broadcastLists.name,
-          description: broadcastLists.description,
-          memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
-          lastSentAt: broadcastLists.lastSentAt,
-          createdAt: broadcastLists.createdAt,
-        })
-        .from(broadcastLists)
-        .leftJoin(
-          broadcastListMembers,
-          eq(broadcastLists.id, broadcastListMembers.listId)
-        )
-        .groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt)
-        .orderBy(desc(broadcastLists.createdAt))
-        .limit(Number(input.limit))
-        .offset(offset);
+        console.log('[BroadcastList] Executing main query...');
+        const [lists] = await db
+          .select({
+            id: broadcastLists.id,
+            name: broadcastLists.name,
+            description: broadcastLists.description,
+            memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
+            lastSentAt: broadcastLists.lastSentAt,
+            createdAt: broadcastLists.createdAt,
+          })
+          .from(broadcastLists)
+          .leftJoin(
+            broadcastListMembers,
+            eq(broadcastLists.id, broadcastListMembers.listId)
+          )
+          .groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt)
+          .orderBy(desc(broadcastLists.createdAt))
+          .limit(Number(input.limit))
+          .offset(offset);
 
-      const [[{ total }]] = await db
-        .select({ total: sql<number>`COUNT(*)` })
-        .from(broadcastLists);
+        console.log('[BroadcastList] Main query returned', lists.length, 'rows');
 
-      return {
-        lists,
-        pagination: {
-          page: input.page,
-          limit: input.limit,
-          total: Number(total),
-          totalPages: Math.ceil(Number(total) / input.limit),
-        },
-      };
+        console.log('[BroadcastList] Executing count query...');
+        const [[{ total }]] = await db
+          .select({ total: sql<number>`COUNT(*)` })
+          .from(broadcastLists);
+
+        console.log('[BroadcastList] Count query returned total:', total);
+
+        const result = {
+          lists,
+          pagination: {
+            page: input.page,
+            limit: input.limit,
+            total: Number(total),
+            totalPages: Math.ceil(Number(total) / input.limit),
+          },
+        };
+
+        console.log('[BroadcastList] query completed successfully. Returning', result.lists.length, 'lists');
+        return result;
+      } catch (err: any) {
+        console.error('[BroadcastList] Query failed:', err.message, 'stack:', err.stack);
+        throw err;
+      }
     }),
 
   getById: protectedProcedure
