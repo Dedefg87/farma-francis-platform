@@ -47,7 +47,7 @@ router.post("/run-migrations", async (req, res) => {
       for (const stmt of statements) {
         if (!stmt) continue;
         try {
-          await dbRaw.raw(stmt);
+          await dbRaw.execute(stmt);
         } catch (err: any) {
           // Se for erro de tabela já existe, ignorar (idempotente)
           if (err.message.includes("already exists") || err.message.includes("Duplicate")) {
