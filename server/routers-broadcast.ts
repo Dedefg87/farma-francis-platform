@@ -36,7 +36,7 @@ export const broadcastRouter = router({
           broadcastListMembers,
           eq(broadcastLists.id, broadcastListMembers.listId)
         )
-        .groupBy(broadcastLists.id)
+        .groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt)
         .orderBy(desc(broadcastLists.createdAt))
         .limit(sql(`${Number(input.limit)}`))
         .offset(offset);
