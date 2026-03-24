@@ -83,6 +83,32 @@ export const broadcastRouter = router({
           },
         };
 
+        console.log('[BroadcastList] result structure:', {
+          listsType: typeof lists,
+          listsLength: lists.length,
+          firstItem: lists[0] ? { ...lists[0], memberCount: lists[0].memberCount } : null,
+          pagination: result.pagination,
+        });
+
+        // Validate serializability
+        try {
+          const testJson = JSON.stringify(result);
+          console.log('[BroadcastList] serialization ok, size:', testJson.length);
+        } catch (serErr: any) {
+          console.error('[BroadcastList] serialization failed:', serErr.message);
+          // Try to identify problematic fields
+          if (lists[0]) {
+            for (const [key, val] of Object.entries(lists[0])) {
+              try {
+                JSON.stringify(val);
+              } catch (e) {
+                console.error(`[BroadcastList] field "${key}" cannot be stringified:`, { type: typeof val, value: val });
+              }
+            }
+          }
+          throw serErr;
+        }
+
         console.log('[BroadcastList] query completed successfully. Returning', result.lists.length, 'lists');
         return result;
       } catch (err: any) {
