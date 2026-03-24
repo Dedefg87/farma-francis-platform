@@ -24,6 +24,7 @@ export async function createContext(
     const sessionCookie = cookies[COOKIE_NAME];
 
     console.log('[AuthDebug] Path:', opts.req.path, '| Cookie present:', !!sessionCookie);
+    console.log('[AuthDebug] Code version: 2026-03-24-1535-patch1'); // <-- FORÇAR REBUILD
 
     if (sessionCookie) {
       try {
