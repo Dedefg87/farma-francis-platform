@@ -1,5 +1,6 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { getDbRaw } from "../db";
+import { sdk } from "../_core/sdk";
 
 const router = Router();
 
@@ -7,8 +8,20 @@ const router = Router();
  * POST /api/admin/fix-encoding
  * Converte o banco e todas as tabelas para utf8mb4
  * ATENÇÃO: Execute apenas uma vez, durante baixo tráfego
+ * Requer autenticação e permissão de administrador
  */
-router.post("/", async (req, res) => {
+router.post("/", async (req: Request, res: Response) => {
+  // Authenticate using SDK (same as tRPC context)
+  const user = await sdk.authenticateRequest(req);
+  if (!user) {
+    return res.status(401).json({ success: false, error: "Não autorizado" });
+  }
+
+  // Only admins can run this
+  if (user.role !== "admin" && user.role !== "superadmin") {
+    return res.status(403).json({ success: false, error: "Acesso negado" });
+  }
+
   const db = await getDbRaw();
   if (!db) {
     return res.status(500).json({ success: false, error: "Database not available" });
