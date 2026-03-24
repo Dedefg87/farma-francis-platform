@@ -500,10 +500,11 @@ export async function ingestInboundConversationMessage(message: {
     .where(duplicateCheck)
     .limit(1);
   if (already) {
-    console.log("[Ingest] ⛔ Duplicate message detected, skipping insert:", 
-      message.externalId ? `extID=${message.externalId}` : `content match`);
+    console.log(`[EvolutionDeduplication] Mensagem já processada, ignorando: ${message.externalId || 'sem externalId'}`);
     return null;
   }
+
+  console.log(`[EvolutionDeduplication] Nova mensagem, processando: ${message.externalId || 'sem externalId'}`);
 
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
