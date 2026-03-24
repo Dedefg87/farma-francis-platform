@@ -8,6 +8,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import rateLimit from "express-rate-limit";
 import { sql, SQL, eq, desc } from "drizzle-orm";
+import { broadcastLists as broadcastLists2, broadcastListMembers as broadcastListMembers2 } from "../drizzle/schema";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
@@ -133,7 +134,7 @@ async function runIdempotencyConstraints() {
     if (!(await indexExists("received_messages", idx1))) {
       try {
         await db.execute(`
-          CREATE UNIQUE INDEX ${idx1} 
+          CREATE UNIQUE INDEX ${idx1}
           ON received_messages (provider, external_id)
         `);
         console.log("[Idempotency] ✓ Unique index created on received_messages (provider, external_id)");
@@ -149,7 +150,7 @@ async function runIdempotencyConstraints() {
     if (!(await indexExists("conversation_messages", idx2))) {
       try {
         await db.execute(`
-          CREATE UNIQUE INDEX ${idx2} 
+          CREATE UNIQUE INDEX ${idx2}
           ON conversation_messages (provider, external_id)
         `);
         console.log("[Idempotency] ✓ Unique index created on conversation_messages (provider, external_id)");
@@ -229,13 +230,13 @@ async function startServer() {
         .limit(1);
 
       const newUrl = 'https://evolution-api-production-ffea.up.railway.app';
-      
+
       if (existing.length > 0) {
         const row = existing[0];
         const config = typeof row.config === 'string' ? JSON.parse(row.config) : row.config;
-        
+
         let needsUpdate = false;
-        
+
         // Check both old formats
         if (config.apiUrl && config.apiUrl.includes('6125')) {
           config.apiUrl = newUrl;
@@ -245,7 +246,7 @@ async function startServer() {
           config.instances = config.instances.map((inst: any) => ({ ...inst, url: newUrl }));
           needsUpdate = true;
         }
-        
+
         if (needsUpdate) {
           await db
             .update(integrationSettings)
@@ -266,7 +267,7 @@ async function startServer() {
             },
           ],
         };
-        
+
         await db.insert(integrationSettings).values({
           integrationType: "evolution_api",
           name: "Evolution API (Auto-created)",
@@ -274,7 +275,7 @@ async function startServer() {
           config: defaultConfig,
           createdBy: 1, // Admin user
         });
-        
+
         console.log("[EvolutionFix] ✅ Created Evolution API config with correct URL (ffea)");
       }
     }
@@ -380,26 +381,26 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-  
+
       const offset = 0;
       const limit = 20;
-  
+
       const [lists] = await db
         .select({
-          id: broadcastLists.id,
-          name: broadcastLists.name,
-          description: broadcastLists.description,
-          memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
-          lastSentAt: broadcastLists.lastSentAt,
-          createdAt: broadcastLists.createdAt,
+          id: broadcastLists2.id,
+          name: broadcastLists2.name,
+          description: broadcastLists2.description,
+          memberCount: sql<number>`COUNT(DISTINCT ${broadcastListMembers2.customerId})`.as("memberCount"),
+          lastSentAt: broadcastLists2.lastSentAt,
+          createdAt: broadcastLists2.createdAt,
         })
-        .from(broadcastLists)
-        .leftJoin(broadcastListMembers, eq(broadcastLists.id, broadcastListMembers.listId))
-        .groupBy(broadcastLists.id)
-        .orderBy(desc(broadcastLists.createdAt))
+        .from(broadcastLists2)
+        .leftJoin(broadcastListMembers2, eq(broadcastLists2.id, broadcastListMembers2.listId))
+        .groupBy(broadcastLists2.id)
+        .orderBy(desc(broadcastLists2.createdAt))
         .limit(limit)
         .offset(offset);
-  
+
       res.json({ success: true, lists, count: lists.length });
     } catch (err: any) {
       console.error("[debug/broadcast-list] Error:", err);
@@ -416,27 +417,27 @@ async function startServer() {
   app.get("/api/admin/check-db", async (req, res) => {
     const { getDbRaw } = await import("../db");
     const dbRaw = await getDbRaw();
-    
+
     // Mascarar DATABASE_URL para diagnóstico
     const dbUrl = process.env.DATABASE_URL || "NÃO DEFINIDA";
     const maskedUrl = dbUrl.replace(/:[^:@]+@/, ":****@");
-    
+
     if (!dbRaw) return res.status(500).json({ error: "Database not available", dbUrl: maskedUrl });
     try {
       const [countResult] = await dbRaw.execute("SELECT COUNT(*) as total FROM customers");
       const total = countResult?.[0]?.total || 0;
-      
+
       const [tablesResult] = await dbRaw.execute("SHOW TABLES");
       const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
-      
+
       // Check specifically for broadcast tables
       const broadcastTables = tables.filter((t: string) => t.includes('broadcast'));
-      
+
       const [sampleCustomers] = await dbRaw.execute("SELECT id, name, phone FROM customers LIMIT 5");
-      
-      res.json({ 
-        success: true, 
-        totalCustomers: Number(total), 
+
+      res.json({
+        success: true,
+        totalCustomers: Number(total),
         tables: tables, // full list, not sliced
         broadcastTables, // explicit list
         sampleCustomers,
@@ -566,13 +567,13 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, conversation_id, sender_type, 
+        `SELECT id, conversation_id, sender_type,
          LEFT(content, 100) as content_preview,
          file_url IS NOT NULL as has_file_url,
          LENGTH(file_url) as file_url_length,
          LEFT(file_url, 50) as file_url_preview,
          file_type, created_at
-         FROM conversation_messages 
+         FROM conversation_messages
          ORDER BY id DESC
          LIMIT 20`
       );
@@ -596,8 +597,8 @@ async function startServer() {
 
       // Buscar última mensagem com mídia
       const [rows]: any = await pool.execute(
-        `SELECT id, created_at FROM conversation_messages 
-         WHERE file_type IS NOT NULL 
+        `SELECT id, created_at FROM conversation_messages
+         WHERE file_type IS NOT NULL
          ORDER BY id DESC LIMIT 1`
       );
       await pool.end();
@@ -636,8 +637,8 @@ async function startServer() {
           : configRows[0].config;
 
       const [msgRows]: any = await pool.execute(
-        `SELECT id, created_at FROM conversation_messages 
-         WHERE file_type IS NOT NULL 
+        `SELECT id, created_at FROM conversation_messages
+         WHERE file_type IS NOT NULL
          ORDER BY id DESC LIMIT 1`
       );
       await pool.end();
@@ -744,8 +745,8 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, file_url, file_type FROM conversation_messages 
-         WHERE file_url IS NOT NULL 
+        `SELECT id, file_url, file_type FROM conversation_messages
+         WHERE file_url IS NOT NULL
          AND file_url LIKE '%whatsapp.net%'
          AND file_url NOT LIKE 'data:%'
          LIMIT 100`
@@ -769,12 +770,12 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, conversation_id, file_type, 
-         LENGTH(file_url) as file_size, 
+        `SELECT id, conversation_id, file_type,
+         LENGTH(file_url) as file_size,
          LEFT(file_url, 50) as file_url_preview,
          created_at
-         FROM conversation_messages 
-         WHERE file_url IS NOT NULL 
+         FROM conversation_messages
+         WHERE file_url IS NOT NULL
          ORDER BY id DESC
          LIMIT 20`
       );
@@ -874,8 +875,8 @@ async function startServer() {
 
               // Get external_id and remote_jid directly from conversation_messages
               const [msgRows]: any = await pool.execute(
-                `SELECT external_id, remote_jid 
-                 FROM conversation_messages 
+                `SELECT external_id, remote_jid
+                 FROM conversation_messages
                  WHERE id = ?`,
                 [messageId]
               );
@@ -897,7 +898,7 @@ async function startServer() {
                 for (let attempt = 1; attempt <= 3; attempt++) {
                   try {
                     console.log(`[Media] Attempt ${attempt}/3: Getting base64 from Evolution API for media ${externalId}, remoteJid ${remoteJid}`);
-                    
+
                     const response = await fetch(url, {
                       method: "POST",
                       headers: {
@@ -979,13 +980,13 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(
-        `SELECT id, conversation_id, sender_type, 
+        `SELECT id, conversation_id, sender_type,
          LEFT(content, 100) as content_preview,
          file_url IS NOT NULL as has_file_url,
          LENGTH(file_url) as file_url_length,
          LEFT(file_url, 50) as file_url_preview,
          file_type, created_at
-         FROM conversation_messages 
+         FROM conversation_messages
          ORDER BY id DESC
          LIMIT 20`
       );
@@ -1158,9 +1159,9 @@ async function startServer() {
 
       // Get all messages with WhatsApp media URLs
       const [rows]: any = await pool.execute(
-        `SELECT cm.id, cm.file_url, cm.file_type 
-         FROM conversation_messages cm 
-         WHERE cm.file_url IS NOT NULL 
+        `SELECT cm.id, cm.file_url, cm.file_type
+         FROM conversation_messages cm
+         WHERE cm.file_url IS NOT NULL
          AND cm.file_url LIKE '%whatsapp.net%'
          AND cm.file_url NOT LIKE 'data:%'
          LIMIT 50`
@@ -1523,9 +1524,9 @@ async function startServer() {
 
       // Desempenho por agente
       const agentResult = await db.execute(sql`
-        SELECT 
-          u.id, 
-          u.name, 
+        SELECT
+          u.id,
+          u.name,
           COUNT(DISTINCT c.id) as total_conversations,
           COUNT(DISTINCT CASE WHEN c.status = 'closed' THEN c.id END) as closed_conversations,
           COUNT(cm.id) as total_messages
@@ -1580,7 +1581,7 @@ async function startServer() {
 
       // Testar query direta
       const result = await db.execute(sql`
-        SELECT 
+        SELECT
           HOUR(created_at) as hour,
           COUNT(DISTINCT conversation_id) as chats
         FROM conversation_messages
@@ -1646,8 +1647,8 @@ async function startServer() {
 
       // Mensagens por tipo
       const msgByTypeResult = await db.execute(sql`
-        SELECT sender_type, COUNT(*) as count 
-        FROM conversation_messages 
+        SELECT sender_type, COUNT(*) as count
+        FROM conversation_messages
         GROUP BY sender_type
       `);
       const msgByType = getRows(msgByTypeResult);
@@ -1660,16 +1661,16 @@ async function startServer() {
 
       // Por canal
       const byChannelResult = await db.execute(sql`
-        SELECT channel, COUNT(*) as count 
-        FROM conversations 
+        SELECT channel, COUNT(*) as count
+        FROM conversations
         GROUP BY channel
       `);
       const byChannel = getRows(byChannelResult);
 
       // Por status
       const byStatusResult = await db.execute(sql`
-        SELECT status, COUNT(*) as count 
-        FROM conversations 
+        SELECT status, COUNT(*) as count
+        FROM conversations
         GROUP BY status
       `);
       const byStatus = getRows(byStatusResult);
@@ -1887,8 +1888,8 @@ async function startServer() {
 
       // Verificar se as tabelas existem
       const tables = await db.raw(`
-        SELECT table_name FROM information_schema.tables 
-        WHERE table_schema = DATABASE() 
+        SELECT table_name FROM information_schema.tables
+        WHERE table_schema = DATABASE()
         AND table_name LIKE 'baby_shower%'
       `);
       results.tables = tables;
@@ -2081,7 +2082,7 @@ async function startServer() {
   app.post("/api/baby-shower/upload-image", async (req, res) => {
     try {
       const { image, filename } = req.body;
-      
+
       if (!image) {
         return res.status(400).json({ error: "Image data required" });
       }
@@ -2099,20 +2100,20 @@ async function startServer() {
       // Otimizar imagem com sharp - redimensionar para 800px e comprimir
       let optimizedBuffer: Buffer;
       let finalExtension = 'webp';
-      
+
       try {
         const sharp = (await import('sharp')).default;
         optimizedBuffer = await sharp(originalBuffer)
-          .resize(800, 800, { 
-            fit: 'inside', 
-            withoutEnlargement: true 
+          .resize(800, 800, {
+            fit: 'inside',
+            withoutEnlargement: true
           })
-          .webp({ 
+          .webp({
             quality: 80,
-            effort: 4 
+            effort: 4
           })
           .toBuffer();
-        
+
         console.log(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes`);
       } catch (sharpError: any) {
         console.log("[Upload] Sharp error, using original:", sharpError.message);
@@ -2122,7 +2123,7 @@ async function startServer() {
 
       // Gerar nome único para o arquivo
       const uniqueName = `baby-shower-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      
+
       // Prioridade 1: Cloudinary (se configurado)
       if (process.env.CLOUDINARY_CLOUD_NAME) {
         try {
@@ -2132,23 +2133,23 @@ async function startServer() {
             api_key: process.env.CLOUDINARY_API_KEY,
             api_secret: process.env.CLOUDINARY_API_SECRET,
           });
-          
+
           const base64Optimized = optimizedBuffer.toString('base64');
           const dataUri = `data:image/${finalExtension};base64,${base64Optimized}`;
-          
+
           const result = await cloudinary.uploader.upload(dataUri, {
             folder: 'baby-shower',
             public_id: uniqueName,
             resource_type: 'image',
           });
-          
+
           console.log("[Upload] Cloudinary success:", result.secure_url);
           return res.json({ success: true, url: result.secure_url });
         } catch (cloudinaryError: any) {
           console.error("[Upload] Cloudinary error:", cloudinaryError.message);
         }
       }
-      
+
       // Prioridade 2: Storage do Forge (se configurado)
       try {
         const { storagePut } = await import("../storage");
@@ -2157,7 +2158,7 @@ async function startServer() {
         return res.json({ success: true, url: result.url });
       } catch (storageError: any) {
         console.log("[Upload] Storage error:", storageError.message);
-        
+
         // Prioridade 3: Imgur API
         try {
           const base64Optimized = optimizedBuffer.toString('base64');
@@ -2171,16 +2172,16 @@ async function startServer() {
           });
 
           const imgurData = await imgurResponse.json();
-          
+
           if (imgurData.success && imgurData.data?.link) {
             console.log("[Upload] Imgur success:", imgurData.data.link);
             return res.json({ success: true, url: imgurData.data.link });
           }
-          
+
           throw new Error(`Imgur failed: ${JSON.stringify(imgurData)}`);
         } catch (imgurError: any) {
           console.error("[Upload] Imgur error:", imgurError.message);
-          
+
           // Último fallback: base64 data URL
           const dataUrl = `data:image/${finalExtension};base64,${optimizedBuffer.toString('base64')}`;
           console.log("[Upload] Using base64 fallback, size:", dataUrl.length);
@@ -2198,9 +2199,9 @@ async function startServer() {
     try {
       const mysql = await import("mysql2/promise");
       const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
-      
+
       const limit = parseInt(req.query.limit as string) || 10;
-      
+
       // Mensagens da tabela messages
       const [messages]: any = await pool.execute(
         `SELECT id, channel, direction, content, created_at FROM messages ORDER BY created_at DESC LIMIT ${limit}`
@@ -2217,7 +2218,7 @@ async function startServer() {
       );
 
       await pool.end();
-      res.json({ 
+      res.json({
         messages: messages,
         receivedMessages: receivedMessages,
         conversationMessages: conversationMessages
@@ -2233,26 +2234,26 @@ async function startServer() {
       const mysql = await import("mysql2/promise");
       const pool = await mysql.createPool({ uri: process.env.DATABASE_URL });
       const phone = req.params.phone.replace(/\D/g, '');
-      
+
       // Buscar em received_messages
       const [received]: any = await pool.execute(
-        `SELECT id, from_number, from_name, message_text, timestamp, created_at 
-         FROM received_messages 
-         WHERE from_number LIKE '%${phone}%' 
+        `SELECT id, from_number, from_name, message_text, timestamp, created_at
+         FROM received_messages
+         WHERE from_number LIKE '%${phone}%'
          ORDER BY created_at DESC LIMIT 50`
       );
 
       // Buscar em conversation_messages via conversations
       const [conversations]: any = await pool.execute(
-        `SELECT cm.id, c.phone_number, cm.sender_type, cm.content, cm.created_at 
-         FROM conversation_messages cm 
-         JOIN conversations c ON c.id = cm.conversation_id 
-         WHERE c.phone_number LIKE '%${phone}%' 
+        `SELECT cm.id, c.phone_number, cm.sender_type, cm.content, cm.created_at
+         FROM conversation_messages cm
+         JOIN conversations c ON c.id = cm.conversation_id
+         WHERE c.phone_number LIKE '%${phone}%'
          ORDER BY cm.created_at DESC LIMIT 50`
       );
 
       await pool.end();
-      res.json({ 
+      res.json({
         phone: phone,
         receivedMessages: received,
         conversationMessages: conversations
@@ -2265,7 +2266,7 @@ async function startServer() {
   // Debug: Ver todos os webhooks recebidos recentemente
   const recentWebhooks: any[] = [];
   app.get("/api/debug/webhooks", (req, res) => {
-    res.json({ 
+    res.json({
       count: recentWebhooks.length,
       last10: recentWebhooks.slice(-10).map(w => ({
         time: w.time,
@@ -2304,15 +2305,15 @@ async function startServer() {
 
       // Insert package - using correct column names from schema
       const [result]: any = await db.execute(sql`
-        INSERT INTO baby_shower_gift_packages 
+        INSERT INTO baby_shower_gift_packages
         (event_id, package_name, description, gift_type, size_label, price, image_url, stock_limit, sold_count, is_active, created_at)
         VALUES (${eventId}, ${name}, ${description || null}, ${giftType || "diapers"}, ${size || null}, ${price}, ${imageUrl || null}, ${stockLimit || null}, 0, 1, NOW())
       `);
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         packageId: result.insertId,
-        message: `Package "${name}" added to event ${eventCode}` 
+        message: `Package "${name}" added to event ${eventCode}`
       });
     } catch (error) {
       console.error("[baby-shower/add-package] Error:", error);
@@ -2338,7 +2339,7 @@ async function startServer() {
 
       // Build SET clauses using Drizzle sql template
       const setClauses: SQL[] = [];
-      
+
       if (name !== undefined) {
         setClauses.push(sql`package_name = ${name}`);
       }
@@ -2367,16 +2368,16 @@ async function startServer() {
 
       // Join all SET clauses
       const setClause = sql.join(setClauses, sql`, `);
-      
+
       await db.execute(sql`
-        UPDATE baby_shower_gift_packages 
+        UPDATE baby_shower_gift_packages
         SET ${setClause}
         WHERE id = ${packageId}
       `);
 
-      res.json({ 
-        success: true, 
-        message: `Package ${packageId} updated` 
+      res.json({
+        success: true,
+        message: `Package ${packageId} updated`
       });
     } catch (error) {
       console.error("[baby-shower/update-package] Error:", error);
@@ -2394,9 +2395,9 @@ async function startServer() {
       }
 
       const [events]: any = await db.execute(sql`
-        SELECT id, event_code, event_name, status, created_at 
-        FROM baby_shower_events 
-        ORDER BY created_at DESC 
+        SELECT id, event_code, event_name, status, created_at
+        FROM baby_shower_events
+        ORDER BY created_at DESC
         LIMIT 20
       `);
 
@@ -2417,7 +2418,7 @@ async function startServer() {
       }
 
       await db.execute(sql`
-        ALTER TABLE baby_shower_gift_packages 
+        ALTER TABLE baby_shower_gift_packages
         MODIFY COLUMN image_url TEXT
       `);
 
@@ -2824,7 +2825,7 @@ async function startServer() {
       const { stdout } = await execAsync("df -h /");
       const lines = stdout.trim().split("\n");
       const [header, ...parts] = lines;
-      
+
       const diskInfo = parts.map(line => {
         const [filesystem, size, used, available, usePct, mounted] = line.split(/\s+/);
         return { filesystem, size, used, available, usePct, mounted };
@@ -2858,9 +2859,9 @@ async function startServer() {
 
       // Query para obter tamanho do banco de dados
       const [rows]: any = await pool.execute(`
-        SELECT 
+        SELECT
           SUM(data_length + index_length) / 1024 / 1024 as size_mb
-        FROM information_schema.TABLES 
+        FROM information_schema.TABLES
         WHERE table_schema = DATABASE()
       `);
 
@@ -2888,11 +2889,11 @@ async function startServer() {
 
       // Query para obter estatísticas das tabelas
       const [rows]: any = await pool.execute(`
-        SELECT 
+        SELECT
           table_name,
           ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
           table_rows
-        FROM information_schema.TABLES 
+        FROM information_schema.TABLES
         WHERE table_schema = DATABASE()
         ORDER BY (data_length + index_length) DESC
       `);
@@ -2922,7 +2923,7 @@ async function startServer() {
     try {
       const { types } = req.body;
       const results = [];
-      
+
       const mysql = await import("mysql2/promise");
       const pool = mysql.createPool({
         connectionLimit: 5,
@@ -2933,7 +2934,7 @@ async function startServer() {
       if (!types || types.includes('logs')) {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 dias atrás
-        
+
         try {
           // Lista de tabelas de logs conhecidas
           const logTables = [
@@ -2943,17 +2944,17 @@ async function startServer() {
             'workflow_executions',
             'execution_data'
           ];
-          
+
           let totalDeleted = 0;
           let tablesFound = 0;
-          
+
           for (const tableName of logTables) {
             try {
               // Verificar se a tabela existe e tem created_at
               const [columns]: any = await pool.execute(
                 `SHOW COLUMNS FROM \`${tableName}\` LIKE 'created_at'`
               );
-              
+
               if (columns.length > 0) {
                 tablesFound++;
                 const [result] = await pool.execute(
@@ -2969,7 +2970,7 @@ async function startServer() {
               }
             }
           }
-          
+
           results.push({
             type: 'logs',
             deleted: totalDeleted,
@@ -2990,7 +2991,7 @@ async function startServer() {
           // Buscar mensagens com mídia antiga (>90 dias) que não são mais referenciadas
           const cutoffDate = new Date();
           cutoffDate.setDate(cutoffDate.getDate() - 90);
-          
+
           const [orphanMedia]: any = await pool.execute(
             `SELECT cm.id FROM conversation_messages cm
              LEFT JOIN conversations c ON cm.conversation_id = c.id
@@ -2999,7 +3000,7 @@ async function startServer() {
              AND c.id IS NULL
              LIMIT 100`
           );
-          
+
           // Por segurança, apenas contar, não deletar
           results.push({
             type: "media_temp",
@@ -3021,11 +3022,11 @@ async function startServer() {
           const [tables]: any = await pool.execute(
             "SHOW TABLES LIKE 'sessions'"
           );
-          
+
           if (tables.length > 0) {
             const cutoffDate = new Date();
             cutoffDate.setDate(cutoffDate.getDate() - 7); // 7 dias
-            
+
             const [result] = await pool.execute(
               "DELETE FROM sessions WHERE expires_at < ?",
               [cutoffDate]
@@ -3083,7 +3084,7 @@ async function startServer() {
         // Lista de tabelas descartáveis
         const tables = [
           'conversation_messages',
-          'received_messages', 
+          'received_messages',
           'system_logs',
           'audit_logs',
           'notifications',
@@ -3093,7 +3094,7 @@ async function startServer() {
         ];
 
         const results = [];
-        
+
         for (const tableName of tables) {
           try {
             // Verificar se tabela existe
@@ -3101,12 +3102,12 @@ async function startServer() {
               `SELECT table_name FROM information_schema.tables WHERE table_name = ? AND table_schema = DATABASE()`,
               [tableName]
             );
-            
+
             if (checkRows.length > 0) {
               // Deletar todas as linhas
               const [result]: any = await pool.execute(`DELETE FROM \`${tableName}\``);
               const deletedCount = result.affectedRows || 0;
-              
+
               results.push({
                 table: tableName,
                 success: true,
@@ -3127,11 +3128,11 @@ async function startServer() {
             });
           }
         }
-        
-        res.json({ 
-          success: true, 
-          results, 
-          message: "Limpeza concluída" 
+
+        res.json({
+          success: true,
+          results,
+          message: "Limpeza concluída"
         });
       } finally {
         await pool.end();
@@ -3197,9 +3198,9 @@ async function startServer() {
 
       res.json({
         settings: settings[0] || null,
-        configParsed: settings[0]?.config 
-          ? (typeof settings[0].config === "string" 
-              ? JSON.parse(settings[0].config) 
+        configParsed: settings[0]?.config
+          ? (typeof settings[0].config === "string"
+              ? JSON.parse(settings[0].config)
               : settings[0].config)
           : null,
         tables: {
@@ -3305,10 +3306,10 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(`
-        SELECT 
-          c.id, 
-          c.customer_name as customerName, 
-          c.status, 
+        SELECT
+          c.id,
+          c.customer_name as customerName,
+          c.status,
           c.assigned_to as assignedTo,
           u.name as assignedAgentName
         FROM conversations c
@@ -3335,10 +3336,10 @@ async function startServer() {
       });
 
       const [rows]: any = await pool.execute(`
-        SELECT 
-          c.id, 
-          c.customer_name as customerName, 
-          c.status, 
+        SELECT
+          c.id,
+          c.customer_name as customerName,
+          c.status,
           c.assigned_to as assignedTo,
           u.name as assignedAgentName
         FROM conversations c
@@ -3360,7 +3361,7 @@ async function startServer() {
     try {
       // Evitar cache
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      
+
       const conversation_id = parseInt(req.query.conversation_id as string);
       if (!conversation_id) {
         return res.status(400).json({ error: "conversation_id é obrigatório" });
@@ -3374,7 +3375,7 @@ async function startServer() {
 
       // Replica a query do messages.list para debug
       const [rows]: any = await pool.execute(
-        `SELECT 
+        `SELECT
           cm.id,
           cm.conversation_id,
           cm.sender_id,
@@ -3385,12 +3386,12 @@ async function startServer() {
           cm.file_type,
           cm.file_size,
           cm.created_at,
-          CASE 
-            WHEN cm.sender_type = 'agent' AND u.role = 'admin' 
+          CASE
+            WHEN cm.sender_type = 'agent' AND u.role = 'admin'
             THEN CONCAT(u.name, ' - Gerente')
-            WHEN cm.sender_type = 'agent' 
+            WHEN cm.sender_type = 'agent'
             THEN u.name
-            ELSE NULL 
+            ELSE NULL
           END as senderName
         FROM conversation_messages cm
         LEFT JOIN users u ON cm.sender_id = u.id
@@ -3453,10 +3454,10 @@ async function startServer() {
         newTableCount: newRows[0].count,
         oldTableCount: oldRows[0].count,
         sampleOldMessages: oldMessages,
-        analysis: newRows[0].count > 0 
-          ? "Nova tabela tem mensagens - deve funcionar" 
-          : oldRows[0].count > 0 
-            ? "APENAS tabela antiga contém mensagens - migration não aplicada" 
+        analysis: newRows[0].count > 0
+          ? "Nova tabela tem mensagens - deve funcionar"
+          : oldRows[0].count > 0
+            ? "APENAS tabela antiga contém mensagens - migration não aplicada"
             : "Nenhuma mensagem encontrada"
       });
     } catch (error) {
@@ -3469,7 +3470,7 @@ async function startServer() {
   app.get("/api/debug/conversations-messages-count", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
-      
+
       const mysql = await import("mysql2/promise");
       const pool = mysql.createPool({
         connectionLimit: 1,
@@ -3478,7 +3479,7 @@ async function startServer() {
 
       // Interpolação direta no LIMIT (safe porque limit é inteiro validado)
       const sql = `
-        SELECT 
+        SELECT
           c.id,
           c.customer_name,
           c.status,
@@ -3489,13 +3490,13 @@ async function startServer() {
         FROM conversations c
         LEFT JOIN users u ON c.assigned_to = u.id
         LEFT JOIN (
-          SELECT conversation_id, COUNT(*) as count 
-          FROM conversation_messages 
+          SELECT conversation_id, COUNT(*) as count
+          FROM conversation_messages
           GROUP BY conversation_id
         ) new_counts ON c.id = new_counts.conversation_id
         LEFT JOIN (
-          SELECT ticket_id, COUNT(*) as count 
-          FROM messages 
+          SELECT ticket_id, COUNT(*) as count
+          FROM messages
           GROUP BY ticket_id
         ) old_counts ON c.id = old_counts.ticket_id
         ORDER BY c.id DESC
@@ -3560,7 +3561,7 @@ async function startServer() {
   app.post("/api/debug/test-send-agent", async (req, res) => {
     try {
       const { conversation_id, content, agent_id = 8 } = req.body; // agent_id padrão = 8 (Anderson)
-      
+
       if (!conversation_id || !content) {
         return res.status(400).json({ error: "conversation_id e content são obrigatórios" });
       }
@@ -3573,8 +3574,8 @@ async function startServer() {
 
       // Insere diretamente na conversation_messages
       const [result] = await pool.execute(
-        `INSERT INTO conversation_messages 
-         (conversation_id, sender_id, sender_type, content, created_at) 
+        `INSERT INTO conversation_messages
+         (conversation_id, sender_id, sender_type, content, created_at)
          VALUES (?, ?, 'agent', ?, NOW())`,
         [conversation_id, agent_id, content]
       );
@@ -3695,19 +3696,19 @@ async function startServer() {
 
         const data = await response.json();
         const images = data.images || [];
-        
+
         if (images.length === 0) {
           return res.json({ success: false, error: "No images found" });
         }
 
         // Get first image
         const imageUrl = images[0].imageUrl || images[0].link;
-        
+
         // Update in database
         const db = await getDb();
         if (db) {
           await db.execute(sql`
-            UPDATE baby_shower_gift_packages 
+            UPDATE baby_shower_gift_packages
             SET image_url = ${imageUrl}
             WHERE id = ${packageId}
           `);
@@ -3726,7 +3727,7 @@ async function startServer() {
     app.get("/api/system/health", async (req, res) => {
       try {
         const checks = [];
-        
+
         // Check API
         const apiStart = Date.now();
         checks.push({
@@ -3735,7 +3736,7 @@ async function startServer() {
           responseTime: Date.now() - apiStart,
           message: "API responding"
         });
-        
+
         // Check Database
         try {
           const db = await getDb();
@@ -3760,7 +3761,7 @@ async function startServer() {
             message: String(dbError)
           });
         }
-        
+
         res.json({
           lastCheck: new Date().toISOString(),
           checks,
@@ -3799,9 +3800,9 @@ async function startServer() {
       sqlMessage: err.sqlMessage,
       code: err.code
     });
-    res.status(500).json({ 
-      error: "Internal Server Error", 
-      message: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    res.status(500).json({
+      error: "Internal Server Error",
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   });
 
