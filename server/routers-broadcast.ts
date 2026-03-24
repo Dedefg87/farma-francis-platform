@@ -386,11 +386,11 @@ export const broadcastRouter = router({
   sendMessage: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
-      content: z.string().optional().default(''),
-      caption: z.string().optional().default(''),
-      fileUrl: z.string().url().optional().or(z.string().max(0).optional()),
-      fileName: z.string().optional().default(''),
-      fileType: z.string().optional().default(''),
+      content: z.string().optional().default('').transform(e => e === '' ? null : e),
+      caption: z.string().optional().default('').transform(e => e === '' ? null : e),
+      fileUrl: z.string().url().optional().or(z.string().max(0).optional()).transform(e => e === '' ? null : e),
+      fileName: z.string().optional().default('').transform(e => e === '' ? null : e),
+      fileType: z.string().optional().default('').transform(e => e === '' ? null : e),
       fileSize: z.number().int().optional().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -419,7 +419,7 @@ export const broadcastRouter = router({
         senderType: "agent",
         status: "sending",
         sentAt: new Date(),
-        errorMessage: null,
+        errorMessage: normalizeEmptyStringToNull(null), // zawsze null no insert inicial
       };
 
       console.log('[BroadcastMessageInsert] Normalized values:', JSON.stringify(values, null, 2));
