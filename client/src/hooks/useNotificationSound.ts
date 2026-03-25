@@ -32,6 +32,10 @@ export function useNotificationSound() {
       }
 
       const audioContext = audioContextRef.current;
+      if (!audioContext) {
+        console.warn("[NotificationSound] AudioContext não disponível");
+        return;
+      }
       const now = audioContext.currentTime;
 
       // Criar oscilador para o som

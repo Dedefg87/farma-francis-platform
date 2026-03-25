@@ -215,17 +215,19 @@ export type InsertBroadcastListMember = typeof broadcastListMembers.$inferInsert
 export const broadcastMessages = mysqlTable("broadcast_messages", {
   id: int("id").primaryKey().autoincrement(),
   listId: int("list_id").notNull(),
-  content: text("content").notNull(),
-  fileUrl: text("file_url"),
-  fileName: text("file_name"),
-  fileType: text("file_type"),
-  fileSize: int("file_size"),
-  sentBy: int("sent_by").notNull(),
-  sentAt: timestamp("sent_at").defaultNow().notNull(),
-  totalRecipients: int("total_recipients").default(0),
-  successfulSends: int("successful_sends").default(0),
-  failedSends: int("failed_sends").default(0),
-  status: varchar("status", { length: 50 }).default("pending"),
+  messageText: text("message_text"), // NULLABLE
+  caption: text("caption"), // NULLABLE
+  fileUrl: varchar("file_url", { length: 255 }), // NULLABLE
+  fileName: varchar("file_name", { length: 255 }), // NULLABLE
+  fileType: varchar("file_type", { length: 50 }), // NULLABLE
+  fileSize: int("file_size"), // NULLABLE
+  senderId: int("sender_id").notNull(),
+  senderType: varchar("sender_type", { length: 50 }).notNull().default('agent'),
+  status: varchar("status", { length: 50 }).notNull().default('pending'),
+  sentAt: datetime("sent_at"), // NULLABLE
+  errorMessage: text("error_message"), // NULLABLE
+  createdAt: datetime("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: datetime("updated_at").default(sql`CURRENT_TIMESTAMP`).onUpdate(sql`CURRENT_TIMESTAMP`),
 });
 
 export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
@@ -944,6 +946,15 @@ export const ticketTags = mysqlTable("ticket_tags", {
   tagId: int("tag_id").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+  provider: varchar("provider", { length: 16 }).nullable(),
+});
+
+export type ProcessedWebhookMessage = typeof processedWebhookMessages.$inferSelect;
+export type InsertProcessedWebhookMessage = typeof processedWebhookMessages.$inferInsert;
 
 export type TicketTag = typeof ticketTags.$inferSelect;
 export type InsertTicketTag = typeof ticketTags.$inferInsert;

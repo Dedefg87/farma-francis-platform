@@ -158,4 +158,23 @@ export const tagsRouter = router({
       return rows as any;
     }, [] as any);
   }),
+
+  getConversationTags: protectedProcedure
+    .input(z.object({ conversationId: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      return await safe(async () => {
+        const rows = await db
+          .select({
+            tag: tags,
+          })
+          .from(conversationTags)
+          .innerJoin(tags, eq(tags.id, conversationTags.tagId))
+          .where(eq(conversationTags.conversationId, input.conversationId))
+          .orderBy(tags.name);
+        return rows.map(r => r.tag) as any;
+      }, [] as any);
+    }),
 });

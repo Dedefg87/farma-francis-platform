@@ -10,6 +10,8 @@ import { eq, sql, asc, desc, and, or, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
+import { normalize, normalizeEmptyStringToNull } from "./utils/normalize";
+import { enqueueBroadcastMessage } from "./services/broadcast-queue";
 
 export const broadcastRouter = router({
   list: protectedProcedure
@@ -155,32 +157,42 @@ export const broadcastRouter = router({
       }
 
       try {
-        console.log(`[BroadcastDelete] Starting deletion for list ID: ${input.listId}`);
+        const listId = input.listId;
+        console.log(`[BroadcastDelete] Starting deletion for list ID: ${listId}`);
 
-        // 1. Obter IDs das mensagens relacionadas a esta lista
-        const messageIdsResult = await db
+        // 1. Selecionar IDs das mensagens associadas a esta lista
+        const messageIds = await db
           .select({ id: broadcastMessages.id })
           .from(broadcastMessages)
-          .where(eq(broadcastMessages.listId, input.listId));
+          .where(eq(broadcastMessages.listId, listId));
 
-        const idsToDelete = messageIdsResult.map(m => m.id);
-        console.log(`[BroadcastDelete] Found message IDs: ${idsToDelete.join(', ')}`);
+        const idsToDelete = messageIds.map(m => m.id);
+        console.log(`[BroadcastDelete] Found ${idsToDelete.length} message IDs for list ${listId}`);
 
+        // 2. Deletar broadcast_members_sent em chunks (evita SIGTERM e MySQL 1093)
         if (idsToDelete.length > 0) {
-          // 2. Deletar registros em broadcast_members_sent
-          console.log(`[BroadcastDelete] Deleting broadcast_members_sent...`);
-          await db.delete(broadcastMembersSent).where(inArray(broadcastMembersSent.broadcastMessageId, idsToDelete));
+          const chunkSize = 20; // chunk menor para evitar timeout/lock
+          for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+            const chunk = idsToDelete.slice(i, i + chunkSize);
+            console.log(`[BroadcastDelete] Deleting broadcast_members_sent chunk: ${chunk.length} items (batch ${Math.floor(i / chunkSize) + 1})`);
+            await db.delete(broadcastMembersSent).where(
+              inArray(broadcastMembersSent.broadcastMessageId, chunk)
+            );
+          }
+          console.log(`[BroadcastDelete] Completed deletion of broadcast_members_sent (${idsToDelete.length} total)`);
+        } else {
+          console.log(`[BroadcastDelete] No messages found, skipping broadcast_members_sent deletion`);
         }
 
-        // 3. Deletar as mensagens em broadcast_messages
-        console.log(`[BroadcastDelete] Deleting broadcast_messages...`);
-        await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, input.listId));
+        // 3. Deletar as mensagens
+        console.log(`[BroadcastDelete] Deleting broadcastMessages for listId: ${listId}`);
+        await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, listId));
 
-        // 4. Deletar a lista em broadcast_lists
-        console.log(`[BroadcastDelete] Deleting broadcast_lists...`);
-        await db.delete(broadcastLists).where(eq(broadcastLists.id, input.listId));
+        // 4. Deletar a lista
+        console.log(`[BroadcastDelete] Deleting broadcastLists for listId: ${listId}`);
+        await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
 
-        console.log(`[BroadcastDelete] List ID ${input.listId} deleted successfully.`);
+        console.log(`[BroadcastDelete] List ${listId} and associated data deleted successfully.`);
         return { success: true };
       } catch (err: any) {
         console.error(`[BroadcastDelete] Failed to delete list ${input.listId}:`, err.message);
@@ -218,19 +230,83 @@ export const broadcastRouter = router({
 
   removeMember: protectedProcedure
     .input(z.object({
-      listId: z.number().int().positive(),
-      customerId: z.number().int().positive(),
+      memberId: z.number().int().positive(),
     }))
     .mutation(async ({ input }) => {
+      console.log(`[BroadcastRemoveMember] Removing memberId: ${input.memberId}`);
+
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) {
+        console.error('[BroadcastRemoveMember] Database not available');
+        throw new Error("Database not available");
+      }
 
-      await db.delete(broadcastListMembers).where(and(
-        eq(broadcastListMembers.listId, input.listId),
-        eq(broadcastListMembers.customerId, input.customerId)
-      ));
+      await db.delete(broadcastListMembers).where(
+        eq(broadcastListMembers.id, input.memberId)
+      );
 
+      console.log(`[BroadcastRemoveMember] MemberId ${input.memberId} removed successfully.`);
       return { success: true };
+    }),
+
+  deleteMany: protectedProcedure
+    .input(z.object({
+      listIds: z.array(z.number().int().positive()),
+    }))
+    .mutation(async ({ input }) => {
+      console.log(`[BroadcastDeleteMany] Starting bulk deletion for ${input.listIds.length} lists:`, input.listIds);
+
+      const db = await getDb();
+      if (!db) {
+        console.error('[BroadcastDeleteMany] Database not available');
+        throw new Error("Database not available");
+      }
+
+      try {
+        // Process each list deletion sequentially to maintain order
+        for (const listId of input.listIds) {
+          console.log(`[BroadcastDeleteMany] Processing list ID: ${listId}`);
+
+          // 1. Get message IDs for this list
+          const messageIds = await db
+            .select({ id: broadcastMessages.id })
+            .from(broadcastMessages)
+            .where(eq(broadcastMessages.listId, listId));
+
+          const idsToDelete = messageIds.map(m => m.id);
+          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${idsToDelete.length} messages`);
+
+          // 2. Delete broadcast_members_sent in chunks (avoids MySQL 1093 error)
+          if (idsToDelete.length > 0) {
+            const chunkSize = 20; // chunk menor para evitar timeout/lock
+            for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+              const chunk = idsToDelete.slice(i, i + chunkSize);
+              await db.delete(broadcastMembersSent).where(
+                inArray(broadcastMembersSent.broadcastMessageId, chunk)
+              );
+              console.log(`[BroadcastDeleteMany] List ${listId}: Deleted chunk ${i / chunkSize + 1} of broadcast_members_sent`);
+            }
+          }
+
+          // 3. Delete broadcast_messages
+          await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, listId));
+          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_messages`);
+
+          // 4. Delete broadcast_list_members
+          await db.delete(broadcastListMembers).where(eq(broadcastListMembers.listId, listId));
+          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_list_members`);
+
+          // 5. Delete the list itself
+          await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
+          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_lists`);
+        }
+
+        console.log(`[BroadcastDeleteMany] Successfully deleted ${input.listIds.length} lists`);
+        return { success: true, deletedCount: input.listIds.length };
+      } catch (err: any) {
+        console.error(`[BroadcastDeleteMany] Failed:`, err.message);
+        throw err;
+      }
     }),
 
   listMembers: protectedProcedure
@@ -310,14 +386,15 @@ export const broadcastRouter = router({
   sendMessage: protectedProcedure
     .input(z.object({
       listId: z.number().int().positive(),
-      content: z.string().optional().default(''),
-      caption: z.string().optional().default(''),
-      fileUrl: z.string().url().optional().or(z.string().max(0).optional()),
-      fileName: z.string().optional().default(''),
-      fileType: z.string().optional().default(''),
-      fileSize: z.number().int().optional().default(0),
+      content: z.string().optional().nullable().transform(normalize),
+      caption: z.string().optional().nullable().transform(normalize),
+      fileUrl: z.string().optional().nullable().transform(normalize),
+      fileName: z.string().optional().nullable().transform(normalize),
+      fileType: z.string().optional().nullable().transform(normalize),
+      fileSize: z.number().int().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
+      console.log('[BroadcastSendMessage] 🚀 Mutation iniciada - input:', JSON.stringify(input, null, 2));
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -331,38 +408,67 @@ export const broadcastRouter = router({
 
       if (members.length === 0) throw new Error("Lista não tem membros");
 
-      const messageResult = await db.insert(broadcastMessages).values({
+      const values = {
         listId: input.listId,
-        messageText: input.content,
-        caption: input.caption || null,
-        fileUrl: input.fileUrl || null,
-        fileName: input.fileName || null,
-        fileType: input.fileType || null,
-        fileSize: input.fileSize || 0,
+        messageText: normalizeEmptyStringToNull(input.content),
+        caption: normalizeEmptyStringToNull(input.caption),
+        fileUrl: normalizeEmptyStringToNull(input.fileUrl),
+        fileName: normalizeEmptyStringToNull(input.fileName),
+        fileType: normalizeEmptyStringToNull(input.fileType),
+        fileSize: input.fileSize ?? null,
         senderId: ctx.user.id,
         senderType: "agent",
+        totalRecipients: members.length,
+        successfulSends: 0,
+        failedSends: 0,
         status: "sending",
         sentAt: new Date(),
         errorMessage: null,
-      });
+      };
 
-      const messageId = Number(messageResult.insertId || messageResult.ids?.[0]);
+      console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
 
-      const batchSize = 1000;
-      for (let i = 0; i < members.length; i += batchSize) {
-        const batch = members.slice(i, i + batchSize);
-        const valuesSql = batch.map(m =>
-          `(${Number(messageId)}, ${m.customerId}, '${m.phone.replace(/'/g, "''")}', 'pending', NULL, NULL, NOW(), NOW(), NOW())`
-        ).join(',');
-        
-        await db.execute(sql`INSERT INTO broadcast_members_sent (broadcast_message_id, customer_id, phone, status, error_message, delivered_at, read_at, sent_at, created_at) VALUES ${sql.raw(valuesSql)}`);
+      try {
+        // Use Drizzle ORM (schema aligned with MySQL)
+        const [result] = await db.insert(broadcastMessages).values(values);
+        const rawId = result.insertId;
+        const messageId = Number(rawId);
+        if (!messageId || isNaN(messageId)) {
+          throw new Error("Falha ao obter ID da mensagem broadcast");
+        }
+
+        // Inserir membros em lote usando Drizzle
+        const batchSize = 1000;
+        for (let i = 0; i < members.length; i += batchSize) {
+          const batch = members.slice(i, i + batchSize);
+          const valuesToInsert = batch.map(m => ({
+            broadcastMessageId: messageId,
+            customerId: m.customerId,
+            phone: normalize(m.phone),
+            status: "pending",
+            errorMessage: null,
+            deliveredAt: null,
+            readAt: null,
+            sentAt: null,
+          }));
+
+          console.log(`[BroadcastSendMessage] Inserting batch of ${valuesToInsert.length} members`);
+          await db.insert(broadcastMembersSent).values(valuesToInsert);
+        }
+
+        await db.update(broadcastLists)
+          .set({ lastSentAt: new Date() })
+          .where(eq(broadcastLists.id, input.listId));
+
+        // Enfileirar job de broadcast (Bull) ao invés de processar síncrono
+        await enqueueBroadcastMessage(messageId, input.listId);
+
+        console.log(`[BroadcastSendMessage] Job enfileirado (Bull) — messageId=${messageId}`);
+        return { messageId: Number(messageId), status: 'queued' };
+      } catch (error) {
+        console.error('[BroadcastSendMessage] Error:', error);
+        throw error;
       }
-
-      await db.update(broadcastLists)
-        .set({ lastSentAt: new Date() })
-        .where(eq(broadcastLists.id, input.listId));
-
-      return { messageId: Number(messageId), status: 'sending' };
     }),
 
   getMessageStats: protectedProcedure

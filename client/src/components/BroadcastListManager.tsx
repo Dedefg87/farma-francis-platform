@@ -54,6 +54,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   const [newListDescription, setNewListDescription] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomers, setSelectedCustomers] = useState<number[]>([]);
+  const [selectedListIds, setSelectedListIds] = useState<number[]>([]);
   const [messageContent, setMessageContent] = useState("");
   const [fileAttachment, setFileAttachment] = useState<{
     url: string;
@@ -78,6 +79,18 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
     { query: searchQuery, excludeListId: selectedListId || undefined },
     { enabled: view === "add-members" }
   );
+
+  // Mutations
+  const deleteMany = trpc.broadcast.deleteMany.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.deletedCount} lista(s) excluída(s)!`);
+      setSelectedListIds([]);
+      refetchLists();
+    },
+    onError: (error) => {
+      toast.error(`Erro ao excluir: ${error.message}`);
+    },
+  });
 
   // Mutations
   const createList = trpc.broadcast.create.useMutation({
@@ -169,6 +182,35 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
 
   const handleRemoveMember = (memberId: number) => {
     removeMember.mutate({ memberId });
+  };
+
+  const toggleListSelection = (listId: number) => {
+    setSelectedListIds(prev =>
+      prev.includes(listId)
+        ? prev.filter(id => id !== listId)
+        : [...prev, listId]
+    );
+  };
+
+  const toggleAllLists = () => {
+    if (!data?.lists) return;
+    const allIds = data.lists.map(l => l.id);
+    if (selectedListIds.length === allIds.length) {
+      setSelectedListIds([]);
+    } else {
+      setSelectedListIds(allIds);
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedListIds.length === 0) {
+      toast.error("Selecione pelo menos uma lista");
+      return;
+    }
+    if (!confirm(`Excluir ${selectedListIds.length} lista(s)? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    deleteMany.mutate({ listIds: selectedListIds });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,6 +323,43 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
           </Button>
         </div>
 
+        {/* Bulk actions toolbar */}
+        {data?.lists && data.lists.length > 0 && (
+          <div className="flex items-center gap-2 p-2 border rounded-lg bg-muted/50">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleAllLists}
+              disabled={!data?.lists || data.lists.length === 0}
+            >
+              {selectedListIds.length === data.lists.length ? "Desmarcar todas" : "Selecionar todas"}
+            </Button>
+            {selectedListIds.length > 0 && (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {selectedListIds.length} selecionada(s)
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteSelected}
+                  disabled={deleteMany.isPending}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Excluir selecionadas
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedListIds([])}
+                >
+                  Limpar
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           {data?.lists?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -290,30 +369,41 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
             </div>
           ) : (
             data?.lists?.map(list => (
-              <button
+              <div
                 key={list.id}
-                onClick={() => {
-                  setSelectedListId(list.id);
-                  setView("detail");
-                }}
-                className="w-full text-left p-4 rounded-lg border hover:bg-accent transition-colors"
+                className={`p-4 rounded-lg border transition-colors ${
+                  selectedListIds.includes(list.id) ? "bg-accent border-primary" : ""
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                      <Megaphone className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{list.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {list.memberCount} contato
-                        {list.memberCount !== 1 ? "s" : ""}
-                      </p>
+                <div className="flex items-center gap-3">
+                  <Checkbox
+                    checked={selectedListIds.includes(list.id)}
+                    onCheckedChange={() => toggleListSelection(list.id)}
+                    onClick={e => e.stopPropagation()}
+                  />
+                  <div
+                    className="flex-1 text-left cursor-pointer"
+                    onClick={() => {
+                      setSelectedListId(list.id);
+                      setView("detail");
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                        <Megaphone className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{list.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {list.memberCount} contato
+                          {list.memberCount !== 1 ? "s" : ""}
+                        </p>
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
                 </div>
-              </button>
+              </div>
             ))
           )}
         </div>

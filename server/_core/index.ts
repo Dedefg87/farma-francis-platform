@@ -34,8 +34,11 @@ import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
-import { startBroadcastSenderWorker } from "../workers/broadcast-sender";
+// Forçar inclusão do broadcast-queue no bundle (esbuild às vezes pula)
+import "../services/broadcast-queue";
+import { startBroadcastQueueProcessor } from "../services/broadcast-queue";
 import { sdk } from "./sdk";
+import { createRateLimiter, rateLimiters } from "../middleware/rate-limit.js";
 import multer from "multer";
 import { uploadToR2 } from "../r2-client";
 import migrationRouter from "../admin/migration-router";
@@ -45,6 +48,10 @@ import encodingFixRouter from "../admin/encoding-fix-router";
 import broadcastCheckRouter from "../admin/broadcast-check-router";
 import broadcastSetupRouter from "../admin/broadcast-setup-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
+
+// Redis com namespaces
+import { getRedis } from "./redis.js";
+import { REDIS_NAMESPACES } from "./redis-namespaces.js";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
@@ -89,6 +96,13 @@ async function runMediaColumnsMigration() {
       console.log("[Migration] Added lastSignedIn column to users");
     }
 
+    // Check updated_at in users
+    const [cols5]: any = await db.execute("SHOW COLUMNS FROM users LIKE 'updated_at'");
+    if (cols5.length === 0) {
+      await db.execute("ALTER TABLE users ADD COLUMN updated_at timestamp DEFAULT now() NOT NULL");
+      console.log("[Migration] Added updated_at column to users");
+    }
+
     // Indexes (ignore if exists)
     try {
       await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id)");
@@ -115,6 +129,98 @@ async function runMediaColumnsMigration() {
     console.log("[Migration] Media columns migration completed");
   } catch (err) {
     console.error("[Migration] Failed:", err);
+  }
+}
+
+// Aplica migrations SQL da pasta server/database/migrations
+async function applySqlMigrations() {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { getDb } = await import('../db');
+
+    const db = await getDb();
+    if (!db) {
+      console.log("[Migrations] DB not ready, skipping");
+      return;
+    }
+
+    const migrationsDir = path.join(process.cwd(), 'server', 'database', 'migrations');
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort(); // ordem alfabética
+
+    console.log(`[Migrations] Encontradas ${files.length} migrations`);
+
+    // 1️⃣ Garantir que a tabela de controle existe
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS _migrations_applied (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          migration_name VARCHAR(255) UNIQUE NOT NULL,
+          applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_migration_name (migration_name)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log("[Migrations] ✅ Tabela de controle _migrations_applied verificada/criada");
+    } catch (err: any) {
+      console.error("[Migrations] ❌ Erro ao criar tabela de controle:", err.message);
+      // Continuar mesmo com erro na tabela de controle
+    }
+
+    // 2️⃣ Buscar migrations já aplicadas
+    let appliedSet = new Set<string>();
+    try {
+      const [rows] = await db.execute("SELECT migration_name FROM _migrations_applied");
+      rows.forEach((row: any) => appliedSet.add(row.migration_name));
+      console.log(`[Migrations] 📋 ${appliedSet.size} migrations já aplicadas anteriormente`);
+    } catch (err: any) {
+      console.warn("[Migrations] ⚠️ Não foi possível ler _migrations_applied, assumindo que nenhuma foi aplicada:", err.message);
+    }
+
+    // 3️⃣ Processar cada arquivo
+    for (const file of files) {
+      const fullPath = path.join(migrationsDir, file);
+
+      // Pular se já aplicada
+      if (appliedSet.has(file)) {
+        console.log(`[Migrations] ⏭️ Já aplicada: ${file} (pulando)`);
+        continue;
+      }
+
+      const sql = fs.readFileSync(fullPath, 'utf8');
+
+      try {
+        // Dividir em statements e executar um por um
+        const statements = sql.split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0 && !s.startsWith('--'));
+
+        for (const stmt of statements) {
+          if (stmt) {
+            await db.execute(stmt + ';');
+          }
+        }
+
+        // Se chegou aqui, sucesso → marcar como aplicada
+        try {
+          await db.execute(
+            "INSERT IGNORE INTO _migrations_applied (migration_name) VALUES (?)",
+            [file]
+          );
+          console.log(`[Migrations] ✅ Aplicada e registrada: ${file}`);
+        } catch (err: any) {
+          console.warn(`[Migrations] ⚠️ Aplicada mas não foi possível registrar: ${file}`, err.message);
+        }
+      } catch (err: any) {
+        console.error(`[Migrations] ❌ Erro em ${file}:`, err.message);
+        // Não registrar no _migrations_applied, continuar para próxima
+      }
+    }
+
+    console.log('[Migrations] ✅ Processamento de migrations concluído');
+  } catch (err) {
+    console.error('[Migrations] ❌ Falha crítica:', err);
   }
 }
 
@@ -204,6 +310,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   // Auto-migrate media columns
   await runMediaColumnsMigration();
+
+  // Aplicar migrations SQL pendentes (da pasta server/database/migrations)
+  await applySqlMigrations();
 
   // 🚨 CRITICAL: Ensure broadcast_messages has file columns (force migration)
   try {
@@ -312,12 +421,28 @@ async function startServer() {
   await runIdempotencyConstraints();
   startMobileSyncProcessor();
 
-  // Iniciar worker de envio de broadcast com retry de 4 variações
+  // Inicializar Redis com namespaces
   try {
-    startBroadcastSenderWorker(5000); // a cada 5 segundos
-    console.log("[BroadcastWorker] ✅ Worker de broadcast iniciado");
+    await getRedis();
+    console.log('[Redis] ✅ Conectado com namespaces:');
+    console.log(` - Evolution: ${REDIS_NAMESPACES.EVOLUTION}`);
+    console.log(` - Farma: ${REDIS_NAMESPACES.FARMA}`);
+    console.log(` - Broadcast: ${REDIS_NAMESPACES.BROADCAST}`);
+    console.log(` - RateLimit: ${REDIS_NAMESPACES.RATELIMIT}`);
+    console.log(` - Cache: ${REDIS_NAMESPACES.CACHE}`);
+    console.log(` - Session: ${REDIS_NAMESPACES.SESSION}`);
+    console.log(` - Queue: ${REDIS_NAMESPACES.QUEUE}`);
   } catch (err) {
-    console.error("[BroadcastWorker] ❌ Falha ao iniciar worker:", err);
+    console.error('[Redis] ❌ Falha ao conectar:', err);
+    // Continuar mesmo sem Redis (algumas funcionalidades vão falhar)
+  }
+
+  // Iniciar fila de broadcast com Bull (Redis-backed)
+  try {
+    startBroadcastQueueProcessor(2); // 2 jobs concurrently
+    console.log("[BroadcastQueue] ✅ Fila de broadcast iniciada (concurrency=2)");
+  } catch (err) {
+    console.error("[BroadcastQueue] ❌ Falha ao iniciar fila:", err);
   }
 
   const app = express();
@@ -344,6 +469,34 @@ async function startServer() {
     legacyHeaders: false,
   });
 
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(cookieParser());
+
+  // Rate limiting distribuído (Redis) para endpoints críticos
+  // IMPORTANTE: Aplicado ANTES de body parsing para evitar processamento desnecessário
+  const { rateLimiters } = await import("../middleware/rate-limit.js");
+
+  // Auth: 10 req/min por IP
+  app.use("/api/auth/login", rateLimiters.auth(10, 60 * 1000));
+  app.use("/api/auth/refresh", rateLimiters.auth(20, 60 * 1000));
+  app.use("/api/auth/logout", rateLimiters.auth(10, 60 * 1000));
+
+  // Upload: 30 req/5min por IP
+  app.use("/api/upload", rateLimiters.upload(30, 5 * 60 * 1000));
+
+  // Webhooks Evolution: aumentado para 300 req/min por IP+path (5 msgs/seg)
+  app.use("/api/webhooks", rateLimiters.webhook(300, 60 * 1000));
+  app.use("/api/webhook/baby-shower", rateLimiters.webhook(300, 60 * 1000));
+
+  // Debug logging middleware (depois do rate limit)
+  try {
+    const debugModule = await import("../debug");
+    app.use(debugModule.webhookLogger);
+  } catch (e) {
+    console.error("[Server] Debug module not loaded");
+  }
+
+  // Body parsing (depois do rate limit)
   app.use(
     express.json({
       limit: "50mb",
@@ -352,18 +505,8 @@ async function startServer() {
       },
     })
   );
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  app.use(cookieParser());
 
-  // Debug logging middleware
-  try {
-    const debugModule = await import("../debug");
-    app.use(debugModule.webhookLogger);
-  } catch (e) {
-    console.error("[Server] Debug module not loaded");
-  }
-
-  app.use("/api/", apiLimiter);
+  // Removido: app.use("/api/", apiLimiter) - genérico não é necessário
 
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);

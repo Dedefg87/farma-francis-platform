@@ -1,0 +1,199 @@
+/**
+ * Broadcast Queue Service
+ *
+ * Gerencia fila de mensagens broadcast usando Bull (Redis-backed).
+ * Substitui a fila em memória atual, fornecendo:
+ * - Persistência (não perde mensagens em restart)
+ * - Concorrência controlada
+ * - Retry automático
+ * - Dashboard de jobs (se Redis disponível)
+ *
+ * Namespace: broadcast: / queue:
+ */
+
+import Bull from 'bull';
+import { REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
+
+// Nome da fila
+const BROADCAST_QUEUE_NAME = 'broadcast-sender';
+
+// Bull default export é a classe Queue
+type Queue<TData = any> = Bull;
+type Job<TData = any> = Bull.Job;
+
+interface BroadcastJobData {
+  messageId: number;
+  listId: number;
+}
+
+/**
+ * Detecta URL do Redis (mesma lógica de _core/redis.ts)
+ */
+function getRedisUrl(): string {
+  // Priorizar REDIS_PUBLIC_URL (Railway) ou REDIS_URL
+  const url =
+    process.env.REDIS_PUBLIC_URL ||
+    process.env.REDIS_URL ||
+    process.env.REDISCLOUD_URL ||
+    (process.env.REDIS_HOST && process.env.REDIS_PORT
+      ? `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
+      : 'redis://localhost:6379');
+
+  const masked = url.replace(/:([^@]+)@/, '://***:***@');
+  console.log(`[BroadcastQueue] 🔌 Redis URL: ${masked}`);
+
+  return url;
+}
+
+// Debug: contador de instâncias
+let instanceCount = 0;
+
+/**
+ * Cria instância da fila de broadcast (singleton)
+ */
+function createBroadcastQueue(): Queue<BroadcastJobData> {
+  console.log(`[BroadcastQueue] 🏗️ Criando instância #${++instanceCount} (singleton check)`);
+  console.log(`[BroadcastQueue] 📋 Stack: ${new Error().stack}`);
+  const redisUrl = getRedisUrl();
+
+  // Parse URL para host/port explícitos (evita fallback para 127.0.0.1)
+  const url = new URL(redisUrl);
+  const redisHost = url.hostname;
+  const redisPort = parseInt(url.port) || (url.protocol === 'rediss:' ? 6380 : 6379);
+  const redisPassword = url.password;
+
+  // Bull (v4) com host/port explícitos
+  const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
+    redis: {
+      host: redisHost,
+      port: redisPort,
+      password: redisPassword || undefined,
+      // SSL/TLS se usar rediss://
+      tls: url.protocol === 'rediss:' ? { rejectUnauthorized: false } : undefined,
+      keyPrefix: REDIS_NAMESPACES.QUEUE, // 'queue:'
+      maxRetriesPerRequest: 3,
+      retryDelayOnFailover: 100,
+    },
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+      removeOnComplete: {
+        count: 100,
+        age: 24 * 60 * 60 * 1000,
+      },
+      removeOnFail: {
+        count: 50,
+        age: 7 * 24 * 60 * 60 * 1000,
+      },
+      timeout: 10 * 60 * 1000,
+    },
+  });
+
+  // Eventos de log
+  broadcastQueue.on('completed', (job: Job<BroadcastJobData>) => {
+    console.log(`[BroadcastQueue] ✅ Job ${job.id} completado (messageId=${job.data.messageId})`);
+  });
+
+  broadcastQueue.on('failed', (job: Job<BroadcastJobData> | undefined, err: Error) => {
+    console.error(`[BroadcastQueue] ❌ Job ${job?.id} falhou:`, err.message);
+  });
+
+  broadcastQueue.on('error', (err: Error) => {
+    console.error('[BroadcastQueue] Erro na fila:', err);
+  });
+
+  return broadcastQueue;
+}
+
+// Singleton
+let broadcastQueueInstance: Queue<BroadcastJobData> | null = null;
+
+/**
+ * Obtém instância da fila de broadcast
+ */
+export async function getBroadcastQueue(): Promise<Queue<BroadcastJobData>> {
+  if (broadcastQueueInstance) {
+    return broadcastQueueInstance;
+  }
+
+  broadcastQueueInstance = createBroadcastQueue();
+  return broadcastQueueInstance;
+}
+
+/**
+ * Adiciona uma mensagem à fila de broadcast
+ */
+export async function enqueueBroadcastMessage(
+  messageId: number,
+  listId: number
+): Promise<void> {
+  const queue = await getBroadcastQueue();
+
+  await queue.add(
+    'send-broadcast',
+    { messageId, listId },
+    {
+      priority: 1,
+      jobId: `broadcast:${messageId}`,
+    }
+  );
+
+  console.log(`[BroadcastQueue] 📩 Job enfileirado (namespace:${REDIS_NAMESPACES.QUEUE}): messageId=${messageId}`);
+}
+
+/**
+ * Processador de jobs da fila (deve ser chamado no startup)
+ */
+export async function startBroadcastQueueProcessor(concurrency = 2): Promise<void> {
+  const queue = await getBroadcastQueue();
+
+  // Processador assíncrono
+  await queue.process('send-broadcast', async (job: Job<BroadcastJobData>) => {
+    const { messageId, listId } = job.data;
+    console.log(`[BroadcastQueue] 🧠 Processando job ${job.id} (messageId=${messageId})`);
+
+    // Importar função de processamento do broadcast
+    const { processBroadcastMessage } = await import('../workers/broadcast-sender.js');
+
+    // Executar processamento
+    await processBroadcastMessage(messageId);
+  });
+
+  console.log(`[BroadcastQueue] 🚀 Processor iniciado (concurrency=${concurrency}, namespace:${REDIS_NAMESPACES.QUEUE})`);
+}
+
+/**
+ * Estatísticas da fila (útil para dashboard/admin)
+ */
+export async function getBroadcastQueueStats() {
+  const queue = await getBroadcastQueue();
+  const [waiting, active, completed, failed, delayed] = await Promise.all([
+    queue.getWaitingCount(),
+    queue.getActiveCount(),
+    queue.getCompletedCount(),
+    queue.getFailedCount(),
+    queue.getDelayedCount(),
+  ]);
+
+  return {
+    waiting,
+    active,
+    completed,
+    failed,
+    delayed,
+    total: waiting + active + completed + failed + delayed,
+  };
+}
+
+/**
+ * Limpa jobs falhados (útil para limpeza manual)
+ */
+export async function cleanFailedJobs(): Promise<number> {
+  const queue = await getBroadcastQueue();
+  const count = await queue.clean(1, 1000, 'failed');
+  console.log(`[BroadcastQueue] 🧹 Limpos ${count} jobs falhados`);
+  return count;
+}
