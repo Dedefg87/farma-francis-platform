@@ -423,6 +423,8 @@ export const broadcastRouter = router({
         status: "sending",
         sentAt: new Date(),
         errorMessage: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
