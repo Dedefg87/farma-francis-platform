@@ -5,7 +5,7 @@
  * no mesmo Redis compartilhado, evitando colisões de chaves.
  */
 
-import { getRedis } from './redis.js';
+import { getRedis as getGlobalRedis } from './redis.js';
 
 // Namespaces para separar dados por serviço
 export const REDIS_NAMESPACES = {
@@ -30,7 +30,7 @@ export function createNamespacedClient(namespace: keyof typeof REDIS_NAMESPACES)
      * Retorna cliente ioredis subjacente (para operações avançadas como pipeline, zadd, etc)
      */
     async getRedis() {
-      return await redisClient.getRedis();
+      return await getGlobalRedis();
     },
 
     /**
