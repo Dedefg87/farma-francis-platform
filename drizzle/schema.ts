@@ -74,10 +74,10 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
   senderId: int("sender_id").notNull(),
   senderType: varchar("sender_type", { length: 50 }).notNull().default("agent"),
   totalRecipients: int("total_recipients").notNull(),
-  successfulSends: int("successful_sends").default("0"),
-  failedSends: int("failed_sends").default("0"),
-  status: varchar("status", { length: 50 }).notNull().default("pending"),
-  sentAt: timestamp("sent_at"),
+  successfulSends: int("successful_sends").default(0),
+  failedSends: int("failed_sends").default(0),
+  status: varchar("status", { length: 50 }).notNull().default("sending"),
+  sentAt: timestamp("sent_at").notNull(),
   errorMessage: text("error_message"),
 });
 

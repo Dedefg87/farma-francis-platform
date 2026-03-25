@@ -423,50 +423,20 @@ export const broadcastRouter = router({
         status: "sending",
         sentAt: new Date(),
         errorMessage: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       };
 
       console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
 
-      // HOTFIX: Use raw SQL to avoid Drizzle quirks with DEFAULT values
-      const insertSql = `
-        INSERT INTO broadcast_messages
-        (list_id, message_text, caption, file_url, file_name, file_type, file_size,
-         sender_id, sender_type, total_recipients, successful_sends, failed_sends,
-         status, sent_at, error_message, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      const insertParams = [
-        values.listId,
-        values.messageText,
-        values.caption,
-        values.fileUrl,
-        values.fileName,
-        values.fileType,
-        values.fileSize,
-        values.senderId,
-        values.senderType,
-        values.totalRecipients,
-        values.successfulSends,
-        values.failedSends,
-        values.status,
-        values.sentAt,
-        values.errorMessage,
-        values.createdAt,
-        values.updatedAt,
-      ];
-
-      console.log('[BroadcastInsert] Executing raw SQL with params:', insertParams);
       try {
-        const [result] = await db.execute(insertSql, insertParams) as any;
+        // Use Drizzle ORM (schema aligned with MySQL)
+        const [result] = await db.insert(broadcastMessages).values(values);
         const rawId = result.insertId;
         const messageId = Number(rawId);
         if (!messageId || isNaN(messageId)) {
           throw new Error("Falha ao obter ID da mensagem broadcast");
         }
 
-        // Inserir membros em lote usando Drizzle (sem SQL raw)
+        // Inserir membros em lote usando Drizzle
         const batchSize = 1000;
         for (let i = 0; i < members.length; i += batchSize) {
           const batch = members.slice(i, i + batchSize);
@@ -479,8 +449,6 @@ export const broadcastRouter = router({
             deliveredAt: null,
             readAt: null,
             sentAt: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
           }));
 
           console.log(`[BroadcastSendMessage] Inserting batch of ${valuesToInsert.length} members`);
