@@ -27,6 +27,13 @@ export function createNamespacedClient(namespace: keyof typeof REDIS_NAMESPACES)
 
   return {
     /**
+     * Retorna cliente ioredis subjacente (para operações avançadas como pipeline, zadd, etc)
+     */
+    async getRedis() {
+      return await redisClient.getRedis();
+    },
+
+    /**
      * Get com namespace
      */
     async get(key: string): Promise<string | null> {
