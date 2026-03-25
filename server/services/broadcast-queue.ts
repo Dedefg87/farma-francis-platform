@@ -5,7 +5,7 @@
  * Substitui a fila em memória atual, fornecendo:
  * - Persistência (não perde mensagens em restart)
  * - Concorrência controlada
- - Retry automático
+ * - Retry automático
  * - Dashboard de jobs (se Redis disponível)
  *
  * Namespace: broadcast: / queue:
@@ -27,15 +27,31 @@ interface BroadcastJobData {
 }
 
 /**
+ * Detecta URL do Redis (mesma lógica de _core/redis.ts)
+ */
+function getRedisUrl(): string {
+  const url =
+    process.env.REDIS_URL ||
+    process.env.REDISCLOUD_URL ||
+    (process.env.REDIS_HOST && process.env.REDIS_PORT
+      ? `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
+      : 'redis://localhost:6379');
+
+  const masked = url.replace(/:([^@]+)@/, '://***:***@');
+  console.log(`[BroadcastQueue] 🔌 Redis URL: ${masked}`);
+
+  return url;
+}
+
+/**
  * Cria instância da fila de broadcast (singleton)
  */
 function createBroadcastQueue(): Queue<BroadcastJobData> {
-  // Configuração: Bull usa ioredis internamente com REDIS_URL
+  const redisUrl = getRedisUrl();
+
   const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
-    // Não passar client: Bull cria sua própria conexão ioredis usando REDIS_URL
-    // Apenas configurar keyPrefix para namespace
     redis: {
-      url: process.env.REDIS_URL || 'redis://localhost:6379',
+      url: redisUrl,
       keyPrefix: REDIS_NAMESPACES.QUEUE, // 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
