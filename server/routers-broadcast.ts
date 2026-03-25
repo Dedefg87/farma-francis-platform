@@ -84,7 +84,7 @@ export const broadcastRouter = router({
 
   getById: protectedProcedure
     .input(z.object({ listId: z.number().int().positive() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -131,7 +131,7 @@ export const broadcastRouter = router({
       name: z.string().min(1).max(255),
       description: z.string().max(500).optional(),
     }))
-    .query(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -148,7 +148,7 @@ export const broadcastRouter = router({
 
   delete: protectedProcedure
     .input(z.object({ listId: z.number().int().positive() }))
-    .query(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) {
         console.error('[BroadcastDelete] Database not available');
@@ -204,7 +204,7 @@ export const broadcastRouter = router({
       listId: z.number().int().positive(),
       customerId: z.number().int().positive(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -231,7 +231,7 @@ export const broadcastRouter = router({
     .input(z.object({
       memberId: z.number().int().positive(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       console.log(`[BroadcastRemoveMember] Removing memberId: ${input.memberId}`);
 
       const db = await getDb();
@@ -252,7 +252,7 @@ export const broadcastRouter = router({
     .input(z.object({
       listIds: z.array(z.number().int().positive()),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       console.log(`[BroadcastDeleteMany] Starting bulk deletion for ${input.listIds.length} lists:`, input.listIds);
 
       const db = await getDb();
@@ -312,7 +312,7 @@ export const broadcastRouter = router({
     .input(z.object({
       listId: z.number().int().positive(),
     }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -353,7 +353,7 @@ export const broadcastRouter = router({
       query: z.string().default(""),
       excludeListId: z.number().int().positive().optional(),
     }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -392,7 +392,7 @@ export const broadcastRouter = router({
       fileType: z.string().optional().nullable().transform(normalize),
       fileSize: z.number().int().optional().nullable(),
     }))
-    .query(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log('[BroadcastSendMessage] 🚀 Mutation iniciada - input:', JSON.stringify(input, null, 2));
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -468,7 +468,7 @@ export const broadcastRouter = router({
 
   getMessageStats: protectedProcedure
     .input(z.object({ messageId: z.number().int().positive() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -504,7 +504,7 @@ export const broadcastRouter = router({
       page: z.number().int().min(1).optional().default(1),
       limit: z.number().int().min(1).max(50).optional().default(20),
     }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -537,33 +537,6 @@ export const broadcastRouter = router({
       return {
         messages,
         pagination: { page: input.page, limit: input.limit, total: Number(total), totalPages: Math.ceil(Number(total) / input.limit) },
-      };
-    }),
-
-  // DEBUG: Extrair DDL das tabelas broadcast (apenas admin)
-  getDdl: protectedProcedure
-    .input(z.object({
-      tableName: z.enum(['broadcast_messages', 'broadcast_members_sent', 'broadcast_lists', 'broadcast_list_members']),
-    }))
-    .query(async ({ input, ctx }) => {
-      if (ctx.user.role !== 'admin') {
-        throw new Error("Acesso negado");
-      }
-
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-
-      const [rows] = await db.execute<{ Table: string; CreateTable: string }>(
-        `SHOW CREATE TABLE ${input.tableName}`
-      ) as any;
-
-      if (!rows || rows.length === 0) {
-        throw new Error(`Tabela ${input.tableName} não encontrada`);
-      }
-
-      return {
-        table: rows[0].Table,
-        createTable: rows[0].CreateTable,
       };
     }),
 });
