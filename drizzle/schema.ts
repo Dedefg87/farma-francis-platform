@@ -86,7 +86,7 @@ export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
   broadcastMessageId: int("message_id").notNull(),
   customerId: int("customer_id").notNull(),
   phone: varchar("phone", { length: 32 }).notNull(),
-  status: varchar("status", { length: 16, enum: ["pending", "sent", "delivered", "read", "failed"] }).default("pending"),
+  status: varchar("status", { length: 16, enum: ["pending", "sent", "failed"] }).default("pending"),
   sentAt: timestamp("sent_at"),
   deliveredAt: timestamp("delivered_at"),
   readAt: timestamp("read_at"),
