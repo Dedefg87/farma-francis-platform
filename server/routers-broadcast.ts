@@ -428,21 +428,43 @@ export const broadcastRouter = router({
       };
 
       console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
+
+      // HOTFIX: Use raw SQL to avoid Drizzle quirks with DEFAULT values
+      const insertSql = `
+        INSERT INTO broadcast_messages
+        (list_id, message_text, caption, file_url, file_name, file_type, file_size,
+         sender_id, sender_type, total_recipients, successful_sends, failed_sends,
+         status, sent_at, error_message, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      const insertParams = [
+        values.listId,
+        values.messageText,
+        values.caption,
+        values.fileUrl,
+        values.fileName,
+        values.fileType,
+        values.fileSize,
+        values.senderId,
+        values.senderType,
+        values.totalRecipients,
+        values.successfulSends,
+        values.failedSends,
+        values.status,
+        values.sentAt,
+        values.errorMessage,
+        values.createdAt,
+        values.updatedAt,
+      ];
+
+      console.log('[BroadcastInsert] Executing raw SQL with params:', insertParams);
       try {
-        const messageResult = await db.insert(broadcastMessages).values(values);
-        const rawId = (messageResult as any).insertId || (messageResult as any).ids?.[0] || (messageResult as any).lastInsertRowid;
+        const [result] = await db.execute(insertSql, insertParams) as any;
+        const rawId = result.insertId;
         const messageId = Number(rawId);
         if (!messageId || isNaN(messageId)) {
           throw new Error("Falha ao obter ID da mensagem broadcast");
         }
-      } catch (insertErr: any) {
-        console.error('[BroadcastInsert] ❌ INSERT FAILED');
-        console.error('  Error:', insertErr.message);
-        console.error('  Code:', insertErr.code);
-        console.error('  SQL Message:', insertErr.sqlMessage);
-        console.error('  Values:', JSON.stringify(values));
-        throw insertErr; // re-throw
-      }
 
       // Inserir membros em lote usando Drizzle (sem SQL raw)
       const batchSize = 1000;
