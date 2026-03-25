@@ -18,6 +18,24 @@ import {
 import { eq, sql, and } from "drizzle-orm";
 import { generatePhoneVariants } from "../utils/phone.js";
 
+// Mapeamento de MIME type para mediatype da Evolution API
+const mimetypeToMediatype: Record<string, string> = {
+  "image/jpeg": "image",
+  "image/png": "image",
+  "image/gif": "image",
+  "image/webp": "image",
+  "video/mp4": "video",
+  "video/quicktime": "video",
+  "application/pdf": "document",
+  "application/msword": "document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "document",
+  "application/vnd.ms-excel": "document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "document",
+  "audio/mpeg": "audio",
+  "audio/ogg": "audio",
+  "audio/wav": "audio",
+};
+
 
 /**
  * Obtém a configuração da Evolution API do banco de dados
@@ -77,7 +95,7 @@ async function sendWhatsAppMessageWithRetry(
       };
 
       if (fileAttachment) {
-        payload.media = fileAttachment.url;
+        payload.media = { url: fileAttachment.url, mediatype: mimetypeToMediatype[fileAttachment.type] || "image" };
         payload.fileName = fileAttachment.name;
         // O Evolution-api espera sendMediaMessage para mídia
         const response = await fetch(
