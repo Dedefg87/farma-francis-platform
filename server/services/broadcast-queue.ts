@@ -45,10 +45,14 @@ function getRedisUrl(): string {
   return url;
 }
 
+// Debug: contador de instâncias
+let instanceCount = 0;
+
 /**
  * Cria instância da fila de broadcast (singleton)
  */
 function createBroadcastQueue(): Queue<BroadcastJobData> {
+  console.log(`[BroadcastQueue] 🏗️ Criando instância #${++instanceCount} (singleton check)`);
   const redisUrl = getRedisUrl();
 
   // Bull (v4) aceita url diretamente
