@@ -1,6 +1,5 @@
-import { date } from "drizzle-orm";
 import {
-  
+  date,
   decimal,
   int,
   longtext,
@@ -10,7 +9,6 @@ import {
   timestamp,
   varchar,
   json,
-  boolean,
 } from "drizzle-orm/mysql2";
 
 // Export execution and analytics tables (SQLite-based)
