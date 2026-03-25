@@ -923,17 +923,6 @@ export const ticketTags = pgTable("ticket_tags", {
 export type TicketTag = typeof ticketTags.$inferSelect;
 export type InsertTicketTag = typeof ticketTags.$inferInsert;
 
-/**
- * ProcessedWebhookMessages: controle de idempotência para webhooks
- */
-export const processedWebhookMessages = pgTable("processed_webhook_messages", {
-  webhookId: varchar("webhook_id", { length: 255 }).primaryKey(),
-  processedAt: timestamp("processed_at").defaultNow().notNull(),
-});
-
-export type ProcessedWebhookMessage = typeof processedWebhookMessages.$inferSelect;
-export type InsertProcessedWebhookMessage = typeof processedWebhookMessages.$inferInsert;
-
 // Note: Indexes are automatically created for primary keys, unique constraints, and foreign keys.
 // Additional indexes can be added via drizzle if needed.
 
