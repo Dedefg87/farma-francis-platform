@@ -352,28 +352,11 @@ async function startServer() {
     legacyHeaders: false,
   });
 
-  app.use(
-    express.json({
-      limit: "50mb",
-      verify: (req: any, _res, buf) => {
-        (req as any).rawBody = buf;
-      },
-    })
-  );
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
 
-  // Debug logging middleware
-  try {
-    const debugModule = await import("../debug");
-    app.use(debugModule.webhookLogger);
-  } catch (e) {
-    console.error("[Server] Debug module not loaded");
-  }
-
-  app.use("/api/", apiLimiter);
-
   // Rate limiting distribuído (Redis) para endpoints críticos
+  // IMPORTANTE: Aplicado ANTES de body parsing para evitar processamento desnecessário
   const { rateLimiters } = await import("../middleware/rate-limit.js");
 
   // Auth: 10 req/min por IP
@@ -384,8 +367,29 @@ async function startServer() {
   // Upload: 30 req/5min por IP
   app.use("/api/upload", rateLimiters.upload(30, 5 * 60 * 1000));
 
-  // Webhooks Evolution: 60 req/min por IP+path
-  app.use("/webhook", rateLimiters.webhook(60, 60 * 1000));
+  // Webhooks Evolution: aumentado para 300 req/min por IP+path (5 msgs/seg)
+  app.use("/api/webhooks", rateLimiters.webhook(300, 60 * 1000));
+  app.use("/api/webhook/baby-shower", rateLimiters.webhook(300, 60 * 1000));
+
+  // Debug logging middleware (depois do rate limit)
+  try {
+    const debugModule = await import("../debug");
+    app.use(debugModule.webhookLogger);
+  } catch (e) {
+    console.error("[Server] Debug module not loaded");
+  }
+
+  // Body parsing (depois do rate limit)
+  app.use(
+    express.json({
+      limit: "50mb",
+      verify: (req: any, _res, buf) => {
+        (req as any).rawBody = buf;
+      },
+    })
+  );
+
+  // Removido: app.use("/api/", apiLimiter) - genérico não é necessário
 
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);
