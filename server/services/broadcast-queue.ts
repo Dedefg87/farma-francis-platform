@@ -11,15 +11,17 @@
  * Namespace: broadcast: / queue:
  */
 
-import * as Bull from 'bull';
+import Bull from 'bull';
 import { getRedis } from '../_core/redis.js';
 import { getQueueRedis, REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
 
 // Nome da fila
 const BROADCAST_QUEUE_NAME = 'broadcast-sender';
 
-// Desestruturar types do Bull (CommonJS namespace import)
-const { Queue, Worker, Job } = Bull;
+// Bull default export é a classe Queue
+// Bull.Job contém a classe Job (adicionada como propriedade)
+type Queue<TData = any> = Bull;
+type Job<TData = any> = Bull.Job;
 interface BroadcastJobData {
   messageId: number;
   listId: number;
@@ -32,7 +34,7 @@ function createBroadcastQueue(): Queue<BroadcastJobData> {
   // Usar cliente Redis namespaced para queue
   const redisClient = getRedis(); // base connection
 
-  const broadcastQueue = new Queue<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
+  const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
     redis: {
       client: redisClient as any,
       // BullMQ adiciona prefix automaticamente se keyPrefix fornecido
