@@ -1478,4 +1478,30 @@ export type BabyShowerWithdrawal = typeof babyShowerWithdrawals.$inferSelect;
 export type InsertBabyShowerWithdrawal =
   typeof babyShowerWithdrawals.$inferInsert;
 
+// broadcast membership tracking
+export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
+  id: int("id").primaryKey().autoincrement(),
+  messageId: int("message_id").notNull(),
+  customerId: int("customer_id").notNull(),
+  phone: varchar("phone", { length: 32 }).notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  error: text("error"),
+  sentAt: timestamp("sent_at"),
+});
+
+export type BroadcastMemberSent = typeof broadcastMembersSent.$inferSelect;
+export type InsertBroadcastMemberSent =
+  typeof broadcastMembersSent.$inferInsert;
+
+// webhook idempotency table
+export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+  provider: varchar("provider", { length: 16 }).nullable(),
+});
+
+export type ProcessedWebhookMessage = typeof processedWebhookMessages.$inferSelect;
+export type InsertProcessedWebhookMessage =
+  typeof processedWebhookMessages.$inferInsert;
+
 export * from './schema_logs';
