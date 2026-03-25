@@ -37,7 +37,7 @@ export function createNamespacedClient(namespace: keyof typeof REDIS_NAMESPACES)
      * Get com namespace
      */
     async get(key: string): Promise<string | null> {
-      const client = await redisClient.getRedis();
+      const client = await getGlobalRedis();
       return await client.get(`${prefix}${key}`);
     },
 
@@ -204,7 +204,7 @@ export function createNamespacedClient(namespace: keyof typeof REDIS_NAMESPACES)
      * Publishes mensagem em um canal (pub/sub)
      */
     async publish(channel: string, message: string): Promise<number> {
-      const client = await redisClient.getRedis();
+      const client = await getGlobalRedis();
       return await client.publish(`${prefix}${channel}`, message);
     },
   };
@@ -306,6 +306,6 @@ export async function clearNamespace(namespace: keyof typeof REDIS_NAMESPACES, p
   if (keys.length === 0) return 0;
 
   const fullKeys = keys.map(k => `${REDIS_NAMESPACES[namespace]}${k}`);
-  const redis = await redisClient.getRedis();
+  const redis = await getGlobalRedis();
   return await redis.del(...fullKeys);
 }
