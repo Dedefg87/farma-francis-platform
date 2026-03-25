@@ -426,12 +426,20 @@ export const broadcastRouter = router({
       };
 
       console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
-      const messageResult = await db.insert(broadcastMessages).values(values);
-
-      const rawId = (messageResult as any).insertId || (messageResult as any).ids?.[0] || (messageResult as any).lastInsertRowid;
-      const messageId = Number(rawId);
-      if (!messageId || isNaN(messageId)) {
-        throw new Error("Falha ao obter ID da mensagem broadcast");
+      try {
+        const messageResult = await db.insert(broadcastMessages).values(values);
+        const rawId = (messageResult as any).insertId || (messageResult as any).ids?.[0] || (messageResult as any).lastInsertRowid;
+        const messageId = Number(rawId);
+        if (!messageId || isNaN(messageId)) {
+          throw new Error("Falha ao obter ID da mensagem broadcast");
+        }
+      } catch (insertErr: any) {
+        console.error('[BroadcastInsert] ❌ INSERT FAILED');
+        console.error('  Error:', insertErr.message);
+        console.error('  Code:', insertErr.code);
+        console.error('  SQL Message:', insertErr.sqlMessage);
+        console.error('  Values:', JSON.stringify(values));
+        throw insertErr; // re-throw
       }
 
       // Inserir membros em lote usando Drizzle (sem SQL raw)
