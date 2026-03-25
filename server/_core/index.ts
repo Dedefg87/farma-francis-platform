@@ -47,6 +47,10 @@ import broadcastCheckRouter from "../admin/broadcast-check-router";
 import broadcastSetupRouter from "../admin/broadcast-setup-router";
 import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
 
+// Redis com namespaces
+import { getRedis } from "./redis.js";
+import { REDIS_NAMESPACES } from "./redis-namespaces.js";
+
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
@@ -414,6 +418,22 @@ async function startServer() {
   // Garantir índices únicos para idempotência (evitar mensagens duplicadas)
   await runIdempotencyConstraints();
   startMobileSyncProcessor();
+
+  // Inicializar Redis com namespaces
+  try {
+    await getRedis();
+    console.log('[Redis] ✅ Conectado com namespaces:');
+    console.log(` - Evolution: ${REDIS_NAMESPACES.EVOLUTION}`);
+    console.log(` - Farma: ${REDIS_NAMESPACES.FARMA}`);
+    console.log(` - Broadcast: ${REDIS_NAMESPACES.BROADCAST}`);
+    console.log(` - RateLimit: ${REDIS_NAMESPACES.RATELIMIT}`);
+    console.log(` - Cache: ${REDIS_NAMESPACES.CACHE}`);
+    console.log(` - Session: ${REDIS_NAMESPACES.SESSION}`);
+    console.log(` - Queue: ${REDIS_NAMESPACES.QUEUE}`);
+  } catch (err) {
+    console.error('[Redis] ❌ Falha ao conectar:', err);
+    // Continuar mesmo sem Redis (algumas funcionalidades vão falhar)
+  }
 
   // Iniciar fila de broadcast com Bull (Redis-backed)
   try {

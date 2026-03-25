@@ -7,10 +7,13 @@
  * - Concorrência controlada
  * - Retry automático
  * - Dashboard de jobs (se Redis disponível)
+ *
+ * Namespace: broadcast: / queue:
  */
 
 import Bull from 'bull';
 import { getRedis } from '../_core/redis.js';
+import { getQueueRedis, REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
 
 // Nome da fila
 const BROADCAST_QUEUE_NAME = 'broadcast-sender';
@@ -29,12 +32,14 @@ interface BroadcastJobData {
  * Cria instância da fila de broadcast (singleton)
  */
 function createBroadcastQueue(): Queue<BroadcastJobData> {
-  const redisConnection = getRedis();
-  
+  // Usar cliente Redis namespaced para queue
+  const redisClient = getRedis(); // base connection
+
   const queue = new Queue<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
     redis: {
-      host: 'localhost', // será sobrescrito por getRedis()
-      port: 6379,
+      client: redisClient,
+      // BullMQ adiciona prefix automaticamente se keyPrefix fornecido
+      keyPrefix: REDIS_NAMESPACES.QUEUE, // usa 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
     },
@@ -84,7 +89,6 @@ export async function getBroadcastQueue(): Promise<Queue<BroadcastJobData>> {
   }
 
   // Await Redis connection antes de criar fila
-  const { getRedis } = await import('../_core/redis.js');
   await getRedis();
 
   broadcastQueueInstance = createBroadcastQueue();
@@ -99,7 +103,7 @@ export async function enqueueBroadcastMessage(
   listId: number
 ): Promise<void> {
   const queue = await getBroadcastQueue();
-  
+
   await queue.add(
     'send-broadcast',
     { messageId, listId },
@@ -109,7 +113,7 @@ export async function enqueueBroadcastMessage(
     }
   );
 
-  console.log(`[BroadcastQueue] 📩 Job enfileirado: messageId=${messageId}`);
+  console.log(`[BroadcastQueue] 📩 Job enfileirado (namespace:${REDIS_NAMESPACES.QUEUE}): messageId=${messageId}`);
 }
 
 /**
@@ -125,12 +129,12 @@ export async function startBroadcastQueueProcessor(concurrency = 2): Promise<voi
 
     // Importar função de processamento do broadcast
     const { processBroadcastMessage } = await import('../workers/broadcast-sender.js');
-    
+
     // Executar processamento
     await processBroadcastMessage(messageId);
   });
 
-  console.log(`[BroadcastQueue] 🚀 Processor iniciado (concurrency=${concurrency})`);
+  console.log(`[BroadcastQueue] 🚀 Processor iniciado (concurrency=${concurrency}, namespace:${REDIS_NAMESPACES.QUEUE})`);
 }
 
 /**

@@ -1,13 +1,14 @@
 /**
  * Rate Limiting Middleware (Redis-backed)
  *
- * Protege endpoints críticos contra abuso usando Redis.
+ * Protege endpoints críticos contra abuso usando Redis com namespaces.
  * Mais eficiente que o rate-limit em memória padrão.
+ *
+ * Namespace: ratelimit:
  */
 
 import { Request, Response, NextFunction } from 'express';
-import Redis from 'ioredis';
-import { getRedis } from '../_core/redis.js';
+import { getRateLimitRedis, REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
 
 export interface RateLimitConfig {
   windowMs: number;          // janela em ms (ex: 60 * 1000 = 1 minuto)
@@ -35,25 +36,29 @@ export function createRateLimiter(config: RateLimitConfig) {
       return next();
     }
 
-    const client = await getRedis();
-    const key = `ratelimit:${keyGenerator(req)}`;
+    const cache = getRateLimitRedis();
+    const key = keyGenerator(req); // sem prefixo, o namespace já adiciona
 
     try {
       // Usar sliding window com Redis sorted set
       const now = Date.now();
+      const client = await cache.getRedis(); // cliente ioredis subjacente
+      const fullKey = `${REDIS_NAMESPACES.RATELIMIT}${key}`;
+
+      // Pipeline para eficiência
       const pipeline = client.pipeline();
 
       // 1. Remover entradas antigas (fora da janela)
-      pipeline.zremrangebyscore(key, 0, now - windowMs);
+      pipeline.zremrangebyscore(fullKey, 0, now - windowMs);
 
       // 2. Contar requisições na janela atual
-      pipeline.zcard(key);
+      pipeline.zcard(fullKey);
 
       // 3. Adicionar requisição atual (score = timestamp)
-      pipeline.zadd(key, now, `${now}-${Math.random()}`);
+      pipeline.zadd(fullKey, now, `${now}-${Math.random()}`);
 
       // 4. Expirar chave após windowMs (limpeza automática)
-      pipeline.expire(key, Math.ceil(windowMs / 1000));
+      pipeline.expire(fullKey, Math.ceil(windowMs / 1000));
 
       const results = await pipeline.exec();
       const currentCount = results?.[1]?.[1] as number || 0;
@@ -104,9 +109,9 @@ export const rateLimiters = {
    * Webhooks: 60 req/min por endpoint
    */
   webhook: (max = 60, windowMs = 60 * 1000) =>
-    createRateLimiter({ 
-      windowMs, 
-      max, 
+    createRateLimiter({
+      windowMs,
+      max,
       keyGenerator: (req) => `${req.path}:${req.ip}`,
     }),
 

@@ -5,32 +5,32 @@
  * reduzindo queries ao banco e melhorando performance.
  *
  * TTL padrão: 5 minutos (300s)
+ * Namespace: evolution:
  */
 
-import { getRedis } from "../_core/redis.js";
+import { getEvolutionRedis } from "../_core/redis-namespaces.js";
 import { getDb } from "../db.js";
 import {
   integrationSettings,
 } from "../../drizzle/schema.js";
 import { eq, sql } from "drizzle-orm";
 
-// Cache keys
-const EVOLUTION_CONFIG_KEY = 'evolution:config';
+// Cache keys (sem prefixo, o namespace adiciona automaticamente)
+const EVOLUTION_CONFIG_KEY = 'config:evolution';
 const EVOLUTION_TTL = 300; // 5 minutos
 
 /**
  * Busca configuração da Evolution API do cache ou banco
  */
 export async function getEvolutionConfigWithCache() {
-  const client = await getRedis();
+  const cache = getEvolutionRedis();
 
   try {
     // 1. Tentar cache
-    const cached = await client.get(EVOLUTION_CONFIG_KEY);
+    const cached = await cache.getJSON(EVOLUTION_CONFIG_KEY);
     if (cached) {
-      const config = JSON.parse(cached);
-      console.log('[CacheEvolution] ✅ Cache HIT');
-      return config;
+      console.log('[CacheEvolution] ✅ Cache HIT (namespace:evolution:)');
+      return cached;
     }
 
     console.log('[CacheEvolution] ⏳ Cache MISS — buscando no banco');
@@ -61,13 +61,8 @@ export async function getEvolutionConfigWithCache() {
       // não cachear apiKey por segurança (buscar do banco quando necessário)
     };
 
-    await client.setex(
-      EVOLUTION_CONFIG_KEY,
-      EVOLUTION_TTL,
-      JSON.stringify(toCache)
-    );
-
-    console.log('[CacheEvolution] 💾 Cache SET (TTL 300s)');
+    await cache.set(EVOLUTION_CONFIG_KEY, toCache, EVOLUTION_TTL);
+    console.log('[CacheEvolution] 💾 Cache SET (TTL 300s, namespace:evolution:)');
 
     return configData;
   } catch (error) {
@@ -105,9 +100,9 @@ export async function getEvolutionApiKey(): Promise<string> {
  * Invalida cache da Evolution (útil quando config é atualizada)
  */
 export async function invalidateEvolutionCache(): Promise<void> {
-  const client = await getRedis();
-  await client.del(EVOLUTION_CONFIG_KEY);
-  console.log('[CacheEvolution] 🗑️ Cache invalidado');
+  const cache = getEvolutionRedis();
+  await cache.del(EVOLUTION_CONFIG_KEY);
+  console.log('[CacheEvolution] 🗑️ Cache invalidado (namespace:evolution:)');
 }
 
 /**
