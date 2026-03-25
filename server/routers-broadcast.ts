@@ -18,7 +18,7 @@ export const broadcastRouter = router({
       page: z.number().int().min(1).optional().default(1),
       limit: z.number().int().min(1).max(100).optional().default(20),
     }))
-    .query(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log('[BroadcastList] query started. input:', JSON.stringify(input), 'user:', ctx.user?.id);
       const db = await getDb();
       if (!db) {
@@ -545,7 +545,7 @@ export const broadcastRouter = router({
     .input(z.object({
       tableName: z.enum(['broadcast_messages', 'broadcast_members_sent', 'broadcast_lists', 'broadcast_list_members']),
     }))
-    .query(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       if (ctx.user.role !== 'admin') {
         throw new Error("Acesso negado");
       }
