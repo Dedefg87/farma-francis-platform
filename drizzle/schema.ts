@@ -11,7 +11,7 @@ import {
   varchar,
   json,
   boolean,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/mysql2";
 
 // Export execution and analytics tables (SQLite-based)
 export * from "./schema_executions";
@@ -1497,7 +1497,7 @@ export type InsertBroadcastMemberSent =
 export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
   id: varchar("id", { length: 255 }).primaryKey(),
   processedAt: timestamp("processed_at").defaultNow().notNull(),
-  provider: varchar("provider", { length: 16 }).nullable(),
+  provider: varchar("provider", { length: 16 }),
 });
 
 export type ProcessedWebhookMessage = typeof processedWebhookMessages.$inferSelect;
