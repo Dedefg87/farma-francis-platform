@@ -12,6 +12,11 @@ import { logger } from './logger';
 const REDIS_URL = process.env.REDIS_URL || process.env.REDISCLOUD_URL || 'redis://localhost:6379';
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || process.env.REDISCLOUD_PASSWORD;
 
+// Log de debug (mascara senha)
+const maskedUrl = REDIS_URL.replace(/:([^@]+)@/, ':***@');
+console.log(`[Redis] Configurado com URL: ${maskedUrl}`);
+console.log(`[Redis] Password definida: ${!!REDIS_PASSWORD}`);
+
 // Opções de conexão
 const redisOptions: Redis.RedisOptions = {
   host: undefined as any, // será preenchido se não for URL
