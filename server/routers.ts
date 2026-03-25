@@ -14,7 +14,7 @@ import { dashboardRouter } from "./routers-dashboard";
 import { executionsRouter } from "./routers-executions";
 import { agentsRouter } from "./routers-agents";
 import { aiRouter } from "./routers-ai";
-// import { tagsRouter } from "./routers-tags"; // Removido - tabelas de tags comentadas
+import { tagsRouter } from "./routers-tags"; // Tags: gestão de etiquetas
 import { agentRouter } from "./routers-agent";
 import { queuesRouter } from "./routers-queues";
 import {

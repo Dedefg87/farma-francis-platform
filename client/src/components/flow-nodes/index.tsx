@@ -31,8 +31,11 @@ interface FlowNodeData {
   [key: string]: unknown;
 }
 
+// Usar any para compatibilidade com@xyflow/react tipagem
+type FlowNodeProps = NodeProps & { data: FlowNodeData };
+
 // Trigger Node
-export const TriggerNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
+export const TriggerNode = memo(({ data, selected }: FlowNodeProps) => (
   <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
     <div className="p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -54,7 +57,7 @@ export const TriggerNode = memo(({ data, selected }: NodeProps<FlowNodeData>) =>
 ));
 
 // Message Node
-export const MessageNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
+export const MessageNode = memo(({ data, selected }: FlowNodeProps) => (
   <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
     <div className="p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -74,7 +77,7 @@ export const MessageNode = memo(({ data, selected }: NodeProps<FlowNodeData>) =>
 ));
 
 // Condition Node
-export const ConditionNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
+export const ConditionNode = memo(({ data, selected }: FlowNodeProps) => (
   <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
     <div className="p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -106,13 +109,13 @@ export const ConditionNode = memo(({ data, selected }: NodeProps<FlowNodeData>) 
   </Card>
 ));
 
-// AI Node - Professional version with agent selection
-export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
-  // Get agent info from data if configured
-  const agentId = data.aiAgent?.agentId;
-  const agentName = data.aiAgent?.agentName || 'AI Assistant';
-  const agentIcon = data.aiAgent?.agentIcon || '🤖';
-  const agentColor = data.aiAgent?.agentColor || '#ec4899';
+// AI Node
+export const AINode = memo(({ data, selected }: FlowNodeProps) => {
+  const agentId = data.aiAgent?.agentId || data.config?.agentId;
+  const agentName = data.aiAgent?.agentName || data.config?.agentName || 'AI Assistant';
+  const agentIcon = data.aiAgent?.agentIcon || data.config?.agentIcon || '🤖';
+  const agentColor = data.aiAgent?.agentColor || data.config?.agentColor || '#ec4899';
+  const agentModel = data.aiAgent?.agentModel || data.config?.agentModel;
   const isConfigured = !!agentId;
 
   return (
@@ -130,7 +133,7 @@ export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm truncate">{agentName}</div>
             <div className="text-xs text-muted-foreground truncate">
-              {isConfigured ? data.aiAgent?.agentModel || 'Configurado' : 'Clique para configurar'}
+              {isConfigured ? (agentModel || 'Configurado') : 'Clique para configurar'}
             </div>
           </div>
           <Badge 
@@ -144,7 +147,6 @@ export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
           </Badge>
         </div>
         
-        {/* Status indicator */}
         {isConfigured && (
           <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
             <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -166,7 +168,7 @@ export const AINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => {
 });
 
 // API Node
-export const APINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
+export const APINode = memo(({ data, selected }: FlowNodeProps) => (
   <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
     <div className="p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -185,8 +187,28 @@ export const APINode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
   </Card>
 ));
 
-// Delay Node
-export const DelayNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
+// Assignment Node
+export const AssignmentNode = memo(({ data, selected }: FlowNodeProps) => (
+  <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
+    <div className="p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xl">👥</span>
+        <div className="flex-1">
+          <div className="font-semibold text-sm">Atribuir</div>
+          <div className="text-xs text-muted-foreground">
+            {data.config?.agentName || "Selecione um agente"}
+          </div>
+        </div>
+        <Badge className="bg-green-600">Atribuição</Badge>
+      </div>
+    </div>
+    <Handle type="target" position={Position.Top} className="!bg-green-600" />
+    <Handle type="source" position={Position.Bottom} className="!bg-green-600" />
+  </Card>
+));
+
+// Delay Node (já existe acima, mas mantendo por clareza)
+export const DelayNode2 = memo(({ data, selected }: FlowNodeProps) => (
   <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
     <div className="p-3">
       <div className="flex items-center gap-2 mb-2">
@@ -206,7 +228,7 @@ export const DelayNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
 ));
 
 // Transfer Node
-export const TransferNode = memo(({ data, selected }: NodeProps<FlowNodeData>) => (
+export const TransferNode = memo(({ data, selected }: FlowNodeProps) => (
   <Card className={`min-w-[220px] ${selected ? "ring-2 ring-primary" : ""}`}>
     <div className="p-3">
       <div className="flex items-center gap-2 mb-2">

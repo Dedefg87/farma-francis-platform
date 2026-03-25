@@ -1,9 +1,7 @@
 // Hooks compartilhados
 export { useFileUpload } from './useFileUpload';
-export { usePdfViewer, getMimeType, getMediaUrl } from './usePdfViewer';
-export { useConversationState } from './useConversation';
+export { usePdfViewer, getMimeType, getMediaUrl, type UsePdfViewerReturn } from './usePdfViewer';
+export { useConversationState, type UseConversationStateReturn } from './useConversation';
 
-// Tipos
+// Re-export de tipos para compatibilidade
 export type { UseFileUploadReturn } from './useFileUpload';
-export type { UsePdfViewerReturn } from './usePdfViewer';
-export type { UseConversationStateReturn } from './useConversation';
