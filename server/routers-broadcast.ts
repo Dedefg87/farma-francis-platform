@@ -539,4 +539,31 @@ export const broadcastRouter = router({
         pagination: { page: input.page, limit: input.limit, total: Number(total), totalPages: Math.ceil(Number(total) / input.limit) },
       };
     }),
+
+  // DEBUG: Extrair DDL das tabelas broadcast (apenas admin)
+  getDdl: protectedProcedure
+    .input(z.object({
+      tableName: z.enum(['broadcast_messages', 'broadcast_members_sent', 'broadcast_lists', 'broadcast_list_members']),
+    }))
+    .query(async ({ input, ctx }) => {
+      if (ctx.user.role !== 'admin') {
+        throw new Error("Acesso negado");
+      }
+
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [rows] = await db.execute<{ Table: string; CreateTable: string }>(
+        `SHOW CREATE TABLE ${input.tableName}`
+      ) as any;
+
+      if (!rows || rows.length === 0) {
+        throw new Error(`Tabela ${input.tableName} não encontrada`);
+      }
+
+      return {
+        table: rows[0].Table,
+        createTable: rows[0].CreateTable,
+      };
+    }),
 });
