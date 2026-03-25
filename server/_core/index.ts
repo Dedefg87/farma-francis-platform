@@ -126,6 +126,49 @@ async function runMediaColumnsMigration() {
   }
 }
 
+// Aplica migrations SQL da pasta server/database/migrations
+async function applySqlMigrations() {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const { getDb } = await import('../db');
+
+    const db = await getDb();
+    if (!db) {
+      console.log("[Migrations] DB not ready, skipping");
+      return;
+    }
+
+    const migrationsDir = path.join(process.cwd(), 'server', 'database', 'migrations');
+    const files = fs.readdirSync(migrationsDir)
+      .filter(f => f.endsWith('.sql'))
+      .sort(); // ordem alfabética
+
+    console.log(`[Migrations] Encontradas ${files.length} migrations`);
+
+    for (const file of files) {
+      const fullPath = path.join(migrationsDir, file);
+      const sql = fs.readFileSync(fullPath, 'utf8');
+
+      try {
+        const statements = sql.split(';').filter(s => s.trim());
+        for (const stmt of statements) {
+          if (stmt.trim()) {
+            await db.execute(stmt + ';');
+          }
+        }
+        console.log(`[Migrations] ✅ Aplicada: ${file}`);
+      } catch (err: any) {
+        console.error(`[Migrations] ❌ Erro em ${file}:`, err.message);
+      }
+    }
+
+    console.log('[Migrations] ✅ Concluído');
+  } catch (err) {
+    console.error('[Migrations] ❌ Falha:', err);
+  }
+}
+
 // Idempotency: Unique indexes to prevent duplicate messages (MySQL compatible)
 async function runIdempotencyConstraints() {
   try {
@@ -212,6 +255,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   // Auto-migrate media columns
   await runMediaColumnsMigration();
+
+  // Aplicar migrations SQL pendentes (da pasta server/database/migrations)
+  await applySqlMigrations();
 
   // 🚨 CRITICAL: Ensure broadcast_messages has file columns (force migration)
   try {
