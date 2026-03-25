@@ -11,14 +11,15 @@
  * Namespace: broadcast: / queue:
  */
 
-import { Queue, Worker, Job } from 'bull';
+import Bull from 'bull';
 import { getRedis } from '../_core/redis.js';
 import { getQueueRedis, REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
 
 // Nome da fila
 const BROADCAST_QUEUE_NAME = 'broadcast-sender';
 
-// Configuração da fila
+// Desestruturar types do Bull (CommonJS)
+const { Queue, Worker, Job } = Bull;
 interface BroadcastJobData {
   messageId: number;
   listId: number;
