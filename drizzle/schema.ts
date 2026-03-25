@@ -79,8 +79,8 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
   status: varchar("status", { length: 50 }).notNull().default("pending"),
   sentAt: timestamp("sent_at"),
   errorMessage: text("error_message"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").notNull(),
+  updatedAt: timestamp("updated_at").notNull(),
 });
 
 export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
