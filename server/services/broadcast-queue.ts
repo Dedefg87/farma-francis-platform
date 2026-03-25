@@ -11,16 +11,12 @@
  * Namespace: broadcast: / queue:
  */
 
-import * as Bull from 'bull';
+import { Queue, Worker, Job } from 'bull';
 import { getRedis } from '../_core/redis.js';
 import { getQueueRedis, REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
 
 // Nome da fila
 const BROADCAST_QUEUE_NAME = 'broadcast-sender';
-
-// Tipos Bull (namespace)
-type Queue<TData = any> = Bull.Queue<TData>;
-type Job<TData = any> = Bull.Job<TData>;
 
 // Configuração da fila
 interface BroadcastJobData {
@@ -35,7 +31,7 @@ function createBroadcastQueue(): Queue<BroadcastJobData> {
   // Usar cliente Redis namespaced para queue
   const redisClient = getRedis(); // base connection
 
-  const queue = new Bull.Queue<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
+  const broadcastQueue = new Queue<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
     redis: {
       client: redisClient as any,
       // BullMQ adiciona prefix automaticamente se keyPrefix fornecido
@@ -62,19 +58,19 @@ function createBroadcastQueue(): Queue<BroadcastJobData> {
   });
 
   // Eventos de log
-  queue.on('completed', (job: Job<BroadcastJobData>) => {
+  broadcastQueue.on('completed', (job: Job<BroadcastJobData>) => {
     console.log(`[BroadcastQueue] ✅ Job ${job.id} completado (messageId=${job.data.messageId})`);
   });
 
-  queue.on('failed', (job: Job<BroadcastJobData> | undefined, err: Error) => {
+  broadcastQueue.on('failed', (job: Job<BroadcastJobData> | undefined, err: Error) => {
     console.error(`[BroadcastQueue] ❌ Job ${job?.id} falhou:`, err.message);
   });
 
-  queue.on('error', (err: Error) => {
+  broadcastQueue.on('error', (err: Error) => {
     console.error('[BroadcastQueue] Erro na fila:', err);
   });
 
-  return queue;
+  return broadcastQueue;
 }
 
 // Singleton
