@@ -91,13 +91,15 @@ async function sendWhatsAppMessageWithRetry(
     try {
       const payload: any = {
         number: variant,
-        text: content,
       };
 
       if (fileAttachment) {
         payload.media = fileAttachment.url;
         payload.mediatype = mimetypeToMediatype[fileAttachment.type] || "image";
         payload.fileName = fileAttachment.name;
+        if (content && content.trim()) {
+          payload.caption = content;
+        }
         // O Evolution-api espera sendMediaMessage para mídia
         const response = await fetch(
           `${apiUrl}/message/sendMedia/${instanceName}`,
@@ -123,6 +125,7 @@ async function sendWhatsAppMessageWithRetry(
         }
       } else {
         // Apenas texto
+        payload.text = content;
         const response = await fetch(
           `${apiUrl}/message/sendText/${instanceName}`,
           {
