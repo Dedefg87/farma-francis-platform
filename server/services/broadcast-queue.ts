@@ -53,14 +53,23 @@ let instanceCount = 0;
  */
 function createBroadcastQueue(): Queue<BroadcastJobData> {
   console.log(`[BroadcastQueue] 🏗️ Criando instância #${++instanceCount} (singleton check)`);
+  console.log(`[BroadcastQueue] 📋 Stack: ${new Error().stack}`);
   const redisUrl = getRedisUrl();
 
-  // Bull (v4) aceita url diretamente
+  // Parse URL para host/port explícitos (evita fallback para 127.0.0.1)
+  const url = new URL(redisUrl);
+  const redisHost = url.hostname;
+  const redisPort = parseInt(url.port) || (url.protocol === 'rediss:' ? 6380 : 6379);
+  const redisPassword = url.password;
+
+  // Bull (v4) com host/port explícitos
   const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
     redis: {
-      url: redisUrl,
-      // Bull automaticamente adiciona prefix: "bull:" + queueName
-      // Para custom namespace, usamos keyPrefix
+      host: redisHost,
+      port: redisPort,
+      password: redisPassword || undefined,
+      // SSL/TLS se usar rediss://
+      tls: url.protocol === 'rediss:' ? { rejectUnauthorized: false } : undefined,
       keyPrefix: REDIS_NAMESPACES.QUEUE, // 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
