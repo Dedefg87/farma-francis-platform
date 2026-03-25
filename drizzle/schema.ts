@@ -1483,7 +1483,7 @@ export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
   customerId: int("customer_id").notNull(),
   phone: varchar("phone", { length: 32 }).notNull(),
   status: varchar("status", { length: 16 }).default("pending").notNull(),
-  error: text("error"),
+  errorMessage: text("error_message"),
   sentAt: timestamp("sent_at"),
 });
 
