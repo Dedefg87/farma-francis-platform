@@ -95,7 +95,8 @@ async function sendWhatsAppMessageWithRetry(
       };
 
       if (fileAttachment) {
-        payload.media = { url: fileAttachment.url, mediatype: mimetypeToMediatype[fileAttachment.type] || "image" };
+        payload.media = fileAttachment.url;
+        payload.mediatype = mimetypeToMediatype[fileAttachment.type] || "image";
         payload.fileName = fileAttachment.name;
         // O Evolution-api espera sendMediaMessage para mídia
         const response = await fetch(
