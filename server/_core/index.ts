@@ -34,8 +34,9 @@ import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
-import { startBroadcastSenderWorker } from "../workers/broadcast-sender";
+import { startBroadcastQueueProcessor } from "../services/broadcast-queue";
 import { sdk } from "./sdk";
+import { createRateLimiter, rateLimiters } from "../middleware/rate-limit.js";
 import multer from "multer";
 import { uploadToR2 } from "../r2-client";
 import migrationRouter from "../admin/migration-router";
@@ -319,12 +320,12 @@ async function startServer() {
   await runIdempotencyConstraints();
   startMobileSyncProcessor();
 
-  // Iniciar worker de envio de broadcast com retry de 4 variações
+  // Iniciar fila de broadcast com Bull (Redis-backed)
   try {
-    startBroadcastSenderWorker(5000); // a cada 5 segundos
-    console.log("[BroadcastWorker] ✅ Worker de broadcast iniciado");
+    startBroadcastQueueProcessor(2); // 2 jobs concurrently
+    console.log("[BroadcastQueue] ✅ Fila de broadcast iniciada (concurrency=2)");
   } catch (err) {
-    console.error("[BroadcastWorker] ❌ Falha ao iniciar worker:", err);
+    console.error("[BroadcastQueue] ❌ Falha ao iniciar fila:", err);
   }
 
   const app = express();
@@ -371,6 +372,20 @@ async function startServer() {
   }
 
   app.use("/api/", apiLimiter);
+
+  // Rate limiting distribuído (Redis) para endpoints críticos
+  const { rateLimiters } = await import("../middleware/rate-limit.js");
+
+  // Auth: 10 req/min por IP
+  app.use("/api/auth/login", rateLimiters.auth(10, 60 * 1000));
+  app.use("/api/auth/refresh", rateLimiters.auth(20, 60 * 1000));
+  app.use("/api/auth/logout", rateLimiters.auth(10, 60 * 1000));
+
+  // Upload: 30 req/5min por IP
+  app.use("/api/upload", rateLimiters.upload(30, 5 * 60 * 1000));
+
+  // Webhooks Evolution: 60 req/min por IP+path
+  app.use("/webhook", rateLimiters.webhook(60, 60 * 1000));
 
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);

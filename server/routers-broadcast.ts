@@ -459,7 +459,12 @@ export const broadcastRouter = router({
           .set({ lastSentAt: new Date() })
           .where(eq(broadcastLists.id, input.listId));
 
-        return { messageId: Number(messageId), status: 'sending' };
+        // Enfileirar job de broadcast (Bull) ao invés de processar síncrono
+        const { enqueueBroadcastMessage } = await import('../services/broadcast-queue.js');
+        await enqueueBroadcastMessage(messageId, input.listId);
+
+        console.log(`[BroadcastSendMessage] Job enfileirado (Bull) — messageId=${messageId}`);
+        return { messageId: Number(messageId), status: 'queued' };
       } catch (error) {
         console.error('[BroadcastSendMessage] Error:', error);
         throw error;

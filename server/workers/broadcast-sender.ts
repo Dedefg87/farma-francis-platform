@@ -17,6 +17,7 @@ import {
 } from "../../drizzle/schema.js";
 import { eq, sql, and } from "drizzle-orm";
 import { generatePhoneVariants } from "../utils/phone.js";
+import { getEvolutionConfigWithCache, getEvolutionApiKey } from "../services/cache-evolution.js";
 
 // Mapeamento de MIME type para mediatype da Evolution API
 const mimetypeToMediatype: Record<string, string> = {
@@ -38,39 +39,6 @@ const mimetypeToMediatype: Record<string, string> = {
 
 
 /**
- * Obtém a configuração da Evolution API do banco de dados
- */
-async function getEvolutionConfig() {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const [config] = await db
-    .select()
-    .from(integrationSettings)
-    .where(sql`integration_type = ${"evolution_api"}`)
-    .limit(1);
-
-  if (!config || !config.isActive) {
-    throw new Error("Evolution API not configured");
-  }
-
-  const configData =
-    typeof config.config === "string"
-      ? JSON.parse(config.config)
-      : config.config;
-
-  const apiUrl = (configData.apiUrl as string)?.replace(/\/$/, "");
-  const apiKey = (configData.apiKey as string) || (configData.accessToken as string);
-  const instanceName = configData.instanceName as string;
-
-  if (!apiUrl || !apiKey || !instanceName) {
-    throw new Error("Evolution config incomplete");
-  }
-
-  return { apiUrl, apiKey, instanceName };
-}
-
-/**
  * Envia uma mensagem via Evolution API com retry de 4 variações
  */
 async function sendWhatsAppMessageWithRetry(
@@ -84,7 +52,10 @@ async function sendWhatsAppMessageWithRetry(
   }
 ): Promise<{ success: boolean; error?: string }> {
   const variants = generatePhoneVariants(phone);
-  const { apiUrl, apiKey, instanceName } = await getEvolutionConfig();
+
+  // Buscar configuração (com cache)
+  const { apiUrl, instanceName } = await getEvolutionConfigWithCache();
+  const apiKey = await getEvolutionApiKey();
 
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i];
@@ -288,64 +259,4 @@ export async function processBroadcastMessage(messageId: number) {
   }
 }
 
-/**
- * Worker que fica processando mensagens broadcast pendentes
- */
-export function startBroadcastSenderWorker(pollIntervalMs = 5000) {
-  console.log("[BroadcastWorker] Iniciando worker de envio de broadcast...");
-
-  // Processar imediatamente na inicialização
-  processPendingBroadcasts().catch(err => {
-    console.error("[BroadcastWorker] Erro inicial:", err);
-  });
-
-  // Configurar intervalo
-  const intervalId = setInterval(async () => {
-    try {
-      await processPendingBroadcasts();
-    } catch (err) {
-      console.error("[BroadcastWorker] Erro no intervalo:", err);
-    }
-  }, pollIntervalMs);
-
-  // Graceful shutdown
-  process.on("SIGTERM", () => {
-    console.log("[BroadcastWorker] Recebido SIGTERM, parando...");
-    clearInterval(intervalId);
-    process.exit(0);
-  });
-
-  process.on("SIGINT", () => {
-    console.log("[BroadcastWorker] Recebido SIGINT, parando...");
-    clearInterval(intervalId);
-    process.exit(0);
-  });
-
-  return intervalId;
-}
-
-/**
- * Busca e processa todas as mensagens broadcast com status 'sending' e pendentes
- */
-async function processPendingBroadcasts() {
-  const db = await getDb();
-  if (!db) return;
-
-  // Buscar mensagens em status 'sending' que ainda têm pendentes
-  const messages = await db
-    .select({ id: broadcastMessages.id })
-    .from(broadcastMessages)
-    .where(eq(broadcastMessages.status, "sending"))
-    .limit(10); //_processar até 10 por ciclo para evitar sobrecarga
-
-  for (const msg of messages) {
-    try {
-      await processBroadcastMessage(msg.id);
-    } catch (err) {
-      console.error(
-        `[BroadcastWorker] Falha ao processar mensagem ${msg.id}:`,
-        err
-      );
-    }
-  }
-}
+// export { processBroadcastMessage }; // removido — já exportado acima
