@@ -466,32 +466,36 @@ export const broadcastRouter = router({
           throw new Error("Falha ao obter ID da mensagem broadcast");
         }
 
-      // Inserir membros em lote usando Drizzle (sem SQL raw)
-      const batchSize = 1000;
-      for (let i = 0; i < members.length; i += batchSize) {
-        const batch = members.slice(i, i + batchSize);
-        const valuesToInsert = batch.map(m => ({
-          broadcastMessageId: messageId,
-          customerId: m.customerId,
-          phone: normalize(m.phone),
-          status: "pending",
-          errorMessage: null,
-          deliveredAt: null,
-          readAt: null,
-          sentAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }));
+        // Inserir membros em lote usando Drizzle (sem SQL raw)
+        const batchSize = 1000;
+        for (let i = 0; i < members.length; i += batchSize) {
+          const batch = members.slice(i, i + batchSize);
+          const valuesToInsert = batch.map(m => ({
+            broadcastMessageId: messageId,
+            customerId: m.customerId,
+            phone: normalize(m.phone),
+            status: "pending",
+            errorMessage: null,
+            deliveredAt: null,
+            readAt: null,
+            sentAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }));
 
-        console.log(`[BroadcastSendMessage] Inserting batch of ${valuesToInsert.length} members`);
-        await db.insert(broadcastMembersSent).values(valuesToInsert);
+          console.log(`[BroadcastSendMessage] Inserting batch of ${valuesToInsert.length} members`);
+          await db.insert(broadcastMembersSent).values(valuesToInsert);
+        }
+
+        await db.update(broadcastLists)
+          .set({ lastSentAt: new Date() })
+          .where(eq(broadcastLists.id, input.listId));
+
+        return { messageId: Number(messageId), status: 'sending' };
+      } catch (error) {
+        console.error('[BroadcastSendMessage] Error:', error);
+        throw error;
       }
-
-      await db.update(broadcastLists)
-        .set({ lastSentAt: new Date() })
-        .where(eq(broadcastLists.id, input.listId));
-
-      return { messageId: Number(messageId), status: 'sending' };
     }),
 
   getMessageStats: protectedProcedure
