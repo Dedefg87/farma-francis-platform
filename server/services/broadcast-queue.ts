@@ -5,23 +5,22 @@
  * Substitui a fila em memória atual, fornecendo:
  * - Persistência (não perde mensagens em restart)
  * - Concorrência controlada
- * - Retry automático
+ - Retry automático
  * - Dashboard de jobs (se Redis disponível)
  *
  * Namespace: broadcast: / queue:
  */
 
 import Bull from 'bull';
-import { getRedis } from '../_core/redis.js';
-import { getQueueRedis, REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
+import { REDIS_NAMESPACES } from '../_core/redis-namespaces.js';
 
 // Nome da fila
 const BROADCAST_QUEUE_NAME = 'broadcast-sender';
 
 // Bull default export é a classe Queue
-// Bull.Job contém a classe Job (adicionada como propriedade)
 type Queue<TData = any> = Bull;
 type Job<TData = any> = Bull.Job;
+
 interface BroadcastJobData {
   messageId: number;
   listId: number;
@@ -31,14 +30,12 @@ interface BroadcastJobData {
  * Cria instância da fila de broadcast (singleton)
  */
 function createBroadcastQueue(): Queue<BroadcastJobData> {
-  // Usar REDIS_URL environment variable
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-
+  // Configuração: Bull usa ioredis internamente com REDIS_URL
   const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
+    // Não passar client: Bull cria sua própria conexão ioredis usando REDIS_URL
+    // Apenas configurar keyPrefix para namespace
     redis: {
-      url: redisUrl,
-      // Bull adiciona prefix automaticamente se keyPrefix fornecido
-      keyPrefix: REDIS_NAMESPACES.QUEUE, // usa 'queue:'
+      keyPrefix: REDIS_NAMESPACES.QUEUE, // 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
     },
@@ -86,9 +83,6 @@ export async function getBroadcastQueue(): Promise<Queue<BroadcastJobData>> {
   if (broadcastQueueInstance) {
     return broadcastQueueInstance;
   }
-
-  // Await Redis connection antes de criar fila
-  await getRedis();
 
   broadcastQueueInstance = createBroadcastQueue();
   return broadcastQueueInstance;
