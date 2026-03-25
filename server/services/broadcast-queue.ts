@@ -35,6 +35,7 @@ function createBroadcastQueue(): Queue<BroadcastJobData> {
     // Não passar client: Bull cria sua própria conexão ioredis usando REDIS_URL
     // Apenas configurar keyPrefix para namespace
     redis: {
+      url: process.env.REDIS_URL || 'redis://localhost:6379',
       keyPrefix: REDIS_NAMESPACES.QUEUE, // 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
