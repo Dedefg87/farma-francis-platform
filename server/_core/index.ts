@@ -34,6 +34,8 @@ import { createContext } from "./context";
 import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
+// Forçar inclusão do broadcast-queue no bundle (esbuild às vezes pula)
+import "../services/broadcast-queue";
 import { startBroadcastQueueProcessor } from "../services/broadcast-queue";
 import { sdk } from "./sdk";
 import { createRateLimiter, rateLimiters } from "../middleware/rate-limit.js";

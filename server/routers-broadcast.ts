@@ -11,6 +11,7 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
 import { normalize, normalizeEmptyStringToNull } from "./utils/normalize";
+import { enqueueBroadcastMessage } from "./services/broadcast-queue";
 
 export const broadcastRouter = router({
   list: protectedProcedure
@@ -460,7 +461,6 @@ export const broadcastRouter = router({
           .where(eq(broadcastLists.id, input.listId));
 
         // Enfileirar job de broadcast (Bull) ao invés de processar síncrono
-        const { enqueueBroadcastMessage } = await import('../services/broadcast-queue.js');
         await enqueueBroadcastMessage(messageId, input.listId);
 
         console.log(`[BroadcastSendMessage] Job enfileirado (Bull) — messageId=${messageId}`);
