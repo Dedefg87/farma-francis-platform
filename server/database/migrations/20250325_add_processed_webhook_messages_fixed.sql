@@ -4,8 +4,8 @@
 
 CREATE TABLE IF NOT EXISTS `processed_webhook_messages` (
   `id` VARCHAR(255) NOT NULL,
-  `received_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  `processed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
   `provider` VARCHAR(16) NULL,
   PRIMARY KEY (`id`),
-  INDEX `idx_received_at` (`received_at`)
+  INDEX `idx_processed_at` (`processed_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

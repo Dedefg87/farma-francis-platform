@@ -949,8 +949,8 @@ export const ticketTags = mysqlTable("ticket_tags", {
 
 export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
   id: varchar("id", { length: 255 }).primaryKey(),
-  receivedAt: timestamp("received_at").defaultNow().notNull(),
-  provider: varchar("provider", { length: 16 }).notNull(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+  provider: varchar("provider", { length: 16 }).nullable(),
 });
 
 export type ProcessedWebhookMessage = typeof processedWebhookMessages.$inferSelect;
