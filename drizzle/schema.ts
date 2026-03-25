@@ -85,7 +85,7 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
 
 export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
   id: autoincrement().primaryKey(),
-  broadcastMessageId: int("broadcast_message_id").notNull(),
+  broadcastMessageId: int("message_id").notNull(),
   customerId: int("customer_id").notNull(),
   phone: varchar("phone", { length: 32 }).notNull(),
   status: varchar("status", { length: 16, enum: ["pending", "sent", "delivered", "read", "failed"] }).default("pending"),
