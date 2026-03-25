@@ -9,7 +9,11 @@ import Redis from 'ioredis';
 import { logger } from './logger';
 
 // Configuração a partir de variáveis de ambiente
-const REDIS_URL = process.env.REDIS_URL || process.env.REDISCLOUD_URL || 'redis://localhost:6379';
+// Railway usa REDIS_PUBLIC_URL (URL completa com credenciais)
+const REDIS_URL = process.env.REDIS_PUBLIC_URL ||
+                  process.env.REDIS_URL ||
+                  process.env.REDISCLOUD_URL ||
+                  'redis://localhost:6379';
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || process.env.REDISCLOUD_PASSWORD;
 
 // Log de debug (mascara senha)

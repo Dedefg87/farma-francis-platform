@@ -30,7 +30,9 @@ interface BroadcastJobData {
  * Detecta URL do Redis (mesma lógica de _core/redis.ts)
  */
 function getRedisUrl(): string {
+  // Priorizar REDIS_PUBLIC_URL (Railway) ou REDIS_URL
   const url =
+    process.env.REDIS_PUBLIC_URL ||
     process.env.REDIS_URL ||
     process.env.REDISCLOUD_URL ||
     (process.env.REDIS_HOST && process.env.REDIS_PORT
