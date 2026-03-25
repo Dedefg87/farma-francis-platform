@@ -1,5 +1,6 @@
+import { date } from "drizzle-orm";
 import {
-  date,
+  
   decimal,
   int,
   longtext,
@@ -489,7 +490,7 @@ export type InsertAttachment = typeof attachments.$inferInsert;
 export const auditLogs = mysqlTable("audit_logs", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("user_id").references(() => users.id),
-  action: varchar("action", { length: 100 }).notNull(), // create, update, delete, login, etc
+  action: varchar("action", { length: 100 }).notNull(), // create, up delete, login, etc
   entityType: varchar("entity_type", { length: 100 }), // ticket, customer, user, etc
   entityId: int("entity_id"),
   changes: text("changes"), // JSON of what changed
