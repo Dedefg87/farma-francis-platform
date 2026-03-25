@@ -632,7 +632,7 @@ export const receivedMessages = mysqlTable("received_messages", {
   caption: text("caption"), // Media caption
   latitude: decimal("latitude", { precision: 10, scale: 8 }), // Location latitude
   longitude: decimal("longitude", { precision: 11, scale: 8 }), // Location longitude
-  timestamp: bigint("timestamp", { mode: "number" }).notNull(), // Unix timestamp from provider
+  timestamp: text("timestamp").notNull(), // Unix timestamp from provider (stored as text)
   rawPayload: longtext("raw_payload"), // Full JSON payload for debugging
   processed: int("processed").default(0).notNull(), // 0 = pending, 1 = processed
   processedAt: timestamp("processed_at"),
@@ -1040,7 +1040,7 @@ export const integrationSettings = mysqlTable("integration_settings", {
     "email",
   ]).notNull(),
   name: varchar("name", { length: 255 }).notNull(), // Nome descritivo da configuração
-  isActive: boolean("is_active").default(true).notNull(),
+  isActive: int("is_active").default(1).notNull(), // 1 = active, 0 = inactive
 
   // Configurações gerais (JSON)
   config: json("config").notNull(), // Armazena { accessToken, phoneNumberId, etc }
