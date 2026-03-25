@@ -31,13 +31,13 @@ interface BroadcastJobData {
  * Cria instância da fila de broadcast (singleton)
  */
 function createBroadcastQueue(): Queue<BroadcastJobData> {
-  // Usar cliente Redis namespaced para queue
-  const redisClient = getRedis(); // base connection
+  // Usar REDIS_URL environment variable
+  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
   const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
     redis: {
-      client: redisClient as any,
-      // BullMQ adiciona prefix automaticamente se keyPrefix fornecido
+      url: redisUrl,
+      // Bull adiciona prefix automaticamente se keyPrefix fornecido
       keyPrefix: REDIS_NAMESPACES.QUEUE, // usa 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
