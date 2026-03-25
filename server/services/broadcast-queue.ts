@@ -51,9 +51,12 @@ function getRedisUrl(): string {
 function createBroadcastQueue(): Queue<BroadcastJobData> {
   const redisUrl = getRedisUrl();
 
+  // Bull (v4) aceita url diretamente
   const broadcastQueue = new Bull<BroadcastJobData>(BROADCAST_QUEUE_NAME, {
     redis: {
       url: redisUrl,
+      // Bull automaticamente adiciona prefix: "bull:" + queueName
+      // Para custom namespace, usamos keyPrefix
       keyPrefix: REDIS_NAMESPACES.QUEUE, // 'queue:'
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
