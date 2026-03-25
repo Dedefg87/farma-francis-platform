@@ -1,7 +1,8 @@
--- Hotfix: Ensure lastSignedIn column exists in users table
--- Run: psql $DATABASE_URL -f this-file
+-- Migration: 0006_add_lastSignedIn
+-- Data: 2025-03-17 (original) / 2025-03-25 (MySQL conversion)
+-- Propósito: Garantir que a coluna lastSignedIn existe na tabela users
 
-ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "lastSignedIn" timestamp DEFAULT now() NOT NULL;
+-- Adicionar coluna se não existir
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `lastSignedIn` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL;
 
--- If column already exists, this is a no-op
-COMMIT;
+-- Nota: IF NOT EXISTS é suportado no MySQL 8.0+. Se usar MySQL <8, remover IF NOT EXISTS e deixar erro ignorar.

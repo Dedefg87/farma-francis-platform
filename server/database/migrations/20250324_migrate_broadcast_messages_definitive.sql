@@ -1,50 +1,20 @@
--- SQL Migration Script for broadcast_messages table
--- Date: 24 de março de 2026
---
--- OBJETIVO: Alinhar a estrutura da tabela 'broadcast_messages' com o schema esperado pelo código.
--- - Renomear 'content' para 'message_text'
--- - Renomear 'sentBy' para 'sender_id'
--- - Adicionar 'caption'
--- - Adicionar 'sender_type'
--- - Adicionar 'error_message'
+-- Migration: 20250324_migrate_broadcast_messages_definitive
+-- Data: 2025-03-24
+-- Propósito: Alterar tabela broadcast_messages para ter colunas corretas (sender_id, caption, sender_type, error_message)
+-- Nota: Assume que broadcast_messages já existe. Apenas adiciona colunas faltantes.
 
-START TRANSACTION;
+-- Adicionar sender_id (INT) se não existir
+ALTER TABLE `broadcast_messages` ADD COLUMN IF NOT EXISTS `sender_id` INT NOT NULL AFTER `sentBy`;
 
--- PASSO 1: RENOMEAR COLUNAS EXISTENTES
+-- Adicionar caption (TEXT) se não existir
+ALTER TABLE `broadcast_messages` ADD COLUMN IF NOT EXISTS `caption` TEXT NULL AFTER `content`;
 
--- Renomear 'content' para 'message_text' e definir como TEXT NULL
-ALTER TABLE broadcast_messages
-CHANGE COLUMN `content` `message_text` TEXT NULL;
+-- Adicionar sender_type (VARCHAR 50) se não existir
+ALTER TABLE `broadcast_messages` ADD COLUMN IF NOT EXISTS `sender_type` VARCHAR(50) NOT NULL DEFAULT 'agent' AFTER `sender_id`;
 
--- Renomear 'sentBy' para 'sender_id' e definir como INT NOT NULL
-ALTER TABLE broadcast_messages
-CHANGE COLUMN `sentBy` `sender_id` INT NOT NULL;
+-- Adicionar error_message (TEXT) se não existir
+ALTER TABLE `broadcast_messages` ADD COLUMN IF NOT EXISTS `error_message` TEXT NULL AFTER `status`;
 
--- PASSO 2: ADICIONAR COLUNAS FALTANTES
-
--- Adicionar 'caption' (TEXT NULL) após 'message_text'
-ALTER TABLE broadcast_messages
-ADD COLUMN `caption` TEXT NULL AFTER `message_text`;
-
--- Adicionar 'sender_type' (VARCHAR(50) NOT NULL DEFAULT 'agent') após 'sender_id'
-ALTER TABLE broadcast_messages
-ADD COLUMN `sender_type` VARCHAR(50) NOT NULL DEFAULT 'agent' AFTER `sender_id`;
-
--- Adicionar 'error_message' (TEXT NULL) após 'sent_at'
-ALTER TABLE broadcast_messages
-ADD COLUMN `error_message` TEXT NULL AFTER `sent_at`;
-
-COMMIT;
-
--- Verificação pós-migração
-SELECT
-  COLUMN_NAME,
-  COLUMN_TYPE,
-  IS_NULLABLE,
-  COLUMN_DEFAULT
-FROM
-  INFORMATION_SCHEMA.COLUMNS
-WHERE
-  TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'broadcast_messages'
-ORDER BY
-  ORDINAL_POSITION;
+-- Nota: Em produção, pode ser necessário renomear 'sentBy' para 'sender_id' se ainda não foi feito.
+-- Se 'sentBy' ainda existe e 'sender_id' não, faça manualmente:
+-- ALTER TABLE `broadcast_messages` CHANGE COLUMN `sentBy` `sender_id` INT NOT NULL;

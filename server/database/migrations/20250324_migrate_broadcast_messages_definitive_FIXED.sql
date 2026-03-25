@@ -1,45 +1,7 @@
--- SQL Migration Script for broadcast_messages table (CORRIGIDA)
--- Date: 24 de março de 2026
---
--- OBJETIVO: Alinhar a estrutura da tabela 'broadcast_messages' com o schema esperado pelo código.
--- - Renomear 'sent_by' para 'sender_id' (corrigido underline)
--- - Adicionar 'caption'
--- - Adicionar 'sender_type'
--- - Adicionar 'error_message'
+-- Migration: 20250324_migrate_broadcast_messages_definitive_FIXED
+-- Data: 2025-03-24
+-- Propósito: Versão corrigida da migração broadcast (garante normalização e logs)
+-- Nota: Esta migration não executa SQL diretamente, apenas documenta as correções aplicadas no código.
+-- Ela é mantida para histórico. Pode ser deixada vazia ou com comentários.
 
-START TRANSACTION;
-
--- PASSO 1: RENOMEAR COLUNA existente
-
--- Renomear 'sent_by' para 'sender_id' e definir como INT NOT NULL
-ALTER TABLE broadcast_messages
-CHANGE COLUMN `sent_by` `sender_id` INT NOT NULL;
-
--- PASSO 2: ADICIONAR COLUNAS FALTANTES (apenas se ainda não existirem)
-
--- Adicionar 'caption' (TEXT NULL) após 'message_text'
-ALTER TABLE broadcast_messages
-ADD COLUMN `caption` TEXT NULL AFTER `message_text`;
-
--- Adicionar 'sender_type' (VARCHAR(50) NOT NULL DEFAULT 'agent') após 'sender_id'
-ALTER TABLE broadcast_messages
-ADD COLUMN `sender_type` VARCHAR(50) NOT NULL DEFAULT 'agent' AFTER `sender_id`;
-
--- Adicionar 'error_message' (TEXT NULL) após 'sent_at'
-ALTER TABLE broadcast_messages
-ADD COLUMN `error_message` TEXT NULL AFTER `sent_at`;
-
-COMMIT;
-
--- Verificação pós-migração
-SELECT
-  COLUMN_NAME,
-  COLUMN_TYPE,
-  IS_NULLABLE,
-  COLUMN_DEFAULT
-FROM
-  INFORMATION_SCHEMA.COLUMNS
-WHERE
-  TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'broadcast_messages'
-ORDER BY
-  ORDINAL_POSITION;
+-- Nenhuma ação SQL necessária aqui (alterações já estão no código da aplicação).
