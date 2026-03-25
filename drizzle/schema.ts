@@ -22,21 +22,16 @@ export * from "./schema_executions";
  * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: varchar("open_id", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
-  passwordHash: varchar("passwordHash", { length: 255 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
+  passwordHash: varchar("password_hash", { length: 255 }),
+  loginMethod: varchar("login_method", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  lastSignedIn: timestamp("last_signed_in").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -47,30 +42,15 @@ export type InsertUser = typeof users.$inferInsert;
  */
 export const customers = mysqlTable("customers", {
   id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  email: varchar("email", { length: 320 }),
-  phone: varchar("phone", { length: 20 }),
-  birthDate: date("birth_date"),
-  expectedDueDate: date("expected_due_date"), // Data prevista do parto (para módulo Chá de Bebê)
-  healthTagsJson: text("health_tags_json"), // JSON array of sensitive health tags (admin-only)
-  whatsappOptIn: int("whatsapp_opt_in").default(0).notNull(),
-  whatsappOptInAt: timestamp("whatsapp_opt_in_at"),
-  photoUrl: varchar("photo_url", { length: 500 }),
-  cpfCnpj: varchar("cpf_cnpj", { length: 18 }),
-  address: text("address"),
-  city: varchar("city", { length: 100 }),
-  state: varchar("state", { length: 2 }),
-  zipCode: varchar("zip_code", { length: 10 }),
-  tags: text("tags"), // JSON array of tags
+  name: text("name").notNull(),
+  phone: varchar("phone", { length: 32 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  photoUrl: text("photoUrl"),
+  status: varchar("status", { length: 32 }).default("active").notNull(),
   notes: text("notes"),
-  ltvValue: decimal("ltv_value", { precision: 12, scale: 2 }).default("0"),
-  lastPurchaseAt: timestamp("last_purchase_at"),
-  status: mysqlEnum("status", ["active", "inactive", "blocked"])
-    .default("active")
-    .notNull(),
-  createdBy: int("created_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  source: varchar("source", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Customer = typeof customers.$inferSelect;
@@ -836,15 +816,13 @@ export type InsertQuickReply = typeof quickReplies.$inferInsert;
  * Controla se agente está online/pausado em cada canal
  */
 export const agentStatus = mysqlTable("agent_status", {
-  id: int("id").autoincrement().primaryKey(),
   userId: int("user_id")
+    .primaryKey()
     .references(() => users.id)
     .notNull(),
-  channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
-  status: mysqlEnum("status", ["online", "paused", "offline"])
-    .default("offline")
-    .notNull(),
-  lastActivity: timestamp("last_activity").defaultNow().notNull(),
+  status: varchar("status", { length: 16 }).default("offline").notNull(),
+  lastSeen: timestamp("last_seen").defaultNow().notNull(),
+  currentConversationId: int("current_conversation_id"),
 });
 
 export type AgentStatus = typeof agentStatus.$inferSelect;
@@ -876,18 +854,11 @@ export const agentPauses = mysqlTable("agent_pauses", {
   agentId: int("agent_id")
     .references(() => users.id)
     .notNull(),
-  pauseType: mysqlEnum("pause_type", [
-    "lunch",
-    "snack",
-    "bathroom",
-    "other",
-  ]).notNull(),
+  reason: text("reason"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
-  durationMinutes: int("duration_minutes"), // Duração planejada em minutos
-  status: mysqlEnum("status", ["active", "completed"])
-    .default("active")
-    .notNull(),
+
+  status: varchar("status", { length: 16 }).default("active").notNull(),
 });
 
 export type AgentPause = typeof agentPauses.$inferSelect;
@@ -899,15 +870,11 @@ export type InsertAgentPause = typeof agentPauses.$inferInsert;
  */
 export const queues = mysqlTable("queues", {
   id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  status: mysqlEnum("status", ["active", "inactive"])
-    .default("active")
-    .notNull(),
-  maxConcurrentChats: int("max_concurrent_chats").default(3).notNull(), // Máximo de chats por agente
-  priority: int("priority").default(0).notNull(), // Prioridade da fila (maior = mais prioritária)
-  color: varchar("color", { length: 7 }).default("#D32F2F"), // Cor da fila em hex
-  createdBy: int("created_by").references(() => users.id),
+  channel: varchar("channel", { length: 16 }).notNull(),
+  priority: int("priority").default(0).notNull(),
+  status: varchar("status", { length: 16 }).default("active").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -1038,11 +1005,10 @@ export const integrationSettings = mysqlTable("integration_settings", {
     "telegram",
     "email",
   ]).notNull(),
-  name: varchar("name", { length: 255 }).notNull(), // Nome descritivo da configuração
-  isActive: int("is_active").default(1).notNull(), // 1 = active, 0 = inactive
-
-  // Configurações gerais (JSON)
-  config: json("config").notNull(), // Armazena { accessToken, phoneNumberId, etc }
+  name: varchar("name", { length: 255 }).notNull(),
+  isActive: int("is_active").default(1).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  config: json("config").notNull(),
 
   // Metadados
   createdBy: int("created_by")
@@ -1246,14 +1212,15 @@ export const broadcastLists = mysqlTable("broadcast_lists", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  createdBy: int("created_by")
+  createdBy: int("createdBy")
     .references(() => users.id)
     .notNull(),
   status: mysqlEnum("status", ["active", "paused", "deleted"])
     .default("active")
     .notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  lastSentAt: timestamp("lastSentAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type BroadcastList = typeof broadcastLists.$inferSelect;
@@ -1287,14 +1254,22 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
   listId: int("list_id")
     .references(() => broadcastLists.id)
     .notNull(),
-  content: text("content").notNull(),
-  sentBy: int("sent_by")
+  messageText: text("content").notNull(),
+  caption: text("caption"),
+  fileUrl: text("file_url"),
+  fileName: text("file_name"),
+  fileType: text("file_type"),
+  fileSize: int("file_size"),
+  senderId: int("sender_id")
     .references(() => users.id)
     .notNull(),
+  senderType: varchar("sender_type", { length: 50 }).default("agent").notNull(),
   totalRecipients: int("total_recipients").notNull(),
   successfulSends: int("successful_sends").default(0),
   failedSends: int("failed_sends").default(0),
+  status: varchar("status", { length: 16 }).default("sending").notNull(),
   sentAt: timestamp("sent_at").defaultNow().notNull(),
+  errorMessage: text("error_message"),
 });
 
 export type BroadcastMessage = typeof broadcastMessages.$inferSelect;
@@ -1479,12 +1454,14 @@ export type InsertBabyShowerWithdrawal =
 // broadcast membership tracking
 export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
   id: int("id").primaryKey().autoincrement(),
-  messageId: int("message_id").notNull(),
+  broadcastMessageId: int("message_id").notNull(),
   customerId: int("customer_id").notNull(),
   phone: varchar("phone", { length: 32 }).notNull(),
   status: varchar("status", { length: 16 }).default("pending").notNull(),
   errorMessage: text("error_message"),
   sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
 });
 
 export type BroadcastMemberSent = typeof broadcastMembersSent.$inferSelect;
