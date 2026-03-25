@@ -10,11 +10,14 @@
  */
 
 import Bull from 'bull';
-import { Queue, Job } from 'bull';
 import { getRedis } from '../_core/redis.js';
 
 // Nome da fila
 const BROADCAST_QUEUE_NAME = 'broadcast-sender';
+
+// Tipos Bull (CommonJS default export)
+type Queue<TData = any> = Bull.Queue<TData>;
+type Job<TData = any> = Bull.Job<TData>;
 
 // Configuração da fila
 interface BroadcastJobData {
@@ -32,36 +35,34 @@ function createBroadcastQueue(): Queue<BroadcastJobData> {
     redis: {
       host: 'localhost', // será sobrescrito por getRedis()
       port: 6379,
-      // these options are passed to the Redis client
       maxRetriesPerRequest: 3,
       retryDelayOnFailover: 100,
     },
     defaultJobOptions: {
-      attempts: 3, // tentar 3x se falhar
+      attempts: 3,
       backoff: {
         type: 'exponential',
-        delay: 2000, // 2s, 4s, 8s...
+        delay: 2000,
       },
       removeOnComplete: {
-        count: 100, // manter últimos 100 jobs completos
-        age: 24 * 60 * 60 * 1000, // 24h
+        count: 100,
+        age: 24 * 60 * 60 * 1000,
       },
       removeOnFail: {
-        count: 50, // manter últimos 50 falhados
-        age: 7 * 24 * 60 * 60 * 1000, // 7 dias
+        count: 50,
+        age: 7 * 24 * 60 * 60 * 1000,
       },
-      timeout: 10 * 60 * 1000, // 10 minutos max por job
+      timeout: 10 * 60 * 1000,
     },
   });
 
   // Eventos de log
-  queue.on('completed', (job: Job) => {
+  queue.on('completed', (job: Job<BroadcastJobData>) => {
     console.log(`[BroadcastQueue] ✅ Job ${job.id} completado (messageId=${job.data.messageId})`);
   });
 
-  queue.on('failed', (job: Job | undefined, err: Error) => {
+  queue.on('failed', (job: Job<BroadcastJobData> | undefined, err: Error) => {
     console.error(`[BroadcastQueue] ❌ Job ${job?.id} falhou:`, err.message);
-    // job pode ter falhado após todas as tentativas
   });
 
   queue.on('error', (err: Error) => {
@@ -103,8 +104,8 @@ export async function enqueueBroadcastMessage(
     'send-broadcast',
     { messageId, listId },
     {
-      priority: 1, // prioridade normal
-      jobId: `broadcast:${messageId}`, // idempotência
+      priority: 1,
+      jobId: `broadcast:${messageId}`,
     }
   );
 
@@ -160,7 +161,7 @@ export async function getBroadcastQueueStats() {
  */
 export async function cleanFailedJobs(): Promise<number> {
   const queue = await getBroadcastQueue();
-  const count = await queue.clean(1, 1000, 'failed'); // até 1000 jobs, idade > 1 dia
+  const count = await queue.clean(1, 1000, 'failed');
   console.log(`[BroadcastQueue] 🧹 Limpos ${count} jobs falhados`);
   return count;
 }
