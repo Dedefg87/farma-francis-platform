@@ -1,11 +1,13 @@
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { getDb } from "./_core/db";
+import { getDb } from "./db";
 import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
 import { fileURLToPath } from "url";
-import { conversationsRouter } from "./routers-conversations";
-import { messagesRouter } from "./routers-messages";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { users, queues, agentStatus, broadcastLists } from "../drizzle/schema";
+import jwt from "jsonwebtoken";
 import { conversationsRouter } from "./routers-conversations";
 import { messagesRouter } from "./routers-messages";
 
@@ -34,7 +36,7 @@ async function startServer() {
   });
 
   // Minimal tRPC router
-  const { router, publicProcedure, protectedProcedure } = await import("../_core/trpc");
+  const { router, publicProcedure, protectedProcedure } = await import("./_core/trpc");
 
   const systemRouter = router({
     health: publicProcedure.query(() => ({ status: "ok", timestamp: new Date().toISOString() })),
