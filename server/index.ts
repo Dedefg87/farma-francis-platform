@@ -24,7 +24,7 @@ async function startServer() {
 
   const app = express();
 
-  app.use(express.json());
+  // Note: Removing global express.json() because tRPC handles its own body parsing
   app.use(express.static(path.join(__dirname, "../dist/public")));
 
   app.get("/api/health", (_, res) => {
@@ -119,33 +119,27 @@ async function startServer() {
     next();
   });
 
-  // Error handler to log errors
+  app.use(
+    "/api/trpc",
+    createExpressMiddleware({
+      router: appRouter,
+      createContext: async ({ req }) => {
+        console.log("[createContext] Building context for", req.path);
+        return {
+          db,
+          user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
+        };
+      },
+    })
+  );
+
+  // Global error handler (must come after all routes)
   app.use((err: any, _req: any, res: any, _next: any) => {
-    console.error("[tRPC Error]", err?.message, err?.stack || "");
+    console.error("[Server Error]", err?.message, err?.stack || "");
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal Server Error", details: err?.message });
     }
   });
-
-  try {
-    app.use(
-      "/api/trpc",
-      createExpressMiddleware({
-        router: appRouter,
-        createContext: async ({ req }) => {
-          // Log context creation
-          console.log("[createContext] Building context for", req.path);
-          return {
-            db,
-            user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
-          };
-        },
-      })
-    );
-  } catch (err: any) {
-    console.error("[tRPC Setup] Failed to mount middleware:", err);
-    throw err;
-  }
 
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.listen(port, "0.0.0.0", () => {
