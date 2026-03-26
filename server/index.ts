@@ -46,26 +46,30 @@ async function startServer() {
     login: publicProcedure
       .input(z.object({ email: z.string(), password: z.string() }))
       .mutation(async ({ input }) => {
+        console.log("[auth.login] Input received:", input.email);
         // Buscar ou criar usuário (seed automático)
         let [user] = await users.select().where(eq(users.email, input.email)).limit(1);
+        console.log("[auth.login] User query result:", user ? "found" : "not found");
         const now = new Date();
         if (!user) {
           // Criar usuário automático (seed)
+          console.log("[auth.login] Creating new user");
           const [result] = await db.insert(users).values({
             openId: `manual-${Date.now()}`,
             email: input.email,
             name: input.email.split('@')[0],
             role: input.email.includes('admin') ? 'admin' : 'user',
-            passwordHash: input.password, // WARNING: senha em texto plano (só para seed)
+            passwordHash: input.password,
             loginMethod: 'manual',
             lastSignedIn: now,
             createdAt: now,
             updatedAt: now,
           }).returning({ insertedId: users.id });
           user = await users.select().where(eq(users.id, result.insertedId)).limit(1);
+          console.log("[auth.login] Created user:", user);
         }
-        // Em produção, verificar password hash. Para debug, aceita qualquer senha
         const token = jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
+        console.log("[auth.login] Token generated for user", user.id);
         return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
       }),
   });
