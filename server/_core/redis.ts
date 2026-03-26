@@ -1,194 +1,212 @@
+import Redis from "ioredis";
+
 /**
- * Redis Connection Manager
- *
- * Gerencia conexão única com Redis para toda a aplicação.
- * Suporta Redis standalone e cluster (via ioredis).
+ * Estado interno para circuit breaker
  */
+let redisClient: Redis | null = null;
+let redisDown = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
 
-import Redis from 'ioredis';
-import { logger } from './logger';
-
-// Configuração a partir de variáveis de ambiente
-// Railway usa REDIS_PUBLIC_URL (URL completa com credenciais)
-const REDIS_URL = process.env.REDIS_PUBLIC_URL ||
-                  process.env.REDIS_URL ||
-                  process.env.REDISCLOUD_URL ||
-                  'redis://localhost:6379';
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD || process.env.REDISCLOUD_PASSWORD;
-
-// Log de debug (mascara senha)
-const maskedUrl = typeof REDIS_URL === 'string' ? REDIS_URL.replace(/:([^@]+)@/, ':***@') : REDIS_URL;
-console.log(`[Redis] Configurado com URL: ${maskedUrl}`);
-console.log(`[Redis] Password definida: ${!!REDIS_PASSWORD}`);
-
-// Opções de conexão
-const redisOptions: Redis.RedisOptions = {
-  host: undefined as any, // será preenchido se não for URL
-  port: undefined as any,
-  family: 4, // 4 = IPv4, 6 = IPv6
-  password: REDIS_PASSWORD,
-  retryStrategy: (times) => {
-    // Reconectar após 100ms, 200ms, 400ms... até 10s
-    const delay = Math.min(times * 100, 10000);
-    logger.warn(`[Redis] Reconectando (tentativa ${times}, delay ${delay}ms)`);
-    return delay;
-  },
-  maxRetriesPerRequest: 3, // tentativas por comando
-  enableReadyCheck: true,
-  lazyConnect: true, // conectar apenas no primeiro acesso
-  // Automático reconnect em caso de erro de rede
-  reconnectOnError: (err) => {
-    const targetError = 'ECONNRESET';
-    if (err.message.includes(targetError)) {
-      logger.warn(`[Redis] Erro de conexão, tentando reconectar: ${err.message}`);
-      return true;
-    }
-    return false;
-  },
+/**
+ * Métricas do Redis
+ */
+const metrics = {
+  operations: 0,
+  errors: 0,
+  reconnects: 0,
+  lastHealthCheck: new Date(),
 };
 
-// Se for URL, usar connect
-let redisInstance: Redis.Redis | null = null;
-let isConnecting = false;
-let connectPromise: Promise<Redis.Redis> | null = null;
-
 /**
- * Obtém instância única de Redis (singleton)
+ * Inicialização segura do Redis
  */
-export async function getRedis(): Promise<Redis.Redis> {
-  // Se já temos uma instância conectada, retorna
-  if (redisInstance && redisInstance.status === 'ready') {
-    return redisInstance;
+function createRedisClient() {
+  if (!process.env.REDIS_URL) {
+    console.warn("[Redis] ❌ REDIS_URL não definida — Redis desativado");
+    return null;
   }
 
-  // Se já está conectando, aguarda a mesma promise
-  if (connectPromise) {
-    return connectPromise;
-  }
-
-  // Evita race condition múltipla conexão simultânea
-  if (isConnecting) {
-    logger.debug('[Redis] Aguardando conexão em progresso...');
-    while (isConnecting) {
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    return redisInstance!;
-  }
-
-  isConnecting = true;
-  connectPromise = (async () => {
-    try {
-      logger.info(`[Redis] Conectando a ${REDIS_URL}...`);
-
-      // Se for URL no formato redis://host:port
-      if (typeof REDIS_URL === 'string' && (REDIS_URL.startsWith('redis://') || REDIS_URL.startsWith('rediss://'))) {
-        const url = new URL(REDIS_URL);
-        redisOptions.host = url.hostname;
-        redisOptions.port = parseInt(url.port) || 6379;
-        if (url.password) {
-          redisOptions.password = url.password;
-        }
-      }
-
-      redisInstance = new Redis(redisOptions);
-
-      // Eventos de log
-      redisInstance.on('connect', () => {
-        logger.info('[Redis] ✅ Conexão estabelecida');
-      });
-
-      redisInstance.on('ready', () => {
-        logger.info('[Redis] ✅ Pronto para uso');
-      });
-
-      redisInstance.on('error', (err) => {
-        logger.error('[Redis] ❌ Erro:', err.message);
-      });
-
-      redisInstance.on('close', () => {
-        logger.warn('[Redis] ⚠️ Conexão fechada');
-      });
-
-      redisInstance.on('end', () => {
-        logger.info('[Redis] 🔌 Conexão encerrada');
-      });
-
-      // Wait for connection establishment
-      await redisInstance.connect();
-
-      // Teste ping
-      const pong = await redisInstance.ping();
-      if (pong !== 'PONG') {
-        throw new Error(`Redis respondeu inesperadamente: ${pong}`);
-      }
-
-      logger.info('[Redis] ✅ Handshake completo');
-      return redisInstance;
-    } catch (error) {
-      logger.error('[Redis] ❌ Falha ao conectar:', error);
-      connectPromise = null;
-      isConnecting = false;
-      throw error;
-    } finally {
-      isConnecting = false;
-    }
-  })();
-
-  return connectPromise;
-}
-
-/**
- * Fecha a conexão Redis (útil para shutdown graceful)
- */
-export async function disconnectRedis(): Promise<void> {
-  if (redisInstance) {
-    await redisInstance.quit();
-    redisInstance = null;
-    logger.info('[Redis] Conexão encerrada');
-  }
-}
-
-/**
- * Verifica se Redis está disponível
- */
-export async function isRedisAvailable(): Promise<boolean> {
   try {
-    const client = await getRedis();
-    const pong = await client.ping();
-    return pong === 'PONG';
-  } catch {
+    const isRailway = process.env.REDIS_URL.includes("proxy.rlwy.net");
+
+    const client = new Redis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      connectTimeout: 10000,
+      lazyConnect: false,
+      retryStrategy: (times) => Math.min(times * 50, 2000),
+
+      tls: isRailway
+        ? {
+            rejectUnauthorized: false,
+          }
+        : undefined,
+    });
+
+    client.on("connect", () => {
+      redisDown = false;
+      reconnectAttempts = 0;
+      metrics.reconnects++;
+      console.log("[Redis] ✅ Conectado com sucesso");
+    });
+
+    client.on("error", (err) => {
+      redisDown = true;
+      reconnectAttempts++;
+      metrics.errors++;
+
+      if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+        console.error(
+          "[Redis] ❌ Máximo de tentativas atingido — desativando"
+        );
+        redisClient = null;
+      } else {
+        console.error("[Redis] ❌ Erro de conexão:", err.message);
+      }
+    });
+
+    client.on("end", () => {
+      redisDown = true;
+      console.warn("[Redis] ⚠️ Conexão encerrada — fallback ativado");
+    });
+
+    return client;
+  } catch (err) {
+    console.error("[Redis] ❌ Falha ao inicializar:", err);
+    return null;
+  }
+}
+
+redisClient = createRedisClient();
+
+/**
+ * Retorna o cliente Redis ou null (fallback)
+ */
+export function getRedis() {
+  if (redisDown) return null;
+  return redisClient;
+}
+
+/**
+ * Health check seguro
+ */
+export async function checkRedisHealth() {
+  const redis = getRedis();
+  if (!redis) return false;
+
+  try {
+    await redis.ping();
+    metrics.lastHealthCheck = new Date();
+    return true;
+  } catch (err) {
+    console.error("[Redis] ❌ Health check falhou:", err);
     return false;
   }
 }
 
 /**
- * Wrapper para operações Redis com retry automático
+ * Valida chaves para evitar injeção
  */
-export async function redisCommand<T>(
-  fn: (client: Redis.Redis) => Promise<T>,
-  retries = 3,
-  delayMs = 100
-): Promise<T> {
-  let lastError: Error | null = null;
+function validateKey(key: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(key);
+}
 
-  for (let i = 0; i < retries; i++) {
-    try {
-      const client = await getRedis();
-      return await fn(client);
-    } catch (error: any) {
-      lastError = error;
+/**
+ * Namespaces com TTL padrão
+ */
+const DEFAULT_TTL = 60 * 60;
 
-      // Se for erro de conexão, tenta reconectar
-      if (error.message.includes('ECONNREFUSED') || error.message.includes('Connection closed')) {
-        logger.warn(`[Redis] Comando falhou (tentativa ${i + 1}/${retries}), reconectando...`);
-        await new Promise(resolve => setTimeout(resolve, delayMs * (i + 1)));
-        continue;
-      }
+export function getRedisNamespace(namespace: string) {
+  const redis = getRedis();
+  if (!redis) return null;
 
-      // Outros erros propagam imediatamente
-      throw error;
-    }
+  if (!validateKey(namespace)) {
+    throw new Error(`[Redis] Namespace inválido: ${namespace}`);
   }
 
-  throw lastError;
+  return {
+    get: (key: string) => {
+      if (!validateKey(key)) {
+        throw new Error(`[Redis] Chave inválida: ${key}`);
+      }
+      metrics.operations++;
+      return redis.get(`${namespace}:${key}`);
+    },
+
+    set: (key: string, value: string, ttl = DEFAULT_TTL) => {
+      if (!validateKey(key)) {
+        throw new Error(`[Redis] Chave inválida: ${key}`);
+      }
+      metrics.operations++;
+      return redis.setex(`${namespace}:${key}`, ttl, value);
+    },
+
+    del: (key: string) => {
+      if (!validateKey(key)) {
+        throw new Error(`[Redis] Chave inválida: ${key}`);
+      }
+      metrics.operations++;
+      return redis.del(`${namespace}:${key}`);
+    },
+
+    exists: (key: string) => {
+      if (!validateKey(key)) {
+        throw new Error(`[Redis] Chave inválida: ${key}`);
+      }
+      return redis.exists(`${namespace}:${key}`);
+    },
+  };
 }
+
+/**
+ * Métricas do Redis
+ */
+export async function getRedisMetrics() {
+  const redis = getRedis();
+  if (!redis) return null;
+
+  try {
+    const info = await redis.info("stats");
+    return {
+      connected: !redisDown,
+      operations: metrics.operations,
+      errors: metrics.errors,
+      reconnects: metrics.reconnects,
+      lastHealthCheck: metrics.lastHealthCheck,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Encerramento seguro do Redis
+ */
+export async function closeRedis() {
+  if (redisClient) {
+    try {
+      await redisClient.quit();
+      console.log("[Redis] ✅ Desconectado com segurança");
+    } catch (err) {
+      console.error("[Redis] ❌ Erro ao desconectar:", err);
+      redisClient.disconnect();
+    }
+  }
+}
+
+/**
+ * Graceful shutdown
+ */
+process.on("SIGTERM", async () => {
+  console.log("[Server] SIGTERM recebido — encerrando...");
+  await closeRedis();
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  console.log("[Server] SIGINT recebido — encerrando...");
+  await closeRedis();
+  process.exit(0);
+});
