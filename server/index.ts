@@ -82,8 +82,6 @@ async function startServer() {
     system: systemRouter,
     auth: authRouter,
     queues: queuesRouter,
-    conversations: conversationsRouter,
-    messages: messagesRouter,
     agent: agentRouter,
     broadcast: broadcastRouter,
   });
