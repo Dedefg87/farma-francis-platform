@@ -30,6 +30,11 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Simple test route
+  app.get("/api/test", (req, res) => {
+    res.json({ ok: true, method: req.method, headers: req.headers });
+  });
+
   console.log("[tRPC] About to mount. appRouter type:", typeof appRouter, "keys:", appRouter?.router ? Object.keys(appRouter.router) : "none");
   app.use(
     "/api/trpc",
