@@ -334,4 +334,51 @@ export const agentRouter = router({
       };
     }),
   }),
+
+  // Agent Status (flat procedures)
+  getStatus: protectedProcedure.query(async ({ ctx }) => {
+    const { getDb } = await import("./db");
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const { agentStatus } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+
+    const [record] = await db
+      .select()
+      .from(agentStatus)
+      .where(eq(agentStatus.userId, ctx.user.id));
+    return record || null;
+  }),
+
+  setOnline: protectedProcedure.mutation(async ({ ctx }) => {
+    const { getDb } = await import("./db");
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const { agentStatus } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db.insert(agentStatus).values({
+      userId: ctx.user.id,
+      status: "online",
+      lastSeen: new Date(),
+    }).onDuplicateKeyUpdate({
+      status: "online",
+      lastSeen: new Date(),
+    });
+    return { success: true };
+  }),
+
+  setOffline: protectedProcedure.mutation(async ({ ctx }) => {
+    const { getDb } = await import("./db");
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const { agentStatus } = await import("../drizzle/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db.update(agentStatus).set({
+      status: "offline",
+      lastSeen: new Date(),
+    }).where(eq(agentStatus.userId, ctx.user.id));
+    return { success: true };
+  }),
 });
