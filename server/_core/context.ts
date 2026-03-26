@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Database } from "drizzle-orm/mysql2";
+import { getDb } from "../db";
 
 export interface Context {
   req: Request;
@@ -8,10 +9,10 @@ export interface Context {
   user?: { id: number; role: string };
 }
 
-export function createContext({ req, res }: { req: Request; res: Response }): Context {
-  const db = (globalThis as any).__DB__;
+export async function createContext({ req, res }: { req: Request; res: Response }): Promise<Context> {
+  const db = await getDb();
   if (!db) {
-    throw new Error("Database not initialized");
+    throw new Error("Database not available");
   }
   const authHeader = req.headers.authorization || "";
   const user = authHeader ? { id: 1, role: "admin" as const } : undefined;
