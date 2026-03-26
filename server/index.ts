@@ -133,14 +133,6 @@ async function startServer() {
     })
   );
 
-  // Global error handler (must come after all routes)
-  app.use((err: any, _req: any, res: any, _next: any) => {
-    console.error("[Server Error]", err?.message, err?.stack || "");
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Internal Server Error", details: err?.message });
-    }
-  });
-
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.listen(port, "0.0.0.0", () => {
     console.log(`[Server] Listening on port ${port}`);
