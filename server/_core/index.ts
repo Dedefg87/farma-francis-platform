@@ -4086,3 +4086,9 @@ startServer().catch(console.error);
 // FORCE REBUILD: 1772736794
 
 // Deploy force rebuild at Tue Mar 24 11:49:55 UTC 2026
+
+// Iniciar o servidor
+startServer().catch(e => {
+  debugLog("Fatal error starting server: " + e);
+  process.exit(1);
+});
