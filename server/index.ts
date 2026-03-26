@@ -40,7 +40,10 @@ async function start() {
       "/api/trpc",
       createExpressMiddleware({
         router: appRouter,
-        createContext: () => ({ db }),
+        createContext: ({ req }) => ({
+          db,
+          user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
+        }),
       })
     );
 
