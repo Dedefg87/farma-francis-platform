@@ -1,15 +1,13 @@
 -- Migration: 20250326_drop_and_recreate_processed_webhook_messages
--- Data: 2025-03-25
--- Propósito: Recriar tabela processed_webhook_messages com schema correto (processed_at)
--- IMPORTANTE: Esta migration assume que a tabela anterior foi criada com estrutura incorreta.
--- Se houver dados importantes, faça backup antes.
+-- Purpose: Recreate processed_webhook_messages table with correct structure
 
-DROP TABLE IF EXISTS `processed_webhook_messages`;
+DROP TABLE IF EXISTS processed_webhook_messages;
 
-CREATE TABLE `processed_webhook_messages` (
-  `id` VARCHAR(255) NOT NULL,
-  `processed_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-  `provider` VARCHAR(16) NULL,
-  PRIMARY KEY (`id`),
-  INDEX `idx_processed_at` (`processed_at`)
+CREATE TABLE processed_webhook_messages (
+  id INT NOT NULL AUTO_INCREMENT,
+  provider VARCHAR(50) NOT NULL,
+  external_id VARCHAR(255) NOT NULL,
+  received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_processed_webhook_messages_provider_external (provider, external_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
