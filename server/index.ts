@@ -2,17 +2,10 @@ import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { getDb } from "./_core/db";
 import { applySqlMigrations } from "./_core/migrations";
-import { z } from "zod";
-import { eq } from "drizzle-orm";
-import {
-  queues,
-  agentStatus,
-  broadcastLists,
-  users,
-} from "../drizzle/schema";
-import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
+import { conversationsRouter } from "./routers-conversations";
+import { messagesRouter } from "./routers-messages";
 
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -89,6 +82,8 @@ async function startServer() {
     system: systemRouter,
     auth: authRouter,
     queues: queuesRouter,
+    conversations: conversationsRouter,
+    messages: messagesRouter,
     agent: agentRouter,
     broadcast: broadcastRouter,
   });
