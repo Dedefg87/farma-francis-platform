@@ -17,7 +17,7 @@ const REDIS_URL = process.env.REDIS_PUBLIC_URL ||
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || process.env.REDISCLOUD_PASSWORD;
 
 // Log de debug (mascara senha)
-const maskedUrl = REDIS_URL.replace(/:([^@]+)@/, ':***@');
+const maskedUrl = typeof REDIS_URL === 'string' ? REDIS_URL.replace(/:([^@]+)@/, ':***@') : REDIS_URL;
 console.log(`[Redis] Configurado com URL: ${maskedUrl}`);
 console.log(`[Redis] Password definida: ${!!REDIS_PASSWORD}`);
 
@@ -81,7 +81,7 @@ export async function getRedis(): Promise<Redis.Redis> {
       logger.info(`[Redis] Conectando a ${REDIS_URL}...`);
 
       // Se for URL no formato redis://host:port
-      if (REDIS_URL.startsWith('redis://') || REDIS_URL.startsWith('rediss://')) {
+      if (typeof REDIS_URL === 'string' && (REDIS_URL.startsWith('redis://') || REDIS_URL.startsWith('rediss://'))) {
         const url = new URL(REDIS_URL);
         redisOptions.host = url.hostname;
         redisOptions.port = parseInt(url.port) || 6379;
