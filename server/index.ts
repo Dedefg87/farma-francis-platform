@@ -98,16 +98,33 @@ async function startServer() {
     next();
   });
 
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext: ({ req }) => ({
-        db,
-        user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
-      }),
-    })
-  );
+  // Error handler to log errors
+  app.use((err: any, _req: any, res: any, _next: any) => {
+    console.error("[tRPC Error]", err?.message, err?.stack || "");
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal Server Error", details: err?.message });
+    }
+  });
+
+  try {
+    app.use(
+      "/api/trpc",
+      createExpressMiddleware({
+        router: appRouter,
+        createContext: async ({ req }) => {
+          // Log context creation
+          console.log("[createContext] Building context for", req.path);
+          return {
+            db,
+            user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
+          };
+        },
+      })
+    );
+  } catch (err: any) {
+    console.error("[tRPC Setup] Failed to mount middleware:", err);
+    throw err;
+  }
 
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.listen(port, "0.0.0.0", () => {
