@@ -28,6 +28,12 @@ import { sql, SQL, eq, desc } from "drizzle-orm";
 import { broadcastLists as broadcastLists2, broadcastListMembers as broadcastListMembers2 } from "../../drizzle/schema";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
+
+console.log("[Server] Modules loaded. appRouter loaded:", appRouter ? "OK" : "NULL");
+if (appRouter) {
+  console.log("[Server] appRouter type:", typeof appRouter);
+  console.log("[Server] appRouter.router keys:", appRouter.router ? Object.keys(appRouter.router) : "none");
+}
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
 import mediaRouter from "../routers-media";
 import { createContext } from "./context";
@@ -421,6 +427,8 @@ async function startServer() {
   await runIdempotencyConstraints();
   startMobileSyncProcessor();
 
+  console.log("[Server] Broadcast migrations + idempotency constraints applied");
+
   // Inicializar Redis com namespaces
   try {
     await getRedis();
@@ -435,6 +443,9 @@ async function startServer() {
   } catch (err) {
     console.error('[Redis] ❌ Falha ao conectar:', err);
     // Continuar mesmo sem Redis (algumas funcionalidades vão falhar)
+  }
+
+  console.log("[Server] About to mount tRPC middleware...");
   }
 
   // Iniciar fila de broadcast com Bull (Redis-backed)
