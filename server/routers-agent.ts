@@ -20,7 +20,7 @@ export const agentRouter = router({
     }),
 
     getById: protectedProcedure
-      .input((raw: unknown) => z.object({ id: z.number() }).parse(raw))
+      .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
@@ -36,9 +36,7 @@ export const agentRouter = router({
       }),
 
     assign: protectedProcedure
-      .input((raw: unknown) =>
-        z.object({ conversationId: z.number() }).parse(raw)
-      )
+      .input(z.object({ conversationId: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
@@ -54,18 +52,16 @@ export const agentRouter = router({
       }),
 
     close: protectedProcedure
-      .input((raw: unknown) =>
-        z
-          .object({
-            conversationId: z.number(),
-            reason: z.enum([
-              "venda",
-              "orcamento",
-              "conversa_anterior",
-              "engano",
-            ]),
-          })
-          .parse(raw)
+      .input(
+        z.object({
+          conversationId: z.number(),
+          reason: z.enum([
+            "venda",
+            "orcamento",
+            "conversa_anterior",
+            "engano",
+          ]),
+        })
       )
       .mutation(async ({ input }) => {
         const { getDb } = await import("./db");
@@ -94,9 +90,7 @@ export const agentRouter = router({
   // Messages
   messages: router({
     list: protectedProcedure
-      .input((raw: unknown) =>
-        z.object({ conversation_id: z.number() }).parse(raw)
-      )
+      .input(z.object({ conversation_id: z.number() }))
       .query(async ({ input }) => {
         const { getDb } = await import("./db");
         const db = await getDb();
@@ -134,7 +128,7 @@ export const agentRouter = router({
       }),
 
     send: protectedProcedure
-      .input((raw: unknown) =>
+      .input(
         z
           .object({
             conversation_id: z.number(),
@@ -158,7 +152,6 @@ export const agentRouter = router({
             file_type: input.file_type ?? input.fileType ?? undefined,
             file_size: input.file_size ?? input.fileSize ?? undefined,
           }))
-          .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
@@ -198,14 +191,13 @@ export const agentRouter = router({
     }),
 
     create: adminProcedure
-      .input((raw: unknown) =>
+      .input(
         z
           .object({
             title: z.string(),
             content: z.string(),
             category: z.string().optional(),
           })
-          .parse(raw)
       )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
@@ -225,65 +217,6 @@ export const agentRouter = router({
       }),
   }),
 
-  // Agent Status
-  status: router({
-    get: protectedProcedure.query(async ({ ctx }) => {
-      const { getDb } = await import("./db");
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const { agentStatus } = await import("../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-
-      const statuses = await db
-        .select()
-        .from(agentStatus)
-        .where(eq(agentStatus.userId, ctx.user.id));
-      return statuses;
-    }),
-
-    update: protectedProcedure
-      .input((raw: unknown) =>
-        z
-          .object({
-            channel: z.enum(["whatsapp", "instagram"]),
-            status: z.enum(["online", "paused", "offline"]),
-          })
-          .parse(raw)
-      )
-      .mutation(async ({ input, ctx }) => {
-        const { getDb } = await import("./db");
-        const db = await getDb();
-        if (!db) throw new Error("Database not available");
-        const { agentStatus } = await import("../drizzle/schema");
-        const { eq, and } = await import("drizzle-orm");
-
-        // Verificar se já existe
-        const [existing] = await db
-          .select()
-          .from(agentStatus)
-          .where(
-            and(
-              eq(agentStatus.userId, ctx.user.id),
-              eq(agentStatus.channel, input.channel)
-            )
-          );
-
-        if (existing) {
-          await db
-            .update(agentStatus)
-            .set({ status: input.status, lastActivity: new Date() })
-            .where(eq(agentStatus.id, existing.id));
-        } else {
-          await db.insert(agentStatus).values({
-            userId: ctx.user.id,
-            channel: input.channel,
-            status: input.status,
-            lastActivity: new Date(),
-          });
-        }
-        return { success: true };
-      }),
-  }),
 
   // Queues
   queues: router({

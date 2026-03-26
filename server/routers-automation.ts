@@ -101,7 +101,7 @@ export const automationRouter = router({
    * @returns { success: boolean, data: { id: number }, message?: string }
    */
   create: protectedProcedure
-    .input((raw: unknown) => CreateAutomationInput.parse(raw))
+    .input(CreateAutomationInput)
     .mutation(async ({ input }) => {
       try {
         const db = await getDb();
@@ -155,7 +155,7 @@ export const automationRouter = router({
    * @returns { success: boolean, data: { items: [], total: number }, message?: string }
    */
   list: protectedProcedure
-    .input((raw: unknown) => AutomationFilterInput.parse(raw))
+    .input(AutomationFilterInput)
     .query(async ({ input }) => {
       try {
         const db = await getDb();
@@ -301,7 +301,7 @@ export const automationRouter = router({
    * @returns { success: boolean, data?: { id: number }, message?: string }
    */
   update: protectedProcedure
-    .input((raw: unknown) => UpdateAutomationInput.parse(raw))
+    .input(UpdateAutomationInput)
     .mutation(async ({ input }) => {
       try {
         const db = await getDb();
@@ -508,17 +508,15 @@ export const automationRouter = router({
    * ```
    */
   execute: protectedProcedure
-    .input((raw: unknown) => {
-      return z
-        .object({
-          automationId: z.string(),
-          templateType: z.string(),
-          customerId: z.number(),
-          conversationId: z.number().optional(),
-          context: z.record(z.string(), z.any()).optional(),
-        })
-        .parse(raw);
-    })
+    .input(
+      z.object({
+        automationId: z.string(),
+        templateType: z.string(),
+        customerId: z.number(),
+        conversationId: z.number().optional(),
+        context: z.record(z.string(), z.any()).optional(),
+      })
+    )
     .mutation(async ({ input }) => {
       try {
         const result = await executeAutomationWithSSE(input);
