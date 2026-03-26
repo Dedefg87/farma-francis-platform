@@ -10,6 +10,7 @@ import { users, queues, agentStatus, broadcastLists } from "../drizzle/schema";
 import jwt from "jsonwebtoken";
 import { conversationsRouter } from "./routers-conversations";
 import { messagesRouter } from "./routers-messages";
+import healthRouter from "./routes/health";
 
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -30,6 +31,9 @@ async function startServer() {
   app.get("/api/health", (_, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
+
+  // Detailed health check
+  app.use("/api/health/detail", healthRouter);
 
   app.get("/api/test", (_, res) => {
     res.json({ ok: true });
