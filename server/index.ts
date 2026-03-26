@@ -15,10 +15,10 @@ import healthRouter from "./routes/health";
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
 async function startServer() {
-  console.log("[Server] Starting...");
+  console.log("[Server] Starting... (PID:", process.pid, ")");
 
   const db = await getDb();
-  console.log("[DB] Connected");
+  console.log("[DB] Connected (db getDb returned)");
 
   await applySqlMigrations();
   console.log("[Migrations] Applied");
