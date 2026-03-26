@@ -49,14 +49,12 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     login: publicProcedure
-      .input((raw: unknown) => {
-        return z
-          .object({
-            email: z.string(), // Aceita username ou email
-            password: z.string().min(5),
-          })
-          .parse(raw);
-      })
+      .input(
+        z.object({
+          email: z.string(), // Aceita username ou email
+          password: z.string().min(5),
+        })
+      )
       .mutation(async ({ input, ctx }) => {
         const { getDb } = await import("./db");
         const { users } = await import("../drizzle/schema");
