@@ -1010,7 +1010,6 @@ export const integrationSettings = mysqlTable("integration_settings", {
   ]).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   isActive: int("is_active").default(1).notNull(),
-  createdBy: int("created_by").references(() => users.id),
   config: json("config").notNull(),
 
   // Metadados
