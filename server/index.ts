@@ -30,23 +30,18 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // tRPC: mount router (with error tolerance)
-  try {
-    app.use(
-      "/api/trpc",
-      createExpressMiddleware({
-        router: appRouter,
-        createContext: ({ req }) => ({
-          db,
-          user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
-        }),
-      })
-    );
-    console.log("[tRPC] Mounted on /api/trpc");
-  } catch (err) {
-    console.error("[tRPC] Failed to mount:", err);
-    // Continue running; tRPC routes will be unavailable
-  }
+  console.log("[tRPC] About to mount. appRouter type:", typeof appRouter, "keys:", appRouter?.router ? Object.keys(appRouter.router) : "none");
+  app.use(
+    "/api/trpc",
+    createExpressMiddleware({
+      router: appRouter,
+      createContext: ({ req }) => ({
+        db,
+        user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
+      }),
+    })
+  );
+  console.log("[tRPC] Mounted on /api/trpc");
 
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.listen(port, "0.0.0.0", () => {
