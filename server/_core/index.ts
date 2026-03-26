@@ -5,18 +5,18 @@ config();
 
 // 🔍 Debug JWT_SECRET carregamento
 const jwtSecret = process.env.JWT_SECRET;
-console.log("[STARTUP] JWT_SECRET length:", jwtSecret?.length);
-console.log("[STARTUP] JWT_SECRET defined:", !!jwtSecret);
-console.log("[STARTUP] NODE_ENV:", process.env.NODE_ENV);
+debugLog("[STARTUP] JWT_SECRET length:", jwtSecret?.length);
+debugLog("[STARTUP] JWT_SECRET defined:", !!jwtSecret);
+debugLog("[STARTUP] NODE_ENV:", process.env.NODE_ENV);
 
 // ⚠️ Validar comprimento mínimo da secret
 if (!jwtSecret || jwtSecret.length < 16) {
   console.warn("[STARTUP] ⚠️ JWT_SECRET está muito curta ou não definida! Auth pode falhar. Comprimento atual:", jwtSecret?.length);
 } else {
-  console.log("[STARTUP] ✅ JWT_SECRET tem comprimentoadequado");
+  debugLog("[STARTUP] ✅ JWT_SECRET tem comprimentoadequado");
 }
 
-console.log("[Server] Starting initialization...");
+debugLog("[Server] Starting initialization...");
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -32,10 +32,10 @@ let appRouter;
 try {
   const routersMod = await import("../routers");
   appRouter = routersMod.appRouter;
-  console.log("[Server] appRouter imported successfully");
-  console.log("[Server] appRouter type:", typeof appRouter);
+  debugLog("[Server] appRouter imported successfully");
+  debugLog("[Server] appRouter type:", typeof appRouter);
   if (appRouter?.router) {
-    console.log("[Server] appRouter.router keys:", Object.keys(appRouter.router));
+    debugLog("[Server] appRouter.router keys:", Object.keys(appRouter.router));
   } else {
     console.warn("[Server] appRouter.router is missing!");
   }
@@ -69,7 +69,7 @@ import { getRedis } from "./redis.js";
 import { REDIS_NAMESPACES } from "./redis-namespaces.js";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
-console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
+debugLog("[Deploy] Redeploy trigger activated: patch applied on startup");
 import { logger } from "./logger";
 import { runBroadcastMigrations } from "../broadcast-migration";
 
@@ -79,7 +79,7 @@ async function runMediaColumnsMigration() {
     const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) {
-      console.log("[Migration] DB not ready, skipping");
+      debugLog("[Migration] DB not ready, skipping");
       return;
     }
 
@@ -87,48 +87,48 @@ async function runMediaColumnsMigration() {
     const [cols1]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'external_id'");
     if (cols1.length === 0) {
       await db.execute("ALTER TABLE conversation_messages ADD COLUMN external_id VARCHAR(255) NULL COMMENT 'ID da mensagem na Evolution API' AFTER id");
-      console.log("[Migration] Added external_id column");
+      debugLog("[Migration] Added external_id column");
     }
 
     // Check remote_jid
     const [cols2]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'remote_jid'");
     if (cols2.length === 0) {
       await db.execute("ALTER TABLE conversation_messages ADD COLUMN remote_jid VARCHAR(255) NULL COMMENT 'JID do remetente' AFTER external_id");
-      console.log("[Migration] Added remote_jid column");
+      debugLog("[Migration] Added remote_jid column");
     }
 
     // Check provider
     const [cols3]: any = await db.execute("SHOW COLUMNS FROM conversation_messages LIKE 'provider'");
     if (cols3.length === 0) {
       await db.execute("ALTER TABLE conversation_messages ADD COLUMN provider ENUM('whatsapp','instagram') NOT NULL DEFAULT 'whatsapp' COMMENT 'Provedor da mensagem' AFTER remote_jid");
-      console.log("[Migration] Added provider column");
+      debugLog("[Migration] Added provider column");
     }
 
     // Check lastSignedIn in users
     const [cols4]: any = await db.execute("SHOW COLUMNS FROM users LIKE 'lastSignedIn'");
     if (cols4.length === 0) {
       await db.execute("ALTER TABLE users ADD COLUMN lastSignedIn timestamp DEFAULT now() NOT NULL");
-      console.log("[Migration] Added lastSignedIn column to users");
+      debugLog("[Migration] Added lastSignedIn column to users");
     }
 
     // Check updated_at in users
     const [cols5]: any = await db.execute("SHOW COLUMNS FROM users LIKE 'updated_at'");
     if (cols5.length === 0) {
       await db.execute("ALTER TABLE users ADD COLUMN updated_at timestamp DEFAULT now() NOT NULL");
-      console.log("[Migration] Added updated_at column to users");
+      debugLog("[Migration] Added updated_at column to users");
     }
 
     // Indexes (ignore if exists)
     try {
       await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_external_id ON conversation_messages(external_id)");
-      console.log("[Migration] Created index idx_conversation_messages_external_id");
+      debugLog("[Migration] Created index idx_conversation_messages_external_id");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Index external_id error:", e.message);
     }
 
     try {
       await db.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_remote_jid ON conversation_messages(remote_jid)");
-      console.log("[Migration] Created index idx_conversation_messages_remote_jid");
+      debugLog("[Migration] Created index idx_conversation_messages_remote_jid");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Index remote_jid error:", e.message);
     }
@@ -136,12 +136,12 @@ async function runMediaColumnsMigration() {
     // Unique constraint to prevent duplicate messages (provider + external_id)
     try {
       await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_conversation_messages_provider_external ON conversation_messages(provider, external_id)");
-      console.log("[Migration] Created unique index uq_conversation_messages_provider_external");
+      debugLog("[Migration] Created unique index uq_conversation_messages_provider_external");
     } catch (e: any) {
       if (!e.message.includes("already exists")) console.error("[Migration] Unique index error:", e.message);
     }
 
-    console.log("[Migration] Media columns migration completed");
+    debugLog("[Migration] Media columns migration completed");
   } catch (err) {
     console.error("[Migration] Failed:", err);
   }
@@ -156,7 +156,7 @@ async function applySqlMigrations() {
 
     const db = await getDb();
     if (!db) {
-      console.log("[Migrations] DB not ready, skipping");
+      debugLog("[Migrations] DB not ready, skipping");
       return;
     }
 
@@ -165,7 +165,7 @@ async function applySqlMigrations() {
       .filter(f => f.endsWith('.sql'))
       .sort(); // ordem alfabética
 
-    console.log(`[Migrations] Encontradas ${files.length} migrations`);
+    debugLog(`[Migrations] Encontradas ${files.length} migrations`);
 
     // 1️⃣ Garantir que a tabela de controle existe
     try {
@@ -177,7 +177,7 @@ async function applySqlMigrations() {
           INDEX idx_migration_name (migration_name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
-      console.log("[Migrations] ✅ Tabela de controle _migrations_applied verificada/criada");
+      debugLog("[Migrations] ✅ Tabela de controle _migrations_applied verificada/criada");
     } catch (err: any) {
       console.error("[Migrations] ❌ Erro ao criar tabela de controle:", err.message);
       // Continuar mesmo com erro na tabela de controle
@@ -188,7 +188,7 @@ async function applySqlMigrations() {
     try {
       const [rows] = await db.execute("SELECT migration_name FROM _migrations_applied");
       rows.forEach((row: any) => appliedSet.add(row.migration_name));
-      console.log(`[Migrations] 📋 ${appliedSet.size} migrations já aplicadas anteriormente`);
+      debugLog(`[Migrations] 📋 ${appliedSet.size} migrations já aplicadas anteriormente`);
     } catch (err: any) {
       console.warn("[Migrations] ⚠️ Não foi possível ler _migrations_applied, assumindo que nenhuma foi aplicada:", err.message);
     }
@@ -199,7 +199,7 @@ async function applySqlMigrations() {
 
       // Pular se já aplicada
       if (appliedSet.has(file)) {
-        console.log(`[Migrations] ⏭️ Já aplicada: ${file} (pulando)`);
+        debugLog(`[Migrations] ⏭️ Já aplicada: ${file} (pulando)`);
         continue;
       }
 
@@ -223,7 +223,7 @@ async function applySqlMigrations() {
             "INSERT IGNORE INTO _migrations_applied (migration_name) VALUES (?)",
             [file]
           );
-          console.log(`[Migrations] ✅ Aplicada e registrada: ${file}`);
+          debugLog(`[Migrations] ✅ Aplicada e registrada: ${file}`);
         } catch (err: any) {
           console.warn(`[Migrations] ⚠️ Aplicada mas não foi possível registrar: ${file}`, err.message);
         }
@@ -233,7 +233,7 @@ async function applySqlMigrations() {
       }
     }
 
-    console.log('[Migrations] ✅ Processamento de migrations concluído');
+    debugLog('[Migrations] ✅ Processamento de migrations concluído');
   } catch (err) {
     console.error('[Migrations] ❌ Falha crítica:', err);
   }
@@ -245,7 +245,7 @@ async function runIdempotencyConstraints() {
     const { getDb } = await import("../db");
     const db = await getDb();
     if (!db) {
-      console.log("[Idempotency] DB not ready, skipping");
+      debugLog("[Idempotency] DB not ready, skipping");
       return;
     }
 
@@ -275,12 +275,12 @@ async function runIdempotencyConstraints() {
           CREATE UNIQUE INDEX ${idx1}
           ON received_messages (provider, external_id)
         `);
-        console.log("[Idempotency] ✓ Unique index created on received_messages (provider, external_id)");
+        debugLog("[Idempotency] ✓ Unique index created on received_messages (provider, external_id)");
       } catch (e: any) {
         console.error("[Idempotency] Failed to create index on received_messages:", e);
       }
     } else {
-      console.log("[Idempotency] ✓ Index already exists on received_messages (provider, external_id)");
+      debugLog("[Idempotency] ✓ Index already exists on received_messages (provider, external_id)");
     }
 
     // Índice único em conversation_messages (provider, external_id)
@@ -291,12 +291,12 @@ async function runIdempotencyConstraints() {
           CREATE UNIQUE INDEX ${idx2}
           ON conversation_messages (provider, external_id)
         `);
-        console.log("[Idempotency] ✓ Unique index created on conversation_messages (provider, external_id)");
+        debugLog("[Idempotency] ✓ Unique index created on conversation_messages (provider, external_id)");
       } catch (e: any) {
         console.error("[Idempotency] Failed to create index on conversation_messages:", e);
       }
     } else {
-      console.log("[Idempotency] ✓ Index already exists on conversation_messages (provider, external_id)");
+      debugLog("[Idempotency] ✓ Index already exists on conversation_messages (provider, external_id)");
     }
   } catch (err) {
     console.error("[Idempotency] ❌ Failed:", err);
@@ -337,17 +337,17 @@ async function startServer() {
       // Check if columns exist
       const [check]: any = await db.execute("SHOW COLUMNS FROM broadcast_messages LIKE 'file_url'");
       if (check.length === 0) {
-        console.log("[BroadcastMigration] file_url column missing - adding all file columns...");
+        debugLog("[BroadcastMigration] file_url column missing - adding all file columns...");
         await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_url VARCHAR(1000) NULL COMMENT 'URL do arquivo' AFTER content");
         await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_name VARCHAR(255) NULL COMMENT 'Nome do arquivo' AFTER file_url");
         await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_type VARCHAR(100) NULL COMMENT 'MIME type' AFTER file_name");
         await db.execute("ALTER TABLE broadcast_messages ADD COLUMN file_size INT NULL COMMENT 'Tamanho em bytes' AFTER file_type");
-        console.log("[BroadcastMigration] ✓ File columns added to broadcast_messages");
+        debugLog("[BroadcastMigration] ✓ File columns added to broadcast_messages");
       } else {
-        console.log("[BroadcastMigration] ✓ File columns already exist in broadcast_messages");
+        debugLog("[BroadcastMigration] ✓ File columns already exist in broadcast_messages");
       }
     } else {
-      console.log("[BroadcastMigration] DB not ready, skipping");
+      debugLog("[BroadcastMigration] DB not ready, skipping");
     }
   } catch (err) {
     console.error("[BroadcastMigration] ❌ Failed to add file columns:", err);
@@ -393,9 +393,9 @@ async function startServer() {
             .update(integrationSettings)
             .set({ config, updatedAt: new Date() })
             .where(eq(integrationSettings.id, row.id));
-          console.log("[EvolutionFix] ✅ Fixed Evolution API URL from 6125 to ffea (updated existing record)");
+          debugLog("[EvolutionFix] ✅ Fixed Evolution API URL from 6125 to ffea (updated existing record)");
         } else {
-          console.log("[EvolutionFix] ✅ Evolution API URL already correct (ffea)");
+          debugLog("[EvolutionFix] ✅ Evolution API URL already correct (ffea)");
         }
       } else {
         // Create new record with correct URL
@@ -417,7 +417,7 @@ async function startServer() {
           createdBy: 1, // Admin user
         });
 
-        console.log("[EvolutionFix] ✅ Created Evolution API config with correct URL (ffea)");
+        debugLog("[EvolutionFix] ✅ Created Evolution API config with correct URL (ffea)");
       }
     }
   } catch (err) {
@@ -436,31 +436,31 @@ async function startServer() {
   await runIdempotencyConstraints();
   startMobileSyncProcessor();
 
-  console.log("[Server] Broadcast migrations + idempotency constraints applied");
+  debugLog("[Server] Broadcast migrations + idempotency constraints applied");
 
   // Inicializar Redis com namespaces
   try {
     await getRedis();
-    console.log('[Redis] ✅ Conectado com namespaces:');
-    console.log(` - Evolution: ${REDIS_NAMESPACES.EVOLUTION}`);
-    console.log(` - Farma: ${REDIS_NAMESPACES.FARMA}`);
-    console.log(` - Broadcast: ${REDIS_NAMESPACES.BROADCAST}`);
-    console.log(` - RateLimit: ${REDIS_NAMESPACES.RATELIMIT}`);
-    console.log(` - Cache: ${REDIS_NAMESPACES.CACHE}`);
-    console.log(` - Session: ${REDIS_NAMESPACES.SESSION}`);
-    console.log(` - Queue: ${REDIS_NAMESPACES.QUEUE}`);
+    debugLog('[Redis] ✅ Conectado com namespaces:');
+    debugLog(` - Evolution: ${REDIS_NAMESPACES.EVOLUTION}`);
+    debugLog(` - Farma: ${REDIS_NAMESPACES.FARMA}`);
+    debugLog(` - Broadcast: ${REDIS_NAMESPACES.BROADCAST}`);
+    debugLog(` - RateLimit: ${REDIS_NAMESPACES.RATELIMIT}`);
+    debugLog(` - Cache: ${REDIS_NAMESPACES.CACHE}`);
+    debugLog(` - Session: ${REDIS_NAMESPACES.SESSION}`);
+    debugLog(` - Queue: ${REDIS_NAMESPACES.QUEUE}`);
   } catch (err) {
     console.error('[Redis] ❌ Falha ao conectar:', err);
     // Continuar mesmo sem Redis (algumas funcionalidades vão falhar)
   }
 
-  console.log("[Server] About to mount tRPC middleware...");
+  debugLog("[Server] About to mount tRPC middleware...");
   }
 
   // Iniciar fila de broadcast com Bull (Redis-backed)
   try {
     startBroadcastQueueProcessor(2); // 2 jobs concurrently
-    console.log("[BroadcastQueue] ✅ Fila de broadcast iniciada (concurrency=2)");
+    debugLog("[BroadcastQueue] ✅ Fila de broadcast iniciada (concurrency=2)");
   } catch (err) {
     console.error("[BroadcastQueue] ❌ Falha ao iniciar fila:", err);
   }
@@ -641,7 +641,7 @@ async function startServer() {
   // GET /api/debug/auth-test - Diagnóstico completo de autenticação JWT
   app.get("/api/debug/auth-test", async (req, res) => {
     try {
-      console.log("[AuthTest] Endpoint called");
+      debugLog("[AuthTest] Endpoint called");
       const results: any = {};
       // Parse cookies manually to avoid dynamic require issues
       const cookieHeader = req.headers.cookie || '';
@@ -989,7 +989,7 @@ async function startServer() {
         return res.status(400).json({ error: "Task payload is required" });
       }
 
-      console.log("[OpenClaw] Received task:", openclawTaskId, task);
+      debugLog("[OpenClaw] Received task:", openclawTaskId, task);
 
       // Here you can process the task as needed
       // For now, just acknowledge and log
@@ -1114,7 +1114,7 @@ async function startServer() {
       }
 
       // If it's a regular URL (not base64), fetch via Evolution API using getBase64FromMediaMessage
-      console.log(
+      debugLog(
         "[Media] file_url is not a data URL, using Evolution API getBase64FromMediaMessage:",
         fileUrl.substring(0, 50)
       );
@@ -1170,7 +1170,7 @@ async function startServer() {
 
                 for (let attempt = 1; attempt <= 3; attempt++) {
                   try {
-                    console.log(`[Media] Attempt ${attempt}/3: Getting base64 from Evolution API for media ${externalId}, remoteJid ${remoteJid}`);
+                    debugLog(`[Media] Attempt ${attempt}/3: Getting base64 from Evolution API for media ${externalId}, remoteJid ${remoteJid}`);
 
                     const response = await fetch(url, {
                       method: "POST",
@@ -1196,7 +1196,7 @@ async function startServer() {
                       if (data.base64) {
                         base64Data = data.base64;
                         mimeTypeResult = data.mimetype || msg.file_type || "application/octet-stream";
-                        console.log("[Media] Successfully retrieved base64, size:", base64Data.length);
+                        debugLog("[Media] Successfully retrieved base64, size:", base64Data.length);
                         break;
                       }
                     } else {
@@ -1454,7 +1454,7 @@ async function startServer() {
           const response = await fetch(mediaUrl);
 
           if (!response.ok) {
-            console.log(
+            debugLog(
               `[Migrate] Failed to download ${mediaUrl}: ${response.status}`
             );
             failed++;
@@ -1473,7 +1473,7 @@ async function startServer() {
           );
 
           processed++;
-          console.log(`[Migrate] Processed message ${row.id}`);
+          debugLog(`[Migrate] Processed message ${row.id}`);
         } catch (err) {
           console.error(`[Migrate] Error processing ${row.id}:`, err);
           failed++;
@@ -1516,7 +1516,7 @@ async function startServer() {
       token = sessionCookie;
     }
 
-    console.log(
+    debugLog(
       "[SSE] Auth check - cookie:",
       sessionCookie ? "present" : "missing",
       "token:",
@@ -1524,7 +1524,7 @@ async function startServer() {
     );
 
     if (!token) {
-      console.log("[SSE] Unauthorized - no token found");
+      debugLog("[SSE] Unauthorized - no token found");
       return res.status(401).json({ error: "Unauthorized" });
     }
 
@@ -1532,11 +1532,11 @@ async function startServer() {
     const decoded = await verifyToken(token);
 
     if (!decoded) {
-      console.log("[SSE] Token verification failed - invalid token");
+      debugLog("[SSE] Token verification failed - invalid token");
       return res.status(401).json({ error: "Invalid token" });
     }
 
-    console.log("[SSE] Token decoded:", decoded);
+    debugLog("[SSE] Token decoded:", decoded);
 
     // Get userId from token - could be userId or openId
     let userId: string;
@@ -1557,12 +1557,12 @@ async function startServer() {
           .where(eq(users.openId, decoded.openId));
 
         if (!user) {
-          console.log("[SSE] User not found for openId:", decoded.openId);
+          debugLog("[SSE] User not found for openId:", decoded.openId);
           return res.status(401).json({ error: "User not found" });
         }
 
         userId = String(user.id);
-        console.log(
+        debugLog(
           "[SSE] Mapped openId to userId:",
           decoded.openId,
           "->",
@@ -1573,7 +1573,7 @@ async function startServer() {
         return res.status(500).json({ error: "Internal server error" });
       }
     } else {
-      console.log("[SSE] Token has no userId or openId");
+      debugLog("[SSE] Token has no userId or openId");
       return res.status(401).json({ error: "Invalid token structure" });
     }
 
@@ -1582,11 +1582,11 @@ async function startServer() {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    console.log("[SSE] Client connected for userId:", userId);
+    debugLog("[SSE] Client connected for userId:", userId);
     sseManager.addClient(userId, res);
 
     req.on("close", () => {
-      console.log("[SSE] Client disconnected for userId:", userId);
+      debugLog("[SSE] Client disconnected for userId:", userId);
     });
   });
 
@@ -1667,7 +1667,7 @@ async function startServer() {
         return res.status(500).json({ error: "Database not available" });
       }
 
-      console.log(`[mark-read] Conversation ${conversationId}`);
+      debugLog(`[mark-read] Conversation ${conversationId}`);
 
       // 1. Zerar unreadCount da conversa
       await db
@@ -1687,7 +1687,7 @@ async function startServer() {
           )
         );
 
-      console.log(`[mark-read] Success for conversation ${conversationId}`);
+      debugLog(`[mark-read] Success for conversation ${conversationId}`);
       res.json({ success: true, conversationId });
     } catch (error) {
       console.error("[mark-read] Error:", error);
@@ -1865,7 +1865,7 @@ async function startServer() {
         ORDER BY HOUR(created_at)
       `);
 
-      console.log("[debug/contacts-by-hour] Result:", result);
+      debugLog("[debug/contacts-by-hour] Result:", result);
 
       res.json({
         start,
@@ -2387,9 +2387,9 @@ async function startServer() {
           })
           .toBuffer();
 
-        console.log(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes`);
+        debugLog(`[Upload] Optimized: ${originalBuffer.length} → ${optimizedBuffer.length} bytes`);
       } catch (sharpError: any) {
-        console.log("[Upload] Sharp error, using original:", sharpError.message);
+        debugLog("[Upload] Sharp error, using original:", sharpError.message);
         optimizedBuffer = originalBuffer;
         finalExtension = extension;
       }
@@ -2416,7 +2416,7 @@ async function startServer() {
             resource_type: 'image',
           });
 
-          console.log("[Upload] Cloudinary success:", result.secure_url);
+          debugLog("[Upload] Cloudinary success:", result.secure_url);
           return res.json({ success: true, url: result.secure_url });
         } catch (cloudinaryError: any) {
           console.error("[Upload] Cloudinary error:", cloudinaryError.message);
@@ -2427,10 +2427,10 @@ async function startServer() {
       try {
         const { storagePut } = await import("../storage");
         const result = await storagePut(`baby-shower/${uniqueName}.${finalExtension}`, optimizedBuffer, `image/${finalExtension}`);
-        console.log("[Upload] Storage success:", result.url);
+        debugLog("[Upload] Storage success:", result.url);
         return res.json({ success: true, url: result.url });
       } catch (storageError: any) {
-        console.log("[Upload] Storage error:", storageError.message);
+        debugLog("[Upload] Storage error:", storageError.message);
 
         // Prioridade 3: Imgur API
         try {
@@ -2447,7 +2447,7 @@ async function startServer() {
           const imgurData = await imgurResponse.json();
 
           if (imgurData.success && imgurData.data?.link) {
-            console.log("[Upload] Imgur success:", imgurData.data.link);
+            debugLog("[Upload] Imgur success:", imgurData.data.link);
             return res.json({ success: true, url: imgurData.data.link });
           }
 
@@ -2457,7 +2457,7 @@ async function startServer() {
 
           // Último fallback: base64 data URL
           const dataUrl = `data:image/${finalExtension};base64,${optimizedBuffer.toString('base64')}`;
-          console.log("[Upload] Using base64 fallback, size:", dataUrl.length);
+          debugLog("[Upload] Using base64 fallback, size:", dataUrl.length);
           return res.json({ success: true, url: dataUrl, fallback: true });
         }
       }
@@ -2980,7 +2980,7 @@ async function startServer() {
       } = await import("../../drizzle/schema");
       const { sql, eq } = await import("drizzle-orm");
 
-      console.log("[Admin] 🔍 Iniciando merge de clientes duplicados...");
+      debugLog("[Admin] 🔍 Iniciando merge de clientes duplicados...");
 
       const db = await getDb();
       if (!db) {
@@ -3068,7 +3068,7 @@ async function startServer() {
       logs.push(`   Total deletados: ${totalDeleted}`);
       logs.push(`   Clientes restantes: ${allCustomers.length - totalDeleted}`);
 
-      console.log("[Admin] ✅ Merge finalizado");
+      debugLog("[Admin] ✅ Merge finalizado");
       res.json({
         success: true,
         totalCustomers: allCustomers.length,
@@ -3239,7 +3239,7 @@ async function startServer() {
             } catch (e) {
               // Tabela não existe ou erro - ignorar silenciosamente
               if (!e.message.includes("doesn't exist")) {
-                console.log(`[System/Clean] Erro em ${tableName}: ${e.message}`);
+                debugLog(`[System/Clean] Erro em ${tableName}: ${e.message}`);
               }
             }
           }
@@ -3812,9 +3812,9 @@ async function startServer() {
 
   // Railway requires exact PORT from environment variable
   const port = parseInt(process.env.PORT || "3000");
-  console.log(`[Server] Starting on port ${port}...`);
-  console.log(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
-  console.log(`[Server] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
+  debugLog(`[Server] Starting on port ${port}...`);
+  debugLog(`[Server] NODE_ENV: ${process.env.NODE_ENV}`);
+  debugLog(`[Server] DATABASE_URL set: ${!!process.env.DATABASE_URL}`);
 
   // Bind to all interfaces to be accessible from Railway's router
   // Final API catch-all for unknown API routes (JSON only)
@@ -3867,10 +3867,10 @@ async function startServer() {
   });
 
   server.listen(port, "0.0.0.0", async () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    debugLog(`Server running on http://localhost:${port}/`);
 
     // Migrations já executadas no início do startServer()
-    console.log("[Server] All migrations completed earlier");
+    debugLog("[Server] All migrations completed earlier");
 
     // Start simple chatbot after server is running
     import("../chatbot")
@@ -3930,7 +3930,7 @@ async function startServer() {
     import("../workers/pause-auto-finisher")
       .then(module => {
         module.startPauseAutoFinisher(1); // Check every 1 minute
-        console.log("Pause auto-finisher worker started");
+        debugLog("Pause auto-finisher worker started");
       })
       .catch(error => {
         console.error("Failed to start flow engine:", error);
@@ -4057,7 +4057,7 @@ async function startServer() {
       }
     });
 
-    console.log(`🚀 Server listening on port ${port}`);
+    debugLog(`🚀 Server listening on port ${port}`);
   });
 
   // Global error handler para logs detalhados
