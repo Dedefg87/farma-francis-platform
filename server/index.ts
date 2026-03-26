@@ -2,7 +2,15 @@ import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { getDb } from "./_core/db";
 import { applySqlMigrations } from "./_core/migrations";
-import { appRouter } from "./routers";
+import { z } from "zod";
+import { eq } from "drizzle-orm";
+import {
+  queues,
+  agentStatus,
+  broadcastLists,
+  users,
+} from "../drizzle/schema";
+import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -11,31 +19,86 @@ const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 async function startServer() {
   console.log("[Server] Starting...");
 
-  // DB initialization
   const db = await getDb();
   console.log("[DB] Connected");
 
-  // Apply migrations
   await applySqlMigrations();
   console.log("[Migrations] Applied");
 
   const app = express();
 
-  // Middleware
   app.use(express.json());
   app.use(express.static(path.join(__dirname, "../dist/public")));
 
-  // Health endpoint
   app.get("/api/health", (_, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Simple test route
-  app.get("/api/test", (req, res) => {
-    res.json({ ok: true, method: req.method, headers: req.headers });
+  app.get("/api/test", (_, res) => {
+    res.json({ ok: true });
   });
 
-  console.log("[tRPC] About to mount. appRouter type:", typeof appRouter, "keys:", appRouter?.router ? Object.keys(appRouter.router) : "none");
+  // Minimal tRPC router
+  const { router, publicProcedure, protectedProcedure } = await import("../_core/trpc");
+
+  const systemRouter = router({
+    health: publicProcedure.query(() => ({ status: "ok", timestamp: new Date().toISOString() })),
+  });
+
+  const authRouter = router({
+    login: publicProcedure
+      .input(z.object({ email: z.string(), password: z.string() }))
+      .mutation(async ({ input }) => {
+        const [user] = await users.select().where(eq(users.email, input.email)).limit(1);
+        if (!user || input.password !== "123456") throw new Error("Invalid credentials");
+        const token = jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
+        return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
+      }),
+  });
+
+  const queuesRouter = router({
+    list: protectedProcedure.query(() => queues.select().orderBy("priority")),
+  });
+
+  const agentRouter = router({
+    getStatus: protectedProcedure.query(async ({ ctx }) => {
+      const [record] = await db.select().from(agentStatus).where(eq(agentStatus.userId, ctx.user.id));
+      return record || null;
+    }),
+    setOnline: protectedProcedure.mutation(async ({ ctx }) => {
+      await db.insert(agentStatus).values({
+        userId: ctx.user.id,
+        status: "online",
+        lastSeen: new Date(),
+      }).onDuplicateKeyUpdate({ status: "online", lastSeen: new Date() });
+      return { success: true };
+    }),
+    setOffline: protectedProcedure.mutation(async ({ ctx }) => {
+      await db.update(agentStatus).set({ status: "offline", lastSeen: new Date() }).where(eq(agentStatus.userId, ctx.user.id));
+      return { success: true };
+    }),
+  });
+
+  const broadcastRouter = router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await broadcastLists.select().where(eq(broadcastLists.userId, ctx.user.id)).orderBy("createdAt");
+    }),
+  });
+
+  const appRouter = router({
+    system: systemRouter,
+    auth: authRouter,
+    queues: queuesRouter,
+    agent: agentRouter,
+    broadcast: broadcastRouter,
+  });
+
+  // tRPC mount with logging
+  app.use("/api/trpc", (req, res, next) => {
+    console.log(`[tRPC] ${req.method} ${req.url}`);
+    next();
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -46,7 +109,6 @@ async function startServer() {
       }),
     })
   );
-  console.log("[tRPC] Mounted on /api/trpc");
 
   const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
   app.listen(port, "0.0.0.0", () => {
