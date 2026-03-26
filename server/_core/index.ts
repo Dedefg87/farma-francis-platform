@@ -27,12 +27,21 @@ import rateLimit from "express-rate-limit";
 import { sql, SQL, eq, desc } from "drizzle-orm";
 import { broadcastLists as broadcastLists2, broadcastListMembers as broadcastListMembers2 } from "../../drizzle/schema";
 import { registerOAuthRoutes } from "./oauth";
-import { appRouter } from "../routers";
 
-console.log("[Server] Modules loaded. appRouter loaded:", appRouter ? "OK" : "NULL");
-if (appRouter) {
+let appRouter;
+try {
+  const routersMod = await import("../routers");
+  appRouter = routersMod.appRouter;
+  console.log("[Server] appRouter imported successfully");
   console.log("[Server] appRouter type:", typeof appRouter);
-  console.log("[Server] appRouter.router keys:", appRouter.router ? Object.keys(appRouter.router) : "none");
+  if (appRouter?.router) {
+    console.log("[Server] appRouter.router keys:", Object.keys(appRouter.router));
+  } else {
+    console.warn("[Server] appRouter.router is missing!");
+  }
+} catch (e) {
+  console.error("[Server] ❌ Failed to import appRouter:", e);
+  throw e;
 }
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
 import mediaRouter from "../routers-media";
