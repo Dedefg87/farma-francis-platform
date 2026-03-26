@@ -1,15 +1,18 @@
 import {
+  autoIncrement,
+  bigint,
+  boolean,
   date,
   decimal,
   int,
+  json,
   longtext,
   mysqlEnum,
   mysqlTable,
   text,
   timestamp,
   varchar,
-  json,
-} from "drizzle-orm/mysql2";
+} from "drizzle-orm/mysql-core";
 
 // Export execution and analytics tables (SQLite-based)
 export * from "./schema_executions";
