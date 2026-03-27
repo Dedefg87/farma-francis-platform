@@ -90,11 +90,11 @@ async function runMediaColumnsMigration() {
       console.log("[Migration] Added provider column");
     }
 
-    // Check lastSignedIn in users
-    const [cols4]: any = await db.execute("SHOW COLUMNS FROM users LIKE 'lastSignedIn'");
+    // Check last_signed_in in users
+    const [cols4]: any = await db.execute("SHOW COLUMNS FROM users LIKE 'last_signed_in'");
     if (cols4.length === 0) {
-      await db.execute("ALTER TABLE users ADD COLUMN lastSignedIn timestamp DEFAULT now() NOT NULL");
-      console.log("[Migration] Added lastSignedIn column to users");
+      await db.execute("ALTER TABLE users ADD COLUMN last_signed_in timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL");
+      console.log("[Migration] Added last_signed_in column to users");
     }
 
     // Check updated_at in users
