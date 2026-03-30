@@ -35,6 +35,9 @@ export default function Login() {
       
       console.log('Login bem-sucedido:', result);
       
+      // Salvar token no localStorage
+      localStorage.setItem('authToken', result.token);
+      
       // Invalidar cache do auth.me para forçar recarregamento
       await utils.auth.me.invalidate();
       
