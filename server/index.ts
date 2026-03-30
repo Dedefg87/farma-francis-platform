@@ -4,7 +4,7 @@ import { getDb } from "./db";
 import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
 import { fileURLToPath } from "url";
-import { appRouter } from "./routers";
+import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
 
