@@ -1,4 +1,4 @@
-# farma-francis-platform - versão: 2026-03-30-1345-forced
+# Build: auth token header fix - Mon Mar 30 14:45 GMT-3 2026
 FROM node:20-alpine
 
 #强制重建标识: 2c45f20
