@@ -14,7 +14,7 @@ import { systemRouter, authRouter, queuesRouter } from "./routers";
 // Routers específicos que só existem fora do routers.ts
 import { conversationsRouter } from "./routers-conversations";
 import { messagesRouter } from "./routers-messages";
-import healthRouter from "./routes/health";
+import healthRouter from "./_core/routes/health";
 
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
