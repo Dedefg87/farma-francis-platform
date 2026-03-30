@@ -14,7 +14,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const utils = trpc.useUtils();
-
   const loginMutation = trpc.auth.login.useMutation();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -32,7 +31,7 @@ export default function Login() {
       }
 
       // Chamar mutation de login com username
-      const result = await loginMutation.mutateAsync({ email: username, password });
+      const result = await loginMutation.mutateAsync({ username, password });
       
       console.log('Login bem-sucedido:', result);
       
