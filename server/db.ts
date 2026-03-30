@@ -87,7 +87,7 @@ export async function getUserByOpenId(openId: string) {
   if (!db) return null;
 
   const rawResult = await db.execute(
-    sql`SELECT * FROM users WHERE open_id = ${openId} LIMIT 1`
+    sql`SELECT * FROM users WHERE openId = ${openId} LIMIT 1`
   );
   const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
   const rawUser = Array.isArray(rows) ? rows[0] : undefined;
