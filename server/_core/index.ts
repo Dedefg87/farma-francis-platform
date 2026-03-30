@@ -55,11 +55,11 @@ import { runBroadcastMigrations } from "../broadcast-migration";
 import { applySqlMigrations } from "./migrations.js";
 
 // Novos routers organizados
-import debugRouter from "./routes/debug.js";
-import adminRouter from "./routes/admin.js";
-import fixRouter from "./routes/fix.js";
-import emergencyRouter from "./routes/emergency.js";
-import testFlowsRouter from "../routes/test.js";
+import debugRouter from "./routes/debug";
+import adminRouter from "./routes/admin";
+import fixRouter from "./routes/fix";
+import emergencyRouter from "./routes/emergency";
+import testFlowsRouter from "../routes/test";
 
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
@@ -424,11 +424,36 @@ async function startServer() {
   // ============================================
   async function requireAuth(req: any, res: any, next: any) {
     try {
-      // Usar autenticação do SDK (verifica cookie ou header)
-      const user = await sdk.authenticateRequest(req);
-      if (!user) {
-        return res.status(401).json({ error: "Unauthorized" });
+      // 1) TENTAR COOKIE (sessão tradicional)
+      let user: any = null;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch (e) {
+        // Cookie ausente/inválido, tentar header Authorization
       }
+
+      // 2) TENTAR BEARER TOKEN (header Authorization: Bearer <token>)
+      if (!user) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          const token = authHeader.slice(7);
+          const { verifySession } = sdk;
+          const session = await verifySession(token);
+          if (session) {
+            const dbUser = await db.getUserByOpenId(session.openId);
+            if (dbUser) {
+              user = dbUser;
+              req.user = user;
+              return next();
+            }
+          }
+        }
+      }
+
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized - no valid session or token" });
+      }
+
       // Anexar usuário no request para uso nas rotas
       req.user = user;
       next();
