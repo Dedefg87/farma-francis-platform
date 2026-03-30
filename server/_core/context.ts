@@ -1,20 +1,66 @@
 import { Request, Response } from "express";
 import { Database } from "drizzle-orm/mysql2";
+import jwt from "jsonwebtoken";
 import { getDb } from "../db";
 
 export interface Context {
   req: Request;
   res: Response;
   db: Database;
-  user?: { id: number; role: string };
+  user?: { id: number; role: string; email: string };
 }
 
 export async function createContext({ req, res }: { req: Request; res: Response }): Promise<Context> {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database not available");
+  try {
+    const db = await getDb();
+    if (!db) {
+      console.error("[Context] Database not available");
+      throw new Error("Database not available");
+    }
+
+    const authHeader = req.headers.authorization || "";
+    console.log("[Context] Auth header presente?", !!authHeader);
+
+    let user: { id: number; role: string; email: string } | undefined;
+
+    if (authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.substring(7).trim();
+        console.log("[Context] Token extraído, tamanho:", token.length);
+
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+          console.error("[Context] JWT_SECRET not configured");
+          throw new Error("Server configuration error");
+        }
+
+        if (token && token !== "undefined" && token !== "null") {
+          const decoded = jwt.verify(token, secret) as {
+            sub: number;
+            email: string;
+            role: string;
+          };
+
+          console.log("[Context] ✅ Token validado para user ID:", decoded.sub);
+
+          user = {
+            id: decoded.sub,
+            role: decoded.role || "user",
+            email: decoded.email,
+          };
+        } else {
+          console.log("[Context] ❌ Token vazio ou inválido:", token);
+        }
+      } catch (error: any) {
+        console.error("[Context] ❌ Token validation error:", error.message);
+      }
+    } else {
+      console.log("[Context] No bearer token provided");
+    }
+
+    return { req, res, db, user };
+  } catch (error) {
+    console.error("[Context] ❌ createContext error:", error);
+    throw error;
   }
-  const authHeader = req.headers.authorization || "";
-  const user = authHeader ? { id: 1, role: "admin" as const } : undefined;
-  return { req, res, db, user };
 }
