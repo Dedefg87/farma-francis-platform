@@ -21,24 +21,20 @@ console.log("[Server] Starting initialization...");
 import express from "express";
 import cookieParser from "cookie-parser";
 import { createServer } from "http";
-import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import rateLimit from "express-rate-limit";
-import { sql, SQL, eq, desc } from "drizzle-orm";
-import { broadcastLists as broadcastLists2, broadcastListMembers as broadcastListMembers2 } from "../../drizzle/schema";
+import { sql, eq, desc } from "drizzle-orm";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { babyShowerPublicRouter } from "../routes/baby-shower-public.js";
 import mediaRouter from "../routers-media";
-import { createContext } from "./context";
-import { serveStatic } from "./serveStatic";
 import { sseManager } from "./sse";
 import { startMobileSyncProcessor } from "../queue/mobile-sync";
 // Forçar inclusão do broadcast-queue no bundle (esbuild às vezes pula)
 import "../services/broadcast-queue";
 import { startBroadcastQueueProcessor } from "../services/broadcast-queue";
 import { sdk } from "./sdk";
-import { createRateLimiter, rateLimiters } from "../middleware/rate-limit.js";
+import { createContext } from "./context";
+import { serveStatic } from "./serveStatic";
 import multer from "multer";
 import { uploadToR2 } from "../r2-client";
 import migrationRouter from "../admin/migration-router";
@@ -47,7 +43,7 @@ import executeSqlRouter from "../admin/execute-sql-router";
 import encodingFixRouter from "../admin/encoding-fix-router";
 import broadcastCheckRouter from "../admin/broadcast-check-router";
 import broadcastSetupRouter from "../admin/broadcast-setup-router";
-import { getDb } from "../db"; // ✅ Forçar esbuild a incluir db.ts no bundle
+import { getDb } from "../db"; // Forçar esbuild a incluir db.ts no bundle
 
 // Redis com namespaces
 import { getRedis } from "./redis.js";
@@ -55,9 +51,15 @@ import { REDIS_NAMESPACES } from "./redis-namespaces.js";
 
 // Redeploy trigger: log a lightweight marker to force a redeploy in CI/CD pipelines
 console.log("[Deploy] Redeploy trigger activated: patch applied on startup");
-import { logger } from "./logger";
 import { runBroadcastMigrations } from "../broadcast-migration";
 import { applySqlMigrations } from "./migrations.js";
+
+// Novos routers organizados
+import debugRouter from "./routes/debug.ts";
+import adminRouter from "./routes/admin.ts";
+import fixRouter from "./routes/fix.ts";
+import emergencyRouter from "./routes/emergency.ts";
+import testFlowsRouter from "../routes/test.ts";
 
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
@@ -422,11 +424,36 @@ async function startServer() {
   // ============================================
   async function requireAuth(req: any, res: any, next: any) {
     try {
-      // Usar autenticação do SDK (verifica cookie ou header)
-      const user = await sdk.authenticateRequest(req);
-      if (!user) {
-        return res.status(401).json({ error: "Unauthorized" });
+      // 1) TENTAR COOKIE (sessão tradicional)
+      let user: any = null;
+      try {
+        user = await sdk.authenticateRequest(req);
+      } catch (e) {
+        // Cookie ausente/inválido, tentar header Authorization
       }
+
+      // 2) TENTAR BEARER TOKEN (header Authorization: Bearer <token>)
+      if (!user) {
+        const authHeader = req.headers.authorization;
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          const token = authHeader.slice(7);
+          const { verifySession } = sdk;
+          const session = await verifySession(token);
+          if (session) {
+            const dbUser = await db.getUserByOpenId(session.openId);
+            if (dbUser) {
+              user = dbUser;
+              req.user = user;
+              return next();
+            }
+          }
+        }
+      }
+
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized - no valid session or token" });
+      }
+
       // Anexar usuário no request para uso nas rotas
       req.user = user;
       next();
@@ -475,173 +502,17 @@ async function startServer() {
     });
   }
 
-  // DEBUG: Test broadcast list query directly
-  app.get("/api/debug/broadcast-list", async (req, res) => {
-    try {
-      const db = await getDb();
-      if (!db) return res.status(500).json({ error: "Database not available" });
-
-      const offset = 0;
-      const limit = 20;
-
-      const [lists] = await db
-        .select({
-          id: broadcastLists2.id,
-          name: broadcastLists2.name,
-          description: broadcastLists2.description,
-          memberCount: sql`COUNT(DISTINCT ${broadcastListMembers2.customerId})`.as("memberCount"),
-          lastSentAt: broadcastLists2.lastSentAt,
-          createdAt: broadcastLists2.createdAt,
-        })
-        .from(broadcastLists2)
-        .leftJoin(broadcastListMembers2, eq(broadcastLists2.id, broadcastListMembers2.listId))
-        .groupBy(
-          broadcastLists2.id,
-          broadcastLists2.name,
-          broadcastLists2.description,
-          broadcastLists2.lastSentAt,
-          broadcastLists2.createdAt
-        )
-        .orderBy(desc(broadcastLists2.createdAt))
-        .limit(limit)
-        .offset(offset);
-
-      res.json({ success: true, lists, count: lists.length });
-    } catch (err: any) {
-      console.error("[debug/broadcast-list] Error:", err);
-      res.status(500).json({ 
-        error: err.message,
-        sql: err.sql,
-        stack: err.stack,
-        sqlMessage: err.sqlMessage,
-      });
-    }
-  });
-
-  // GET /api/admin/check-db - Diagnóstico do banco ativo
-  app.get("/api/admin/check-db", async (req, res) => {
-    const { getDbRaw } = await import("../db");
-    const dbRaw = await getDbRaw();
-
-    // Mascarar DATABASE_URL para diagnóstico
-    const dbUrl = process.env.DATABASE_URL || "NÃO DEFINIDA";
-    const maskedUrl = dbUrl.replace(/:[^:@]+@/, ":****@");
-
-    if (!dbRaw) return res.status(500).json({ error: "Database not available", dbUrl: maskedUrl });
-    try {
-      const [countResult] = await dbRaw.execute("SELECT COUNT(*) as total FROM customers");
-      const total = countResult?.[0]?.total || 0;
-
-      const [tablesResult] = await dbRaw.execute("SHOW TABLES");
-      const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
-
-      // Check specifically for broadcast tables
-      const broadcastTables = tables.filter((t: string) => t.includes('broadcast'));
-
-      const [sampleCustomers] = await dbRaw.execute("SELECT id, name, phone FROM customers LIMIT 5");
-
-      res.json({
-        success: true,
-        totalCustomers: Number(total),
-        tables: tables, // full list, not sliced
-        broadcastTables, // explicit list
-        sampleCustomers,
-        dbUrl: maskedUrl,
-        dbType: "mysql2-raw"
-      });
-    } catch (err: any) {
-      console.error("[check-db] Erro:", err);
-      res.status(500).json({ error: err.message, dbUrl: maskedUrl });
-    }
-  });
-
-  // GET /api/debug/auth-test - Diagnóstico completo de autenticação JWT
-  app.get("/api/debug/auth-test", async (req, res) => {
-    try {
-      console.log("[AuthTest] Endpoint called");
-      const results: any = {};
-      // Parse cookies manually to avoid dynamic require issues
-      const cookieHeader = req.headers.cookie || '';
-      const cookies: Record<string, string> = {};
-      if (cookieHeader) {
-        cookieHeader.split(';').forEach(pair => {
-          const [name, ...rest] = pair.trim().split('=');
-          if (name) cookies[name] = rest.join('=');
-        });
-      }
-      const sessionCookie = cookies['farma-francis-auth'];
-
-      results.cookiePresent = !!sessionCookie;
-      results.cookieLength = sessionCookie?.length || 0;
-      results.cookieSecretLength = process.env.JWT_SECRET?.length || 0;
-      results.cookieSecretDefined = !!process.env.JWT_SECRET;
-
-      if (!sessionCookie) {
-        return res.json({
-          success: false,
-          message: "Cookie farma-francis-auth não encontrado",
-          results
-        });
-      }
-
-      // Passo 1: Verificar JWT
-      const { jwtVerify } = await import("jose");
-      const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-
-      try {
-        const { payload } = await jwtVerify(sessionCookie, secret, {
-          algorithms: ["HS256"],
-        });
-        results.jwtVerify = "SUCCESS";
-        results.payload = payload;
-
-        const openId = payload.openId as string;
-        results.openId = openId;
-
-        if (!openId) {
-          results.error = "openId não encontrado no payload do JWT";
-          return res.json({ success: false, results });
-        }
-
-        // Passo 2: Buscar usuário no banco
-        const { getUserByOpenId } = await import("../db");
-        const user = await getUserByOpenId(openId);
-
-        results.userFound = !!user;
-        if (user) {
-          results.user = { id: user.id, openId: user.openId, name: user.name, email: user.email, role: user.role };
-        } else {
-          results.error = "Usuário com openId não encontrado no banco";
-        }
-
-        // Passo 3: Verificar se appId corresponde
-        results.appIdInToken = payload.appId;
-        results.expectedAppId = process.env.APP_ID;
-
-        res.json({
-          success: !!user,
-          message: user ? "Autenticação OK" : "Usuário não encontrado no banco",
-          results
-        });
-
-      } catch (jwtError: any) {
-        results.jwtVerify = "FAILED";
-        results.jwtError = jwtError.message || String(jwtError);
-        res.json({
-          success: false,
-          message: "JWT verification falhou",
-          results
-        });
-      }
-
-    } catch (err: any) {
-      console.error("[AuthTest] Error:", err);
-      res.status(500).json({ error: err.message, stack: process.env.NODE_ENV === "development" ? err.stack : undefined });
-    }
-  });
 
 
-
+  // Rotas organizadas (debug, admin, fix, emergency, test)
+  console.log("[Startup] Registering organized routers...");
+  app.use("/api/debug", debugRouter);
+  console.log("[Startup] /api/debug registered");
+  app.use("/api/admin", adminRouter);
+  console.log("[Startup] /api/admin registered");
+  app.use("/api/fix", fixRouter);
+  app.use("/api/emergency", emergencyRouter);
+  app.use("/api/test", testFlowsRouter);
 
   // POST /api/broadcast/upload-temp-file
   // Recebe arquivo via FormData, faz upload para storage (R2) e retorna URL pública
@@ -1489,54 +1360,6 @@ async function startServer() {
   app.use("/api/webhook/baby-shower", babyShowerWebhookRouter.default);
 
   // Test Routes - Sistema de Teste de Fluxos
-  // Safety: disabled by default in production.
-  const enableTestRoutes =
-    process.env.ENABLE_TEST_ROUTES === "1" ||
-    process.env.NODE_ENV === "development";
-  if (enableTestRoutes) {
-    const testFlowsRouter = await import("../test-flows");
-    app.get("/api/test/status", testFlowsRouter.getSystemStatus);
-    app.get("/api/test/flows", testFlowsRouter.listAllFlows);
-    app.post("/api/test/activate/:id", testFlowsRouter.activateFlow);
-    app.post("/api/test/simulate-message", testFlowsRouter.simulateMessage);
-    app.post("/api/test/trigger-flow", testFlowsRouter.triggerFlowManually);
-    app.get("/api/test/messages", testFlowsRouter.listRecentMessages);
-    app.get("/api/test/health", testFlowsRouter.healthCheck);
-    app.post("/api/test/clear-messages", testFlowsRouter.clearTestMessages);
-  }
-
-  // DEBUG routes - Always enabled for troubleshooting
-  app.get("/api/debug/conversations", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const { conversations, users } = await import("../../drizzle/schema");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-      const allConversations = await db
-        .select({
-          id: conversations.id,
-          customerId: conversations.customerId,
-          customerName: conversations.customerName,
-          customerPhone: conversations.customerPhone,
-          channel: conversations.channel,
-          status: conversations.status,
-          assignedTo: conversations.assignedTo,
-          lastMessageAt: conversations.lastMessageAt,
-          unreadCount: conversations.unreadCount,
-        })
-        .from(conversations)
-        .orderBy(conversations.lastMessageAt);
-      res.json({
-        count: allConversations.length,
-        conversations: allConversations,
-      });
-    } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
   // Endpoint REST para marcar conversa como lida
   app.post("/api/conversations/:id/mark-read", async (req, res) => {
     try {
@@ -1912,53 +1735,7 @@ async function startServer() {
     }
   });
 
-  // FIX: Endpoint para corrigir conversas órfãs (status=assigned mas assignedTo=null)
-  app.get("/api/fix-orphaned-conversations", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const { conversations } = await import("../../drizzle/schema");
-      const { eq, and, isNull } = await import("drizzle-orm");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
 
-      // Buscar conversas órfãs
-      const orphaned = await db
-        .select({ id: conversations.id })
-        .from(conversations)
-        .where(
-          and(
-            eq(conversations.status, "assigned"),
-            isNull(conversations.assignedTo)
-          )
-        );
-
-      if (orphaned.length === 0) {
-        return res.json({
-          success: true,
-          message: "Nenhuma conversa órfã encontrada",
-          fixed: 0,
-        });
-      }
-
-      // Corrigir conversas órfãs
-      await db
-        .update(conversations)
-        .set({ status: "open" })
-        .where(
-          and(
-            eq(conversations.status, "assigned"),
-            isNull(conversations.assignedTo)
-          )
-        );
-
-      res.json({
-        success: true,
-        message: `${orphaned.length} conversa(s) corrigida(s)`,
-        fixed: orphaned.length,
-        ids: orphaned.map(c => c.id),
-      });
     } catch (error) {
       res.status(500).json({ error: String(error) });
     }
@@ -1993,96 +1770,6 @@ async function startServer() {
       }
 
       res.json({ conversation });
-    } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
-  // FIX: Adicionar coluna last_signed_in na tabela users
-  app.get("/api/fix/add-last-signed-in", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      // Verificar se a coluna já existe
-      const columns = await db.execute(
-        sql`SHOW COLUMNS FROM users LIKE 'last_signed_in'`
-      );
-
-      if (columns.length > 0) {
-        return res.json({
-          success: true,
-          message: "Coluna last_signed_in já existe",
-          exists: true,
-        });
-      }
-
-      // Adicionar a coluna
-      await db.execute(
-        sql`ALTER TABLE users ADD COLUMN last_signed_in DATETIME NULL`
-      );
-
-      res.json({
-        success: true,
-        message: "Coluna last_signed_in adicionada com sucesso",
-        exists: false,
-      });
-    } catch (error) {
-      console.error("[Fix] Error adding last_signed_in column:", error);
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
-  // DIAGNOSTIC: Verificar estrutura das tabelas de baby shower
-  app.get("/api/fix/diagnose-baby-shower-tables", async (req, res) => {
-    try {
-      const { getDbRaw } = await import("../db");
-      const db = await getDbRaw();
-      if (!db || !db.raw) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      const results: any = {};
-
-      // Verificar se as tabelas existem
-      const tables = await db.raw(`
-        SELECT table_name FROM information_schema.tables
-        WHERE table_schema = DATABASE()
-        AND table_name LIKE 'baby_shower%'
-      `);
-      results.tables = tables;
-
-      // Verificar estrutura de cada tabela
-      for (const table of [
-        "baby_shower_events",
-        "baby_shower_gift_packages",
-        "baby_shower_purchases",
-        "baby_shower_withdrawals",
-      ]) {
-        try {
-          const columns = await db.raw(`DESCRIBE ${table}`);
-          results[`${table}_columns`] = columns;
-        } catch (e: any) {
-          results[`${table}_error`] = e.message;
-        }
-      }
-
-      // Testar query problemática
-      try {
-        const testQuery = await db.raw(`
-          SELECT id FROM baby_shower_purchases LIMIT 1
-        `);
-        results.test_query = "SUCCESS";
-        results.test_result = testQuery;
-      } catch (e: any) {
-        results.test_query = "FAILED";
-        results.test_error = e.message;
-      }
-
-      res.json(results);
     } catch (error) {
       res.status(500).json({ error: String(error) });
     }
@@ -2590,107 +2277,6 @@ async function startServer() {
     }
   });
 
-  // FIX: Migrar colunas faltantes na tabela customers (Chá de Bebê)
-  app.get("/api/fix/migrate-customers-baby-shower", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      const results: { column: string; action: string }[] = [];
-
-      // Colunas a verificar/adicionar
-      const columnsToAdd = [
-        {
-          name: "expected_due_date",
-          sql: "ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL",
-        },
-        {
-          name: "health_tags_json",
-          sql: "ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL",
-        },
-        {
-          name: "whatsapp_opt_in_at",
-          sql: "ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL",
-        },
-      ];
-
-      for (const col of columnsToAdd) {
-        const check = await db.execute(
-          sql`SHOW COLUMNS FROM customers LIKE ${col.name}`
-        );
-        if (check.length === 0) {
-          await db.execute(sql.raw(col.sql));
-          results.push({ column: col.name, action: "added" });
-        } else {
-          results.push({ column: col.name, action: "already_exists" });
-        }
-      }
-
-      res.json({
-        success: true,
-        message: "Migração da tabela customers concluída",
-        results,
-      });
-    } catch (error) {
-      console.error("[Fix] Error migrating customers table:", error);
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
-  // FIX: Adicionar colunas faltantes na tabela customers
-  app.get("/api/fix/add-customer-columns", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      const results: { column: string; status: string }[] = [];
-
-      // Colunas a adicionar: expected_due_date, health_tags_json, whatsapp_opt_in_at
-      const columnsToAdd = [
-        {
-          name: "expected_due_date",
-          sql: sql`ALTER TABLE customers ADD COLUMN expected_due_date DATE NULL`,
-        },
-        {
-          name: "health_tags_json",
-          sql: sql`ALTER TABLE customers ADD COLUMN health_tags_json TEXT NULL`,
-        },
-        {
-          name: "whatsapp_opt_in_at",
-          sql: sql`ALTER TABLE customers ADD COLUMN whatsapp_opt_in_at TIMESTAMP NULL`,
-        },
-      ];
-
-      for (const col of columnsToAdd) {
-        try {
-          // Verificar se a coluna já existe
-          const check = await db.execute(
-            sql`SHOW COLUMNS FROM customers LIKE ${col.name}`
-          );
-          if (check.length > 0) {
-            results.push({ column: col.name, status: "already exists" });
-          } else {
-            await db.execute(col.sql);
-            results.push({ column: col.name, status: "added successfully" });
-          }
-        } catch (err) {
-          results.push({ column: col.name, status: `error: ${err}` });
-        }
-      }
-
-      res.json({ success: true, results });
-    } catch (error) {
-      console.error("[Fix] Error adding customer columns:", error);
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
   // Fix: Add display_order column to baby_shower_gift_packages
   app.post("/api/fix/add-display-order", async (req, res) => {
     try {
@@ -2741,34 +2327,6 @@ async function startServer() {
     }
   });
 
-  // Force: Add display_order column (ignora erros)
-  app.get("/api/fix/force-display-order", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      // Try to add the column, ignore if already exists
-      try {
-        await db.execute(
-          sql`ALTER TABLE baby_shower_gift_packages ADD COLUMN display_order INT DEFAULT 0`
-        );
-        res.json({ success: true, message: "Column display_order added" });
-      } catch (err: any) {
-        if (err.message?.includes("Duplicate column") || err.message?.includes("already exists")) {
-          res.json({ success: true, message: "Column display_order already exists" });
-        } else {
-          throw err;
-        }
-      }
-    } catch (error) {
-      console.error("[Fix] Error:", error);
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
   // Update Evolution API settings
   app.post("/api/settings/evolution", async (req, res) => {
     try {
@@ -2814,160 +2372,6 @@ async function startServer() {
     } catch (error) {
       console.error("[Settings] Error updating Evolution API:", error);
       res.status(500).json({ error: String(error) });
-    }
-  });
-
-  // EMERGENCY: Reset admin password
-  app.get("/api/emergency/reset-admin-password", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const { users } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-      const bcrypt = await import("bcryptjs");
-      const db = await getDb();
-
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      // Hash da senha "admin"
-      const hashedPassword = await bcrypt.hash("admin", 10);
-
-      // Atualizar senha do usuário admin (ID 1)
-      await db
-        .update(users)
-        .set({ password: hashedPassword })
-        .where(eq(users.id, 1));
-
-      res.json({
-        success: true,
-        message: "Senha do admin (ID 1) redefinida para 'admin'",
-        login: "admin",
-        password: "admin",
-      });
-    } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
-  // ========================================
-  // ADMIN ROUTE: Merge Duplicate Customers
-  // ========================================
-  // ATENÇÃO: Esta rota é temporária e deve ser protegida em produção!
-  // Execute apenas uma vez para limpar duplicatas.
-  app.get("/api/admin/merge-duplicate-customers", async (req, res) => {
-    try {
-      const { getDb } = await import("../db");
-      const {
-        customers,
-        conversations,
-        conversationMessages,
-        broadcastMembers,
-        customerTags,
-        guestList,
-      } = await import("../../drizzle/schema");
-      const { sql, eq } = await import("drizzle-orm");
-
-      console.log("[Admin] 🔍 Iniciando merge de clientes duplicados...");
-
-      const db = await getDb();
-      if (!db) {
-        return res.status(500).json({ error: "Database not available" });
-      }
-
-      // 1. Buscar todos os clientes
-      const allCustomers = await db.select().from(customers);
-
-      // 2. Função de normalização
-      function normalizeToBaseNumber(phone: string): string {
-        if (!phone) return "";
-        let digits = phone.replace(/\D/g, '');
-        if (!digits.startsWith('55')) return digits;
-        if (digits.length === 13) {
-          const ddd = digits.slice(2, 4);
-          const rest = digits.slice(5);
-          digits = `55${ddd}${rest}`;
-        }
-        return digits;
-      }
-
-      // 3. Agrupar por número base
-      const groups = new Map<string, typeof allCustomers>();
-      for (const cust of allCustomers) {
-        const baseNum = normalizeToBaseNumber(cust.phone);
-        if (!baseNum) continue;
-        if (!groups.has(baseNum)) groups.set(baseNum, []);
-        groups.get(baseNum)!.push(cust);
-      }
-
-      const duplicateGroups = Array.from(groups.values()).filter(g => g.length > 1);
-      let totalMerged = 0;
-      let totalDeleted = 0;
-      const logs: string[] = [];
-
-      const relatedTables = [
-        { table: conversations, column: "customer_id", name: "conversations" },
-        { table: conversationMessages, column: "customer_id", name: "conversation_messages" },
-        { table: broadcastMembers, column: "customer_id", name: "broadcast_members" },
-        { table: customerTags, column: "customer_id", name: "customer_tags" },
-        { table: guestList, column: "guest_customer_id", name: "guest_list" },
-      ];
-
-      for (const group of duplicateGroups) {
-        group.sort((a, b) => a.id - b.id);
-        const mainCustomer = group[0];
-        const duplicates = group.slice(1);
-
-        logs.push(`\n👤 Grupo ${mainCustomer.phone} (base: ${normalizeToBaseNumber(mainCustomer.phone)})`);
-        logs.push(`   Main: ID ${mainCustomer.id} - ${mainCustomer.name}`);
-        logs.push(`   Duplicados: ${duplicates.map(d => `ID ${d.id} - ${d.name}`).join(", ")}`);
-
-        for (const { table, column, name } of relatedTables) {
-          for (const dup of duplicates) {
-            try {
-              const tableName = (table as any)._schema.tableName;
-              const result = await db.execute(
-                sql`UPDATE ${sql.raw(tableName)} SET ${sql.raw(column)} = ${mainCustomer.id} WHERE ${sql.raw(column)} = ${dup.id}`
-              );
-              if (result.affectedRows && result.affectedRows > 0) {
-                logs.push(`   ↪ ${name}: ${result.affectedRows} registro(s) atualizado(s)`);
-              }
-            } catch (err: any) {
-              logs.push(`   ❌ Erro ${name}: ${err.message}`);
-            }
-          }
-        }
-
-        for (const dup of duplicates) {
-          try {
-            await db.delete(customers).where(eq(customers.id, dup.id));
-            totalDeleted++;
-            logs.push(`   🗑️ Deletado: ID ${dup.id} - ${dup.name}`);
-          } catch (err: any) {
-            logs.push(`   ❌ Erro deletar ID ${dup.id}: ${err.message}`);
-          }
-        }
-
-        totalMerged += duplicates.length;
-      }
-
-      logs.push("\n✅ Limpeza concluída!");
-      logs.push(`   Total mesclados: ${totalMerged}`);
-      logs.push(`   Total deletados: ${totalDeleted}`);
-      logs.push(`   Clientes restantes: ${allCustomers.length - totalDeleted}`);
-
-      console.log("[Admin] ✅ Merge finalizado");
-      res.json({
-        success: true,
-        totalCustomers: allCustomers.length,
-        duplicateGroups: duplicateGroups.length,
-        totalMerged,
-        totalDeleted,
-        logs,
-      });
-    } catch (err: any) {
-      console.error("[Admin] ❌ Erro:", err);
-      res.status(500).json({ error: err.message, stack: process.env.NODE_ENV === "development" ? err.stack : undefined });
     }
   });
 
