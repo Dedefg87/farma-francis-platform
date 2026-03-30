@@ -1,5 +1,4 @@
-# Build: forced rebuild - Wed Mar 18 17:55 GMT+0000
-# Rebuild triggered: 2026-03-16 19:28 GMT-3 (force no-cache for COPY layer)
+# Build: forced rebuild - Mon Mar 30 13:35 GMT-3 2026
 FROM node:20-alpine
 
 WORKDIR /app
