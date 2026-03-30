@@ -1,4 +1,5 @@
 import { router } from "../_core/trpc";
+import { authRouter } from "../routers-auth";
 import { agentsRouter } from "../routers-agents";
 import { aiRouter } from "../routers-ai";
 import { apiConfigRouter } from "../routers-api-config";
@@ -25,6 +26,7 @@ import { tagsRouter } from "../routers-tags";
 import { telemetryRouter } from "../routers-telemetry";
 
 export const appRouter = router({
+  auth: authRouter,
   agents: agentsRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
