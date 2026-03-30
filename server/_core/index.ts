@@ -1735,12 +1735,6 @@ async function startServer() {
     }
   });
 
-
-    } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
   // DEBUG: Verificar status específico de uma conversa
   app.get("/api/debug/conversation/:id", async (req, res) => {
     try {

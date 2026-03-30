@@ -125,6 +125,17 @@ import { messagesRouter } from "./routers-messages";
 import { tagsRouter } from "./routers-tags";
 import { surveyRouter } from "./routers-survey";
 import { crmRouter } from "./routers-crm";
+import { aiRouter } from "./routers-ai";
+import { apiConfigRouter } from "./routers-api-config";
+import { babyShowerRouter } from "./routers-baby-shower";
+import { contactFetchRouter } from "./routers-contact-fetch";
+import { dashboardRouter } from "./routers-dashboard";
+import { dashboardDrilldownRouter } from "./routers-dashboard-drilldown";
+import { executionsRouter } from "./routers-executions";
+import { logsRouter } from "./routers-logs";
+import { pausesRouter } from "./routers-pauses";
+import { quickRepliesRouter } from "./routers-quick-replies";
+import { telemetryRouter } from "./routers-telemetry";
 
 // APP ROUTER
 export const appRouter = router({
@@ -140,6 +151,18 @@ export const appRouter = router({
   tags: tagsRouter,
   survey: surveyRouter,
   crm: crmRouter,
+  // Novos routers adicionados
+  ai: aiRouter,
+  apiConfig: apiConfigRouter,
+  babyShower: babyShowerRouter,
+  contactFetch: contactFetchRouter,
+  dashboard: dashboardRouter,
+  dashboardDrilldown: dashboardDrilldownRouter,
+  executions: executionsRouter,
+  logs: logsRouter,
+  pauses: pausesRouter,
+  quickReplies: quickRepliesRouter,
+  telemetry: telemetryRouter,
 });
 
 export type AppRouter = typeof appRouter;
