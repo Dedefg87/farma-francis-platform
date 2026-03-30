@@ -4,10 +4,14 @@ import { getDb } from "./db";
 import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
 import { fileURLToPath } from "url";
-import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { users, queues, agentStatus, broadcastLists } from "../drizzle/schema";
+import { users, agentStatus, broadcastLists } from "../drizzle/schema";
 import jwt from "jsonwebtoken";
+
+// Routers oficiais (unificados)
+import { systemRouter, authRouter, queuesRouter } from "./routers";
+
+// Routers específicos que só existem fora do routers.ts
 import { conversationsRouter } from "./routers-conversations";
 import { messagesRouter } from "./routers-messages";
 import healthRouter from "./routes/health";
@@ -39,71 +43,43 @@ async function startServer() {
     res.json({ ok: true });
   });
 
-  // Minimal tRPC router
-  const { router, publicProcedure, protectedProcedure } = await import("./_core/trpc");
-
-  const systemRouter = router({
-    health: publicProcedure.query(() => ({ status: "ok", timestamp: new Date().toISOString() })),
-  });
-
-  const authRouter = router({
-    login: publicProcedure
-      .input(z.object({ email: z.string(), password: z.string() }))
-      .mutation(async ({ input }) => {
-        console.log("[auth.login] Input received:", input.email);
-        // Buscar ou criar usuário (seed automático)
-        let [user] = await users.select().where(eq(users.email, input.email)).limit(1);
-        console.log("[auth.login] User query result:", user ? "found" : "not found");
-        const now = new Date();
-        if (!user) {
-          // Criar usuário automático (seed)
-          console.log("[auth.login] Creating new user");
-          const [result] = await db.insert(users).values({
-            openId: `manual-${Date.now()}`,
-            email: input.email,
-            name: input.email.split('@')[0],
-            role: input.email.includes('admin') ? 'admin' : 'user',
-            passwordHash: input.password,
-            loginMethod: 'manual',
-            lastSignedIn: now,
-            createdAt: now,
-            updatedAt: now,
-          }).returning({ insertedId: users.id });
-          user = await users.select().where(eq(users.id, result.insertedId)).limit(1);
-          console.log("[auth.login] Created user:", user);
-        }
-        const token = jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
-        console.log("[auth.login] Token generated for user", user.id);
-        return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
-      }),
-  });
-
-  const queuesRouter = router({
-    list: protectedProcedure.query(() => queues.select().orderBy("priority")),
-  });
+  // Minimal tRPC core
+  const { router, protectedProcedure } = await import("./_core/trpc");
 
   const agentRouter = router({
     getStatus: protectedProcedure.query(async ({ ctx }) => {
-      const [record] = await db.select().from(agentStatus).where(eq(agentStatus.userId, ctx.user.id));
+      const [record] = await db
+        .select()
+        .from(agentStatus)
+        .where(eq(agentStatus.userId, ctx.user.id));
       return record || null;
     }),
     setOnline: protectedProcedure.mutation(async ({ ctx }) => {
-      await db.insert(agentStatus).values({
-        userId: ctx.user.id,
-        status: "online",
-        lastSeen: new Date(),
-      }).onDuplicateKeyUpdate({ status: "online", lastSeen: new Date() });
+      await db
+        .insert(agentStatus)
+        .values({
+          userId: ctx.user.id,
+          status: "online",
+          lastSeen: new Date(),
+        })
+        .onDuplicateKeyUpdate({ status: "online", lastSeen: new Date() });
       return { success: true };
     }),
     setOffline: protectedProcedure.mutation(async ({ ctx }) => {
-      await db.update(agentStatus).set({ status: "offline", lastSeen: new Date() }).where(eq(agentStatus.userId, ctx.user.id));
+      await db
+        .update(agentStatus)
+        .set({ status: "offline", lastSeen: new Date() })
+        .where(eq(agentStatus.userId, ctx.user.id));
       return { success: true };
     }),
   });
 
   const broadcastRouter = router({
     list: protectedProcedure.query(async ({ ctx }) => {
-      return await broadcastLists.select().where(eq(broadcastLists.userId, ctx.user.id)).orderBy("createdAt");
+      return await broadcastLists
+        .select()
+        .where(eq(broadcastLists.userId, ctx.user.id))
+        .orderBy("createdAt");
     }),
   });
 
@@ -129,10 +105,35 @@ async function startServer() {
       router: appRouter,
       createContext: async ({ req }) => {
         console.log("[createContext] Building context for", req.path);
-        return {
-          db,
-          user: req.headers.authorization ? { id: 1, role: "admin" as const } : undefined,
-        };
+
+        const auth = req.headers.authorization;
+        if (!auth) {
+          return { db, user: null };
+        }
+
+        const token = auth.replace("Bearer ", "").trim();
+
+        try {
+          const payload = jwt.verify(
+            token,
+            process.env.JWT_SECRET || "secret"
+          ) as any;
+
+          const [user] = await db
+            .select()
+            .from(users)
+            .where(eq(users.id, payload.sub))
+            .limit(1);
+
+          if (!user) {
+            return { db, user: null };
+          }
+
+          return { db, user };
+        } catch (err) {
+          console.error("[Auth] Invalid token:", err);
+          return { db, user: null };
+        }
       },
     })
   );

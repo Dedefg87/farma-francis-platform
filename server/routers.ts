@@ -21,7 +21,7 @@ import {
   protectedProcedure,
   adminProcedure,
   router,
-} from "../_core/trpc";
+} from "./_core/trpc";
 import jwt from "jsonwebtoken";
 
 // System health
@@ -45,9 +45,19 @@ export const authRouter = router({
         .select()
         .where(eq(users.email, input.email))
         .limit(1);
-      if (!user || input.password !== "123456") {
-        throw new Error("Invalid credentials");
+
+      // 1. Verifica se o usuário existe
+      if (!user) {
+        throw new Error("Credenciais inválidas");
       }
+
+      // 2. Compara a senha digitada com o Hash salvo no banco usando bcrypt
+      const valid = await bcrypt.compare(input.password, user.passwordHash);
+      if (!valid) {
+        throw new Error("Credenciais inválidas");
+      }
+
+      // 3. Gera o token se estiver tudo certo
       const token = jwt.sign({ sub: user.id, role: user.role }, process.env.JWT_SECRET || "secret", { expiresIn: "7d" });
       return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
     }),
@@ -62,7 +72,6 @@ export const authRouter = router({
     return { id: user.id, email: user.email, name: user.name, role: user.role };
   }),
 });
-
 // Queues
 export const queuesRouter = router({
   list: protectedProcedure.query(async () => {
