@@ -35,10 +35,17 @@ export const authRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        console.log("[Auth] Login attempt for:", input.email);
+        console.log("[Auth:Login] 🚀 Iniciando login para:", input.email);
         
         const db = await getDb();
-        if (!db) throw new Error("Database not available");
+        console.log("[Auth:Login] 📦 Database:", db ? "OK" : "FAIL");
+        
+        if (!db) {
+          console.error("[Auth:Login] ❌ Database not available");
+          throw new Error("Database not available");
+        }
+
+        console.log("[Auth:Login] 🔍 Buscando usuário:", input.email.toLowerCase());
 
         // Busca usuário (case-insensitive)
         const users_result = await db
@@ -47,36 +54,48 @@ export const authRouter = router({
           .where(eq(users.email, input.email.toLowerCase()))
           .limit(1);
 
+        console.log("[Auth:Login] 📊 Resultado da query:", users_result.length, "usuário(s) encontrado(s)");
+
         const user = users_result[0];
         
-        // Não revelar se o email existe (segurança contra enumeration)
-        if (!user || !user.passwordHash) {
-          console.log("[Auth] ❌ Invalid credentials for:", input.email);
-          await new Promise(resolve => setTimeout(resolve, 500)); // Fake delay
+        // Não revelar se o email existe
+        if (!user) {
+          console.log("[Auth:Login] ❌ Usuário não encontrado:", input.email);
+          await new Promise(resolve => setTimeout(resolve, 500));
           throw new Error("Email ou senha inválidos");
         }
 
-        // Comparar senha com timing-safe bcrypt
+        console.log("[Auth:Login] ✅ Usuário encontrado:", user.email);
+        console.log("[Auth:Login] 🔐 passwordHash existe?", !!user.passwordHash);
+
+        if (!user.passwordHash) {
+          console.log("[Auth:Login] ❌ passwordHash vazio para:", user.email);
+          throw new Error("Email ou senha inválidos");
+        }
+
+        console.log("[Auth:Login] 🔑 Comparando senhas...");
         const validPassword = await bcrypt.compare(input.password, user.passwordHash);
+        console.log("[Auth:Login] ✅ Senha válida?", validPassword);
         
         if (!validPassword) {
-          console.log("[Auth] ❌ Invalid password for:", input.email);
-          await new Promise(resolve => setTimeout(resolve, 500)); // Fake delay
+          console.log("[Auth:Login] ❌ Senha inválida para:", input.email);
+          await new Promise(resolve => setTimeout(resolve, 500));
           throw new Error("Email ou senha inválidos");
         }
 
         // Verificar se usuário está ativo
+        console.log("[Auth:Login] 🧐 Status do usuário:", user.status);
         if (user.status === "inactive" || user.deletedAt) {
-          console.log("[Auth] ❌ Inactive user:", input.email);
+          console.log("[Auth:Login] ❌ Usuário inativo:", input.email);
           throw new Error("Usuário inativo");
         }
 
-        console.log("[Auth] ✅ Login successful for:", input.email);
-
-        // Gerar JWT
+        console.log("[Auth:Login] ✅ Gerando JWT...");
         const secret = process.env.JWT_SECRET;
+        console.log("[Auth:Login] 🔐 JWT_SECRET configurado?", !!secret);
+        
         if (!secret) {
-          console.error("[Auth] ❌ JWT_SECRET not configured");
+          console.error("[Auth:Login] ❌ JWT_SECRET not configured");
           throw new Error("Server configuration error");
         }
 
@@ -90,8 +109,7 @@ export const authRouter = router({
           { expiresIn: "7d" }
         );
 
-        // Log audit
-        console.log("[Auth] 🔐 Token issued for user:", user.id);
+        console.log("[Auth:Login] ✅ Token gerado com sucesso para user ID:", user.id);
 
         return {
           token,
@@ -103,18 +121,20 @@ export const authRouter = router({
           },
         };
       } catch (error) {
-        console.error("[Auth] ❌ Login error:", error);
+        console.error("[Auth:Login] ❌ Erro completo:", error);
         throw error;
       }
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {
-    console.log("[Auth] Logout for user:", ctx.user?.id || "anonymous");
+    console.log("[Auth:Logout] Logout para user:", ctx.user?.id || "anonymous");
     return { success: true };
   }),
 
   me: protectedProcedure.query(async ({ ctx }) => {
     try {
+      console.log("[Auth:Me] Buscando dados do usuário:", ctx.user?.id);
+      
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -127,9 +147,11 @@ export const authRouter = router({
       const user = users_result[0];
       
       if (!user) {
-        console.log("[Auth] ❌ User not found:", ctx.user!.id);
+        console.log("[Auth:Me] ❌ Usuário não encontrado:", ctx.user!.id);
         throw new Error("Usuário não encontrado");
       }
+
+      console.log("[Auth:Me] ✅ Usuário encontrado:", user.email);
 
       return {
         id: user.id,
@@ -138,7 +160,7 @@ export const authRouter = router({
         role: user.role,
       };
     } catch (error) {
-      console.error("[Auth] ❌ Me query error:", error);
+      console.error("[Auth:Me] ❌ Erro:", error);
       throw error;
     }
   }),
@@ -148,11 +170,12 @@ export const authRouter = router({
 export const queuesRouter = router({
   list: protectedProcedure.query(async () => {
     try {
+      console.log("[Queues:List] Listando filas");
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       return await db.select().from(queues);
     } catch (error) {
-      console.error("[Queues] List error:", error);
+      console.error("[Queues:List] Erro:", error);
       throw error;
     }
   }),
@@ -161,6 +184,7 @@ export const queuesRouter = router({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ input }) => {
       try {
+        console.log("[Queues:Get] Buscando fila:", input.id);
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
@@ -176,14 +200,14 @@ export const queuesRouter = router({
 
         return result[0];
       } catch (error) {
-        console.error("[Queues] Get error:", error);
+        console.error("[Queues:Get] Erro:", error);
         throw error;
       }
     }),
 });
 
 // ============================================================================
-// IMPORT ALL OTHER ROUTERS (COM NOMES CORRETOS)
+// IMPORT ALL OTHER ROUTERS
 // ============================================================================
 
 import { conversationsRouter } from "./routers-conversations";
