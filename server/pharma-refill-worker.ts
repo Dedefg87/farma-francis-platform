@@ -1,6 +1,6 @@
-import { and, eq, gte, lte, desc, sql } from "drizzle-orm";
+import { and, eq, gte, lte, desc } from "drizzle-orm";
 import { getDb } from "./db";
-import { crmTasks, customers } from "../drizzle/schema";
+import { customerTreatments, customers, crmTasks } from "../drizzle/schema";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
 
 let refillTimer: any = null;
@@ -29,124 +29,102 @@ export function startPharmaRefillWorker(
     const now = new Date();
     const future = addDays(now, daysAhead);
 
-    const session = (db as any).session;
-    const client = session?.client;
-    if (!client) return;
-    const [upcomingRaw] = await client.execute(
-      `SELECT ct.*, c.name as customer_name, c.phone as customer_phone
-       FROM customer_treatments ct
-       INNER JOIN customers c ON ct.customer_id = c.id
-       WHERE ct.is_active = 1
-         AND ct.data_fim_previsto >= ?
-         AND ct.data_fim_previsto <= ?
-       ORDER BY ct.data_fim_previsto DESC`,
-      [now, future]
-    );
-    const upcoming = (upcomingRaw as any[]).map(row => ({
-      treatment: {
-        id: row.id,
-        customerId: row.customer_id,
-        nomeMedicamento: row.nome_medicamento,
-        posologiaDiaria: row.posologia_diaria,
-        qtdCaixa: row.qtd_caixa,
-        dataFimPrevisto: row.data_fim_previsto,
-        dataUltimaCompra: row.data_ultima_compra,
-        isActive: row.is_active,
-      },
-      customer: {
-        id: row.customer_id,
-        name: row.customer_name,
-        phone: row.customer_phone,
-      }
-    }));
-
-    for (const row of upcoming) {
-      const endAt = row.treatment.endDate
-        ? new Date(row.treatment.endDate as any)
-        : null;
-      if (!endAt || Number.isNaN(endAt.getTime())) continue;
-
-      const dueAt = subDays(endAt, safetyDays);
-      const dueStart = new Date(dueAt);
-      dueStart.setHours(dueStart.getHours() - 1);
-      const dueEnd = new Date(dueAt);
-      dueEnd.setHours(dueEnd.getHours() + 1);
-
-      // Avoid duplicate open tasks for same treatment around same dueAt
-      const existing = await db
-        .select({ id: crmTasks.id })
-        .from(crmTasks)
+    try {
+      // Query using Drizzle ORM - JOIN customers com customerTreatments
+      const upcoming = await db
+        .select({
+          id: customerTreatments.id,
+          customerId: customerTreatments.customerId,
+          nomeMedicamento: customerTreatments.nomeMedicamento,
+          posologiaDiaria: customerTreatments.posologiaDiaria,
+          qtdCaixa: customerTreatments.qtdCaixa,
+          dataFimPrevisto: customerTreatments.dataFimPrevisto,
+          dataUltimaCompra: customerTreatments.dataUltimaCompra,
+          isActive: customerTreatments.isActive,
+          customeName: customers.name,
+          customerPhone: customers.phone,
+        })
+        .from(customerTreatments)
+        .innerJoin(customers, eq(customerTreatments.customerId, customers.id))
         .where(
           and(
-            eq(crmTasks.status, "open"),
-            eq(crmTasks.relatedEntityType, "customer_treatment"),
-            eq(crmTasks.relatedEntityId, row.treatment.id),
-            gte(crmTasks.dueAt, dueStart),
-            lte(crmTasks.dueAt, dueEnd)
+            eq(customerTreatments.isActive, 1),
+            gte(customerTreatments.dataFimPrevisto, now),
+            lte(customerTreatments.dataFimPrevisto, future)
           )
         )
-        .limit(1);
+        .orderBy(desc(customerTreatments.dataFimPrevisto));
 
-      if (existing?.[0]) continue;
+      for (const row of upcoming) {
+        const endAt = row.dataFimPrevisto
+          ? new Date(row.dataFimPrevisto as any)
+          : null;
 
-      const title = `Reposicao: ${row.customer.name} - ${row.treatment.nomeMedicamento}`;
-      const description =
-        `Tratamento perto do fim (safety ${safetyDays}d). ` +
-        `Fim previsto: ${endAt.toISOString().slice(0, 10)}.`;
+        if (!endAt || Number.isNaN(endAt.getTime())) continue;
 
-      const inserted = await db
-        .insert(crmTasks)
-        .values({
-          title,
-          description,
+        const dueAt = subDays(endAt, safetyDays);
+        const dueStart = new Date(dueAt);
+        dueStart.setHours(dueStart.getHours() - 1);
+        const dueEnd = new Date(dueAt);
+        dueEnd.setHours(dueEnd.getHours() + 1);
+
+        // Avoid duplicate tasks
+        const existing = await db
+          .select({ id: crmTasks.id })
+          .from(crmTasks)
+          .where(
+            and(
+              eq(crmTasks.entityType, "customer_treatment"),
+              eq(crmTasks.entityId, row.id),
+              eq(crmTasks.status, "open")
+            )
+          )
+          .limit(1);
+
+        if (existing.length > 0) continue;
+
+        // Create task
+        await db.insert(crmTasks).values({
+          entityType: "customer_treatment",
+          entityId: row.id,
+          title: `Reposição: ${row.nomeMedicamento}`,
+          body: `${row.customeName} precisa repor ${row.nomeMedicamento}`,
           dueAt,
           status: "open",
-          priority: "medium",
-          relatedEntityType: "customer_treatment",
-          relatedEntityId: row.treatment.id,
-          assignedTo: null,
-          createdBy: null,
+          priority: "normal",
           createdAt: new Date(),
           updatedAt: new Date(),
-          completedAt: null,
-        } as any)
-        .$returningId();
-
-      const taskId = inserted?.[0]?.id ?? null;
-
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "SmartRefillTaskCreated",
-          entityType: "customer",
-          entityId: row.customer.id,
-          actorUserId: null,
-          payload: {
-            taskId,
-            treatmentId: row.treatment.id,
-            customerId: row.customer.id,
-            dueAt: dueAt.toISOString(),
-            endAt: endAt.toISOString(),
-          },
         });
-      });
+
+        // Enqueue event
+        fireAndForget(async () => {
+          await enqueueCrmOutboxEvent({
+            eventName: "refill_task_created",
+            entityType: "customer_treatment",
+            entityId: row.id,
+            payload: {
+              treatmentId: row.id,
+              medicamento: row.nomeMedicamento,
+              customer: row.customeName,
+            },
+          });
+        });
+      }
+    } catch (err) {
+      console.error("[pharma-refill-worker] Error:", err);
     }
   };
 
-  // initial run
-  runOnce().catch(err => {
-    console.error("[Pharma Refill Worker] run failed:", err);
-  });
+  // Run immediately
+  runOnce();
 
-  refillTimer = setInterval(
-    () => {
-      runOnce().catch(err => {
-        console.error("[Pharma Refill Worker] run failed:", err);
-      });
-    },
-    Math.max(1, intervalMinutes) * 60 * 1000
-  );
+  // Schedule interval
+  refillTimer = setInterval(runOnce, intervalMinutes * 60 * 1000);
+}
 
-  console.log(
-    `[Pharma Refill Worker] started (every ${intervalMinutes}m, ahead=${daysAhead}d, safety=${safetyDays}d)`
-  );
+export function stopPharmaRefillWorker() {
+  if (refillTimer) {
+    clearInterval(refillTimer);
+    refillTimer = null;
+  }
 }
