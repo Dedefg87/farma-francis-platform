@@ -55,11 +55,11 @@ import { runBroadcastMigrations } from "../broadcast-migration";
 import { applySqlMigrations } from "./migrations.js";
 
 // Novos routers organizados
-import debugRouter from "./routes/debug";
-import adminRouter from "./routes/admin";
-import fixRouter from "./routes/fix";
-import emergencyRouter from "./routes/emergency";
-import testFlowsRouter from "../routes/test";
+import debugRouter from "./routes/debug.ts";
+import adminRouter from "./routes/admin.ts";
+import fixRouter from "./routes/fix.ts";
+import emergencyRouter from "./routes/emergency.ts";
+import testFlowsRouter from "../routes/test.ts";
 
 // Auto-migrate media columns if missing
 async function runMediaColumnsMigration() {
