@@ -9,7 +9,7 @@ import { trpc } from '@/lib/trpc';
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +22,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      if (!email || !password) {
+      if (!username || !password) {
         throw new Error('Por favor, preencha todos os campos');
       }
 
@@ -30,8 +30,8 @@ export default function Login() {
         throw new Error('Senha deve ter no mínimo 5 caracteres');
       }
 
-      // Chamar mutation de login com email
-      const result = await loginMutation.mutateAsync({ email, password });
+      // Chamar mutation de login com username (pode ser email ou nome)
+      const result = await loginMutation.mutateAsync({ username, password });
       
       console.log('Login bem-sucedido:', result);
       
@@ -90,20 +90,20 @@ export default function Login() {
           <form onSubmit={handleLogin} className="space-y-6">
             {/* Campo Usuário */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                E-mail *
+              <Label htmlFor="username" className="text-sm font-medium text-gray-700">
+                Usuário ou E-mail *
               </Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@farma-francis.com.br"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="username"
+                  type="text"
+                  placeholder="admin ou admin@email.com"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="pl-11 h-12 border-gray-300 focus:border-[#D32F2F] focus:ring-[#D32F2F]"
                   disabled={isLoading}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </div>
             </div>

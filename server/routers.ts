@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
@@ -19,18 +19,25 @@ export const authRouter = router({
   login: publicProcedure
     .input(
       z.object({
-        email: z.string().email(),
+        username: z.string().min(1),
         password: z.string().min(6),
       })
     )
     .mutation(async ({ input }) => {
       try {
-        console.log("[Auth:Login] ✅ Tentando login para:", input.email);
+        console.log("[Auth:Login] ✅ Tentando login para:", input.username);
         
         const db = await getDb();
         if (!db) throw new Error("Database error");
 
-        const result = await db.select().from(users).where(eq(users.email, input.email.toLowerCase())).limit(1);
+        // Buscar por email OU name (username)
+        const result = await db.select().from(users).where(
+          or(
+            eq(users.email, input.username),
+            eq(users.name, input.username)
+          )
+        ).limit(1);
+        
         const user = result[0];
         
         if (!user || !user.passwordHash) {
