@@ -20,7 +20,7 @@ export const authRouter = router({
     .input(
       z.object({
         username: z.string().min(1),
-        password: z.string().min(6),
+        password: z.string(), // Removido min(6) para aceitar senhas menores
       })
     )
     .mutation(async ({ input }) => {

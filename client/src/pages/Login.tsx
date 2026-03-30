@@ -26,9 +26,8 @@ export default function Login() {
         throw new Error('Por favor, preencha todos os campos');
       }
 
-      if (password.length < 5) {
-        throw new Error('Senha deve ter no mínimo 5 caracteres');
-      }
+      // Removida validação de tamanho mínimo da senha
+      // if (password.length < 5) { ... }
 
       // Chamar mutation de login com username (pode ser email ou nome)
       const result = await loginMutation.mutateAsync({ username, password });
