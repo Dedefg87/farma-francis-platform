@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
-import { adminProcedure } from "./_core/trpc.js";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { adminProcedure } from "./_core/trpc";
 import { getDb } from "./db.js";
 import {
   customers,

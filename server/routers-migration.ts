@@ -1,4 +1,4 @@
-import { protectedProcedure, router } from "./_core/trpc.js";
+import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db.js";
 import { exec } from "child_process";
 import { promisify } from "util";
