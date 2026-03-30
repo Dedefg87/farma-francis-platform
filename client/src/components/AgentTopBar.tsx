@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { hasSession } from "@/lib/auth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { useEffect, useRef, useState } from "react";
 
@@ -50,6 +51,7 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
   const { data: conversations } = trpc.conversations.listActive.useQuery(
     undefined,
     {
+      enabled: hasSession(),
       refetchInterval: 1000, // Verificar a cada 1 segundo
       refetchIntervalInBackground: true, // Continuar verificando mesmo em background
     }

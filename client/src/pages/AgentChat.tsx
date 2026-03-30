@@ -5,6 +5,7 @@ import { PDFPreview } from "@/components/PDFPreview";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
+import { hasSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -95,9 +96,13 @@ export default function AgentChat() {
 
   // Queries
   const { data: conversations, isLoading: conversationsLoading } =
-    trpc.conversations.listActive.useQuery({
-      refetchInterval: 5000, // Atualizar a cada 5 segundos
-    });
+    trpc.conversations.listActive.useQuery(
+      {},
+      {
+        enabled: hasSession(),
+        refetchInterval: 5000, // Atualizar a cada 5 segundos
+      }
+    );
 
   const { data: messages, isLoading: messagesLoading } =
     trpc.messages.list.useQuery(

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderContentWithLinks } from "@/utils/text-format";
+import { hasSession } from "@/lib/auth";
 
 function getImageSrc(
   url: string | null | undefined,
@@ -319,9 +320,13 @@ export default function AgentMessages() {
     data: conversations,
     isLoading: loadingConversations,
     refetch: refetchConversations,
-  } = trpc.conversations.listActive.useQuery({
-    refetchInterval: 1000, // Atualizar a cada 1 segundo
-  });
+  } = trpc.conversations.listActive.useQuery(
+    {},
+    {
+      enabled: hasSession(),
+      refetchInterval: 1000, // Atualizar a cada 1 segundo
+    }
+  );
 
   const { data: loggedAgents } = trpc.conversations.loggedAgents.useQuery(
     undefined,

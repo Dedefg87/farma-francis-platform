@@ -8,46 +8,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-function getImageSrc(
-  url: string | null | undefined,
-  messageId?: number
-): string {
-  if (!url) return "";
-
-  // Se já for data URL, retornar direto
-  if (url.startsWith?.("data:")) {
-    return url;
-  }
-
-  // Se for URL absoluta (http/https), usar como está
-  if (url.startsWith?.("http")) {
-    return url;
-  }
-
-  // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
-  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-  const cleanUrl = url.replace(/^\//, "");
-  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
-}
-
-function handleImageClick(url: string | null | undefined, messageId?: number) {
-  const src = getImageSrc(url, messageId);
-  if (!src) return;
-
-  if (src?.startsWith?.("data:")) {
-    const win = window.open("", "_blank", "width=800,height=600");
-    if (win) {
-      win.document.write(
-        `<html><head><title>Imagem</title></head><body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#000;"><img src="${src}" style="max-width:100%;max-height:100vh;object-fit:contain;"/></body></html>`
-      );
-      win.document.close();
-    }
-  } else {
-    window.open(src, "_blank");
-  }
-}
 import { Textarea } from "@/components/ui/textarea";
+import { trpc } from "@/lib/trpc";
+import { hasSession } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -107,7 +70,9 @@ export default function Messages() {
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
-    trpc.conversations.listActive.useQuery();
+    trpc.conversations.listActive.useQuery(undefined, {
+      enabled: hasSession(),
+    });
 
   // Buscar mensagens da conversa selecionada
   const { data: messages, isLoading: loadingMessages } =
