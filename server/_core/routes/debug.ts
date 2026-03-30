@@ -13,6 +13,8 @@ import {
   processedWebhookMessages,
 } from "../../drizzle/schema";
 
+console.log("[DebugRouter] module loaded"); // Log de carregamento
+
 const router = Router();
 
 // GET /api/debug/broadcast-list
