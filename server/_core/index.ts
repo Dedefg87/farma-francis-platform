@@ -505,8 +505,11 @@ async function startServer() {
 
 
   // Rotas organizadas (debug, admin, fix, emergency, test)
+  console.log("[Startup] Registering organized routers...");
   app.use("/api/debug", debugRouter);
+  console.log("[Startup] /api/debug registered");
   app.use("/api/admin", adminRouter);
+  console.log("[Startup] /api/admin registered");
   app.use("/api/fix", fixRouter);
   app.use("/api/emergency", emergencyRouter);
   app.use("/api/test", testFlowsRouter);
