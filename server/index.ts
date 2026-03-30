@@ -95,53 +95,68 @@ async function startServer() {
 
   // tRPC mount with logging
   app.use("/api/trpc", (req, res, next) => {
-    console.log(`[tRPC] ${req.method} ${req.url}`);
+console.log(`[tRPC] ${req.method} ${req.url}`);
     next();
   });
+// tRPC mount with logging
+app.use("/api/trpc", (req, res, next) => {
+  console.log(`[tRPC] ${req.method} ${req.url}`);
+  next();
+});
 
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext: async ({ req }) => {
-        console.log("[createContext] Building context for", req.path);
+app.use(
+  "/api/trpc",
+  createExpressMiddleware({
+    router: appRouter,
+    createContext: async ({ req }) => {
+      console.log("[createContext] Building context for", req.path);
+      
+      const auth = req.headers.authorization;
+      if (!auth) {
+        return { db, user: null };
+      }
 
-        const auth = req.headers.authorization;
-        if (!auth) {
+      const token = auth.replace("Bearer ", "").trim();
+      
+      try {
+        const payload = jwt.verify(
+          token,
+          process.env.JWT_SECRET || "secret"
+        ) as any;
+
+        const [user] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, payload.sub))
+          .limit(1);
+
+        if (!user) {
           return { db, user: null };
         }
 
-        const token = auth.replace("Bearer ", "").trim();
+        return { db, user };
+      } catch (err) {
+        console.error("[Auth] Invalid token:", err);
+        return { db, user: null };
+      }
+    },
+  })
+);
 
-        try {
-          const payload = jwt.verify(
-            token,
-            process.env.JWT_SECRET || "secret"
-          ) as any;
+// ⭐ NOVO: Fallback para SPA - redireciona rotas desconhecidas para index.html
+app.get("*", (req, res) => {
+  // Se não for uma rota de API ou tRPC, serve o index.html
+  if (!req.path.startsWith("/api") && !req.path.startsWith("/trpc")) {
+    res.sendFile(path.join(__dirname, "../dist/public/index.html"));
+  } else {
+    res.status(404).json({ error: "Not found" });
+  }
+});
 
-          const [user] = await db
-            .select()
-            .from(users)
-            .where(eq(users.id, payload.sub))
-            .limit(1);
-
-          if (!user) {
-            return { db, user: null };
-          }
-
-          return { db, user };
-        } catch (err) {
-          console.error("[Auth] Invalid token:", err);
-          return { db, user: null };
-        }
-      },
-    })
-  );
-
-  const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-  app.listen(port, "0.0.0.0", () => {
-    console.log(`[Server] Listening on port ${port}`);
-  });
+const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+app.listen(port, "0.0.0.0", () => {
+  console.log(`[Server] Listening on port ${port}`);
+});
 }
 
 startServer().catch((err) => {
