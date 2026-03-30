@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
 import { getDb } from "./db";
-import { users, queues } from "../drizzle/schema";
+import { users, queues, broadcastLists } from "../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 
 // 1. systemRouter
@@ -19,18 +19,30 @@ export const authRouter = router({
   login: publicProcedure
     .input(
       z.object({
+<<<<<<< HEAD
         email: z.string().email(),
         password: z.string(),
+=======
+        username: z.string().min(1),
+        password: z.string(), // Removido min(6) para aceitar senhas menores
+>>>>>>> 239838d55221719296931ff07f7a90abc2564772
       })
     )
     .mutation(async ({ input }) => {
       try {
-        console.log("[Auth:Login] ✅ Tentando login para:", input.email);
+        console.log("[Auth:Login] ✅ Tentando login para:", input.username);
         
         const db = await getDb();
         if (!db) throw new Error("Database error");
 
-        const result = await db.select().from(users).where(eq(users.email, input.email.toLowerCase())).limit(1);
+        // Buscar por email OU name (username)
+        const result = await db.select().from(users).where(
+          or(
+            eq(users.email, input.username),
+            eq(users.name, input.username)
+          )
+        ).limit(1);
+        
         const user = result[0];
         
         if (!user || !user.passwordHash) {
@@ -99,6 +111,16 @@ export const queuesRouter = router({
     }),
 });
 
+// 4. broadcastRouter
+export const broadcastRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return await broadcastLists
+      .select()
+      .where(eq(broadcastLists.userId, ctx.user.id))
+      .orderBy("createdAt");
+  }),
+});
+
 // IMPORT OTHER ROUTERS
 import { conversationsRouter } from "./routers-conversations";
 import { agentsRouter } from "./routers-agents";
@@ -108,12 +130,24 @@ import { messagesRouter } from "./routers-messages";
 import { tagsRouter } from "./routers-tags";
 import { surveyRouter } from "./routers-survey";
 import { crmRouter } from "./routers-crm";
+import { aiRouter } from "./routers-ai";
+import { apiConfigRouter } from "./routers-api-config";
+import { babyShowerRouter } from "./routers-baby-shower";
+import { contactFetchRouter } from "./routers-contact-fetch";
+import { dashboardRouter } from "./routers-dashboard";
+import { dashboardDrilldownRouter } from "./routers-dashboard-drilldown";
+import { executionsRouter } from "./routers-executions";
+import { logsRouter } from "./routers-logs";
+import { pausesRouter } from "./routers-pauses";
+import { quickRepliesRouter } from "./routers-quick-replies";
+import { telemetryRouter } from "./routers-telemetry";
 
 // APP ROUTER
 export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   queues: queuesRouter,
+  broadcast: broadcastRouter,
   conversations: conversationsRouter,
   agents: agentsRouter,
   automation: automationRouter,
@@ -122,6 +156,18 @@ export const appRouter = router({
   tags: tagsRouter,
   survey: surveyRouter,
   crm: crmRouter,
+  // Novos routers adicionados
+  ai: aiRouter,
+  apiConfig: apiConfigRouter,
+  babyShower: babyShowerRouter,
+  contactFetch: contactFetchRouter,
+  dashboard: dashboardRouter,
+  dashboardDrilldown: dashboardDrilldownRouter,
+  executions: executionsRouter,
+  logs: logsRouter,
+  pauses: pausesRouter,
+  quickReplies: quickRepliesRouter,
+  telemetry: telemetryRouter,
 });
 
 export type AppRouter = typeof appRouter;

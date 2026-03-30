@@ -1,6 +1,7 @@
-# Build: forced rebuild - Wed Mar 18 17:55 GMT+0000
-# Rebuild triggered: 2026-03-16 19:28 GMT-3 (force no-cache for COPY layer)
+# Build: auth token header fix - Mon Mar 30 14:45 GMT-3 2026
 FROM node:20-alpine
+
+#强制重建标识: 2c45f20
 
 WORKDIR /app
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, inArray } from "drizzle-orm";
 import { conversations } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 
@@ -8,6 +8,18 @@ export const conversationsRouter = router({
     return await conversations
       .select()
       .where(eq(conversations.assignedTo, ctx.user.id))
+      .orderBy(desc(conversations.lastMessageAt));
+  }),
+  listActive: protectedProcedure.query(async ({ ctx }) => {
+    // Lista apenas conversas abertas ou atribuídas (não fechadas)
+    return await conversations
+      .select()
+      .where(
+        and(
+          eq(conversations.assignedTo, ctx.user.id),
+          inArray(conversations.status, ["open", "assigned"])
+        )
+      )
       .orderBy(desc(conversations.lastMessageAt));
   }),
   assign: protectedProcedure

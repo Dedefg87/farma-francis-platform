@@ -26,14 +26,16 @@ export default function Login() {
         throw new Error('Por favor, preencha todos os campos');
       }
 
-      if (password.length < 5) {
-        throw new Error('Senha deve ter no mínimo 5 caracteres');
-      }
+      // Removida validação de tamanho mínimo da senha
+      // if (password.length < 5) { ... }
 
-      // Chamar mutation de login com username
+      // Chamar mutation de login com username (pode ser email ou nome)
       const result = await loginMutation.mutateAsync({ username, password });
       
       console.log('Login bem-sucedido:', result);
+      
+      // Salvar token no localStorage
+      localStorage.setItem('authToken', result.token);
       
       // Invalidar cache do auth.me para forçar recarregamento
       await utils.auth.me.invalidate();
@@ -91,14 +93,14 @@ export default function Login() {
             {/* Campo Usuário */}
             <div className="space-y-2">
               <Label htmlFor="username" className="text-sm font-medium text-gray-700">
-                Usuário *
+                Usuário ou E-mail *
               </Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <Input
                   id="username"
                   type="text"
-                  placeholder="admin"
+                  placeholder="admin ou admin@email.com"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="pl-11 h-12 border-gray-300 focus:border-[#D32F2F] focus:ring-[#D32F2F]"

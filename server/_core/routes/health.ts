@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { Router } from "express";
+=======
+import express from "express";
+>>>>>>> 239838d55221719296931ff07f7a90abc2564772
 import { getDb } from "../../db";
 
 const router = Router();
