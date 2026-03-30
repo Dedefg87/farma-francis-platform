@@ -37,37 +37,19 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
-// Link customizado que faz dispatch baseado no tipo da operação
-const customLink = (op: any) => {
-  // Para queries: usar GET
-  if (op.type === "query") {
-    const url = new URL("/api/trpc/" + op.path, window.location.origin);
-    if (op.input) {
-      url.searchParams.set("input", JSON.stringify(op.input));
-    }
-    return fetch(url.toString(), {
-      method: "GET",
-      credentials: "include",
-    }).then(response => ({ ...op, response }));
-  }
-
-  // Para mutations: usar POST com httpBatchLink (batch)
-  const mutationLink = httpBatchLink({
-    url: "/api/trpc",
-    transformer: superjson,
-    fetch(input, init) {
-      return globalThis.fetch(input, {
-        ...(init ?? {}),
-        credentials: "include",
-      });
-    },
-  });
-
-  return mutationLink(op);
-};
-
 const trpcClient = trpc.createClient({
-  links: [customLink],
+  links: [
+    httpBatchLink({
+      url: "/api/trpc",
+      transformer: superjson,
+      fetch(input, init) {
+        return fetch(input, {
+          ...init,
+          credentials: "include",
+        });
+      },
+    }),
+  ],
 });
 
 createRoot(document.getElementById("root")!).render(
