@@ -32,7 +32,6 @@ export const authRouter = router({
     .mutation(async ({ input }) => {
       try {
         console.log("[Login] ✅ Iniciando login para:", input.email);
-
         const db = await getDb();
 
         // Busca o usuário
@@ -49,7 +48,6 @@ export const authRouter = router({
 
         const userData = user[0];
         console.log("[Login] ✅ Usuário encontrado:", userData.email);
-        console.log("[Login] 🔐 Hash armazenado:", userData.passwordHash?.substring(0, 20) + "...");
 
         // Compara a senha
         if (!userData.passwordHash) {
@@ -69,8 +67,6 @@ export const authRouter = router({
 
         // Gera o token
         const secret = process.env.JWT_SECRET || "secret";
-        console.log("[Login] 🔐 JWT_SECRET configurado?", !!process.env.JWT_SECRET);
-
         const token = jwt.sign(
           { sub: userData.id, role: userData.role || "user" },
           secret,
@@ -101,7 +97,6 @@ export const authRouter = router({
 
   me: protectedProcedure.query(async ({ ctx }) => {
     console.log("[Me] Buscando dados do usuário:", ctx.user?.id);
-
     const db = await getDb();
 
     const user = await db
@@ -136,7 +131,6 @@ export const queuesRouter = router({
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       console.log("[Queues] Buscando fila:", input.id);
-
       const db = await getDb();
 
       const q = await db
@@ -153,12 +147,69 @@ export const queuesRouter = router({
     }),
 });
 
-// 4. appRouter - Combina todos os routers
+// 4. Importar todos os outros routers existentes
+let conversationsRouter: any = null;
+let agentsRouter: any = null;
+let automationRouter: any = null;
+let inboxRouter: any = null;
+let messagesRouter: any = null;
+let tagsRouter: any = null;
+let surveysRouter: any = null;
+let crmsRouter: any = null;
+
+try {
+  const { conversationsRouter: cr } = await import("./routers-conversations");
+  conversationsRouter = cr;
+} catch (e) { console.log("[Router] conversationsRouter not found"); }
+
+try {
+  const { agentsRouter: ar } = await import("./routers-agents");
+  agentsRouter = ar;
+} catch (e) { console.log("[Router] agentsRouter not found"); }
+
+try {
+  const { automationRouter: au } = await import("./routers-automation");
+  automationRouter = au;
+} catch (e) { console.log("[Router] automationRouter not found"); }
+
+try {
+  const { inboxRouter: ir } = await import("./routers-inbox");
+  inboxRouter = ir;
+} catch (e) { console.log("[Router] inboxRouter not found"); }
+
+try {
+  const { messagesRouter: mr } = await import("./routers-messages");
+  messagesRouter = mr;
+} catch (e) { console.log("[Router] messagesRouter not found"); }
+
+try {
+  const { tagsRouter: tr } = await import("./routers-tags");
+  tagsRouter = tr;
+} catch (e) { console.log("[Router] tagsRouter not found"); }
+
+try {
+  const { surveysRouter: sr } = await import("./routers-survey");
+  surveysRouter = sr;
+} catch (e) { console.log("[Router] surveysRouter not found"); }
+
+try {
+  const { crmsRouter: cr } = await import("./routers-crm");
+  crmsRouter = cr;
+} catch (e) { console.log("[Router] crmsRouter not found"); }
+
+// 5. appRouter - Combina TODOS os routers
 export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   queues: queuesRouter,
+  ...(conversationsRouter && { conversations: conversationsRouter }),
+  ...(agentsRouter && { agents: agentsRouter }),
+  ...(automationRouter && { automation: automationRouter }),
+  ...(inboxRouter && { inbox: inboxRouter }),
+  ...(messagesRouter && { messages: messagesRouter }),
+  ...(tagsRouter && { tags: tagsRouter }),
+  ...(surveysRouter && { surveys: surveysRouter }),
+  ...(crmsRouter && { crms: crmsRouter }),
 });
 
 export type AppRouter = typeof appRouter;
-
