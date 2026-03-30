@@ -183,18 +183,17 @@ export const queuesRouter = router({
 });
 
 // ============================================================================
-// IMPORT ALL OTHER ROUTERS
+// IMPORT ALL OTHER ROUTERS (COM NOMES CORRETOS)
 // ============================================================================
 
-// Importar routers existentes
 import { conversationsRouter } from "./routers-conversations";
 import { agentsRouter } from "./routers-agents";
 import { automationRouter } from "./routers-automation";
 import { inboxRouter } from "./routers-inbox";
 import { messagesRouter } from "./routers-messages";
 import { tagsRouter } from "./routers-tags";
-import { surveysRouter } from "./routers-survey";
-import { crmsRouter } from "./routers-crm";
+import { surveyRouter } from "./routers-survey";
+import { crmRouter } from "./routers-crm";
 
 // ============================================================================
 // APP ROUTER
@@ -213,8 +212,8 @@ export const appRouter = router({
   inbox: inboxRouter,
   messages: messagesRouter,
   tags: tagsRouter,
-  surveys: surveysRouter,
-  crms: crmsRouter,
+  survey: surveyRouter,
+  crm: crmRouter,
 });
 
 export type AppRouter = typeof appRouter;
