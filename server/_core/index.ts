@@ -417,6 +417,34 @@ async function startServer() {
 
   // Removido: app.use("/api/", apiLimiter) - genérico não é necessário
 
+  // ============================================
+  // PROTEÇÃO DE ROTAS SENSÍVEIS (DEBUG, FIX, ADMIN, EMERGENCY)
+  // ============================================
+  async function requireAuth(req: any, res: any, next: any) {
+    try {
+      // Usar autenticação do SDK (verifica cookie ou header)
+      const user = await sdk.authenticateRequest(req);
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      // Anexar usuário no request para uso nas rotas
+      req.user = user;
+      next();
+    } catch (err) {
+      console.error("[Auth Middleware] Error:", err);
+      return res.status(401).json({ error: "Authentication failed" });
+    }
+  }
+
+  // Aplicar middleware a rotas de diagnóstico e manutenção
+  app.use("/api/debug", requireAuth);
+  app.use("/api/fix", requireAuth);
+  app.use("/api/emergency", requireAuth);
+  app.use("/api/test", requireAuth);
+  app.use("/api/system", requireAuth);
+  // Admin routes também devem ser protegidas
+  app.use("/api/admin", requireAuth);
+
   // Baby Shower Public Routes (confirmação de pagamento)
   app.use("/api", babyShowerPublicRouter);
 
@@ -715,35 +743,6 @@ async function startServer() {
         serverTime: new Date().toISOString(),
       });
     } catch (error) {
-      res.status(500).json({ error: String(error) });
-    }
-  });
-
-  // Debug: listar mensagens com mídia
-  app.get("/api/debug/media-messages", async (req, res) => {
-    try {
-      const mysql = await import("mysql2/promise");
-      const pool = mysql.createPool({
-        connectionLimit: 1,
-        uri: process.env.DATABASE_URL,
-      });
-
-      const [rows]: any = await pool.execute(
-        `SELECT id, conversation_id, sender_type,
-         LEFT(content, 100) as content_preview,
-         file_url IS NOT NULL as has_file_url,
-         LENGTH(file_url) as file_url_length,
-         LEFT(file_url, 50) as file_url_preview,
-         file_type, created_at
-         FROM conversation_messages
-         ORDER BY id DESC
-         LIMIT 20`
-      );
-
-      await pool.end();
-      res.json({ count: rows.length, messages: rows });
-    } catch (error) {
-      console.error("[Debug Media Messages]", error);
       res.status(500).json({ error: String(error) });
     }
   });
