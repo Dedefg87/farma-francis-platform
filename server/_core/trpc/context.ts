@@ -10,7 +10,7 @@ export type User = {
 };
 
 export type Context = {
-  req?: Request;
+  req?: any;
   user?: User;
 };
 
@@ -22,16 +22,31 @@ export async function createContext(
 
   // Extrair token do header Authorization
   if (req) {
-    const authHeader = req.headers.get("authorization");
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.slice(7); // Remove "Bearer "
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET) as User;
-        user = decoded;
-      } catch (error) {
-        // Token inválido ou expirado
-        user = undefined;
+    try {
+      // Tentar como Request do Fetch API
+      let authHeader: string | null = null;
+      
+      if (req.headers && typeof req.headers.get === "function") {
+        // É um objeto Headers do Fetch API
+        authHeader = req.headers.get("authorization");
+      } else if (req.headers && typeof req.headers === "object") {
+        // É um objeto simples com headers
+        authHeader = req.headers.authorization || req.headers["authorization"];
       }
+
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.slice(7); // Remove "Bearer "
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET) as User;
+          user = decoded;
+        } catch (error) {
+          // Token inválido ou expirado
+          user = undefined;
+        }
+      }
+    } catch (error) {
+      // Ignorar erros de parsing
+      user = undefined;
     }
   }
 
