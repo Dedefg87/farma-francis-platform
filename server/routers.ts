@@ -7,12 +7,16 @@ import { getDb } from "./db";
 import { users, queues } from "../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 
-// 1. systemRouter - Rotas de saúde e status do sistema
+// ============================================================================
+// ROUTERS
+// ============================================================================
+
+// 1. systemRouter - Health check
 export const systemRouter = router({
   health: publicProcedure.query(async () => {
-    console.log("[System] Health check requested");
     try {
       const db = await getDb();
+      if (!db) return { status: "error", error: "Database not available" };
       return { status: "ok", timestamp: new Date().toISOString() };
     } catch (error) {
       return { status: "error", error: String(error) };
@@ -20,196 +24,197 @@ export const systemRouter = router({
   }),
 });
 
-// 2. authRouter - Rotas de autenticação (login, logout, me)
+// 2. authRouter - Authentication
 export const authRouter = router({
   login: publicProcedure
     .input(
       z.object({
-        email: z.string().email(),
-        password: z.string().min(6),
+        email: z.string().email("Email inválido"),
+        password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
       })
     )
     .mutation(async ({ input }) => {
       try {
-        console.log("[Login] ✅ Iniciando login para:", input.email);
+        console.log("[Auth] Login attempt for:", input.email);
+        
         const db = await getDb();
+        if (!db) throw new Error("Database not available");
 
-        // Busca o usuário
-        const user = await db
+        // Busca usuário (case-insensitive)
+        const users_result = await db
           .select()
           .from(users)
-          .where(eq(users.email, input.email))
+          .where(eq(users.email, input.email.toLowerCase()))
           .limit(1);
 
-        if (!user || user.length === 0) {
-          console.log("[Login] ❌ Usuário não encontrado:", input.email);
-          throw new Error("Credenciais inválidas");
+        const user = users_result[0];
+        
+        // Não revelar se o email existe (segurança contra enumeration)
+        if (!user || !user.passwordHash) {
+          console.log("[Auth] ❌ Invalid credentials for:", input.email);
+          await new Promise(resolve => setTimeout(resolve, 500)); // Fake delay
+          throw new Error("Email ou senha inválidos");
         }
 
-        const userData = user[0];
-        console.log("[Login] ✅ Usuário encontrado:", userData.email);
-
-        // Compara a senha
-        if (!userData.passwordHash) {
-          console.log("[Login] ❌ Usuário sem senha configurada");
-          throw new Error("Credenciais inválidas");
+        // Comparar senha com timing-safe bcrypt
+        const validPassword = await bcrypt.compare(input.password, user.passwordHash);
+        
+        if (!validPassword) {
+          console.log("[Auth] ❌ Invalid password for:", input.email);
+          await new Promise(resolve => setTimeout(resolve, 500)); // Fake delay
+          throw new Error("Email ou senha inválidos");
         }
 
-        const valid = await bcrypt.compare(input.password, userData.passwordHash);
-        console.log("[Login] 🔑 Senha válida?", valid);
-
-        if (!valid) {
-          console.log("[Login] ❌ Senha inválida para:", input.email);
-          throw new Error("Credenciais inválidas");
+        // Verificar se usuário está ativo
+        if (user.status === "inactive" || user.deletedAt) {
+          console.log("[Auth] ❌ Inactive user:", input.email);
+          throw new Error("Usuário inativo");
         }
 
-        console.log("[Login] ✅ Senha correta, gerando token...");
+        console.log("[Auth] ✅ Login successful for:", input.email);
 
-        // Gera o token
-        const secret = process.env.JWT_SECRET || "secret";
+        // Gerar JWT
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+          console.error("[Auth] ❌ JWT_SECRET not configured");
+          throw new Error("Server configuration error");
+        }
+
         const token = jwt.sign(
-          { sub: userData.id, role: userData.role || "user" },
+          { 
+            sub: user.id, 
+            email: user.email,
+            role: user.role || "user" 
+          },
           secret,
           { expiresIn: "7d" }
         );
 
-        console.log("[Login] ✅ Token gerado com sucesso");
+        // Log audit
+        console.log("[Auth] 🔐 Token issued for user:", user.id);
 
         return {
           token,
           user: {
-            id: userData.id,
-            email: userData.email,
-            name: userData.name,
-            role: userData.role,
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
           },
         };
       } catch (error) {
-        console.error("[Login] ❌ Erro completo:", error);
+        console.error("[Auth] ❌ Login error:", error);
         throw error;
       }
     }),
 
-  logout: publicProcedure.mutation(() => {
-    console.log("[Logout] Usuário fez logout");
+  logout: publicProcedure.mutation(async ({ ctx }) => {
+    console.log("[Auth] Logout for user:", ctx.user?.id || "anonymous");
     return { success: true };
   }),
 
   me: protectedProcedure.query(async ({ ctx }) => {
-    console.log("[Me] Buscando dados do usuário:", ctx.user?.id);
-    const db = await getDb();
+    try {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
 
-    const user = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, ctx.user!.id))
-      .limit(1);
+      const users_result = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, ctx.user!.id))
+        .limit(1);
 
-    if (!user || user.length === 0) {
-      throw new Error("User not found");
+      const user = users_result[0];
+      
+      if (!user) {
+        console.log("[Auth] ❌ User not found:", ctx.user!.id);
+        throw new Error("Usuário não encontrado");
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      };
+    } catch (error) {
+      console.error("[Auth] ❌ Me query error:", error);
+      throw error;
     }
-
-    const userData = user[0];
-    return {
-      id: userData.id,
-      email: userData.email,
-      name: userData.name,
-      role: userData.role,
-    };
   }),
 });
 
-// 3. queuesRouter - Rotas para gerenciamento de filas
+// 3. queuesRouter - Queue management
 export const queuesRouter = router({
   list: protectedProcedure.query(async () => {
-    console.log("[Queues] Listando todas as filas");
-    const db = await getDb();
-    return await db.select().from(queues);
+    try {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(queues);
+    } catch (error) {
+      console.error("[Queues] List error:", error);
+      throw error;
+    }
   }),
 
   get: protectedProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ input }) => {
-      console.log("[Queues] Buscando fila:", input.id);
-      const db = await getDb();
+      try {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
 
-      const q = await db
-        .select()
-        .from(queues)
-        .where(eq(queues.id, input.id))
-        .limit(1);
+        const result = await db
+          .select()
+          .from(queues)
+          .where(eq(queues.id, input.id))
+          .limit(1);
 
-      if (!q || q.length === 0) {
-        throw new Error("Queue not found");
+        if (!result || result.length === 0) {
+          throw new Error("Fila não encontrada");
+        }
+
+        return result[0];
+      } catch (error) {
+        console.error("[Queues] Get error:", error);
+        throw error;
       }
-
-      return q[0];
     }),
 });
 
-// 4. Importar todos os outros routers existentes
-let conversationsRouter: any = null;
-let agentsRouter: any = null;
-let automationRouter: any = null;
-let inboxRouter: any = null;
-let messagesRouter: any = null;
-let tagsRouter: any = null;
-let surveysRouter: any = null;
-let crmsRouter: any = null;
+// ============================================================================
+// IMPORT ALL OTHER ROUTERS
+// ============================================================================
 
-try {
-  const { conversationsRouter: cr } = await import("./routers-conversations");
-  conversationsRouter = cr;
-} catch (e) { console.log("[Router] conversationsRouter not found"); }
+// Importar routers existentes
+import { conversationsRouter } from "./routers-conversations";
+import { agentsRouter } from "./routers-agents";
+import { automationRouter } from "./routers-automation";
+import { inboxRouter } from "./routers-inbox";
+import { messagesRouter } from "./routers-messages";
+import { tagsRouter } from "./routers-tags";
+import { surveysRouter } from "./routers-survey";
+import { crmsRouter } from "./routers-crm";
 
-try {
-  const { agentsRouter: ar } = await import("./routers-agents");
-  agentsRouter = ar;
-} catch (e) { console.log("[Router] agentsRouter not found"); }
+// ============================================================================
+// APP ROUTER
+// ============================================================================
 
-try {
-  const { automationRouter: au } = await import("./routers-automation");
-  automationRouter = au;
-} catch (e) { console.log("[Router] automationRouter not found"); }
-
-try {
-  const { inboxRouter: ir } = await import("./routers-inbox");
-  inboxRouter = ir;
-} catch (e) { console.log("[Router] inboxRouter not found"); }
-
-try {
-  const { messagesRouter: mr } = await import("./routers-messages");
-  messagesRouter = mr;
-} catch (e) { console.log("[Router] messagesRouter not found"); }
-
-try {
-  const { tagsRouter: tr } = await import("./routers-tags");
-  tagsRouter = tr;
-} catch (e) { console.log("[Router] tagsRouter not found"); }
-
-try {
-  const { surveysRouter: sr } = await import("./routers-survey");
-  surveysRouter = sr;
-} catch (e) { console.log("[Router] surveysRouter not found"); }
-
-try {
-  const { crmsRouter: cr } = await import("./routers-crm");
-  crmsRouter = cr;
-} catch (e) { console.log("[Router] crmsRouter not found"); }
-
-// 5. appRouter - Combina TODOS os routers
 export const appRouter = router({
+  // Core
   system: systemRouter,
   auth: authRouter,
   queues: queuesRouter,
-  ...(conversationsRouter && { conversations: conversationsRouter }),
-  ...(agentsRouter && { agents: agentsRouter }),
-  ...(automationRouter && { automation: automationRouter }),
-  ...(inboxRouter && { inbox: inboxRouter }),
-  ...(messagesRouter && { messages: messagesRouter }),
-  ...(tagsRouter && { tags: tagsRouter }),
-  ...(surveysRouter && { surveys: surveysRouter }),
-  ...(crmsRouter && { crms: crmsRouter }),
+
+  // Business logic
+  conversations: conversationsRouter,
+  agents: agentsRouter,
+  automation: automationRouter,
+  inbox: inboxRouter,
+  messages: messagesRouter,
+  tags: tagsRouter,
+  surveys: surveysRouter,
+  crms: crmsRouter,
 });
 
 export type AppRouter = typeof appRouter;
