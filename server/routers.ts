@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
 import { getDb } from "./db";
-import { users, queues } from "../drizzle/schema";
+import { users, queues, broadcastLists } from "../drizzle/schema";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 
 // 1. systemRouter
@@ -99,6 +99,16 @@ export const queuesRouter = router({
     }),
 });
 
+// 4. broadcastRouter
+export const broadcastRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return await broadcastLists
+      .select()
+      .where(eq(broadcastLists.userId, ctx.user.id))
+      .orderBy("createdAt");
+  }),
+});
+
 // IMPORT OTHER ROUTERS
 import { conversationsRouter } from "./routers-conversations";
 import { agentsRouter } from "./routers-agents";
@@ -114,6 +124,7 @@ export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   queues: queuesRouter,
+  broadcast: broadcastRouter,
   conversations: conversationsRouter,
   agents: agentsRouter,
   automation: automationRouter,
