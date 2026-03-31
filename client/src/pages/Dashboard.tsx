@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -23,16 +23,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-
-interface DashboardStats {
-  totalConversations: number;
-  uniqueCustomers: number;
-  messagesSent: number;
-  messagesReceived: number;
-  byChannel: Array<{ channel: string; count: number }>;
-  byStatus: Array<{ status: string; count: number }>;
-  byHour: Array<{ hour: number; chats: number }>;
-}
+import { trpc } from "@/lib/trpc";
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"atendimentos" | "integracoes">(
@@ -40,26 +31,44 @@ export default function Dashboard() {
   );
   const [selectedQueue, setSelectedQueue] = useState("todas");
   const [selectedPeriod, setSelectedPeriod] = useState("mes");
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/dashboard/stats?period=${selectedPeriod}`);
-      const data = await res.json();
-      console.log("[Dashboard] Stats received:", data);
-      setStats(data);
-    } catch (error) {
-      console.error("[Dashboard] Error fetching stats:", error);
-    } finally {
-      setLoading(false);
+  // Usar hook tRPC para buscar estatísticas
+  const {
+    data: stats,
+    isLoading: loading,
+    refetch: refetchStats,
+    isRefetching: isRefetching,
+  } = trpc.dashboardStats.getStats.useQuery(
+    { period: selectedPeriod },
+    {
+      refetchOnWindowFocus: false,
+      staleTime: 2 * 60 * 1000, // 2 minutos
     }
-  };
+  );
 
-  useEffect(() => {
-    fetchStats();
-  }, [selectedPeriod]);
+  // Buscar dados dos gráficos
+  const { data: byChannel } = trpc.dashboardStats.getConversationsByChannel.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
+
+  const { data: byStatus } = trpc.dashboardStats.getConversationsByStatus.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
+
+  const { data: byHour } = trpc.dashboardStats.getContactsByHour.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
+
+  const { data: agentStats } = trpc.dashboardStats.getAgentStats.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
+
+  // Log para debug
+  console.log("[Dashboard] Render:", { stats, loading, byChannel, byStatus, byHour, agentStats });
 
   // Dados de métricas com valores reais
   const metricsData = {
@@ -84,49 +93,24 @@ export default function Dashboard() {
       trend: "up" as const,
     },
     mediaAtendPorAgente: {
-      value: 0,
+      value: stats?.avgPerAgent || 0,
       change: 0,
       trend: "up" as const,
     },
-    tma: "00:00:00",
+    tma: stats?.avgHandlingTime || "00:00:00",
   };
 
   // Dados para gráfico de contatos por hora
-  const contatosPorHoraData = stats?.byHour?.map((h: any) => ({
-    hora: h.hour,
-    chats: Number(h.chats) || 0,
-    chamadas: 0,
-    abandonadas: 0,
-  })) || [];
+  const contatosPorHoraData = byHour || [];
 
   // Dados de canal
-  const atendimentosPorCanalData = stats?.byChannel?.map((c: any) => ({
-    name: c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1) || "Desconhecido",
-    value: Number(c.count) || 0,
-    color: c.channel === "whatsapp" ? "#25D366" : c.channel === "instagram" ? "#E4405F" : "#6B7280",
-  })) || [];
+  const atendimentosPorCanalData = byChannel || [];
 
   // Dados de status
-  const atendimentosPorStatusData = stats?.byStatus?.map((s: any) => {
-    const statusLabels: Record<string, string> = {
-      open: "Em aberto",
-      closed: "Encerrados",
-      pending: "Pendentes",
-    };
-    const statusColors: Record<string, string> = {
-      open: "#3B82F6",
-      closed: "#10B981",
-      pending: "#F59E0B",
-    };
-    return {
-      name: statusLabels[s.status] || s.status || "Desconhecido",
-      value: Number(s.count) || 0,
-      color: statusColors[s.status] || "#6B7280",
-    };
-  }) || [];
+  const atendimentosPorStatusData = byStatus || [];
 
-  // Dados da tabela de agentes (vazio por enquanto)
-  const agentesData: any[] = [];
+  // Dados da tabela de agentes
+  const agentesData = agentStats || [];
 
   const renderMetricCard = (
     label: string,
@@ -252,12 +236,12 @@ export default function Dashboard() {
             </div>
 
             <Button
-              onClick={() => fetchStats()}
-              disabled={loading}
+              onClick={() => refetchStats()}
+              disabled={isRefetching || loading}
               className="bg-[#1e1b4b] hover:bg-[#2d2a5b] text-white"
             >
               <RefreshCw
-                className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+                className={`w-4 h-4 mr-2 ${isRefetching ? "animate-spin" : ""}`}
               />
               Atualizar
             </Button>
