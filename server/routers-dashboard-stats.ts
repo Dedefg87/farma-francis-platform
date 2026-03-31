@@ -136,8 +136,7 @@ export const dashboardStatsRouter = router({
           channel,
           COUNT(*) as count
         FROM conversations
-        WHERE opened_at >= ${start}
-          AND opened_at <= ${end}
+        WHERE channel IS NOT NULL
         GROUP BY channel
         ORDER BY count DESC
       `);
@@ -181,8 +180,7 @@ export const dashboardStatsRouter = router({
           status,
           COUNT(*) as count
         FROM conversations
-        WHERE opened_at >= ${start}
-          AND opened_at <= ${end}
+        WHERE status IS NOT NULL
         GROUP BY status
         ORDER BY count DESC
       `);
@@ -194,6 +192,7 @@ export const dashboardStatsRouter = router({
         closed: "Encerrados",
         pending: "Pendentes",
         waiting: "Aguardando",
+        assigned: "Atribuídos",
       };
 
       const statusColors: Record<string, string> = {
@@ -201,6 +200,7 @@ export const dashboardStatsRouter = router({
         closed: "#10B981",
         pending: "#F59E0B",
         waiting: "#8B5CF6",
+        assigned: "#F59E0B",
       };
 
       return result?.map((r: any) => ({

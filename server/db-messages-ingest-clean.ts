@@ -93,7 +93,7 @@ export async function ingestInboundConversationMessage(message: {
       customerId: customer.id,
       customerName: customer.name,
       customerPhone: customer.phone,
-      channel: message.provider,
+      channel: message.provider || "whatsapp", // fallback para whatsapp se undefined
       status: assignedUserId ? "assigned" : "open",
       assignedTo: assignedUserId,
       queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
