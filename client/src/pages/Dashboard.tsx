@@ -255,7 +255,7 @@ export default function Dashboard() {
                         <td className="px-4 py-3 text-gray-900 font-medium">{agent.name}</td>
                         <td className="px-4 py-3 text-center text-gray-900">{agent.conversations}</td>
                         <td className="px-4 py-3 text-center text-gray-900">{agent.days}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
+                        <td className="px-4 py-3 text-center text-gray-900">{(agent.avgPerDay ?? 0).toFixed(1)}</td>
                         <td className="px-4 py-3 text-center text-gray-900">{agent.messagesSent}</td>
                         <td className="px-4 py-3 text-center text-gray-900">{agent.messagesReceived}</td>
                         <td className="px-4 py-3 text-center text-gray-900">{agent.tma}</td>
