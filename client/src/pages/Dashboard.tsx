@@ -25,6 +25,16 @@ import {
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 
+interface DashboardStats {
+  totalConversations: number;
+  uniqueCustomers: number;
+  messagesSent: number;
+  messagesReceived: number;
+  byChannel: Array<{ channel: string; count: number }>;
+  byStatus: Array<{ status: string; count: number }>;
+  byHour: Array<{ hour: number; chats: number }>;
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"atendimentos" | "integracoes">(
     "atendimentos"
@@ -248,248 +258,221 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Métricas Principais */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
-          <Card className="p-6">
-            {renderMetricCard(
-              "Atendimentos",
-              metricsData.atendimentos.value,
-              metricsData.atendimentos.change,
-              metricsData.atendimentos.trend
-            )}
-          </Card>
-          <Card className="p-6">
-            {renderMetricCard(
-              "Clientes únicos",
-              metricsData.clientesUnicos.value,
-              metricsData.clientesUnicos.change,
-              metricsData.clientesUnicos.trend
-            )}
-          </Card>
-          <Card className="p-6">
-            {renderMetricCard(
-              "Mensagens enviadas",
-              metricsData.mensagensEnviadas.value,
-              metricsData.mensagensEnviadas.change,
-              metricsData.mensagensEnviadas.trend
-            )}
-          </Card>
-          <Card className="p-6">
-            {renderMetricCard(
-              "Mensagens recebidas",
-              metricsData.mensagensRecebidas.value,
-              metricsData.mensagensRecebidas.change,
-              metricsData.mensagensRecebidas.trend
-            )}
-          </Card>
-          <Card className="p-6">
-            {renderMetricCard(
-              "Méd. atend. / agente",
-              metricsData.mediaAtendPorAgente.value,
-              metricsData.mediaAtendPorAgente.change,
-              metricsData.mediaAtendPorAgente.trend
-            )}
-          </Card>
-          <Card className="p-6">
-            {renderMetricCard(
-              "TMA",
-              metricsData.tma,
-              undefined,
-              undefined,
-              true
-            )}
-          </Card>
-        </div>
-
-        {/* Gráficos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico de Contatos por Hora */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Contatos por hora
-              </h3>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-[#1e1b4b]"></div>
-                  Chats
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  Chamadas
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full bg-cyan-400"></div>
-                  Abandonadas
-                </span>
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={contatosPorHoraData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="hora" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="chats" fill="#1e1b4b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="chamadas" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar
-                  dataKey="abandonadas"
-                  fill="#22d3ee"
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Gráfico de Atendimentos por Fila - substituído por Status */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Status dos Atendimentos
-            </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={atendimentosPorStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {atendimentosPorStatusData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.color || "#4f46e5"}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico de Atendimentos por Canal */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Atendimentos por canal
-            </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={atendimentosPorCanalData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {atendimentosPorCanalData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Gráfico de Status dos Atendimentos */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Status dos Atendimentos
-            </h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={atendimentosPorStatusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {atendimentosPorStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-        </div>
-
-        {/* Tabela de Agentes */}
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Desempenho por Agente
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Agente
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Atendimentos
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Dias
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Méd. Atend. / Dia
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Msg. Enviadas
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    Msg. Recebidas
-                  </th>
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
-                    TMA
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {agentesData.map((agente, index) => (
-                  <tr
-                    key={index}
-                    className="border-b border-gray-100 hover:bg-gray-50"
-                  >
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.nome || "-"}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.atendimentos}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.dias}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.mediaAtendPorDia.toFixed(1)}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.msgEnviadas}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.msgRecebidas}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-900">
-                      {agente.tma}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex justify-center items-center h-96">
+            <div className="text-gray-600">Carregando dados...</div>
           </div>
-        </Card>
+        )}
+
+        {/* Conteúdo Principal */}
+        {!loading && stats && (
+          <>
+            {/* Métricas Principais */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Atendimentos",
+                  metricsData.atendimentos.value,
+                  metricsData.atendimentos.change,
+                  metricsData.atendimentos.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Clientes únicos",
+                  metricsData.clientesUnicos.value,
+                  metricsData.clientesUnicos.change,
+                  metricsData.clientesUnicos.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Mensagens enviadas",
+                  metricsData.mensagensEnviadas.value,
+                  metricsData.mensagensEnviadas.change,
+                  metricsData.mensagensEnviadas.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Mensagens recebidas",
+                  metricsData.mensagensRecebidas.value,
+                  metricsData.mensagensRecebidas.change,
+                  metricsData.mensagensRecebidas.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Méd. atend. / agente",
+                  metricsData.mediaAtendPorAgente.value,
+                  metricsData.mediaAtendPorAgente.change,
+                  metricsData.mediaAtendPorAgente.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "TMA",
+                  metricsData.tma,
+                  undefined,
+                  undefined,
+                  true
+                )}
+              </Card>
+            </div>
+
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico de Contatos por Hora */}
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Contatos por hora
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-[#1e1b4b]"></div>
+                      Chats
+                    </span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={contatosPorHoraData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="hora" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="chats" fill="#1e1b4b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+
+              {/* Gráfico de Atendimentos por Canal */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Atendimentos por canal
+                </h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={atendimentosPorCanalData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {atendimentosPorCanalData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+
+              {/* Gráfico de Status dos Atendimentos */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Status dos Atendimentos
+                </h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={atendimentosPorStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {atendimentosPorStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            </div>
+
+            {/* Tabela de Agentes */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Desempenho por Agente
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Agente
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Atendimentos
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Dias
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Méd. Atend. / Dia
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Msg. Enviadas
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Msg. Recebidas
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        TMA
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {agentesData.map((agente: any, index: number) => (
+                      <tr
+                        key={index}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.nome || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.atendimentos}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.dias}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.mediaAtendPorDia.toFixed(1)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.msgEnviadas}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.msgRecebidas}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.tma}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
+
+        {!loading && !stats && (
+          <Card className="p-6 bg-white text-center">
+            <p className="text-red-500 font-medium">Nenhum dado disponível</p>
+          </Card>
+        )}
       </div>
     </FarmaDashboardLayout>
   );

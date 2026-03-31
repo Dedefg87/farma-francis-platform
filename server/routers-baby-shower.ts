@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db.js";
 import {
   babyShowerEvents,
