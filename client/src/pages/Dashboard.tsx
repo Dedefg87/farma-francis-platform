@@ -83,16 +83,16 @@ export default function Dashboard() {
     const avgSeconds = Math.round(totalSeconds / agentData.length);
     const hours = Math.floor(avgSeconds / 3600);
     const minutes = Math.floor((avgSeconds % 3600) / 60);
-    const seconds = avgSeconds % 60;
+    const seconds = Math.round(avgSeconds % 60);
 
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
   const renderMetricCard = (label: string, value: number | string, change?: number) => (
-    <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+    <Card className="p-3 md:p-4 bg-white rounded-lg shadow-sm border border-gray-100">
       <div className="text-gray-600 text-xs font-semibold uppercase">{label}</div>
-      <div className="flex items-baseline gap-2 mt-2">
-        <div className="text-2xl font-bold text-gray-900">{value.toString().includes(':') ? value : value.toLocaleString('pt-BR')}</div>
+      <div className="flex items-baseline gap-2 mt-1 md:mt-2">
+        <div className="text-xl md:text-2xl font-bold text-gray-900">{value.toString().includes(':') ? value : value.toLocaleString('pt-BR')}</div>
         {change !== undefined && (
           <div className="flex items-center gap-1 text-xs text-green-600">
             <TrendingUp className="w-3 h-3" />
@@ -105,15 +105,15 @@ export default function Dashboard() {
 
   return (
     <FarmaDashboardLayout>
-      <div className="space-y-4 p-4 md:p-6 bg-gray-50 min-h-screen">
+      <div className="space-y-4 p-3 md:p-6 bg-gray-50 min-h-screen">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
-          <div className="flex gap-3 flex-wrap">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4">
+          <h1 className="text-xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
+          <div className="flex gap-2 md:gap-3 flex-wrap">
             <select 
               value={selectedPeriod} 
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium text-sm"
+              className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium text-sm"
             >
               <option value="hoje">Hoje</option>
               <option value="ontem">Ontem</option>
@@ -129,7 +129,7 @@ export default function Dashboard() {
                 hourQuery.refetch();
                 agentQuery.refetch();
               }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm whitespace-nowrap"
+              className="px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm whitespace-nowrap"
             >
               ↻ Atualizar
             </button>
@@ -153,7 +153,7 @@ export default function Dashboard() {
         {!isLoading && !isError && stats && (
           <>
             {/* 6 Métricas Principais - grid responsivo */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
               {renderMetricCard("Atendimentos", stats.totalConversations)}
               {renderMetricCard("Clientes Únicos", stats.uniqueCustomers)}
               {renderMetricCard("Msg. Enviadas", stats.messagesSent)}
@@ -162,20 +162,20 @@ export default function Dashboard() {
               {renderMetricCard("TMA", calculateTMA())}
             </div>
 
-            {/* Gráficos principais - layout harmonioso */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            {/* Gráficos principais */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
               {/* Gráfico de Barras - Contatos por hora (2 colunas) */}
               {hourData.length > 0 && (
-                <Card className="lg:col-span-2 p-4 md:p-6 bg-white shadow-sm">
-                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Contatos por hora</h3>
-                  <ResponsiveContainer width="100%" height={250}>
+                <Card className="lg:col-span-2 p-3 md:p-6 bg-white shadow-sm">
+                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Contatos por hora</h3>
+                  <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={hourData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="hora" stroke="#6B7280" fontSize={11} />
-                      <YAxis stroke="#6B7280" fontSize={11} />
+                      <XAxis dataKey="hora" stroke="#6B7280" fontSize={10} />
+                      <YAxis stroke="#6B7280" fontSize={10} />
                       <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: '12px' }} />
-                      <Bar dataKey="chats" fill="#1e3a8a" name="Chats" radius={[4, 4, 0, 0]} />
+                      <Legend wrapperStyle={{ fontSize: '11px' }} />
+                      <Bar dataKey="chats" fill="#1e3a8a" name="Chats" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -183,16 +183,16 @@ export default function Dashboard() {
 
               {/* Gráfico de Pizza - Atendimentos por canal (1 coluna) */}
               {channelData.length > 0 && (
-                <Card className="p-4 md:p-6 bg-white shadow-sm">
-                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Atendimentos por canal</h3>
-                  <ResponsiveContainer width="100%" height={250}>
+                <Card className="p-3 md:p-6 bg-white shadow-sm">
+                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Atendimentos por canal</h3>
+                  <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
                         data={channelData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
+                        innerRadius={40}
+                        outerRadius={70}
                         fill="#1e3a8a"
                         dataKey="value"
                         label={({ name, value }) => `${name}: ${value}`}
@@ -210,19 +210,19 @@ export default function Dashboard() {
             </div>
 
             {/* Segunda linha: Status + Agentes */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
               {/* Gráfico de Pizza - Atendimentos por status (1 coluna) */}
               {statusData.length > 0 && (
-                <Card className="p-4 md:p-6 bg-white shadow-sm">
-                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Atendimentos por status</h3>
-                  <ResponsiveContainer width="100%" height={250}>
+                <Card className="p-3 md:p-6 bg-white shadow-sm">
+                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Atendimentos por status</h3>
+                  <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
                       <Pie
                         data={statusData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
+                        innerRadius={40}
+                        outerRadius={70}
                         fill="#1e3a8a"
                         dataKey="value"
                         label={({ name, value }) => `${name}: ${value}`}
@@ -240,31 +240,31 @@ export default function Dashboard() {
 
               {/* Tabela de Desempenho por Agente (2 colunas) */}
               {agentData.length > 0 && (
-                <Card className="lg:col-span-2 p-4 md:p-6 bg-white shadow-sm overflow-x-auto">
-                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Desempenho por Agente</h3>
-                  <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="w-full text-sm min-w-[600px]">
+                <Card className="lg:col-span-2 p-3 md:p-6 bg-white shadow-sm overflow-x-auto">
+                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Desempenho por Agente</h3>
+                  <div className="overflow-x-auto -mx-2 md:mx-0">
+                    <table className="w-full text-xs md:text-sm min-w-[600px]">
                       <thead className="bg-gray-50 border-b">
                         <tr>
-                          <th className="px-4 py-2 text-left font-semibold text-gray-900">Agente</th>
-                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Atend.</th>
-                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Dias</th>
-                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Méd/dia</th>
-                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Enviadas</th>
-                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Recebidas</th>
-                          <th className="px-4 py-2 text-center font-semibold text-gray-900">TMA</th>
+                          <th className="px-2 md:px-4 py-2 text-left font-semibold text-gray-900">Agente</th>
+                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Atend.</th>
+                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Dias</th>
+                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Méd/dia</th>
+                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Enviadas</th>
+                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Recebidas</th>
+                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">TMA</th>
                         </tr>
                       </thead>
                       <tbody>
                         {agentData.map((agent, idx) => (
                           <tr key={idx} className="border-b hover:bg-gray-50">
-                            <td className="px-4 py-2 text-gray-900 font-medium">{agent.name}</td>
-                            <td className="px-4 py-2 text-center text-gray-900">{agent.conversations}</td>
-                            <td className="px-4 py-2 text-center text-gray-900">{agent.days}</td>
-                            <td className="px-4 py-2 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
-                            <td className="px-4 py-2 text-center text-gray-900">{agent.messagesSent}</td>
-                            <td className="px-4 py-2 text-center text-gray-900">{agent.messagesReceived}</td>
-                            <td className="px-4 py-2 text-center text-gray-900">{agent.tma}</td>
+                            <td className="px-2 md:px-4 py-2 text-gray-900 font-medium">{agent.name}</td>
+                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.conversations}</td>
+                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.days}</td>
+                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
+                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.messagesSent}</td>
+                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.messagesReceived}</td>
+                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.tma}</td>
                           </tr>
                         ))}
                       </tbody>

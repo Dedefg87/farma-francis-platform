@@ -376,19 +376,19 @@ export const dashboardStatsRouter = router({
           const tma = "00:00:00";
 
           return {
-            nome: agent.name,
-            atendimentos: totalConversations.count,
-            dias: activeDays.count,
-            mediaAtendPorDia: parseFloat(avgPerDay),
-            msgEnviadas: messagesSent.count,
-            msgRecebidas: messagesReceived.count,
+            name: agent.name,
+            conversations: totalConversations.count,
+            days: activeDays.count,
+            avgPerDay: parseFloat(avgPerDay),
+            messagesSent: messagesSent.count,
+            messagesReceived: messagesReceived.count,
             tma,
           };
         })
       );
 
       // Ordenar por número de atendimentos (decrescente)
-      return agentStats.sort((a, b) => b.atendimentos - a.atendimentos);
+      return agentStats.sort((a, b) => b.conversations - a.conversations);
     }),
 
   // Atendimentos por fila
