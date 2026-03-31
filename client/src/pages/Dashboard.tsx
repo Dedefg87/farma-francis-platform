@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Loader2, TrendingUp } from "lucide-react";
@@ -15,78 +15,58 @@ interface DashboardStats {
   messagesSent: number;
   messagesReceived: number;
   totalAgents?: number;
-  byChannel?: Array<{ channel: string; count: number }>;
-  byStatus?: Array<{ status: string; count: number }>;
-  byHour?: Array<{ hour: number; chats: number }>;
-  byAgent?: Array<{
-    name: string;
-    conversations: number;
-    days: number;
-    avgPerDay: number;
-    messagesSent: number;
-    messagesReceived: number;
-    tma: string;
-  }>;
-  tma?: string; // TMA geral
+}
+
+interface AgentPerformance {
+  name: string;
+  conversations: number;
+  days: number;
+  avgPerDay: number;
+  messagesSent: number;
+  messagesReceived: number;
+  tma: string;
 }
 
 export default function Dashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState("mes");
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Usar tRPC para puxar dados REAIS
-  const { data, isLoading, refetch } = trpc.dashboardStats.getStats.useQuery(
+  // Usar tRPC para puxar dados REAIS em paralelo
+  const statsQuery = trpc.dashboardStats.getStats.useQuery(
     { period: selectedPeriod },
-    {
-      onSuccess: (data) => {
-        console.log("[Dashboard] Dados REAIS recebidos:", data);
-        setStats(data as any);
-        setLoading(false);
-      },
-      onError: (error) => {
-        console.error("[Dashboard] Erro ao buscar dados:", error);
-        setLoading(false);
-      },
-    }
+    { refetchOnWindowFocus: false }
   );
 
-  // Preparar dados para gráficos
-  const channelData = stats?.byChannel?.map((c: any) => ({
-    name: c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1) || "Desconhecido",
-    value: Number(c.count) || 0,
-    color:
-      c.channel === "whatsapp" ? "#25D366" :
-      c.channel === "instagram" ? "#E4405F" :
-      c.channel === "facebook" ? "#1877F2" : "#6B7280",
-  })) || [];
+  const channelQuery = trpc.dashboardStats.getConversationsByChannel.useQuery(
+    { period: selectedPeriod },
+    { refetchOnWindowFocus: false }
+  );
 
-  const statusData = stats?.byStatus?.map((s: any) => {
-    const statusLabels: Record<string, string> = {
-      open: "Em aberto",
-      closed: "Encerrados",
-      pending: "Pendentes",
-      completed: "Completados",
-    };
-    const statusColors: Record<string, string> = {
-      open: "#3B82F6",
-      closed: "#10B981",
-      pending: "#F59E0B",
-      completed: "#8B5CF6",
-    };
-    return {
-      name: statusLabels[s.status] || s.status || "Desconhecido",
-      value: Number(s.count) || 0,
-      color: statusColors[s.status] || "#6B7280",
-    };
-  }) || [];
+  const statusQuery = trpc.dashboardStats.getConversationsByStatus.useQuery(
+    { period: selectedPeriod },
+    { refetchOnWindowFocus: false }
+  );
 
-  const hourData = stats?.byHour?.map((h: any) => ({
+  const hourQuery = trpc.dashboardStats.getContactsByHour.useQuery(
+    { period: selectedPeriod },
+    { refetchOnWindowFocus: false }
+  );
+
+  const agentQuery = trpc.dashboardStats.getAgentStats.useQuery(
+    { period: selectedPeriod },
+    { refetchOnWindowFocus: false }
+  );
+
+  const stats = statsQuery.data as DashboardStats | undefined;
+  const channelData = channelQuery.data ?? [];
+  const statusData = statusQuery.data ?? [];
+  const hourData = hourQuery.data?.map((h: any) => ({
     hora: `${String(h.hour).padStart(2, '0')}h`,
     chats: Number(h.chats) || 0,
-  })) || [];
+  })) ?? [];
+  const agentData = agentQuery.data as AgentPerformance[] ?? [];
 
-  const agentData = stats?.byAgent || [];
+  const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
+  const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
 
   // Calcular TMA total (média dos TMAs dos agentes)
   const calculateTMA = (): string => {
@@ -141,7 +121,13 @@ export default function Dashboard() {
               <option value="mes">Este Mês</option>
             </select>
             <button
-              onClick={() => refetch()}
+              onClick={() => {
+                statsQuery.refetch();
+                channelQuery.refetch();
+                statusQuery.refetch();
+                hourQuery.refetch();
+                agentQuery.refetch();
+              }}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
             >
               ↻ Atualizar
@@ -149,14 +135,21 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Error State */}
+        {isError && (
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800">Erro ao carregar dados do dashboard.</p>
+          </div>
+        )}
+
         {/* Loading State */}
-        {(isLoading || loading) && (
+        {isLoading && (
           <div className="flex justify-center items-center h-96">
             <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
           </div>
         )}
 
-        {!isLoading && !loading && stats && (
+        {!isLoading && !isError && stats && (
           <>
             {/* 6 Métricas Principais */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
@@ -168,9 +161,9 @@ export default function Dashboard() {
               {renderMetricCard("TMA", calculateTMA())}
             </div>
 
-            {/* Gráficos - Layout conforme imagem */}
+            {/* Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Gráfico de Barras - 2/3 da largura */}
+              {/* Gráfico de Barras - Contatos por hora */}
               {hourData.length > 0 && (
                 <Card className="lg:col-span-2 p-6 bg-white">
                   <h3 className="text-lg font-bold text-gray-900 mb-4">Contatos por hora</h3>
@@ -187,10 +180,10 @@ export default function Dashboard() {
                 </Card>
               )}
 
-              {/* Gráfico de Pizza - 1/3 da largura */}
+              {/* Gráfico de Pizza - Atendimentos por canal */}
               {channelData.length > 0 && (
                 <Card className="p-6 bg-white">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Atendimentos por fila</h3>
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Atendimentos por canal</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
@@ -214,10 +207,10 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Segundo Gráfico de Pizza */}
+            {/* Gráfico de Pizza - Atendimentos por status */}
             {statusData.length > 0 && (
               <Card className="p-6 bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Atend. por fechamento</h3>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">Atendimentos por status</h3>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
