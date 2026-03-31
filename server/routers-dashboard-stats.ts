@@ -17,73 +17,41 @@ export const dashboardStatsRouter = router({
     .input(
       z
         .object({
-          period: z.string().optional().default("hoje"),
+          period: z.string().optional().default("todas"),
         })
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
+      const period = input?.period || "todas";
       const { start, end } = getDateRangeFromPeriod(period);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      console.log(`[getStats] Period: ${period}, Start: ${start}, End: ${end}`);
+      console.log(`[getStats] Period: ${period} (ignoring date filters - using all-time data)`);
 
-      // Se período é "hoje", "ontem", "semana", "mes" - aplicar filtro de data
-      // Se for "todas" ou não houver datas válidas, buscar tudo
-      const useDateFilter = start && end && period !== "todas";
+      // Total de atendimentos (conversas) - SEM FILTRO DE DATA
+      const totalConversations = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversations);
 
-      // Base query para conversations
-      let conversationQuery = db.select({ count: sql<number>`count(*)` }).from(conversations);
-      if (useDateFilter) {
-        conversationQuery = conversationQuery.where(
-          and(
-            gte(conversations.openedAt, start),
-            lte(conversations.openedAt, end)
-          )
-        );
-      }
+      // Clientes únicos - SEM FILTRO DE DATA
+      const uniqueCustomers = await db
+        .select({
+          count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
+        })
+        .from(conversations);
 
-      // Total de atendimentos (conversas)
-      const totalConversations = await conversationQuery;
+      // Mensagens enviadas (por agentes) - SEM FILTRO DE DATA
+      const messagesSent = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.senderType, "agent"));
 
-      // Clientes únicos
-      let uniqueCustomersQuery = db.select({
-        count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
-      }).from(conversations);
-      if (useDateFilter) {
-        uniqueCustomersQuery = uniqueCustomersQuery.where(
-          and(
-            gte(conversations.openedAt, start),
-            lte(conversations.openedAt, end)
-          )
-        );
-      }
-      const uniqueCustomers = await uniqueCustomersQuery;
-
-      // Mensagens enviadas (por agentes)
-      let messagesSentQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "agent"));
-      if (useDateFilter) {
-        messagesSentQuery = messagesSentQuery.where(
-          and(
-            gte(conversationMessages.createdAt, start),
-            lte(conversationMessages.createdAt, end)
-          )
-        );
-      }
-      const messagesSent = await messagesSentQuery;
-
-      // Mensagens recebidas (de clientes)
-      let messagesReceivedQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "customer"));
-      if (useDateFilter) {
-        messagesReceivedQuery = messagesReceivedQuery.where(
-          and(
-            gte(conversationMessages.createdAt, start),
-            lte(conversationMessages.createdAt, end)
-          )
-        );
-      }
-      const messagesReceived = await messagesReceivedQuery;
+      // Mensagens recebidas (de clientes) - SEM FILTRO DE DATA
+      const messagesReceived = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.senderType, "customer"));
 
       // Total de agentes ativos
       const totalAgents = await db
@@ -103,8 +71,7 @@ export const dashboardStatsRouter = router({
         uniqueCustomers: uniqueCustValue,
         messagesSent: msgSentValue,
         messagesReceived: msgRecValue,
-        totalAgents: agentsValue,
-        usedDateFilter: useDateFilter
+        totalAgents: agentsValue
       });
 
       // Média de atendimentos por agente
