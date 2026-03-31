@@ -29,61 +29,67 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getStats] Period: ${period}, Start: ${start}, End: ${end}`);
 
-      // Total de atendimentos (conversas) no período
-      const totalConversations = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversations)
-        .where(
+      // Se período é "hoje", "ontem", "semana", "mes" - aplicar filtro de data
+      // Se for "todas" ou não houver datas válidas, buscar tudo
+      const useDateFilter = start && end && period !== "todas";
+
+      // Base query para conversations
+      let conversationQuery = db.select({ count: sql<number>`count(*)` }).from(conversations);
+      if (useDateFilter) {
+        conversationQuery = conversationQuery.where(
           and(
             gte(conversations.openedAt, start),
             lte(conversations.openedAt, end)
           )
         );
+      }
 
-      console.log(`[getStats] totalConversations result:`, totalConversations);
+      // Total de atendimentos (conversas)
+      const totalConversations = await conversationQuery;
 
-      // Clientes únicos no período
-      const uniqueCustomers = await db
-        .select({
-          count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
-        })
-        .from(conversations)
-        .where(
+      // Clientes únicos
+      let uniqueCustomersQuery = db.select({
+        count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
+      }).from(conversations);
+      if (useDateFilter) {
+        uniqueCustomersQuery = uniqueCustomersQuery.where(
           and(
             gte(conversations.openedAt, start),
             lte(conversations.openedAt, end)
           )
         );
+      }
+      const uniqueCustomers = await uniqueCustomersQuery;
 
-      // Mensagens enviadas (por agentes) no período
-      const messagesSent = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversationMessages)
-        .where(
+      // Mensagens enviadas (por agentes)
+      let messagesSentQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "agent"));
+      if (useDateFilter) {
+        messagesSentQuery = messagesSentQuery.where(
           and(
-            eq(conversationMessages.senderType, "agent"),
             gte(conversationMessages.createdAt, start),
             lte(conversationMessages.createdAt, end)
           )
         );
+      }
+      const messagesSent = await messagesSentQuery;
 
-      // Mensagens recebidas (de clientes) no período
-      const messagesReceived = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversationMessages)
-        .where(
+      // Mensagens recebidas (de clientes)
+      let messagesReceivedQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "customer"));
+      if (useDateFilter) {
+        messagesReceivedQuery = messagesReceivedQuery.where(
           and(
-            eq(conversationMessages.senderType, "customer"),
             gte(conversationMessages.createdAt, start),
             lte(conversationMessages.createdAt, end)
           )
         );
+      }
+      const messagesReceived = await messagesReceivedQuery;
 
       // Total de agentes ativos
       const totalAgents = await db
         .select({ count: sql<number>`count(*)` })
         .from(users)
-        .where(eq(users.role, "user")); // Agentes têm role 'user'
+        .where(eq(users.role, "user"));
 
       // Extrair valores
       const totalConvValue = totalConversations[0]?.count || 0;
@@ -97,13 +103,14 @@ export const dashboardStatsRouter = router({
         uniqueCustomers: uniqueCustValue,
         messagesSent: msgSentValue,
         messagesReceived: msgRecValue,
-        totalAgents: agentsValue
+        totalAgents: agentsValue,
+        usedDateFilter: useDateFilter
       });
 
       // Média de atendimentos por agente
       const avgPerAgent = agentsValue > 0 ? Math.round(totalConvValue / agentsValue) : 0;
 
-      // Tempo médio de atendimento (mock - será calculado depois)
+      // Tempo médio de atendimento (mock)
       const avgHandlingTime = "00:14:32";
 
       return {

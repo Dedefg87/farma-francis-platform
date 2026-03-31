@@ -105,20 +105,21 @@ export default function Dashboard() {
 
   return (
     <FarmaDashboardLayout>
-      <div className="space-y-6 p-6 bg-gray-50">
+      <div className="space-y-4 p-4 md:p-6 bg-gray-50 min-h-screen">
         {/* Header */}
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
+          <div className="flex gap-3 flex-wrap">
             <select 
               value={selectedPeriod} 
               onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium"
+              className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium text-sm"
             >
               <option value="hoje">Hoje</option>
               <option value="ontem">Ontem</option>
               <option value="semana">Esta Semana</option>
               <option value="mes">Este Mês</option>
+              <option value="todas">Todo Histórico</option>
             </select>
             <button
               onClick={() => {
@@ -128,7 +129,7 @@ export default function Dashboard() {
                 hourQuery.refetch();
                 agentQuery.refetch();
               }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm whitespace-nowrap"
             >
               ↻ Atualizar
             </button>
@@ -144,57 +145,58 @@ export default function Dashboard() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="flex justify-center items-center h-96">
+          <div className="flex justify-center items-center h-64">
             <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
           </div>
         )}
 
         {!isLoading && !isError && stats && (
           <>
-            {/* 6 Métricas Principais */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+            {/* 6 Métricas Principais - grid responsivo */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {renderMetricCard("Atendimentos", stats.totalConversations)}
               {renderMetricCard("Clientes Únicos", stats.uniqueCustomers)}
-              {renderMetricCard("Mensagens Enviadas", stats.messagesSent)}
-              {renderMetricCard("Mensagens Recebidas", stats.messagesReceived)}
+              {renderMetricCard("Msg. Enviadas", stats.messagesSent)}
+              {renderMetricCard("Msg. Recebidas", stats.messagesReceived)}
               {renderMetricCard("Méd. Atend/Agente", Math.round(stats.totalConversations / (stats.totalAgents || 1)))}
               {renderMetricCard("TMA", calculateTMA())}
             </div>
 
-            {/* Gráficos */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Gráfico de Barras - Contatos por hora */}
+            {/* Gráficos principais - layout harmonioso */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+              {/* Gráfico de Barras - Contatos por hora (2 colunas) */}
               {hourData.length > 0 && (
-                <Card className="lg:col-span-2 p-6 bg-white">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Contatos por hora</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={hourData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <Card className="lg:col-span-2 p-4 md:p-6 bg-white shadow-sm">
+                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Contatos por hora</h3>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={hourData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="hora" stroke="#6B7280" fontSize={12} />
-                      <YAxis stroke="#6B7280" />
+                      <XAxis dataKey="hora" stroke="#6B7280" fontSize={11} />
+                      <YAxis stroke="#6B7280" fontSize={11} />
                       <Tooltip />
-                      <Legend />
-                      <Bar dataKey="chats" fill="#1e3a8a" name="Chats" radius={[8, 8, 0, 0]} />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <Bar dataKey="chats" fill="#1e3a8a" name="Chats" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
               )}
 
-              {/* Gráfico de Pizza - Atendimentos por canal */}
+              {/* Gráfico de Pizza - Atendimentos por canal (1 coluna) */}
               {channelData.length > 0 && (
-                <Card className="p-6 bg-white">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Atendimentos por canal</h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                <Card className="p-4 md:p-6 bg-white shadow-sm">
+                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Atendimentos por canal</h3>
+                  <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
                       <Pie
                         data={channelData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
+                        innerRadius={50}
+                        outerRadius={80}
                         fill="#1e3a8a"
                         dataKey="value"
                         label={({ name, value }) => `${name}: ${value}`}
+                        labelLine={false}
                       >
                         {channelData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -207,64 +209,70 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Gráfico de Pizza - Atendimentos por status */}
-            {statusData.length > 0 && (
-              <Card className="p-6 bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Atendimentos por status</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      fill="#1e3a8a"
-                      dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Card>
-            )}
+            {/* Segunda linha: Status + Agentes */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+              {/* Gráfico de Pizza - Atendimentos por status (1 coluna) */}
+              {statusData.length > 0 && (
+                <Card className="p-4 md:p-6 bg-white shadow-sm">
+                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Atendimentos por status</h3>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={statusData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        fill="#1e3a8a"
+                        dataKey="value"
+                        label={({ name, value }) => `${name}: ${value}`}
+                        labelLine={false}
+                      >
+                        {statusData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Card>
+              )}
 
-            {/* Tabela de Desempenho por Agente */}
-            {agentData.length > 0 && (
-              <Card className="p-6 bg-white overflow-x-auto">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Desempenho por Agente</h3>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-900">Agente</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Atendimentos</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Dias</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Méd. Atend./Dia</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Msg. Enviadas</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Msg. Recebidas</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">TMA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {agentData.map((agent, idx) => (
-                      <tr key={idx} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-900 font-medium">{agent.name}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.conversations}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.days}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.messagesSent}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.messagesReceived}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.tma}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            )}
+              {/* Tabela de Desempenho por Agente (2 colunas) */}
+              {agentData.length > 0 && (
+                <Card className="lg:col-span-2 p-4 md:p-6 bg-white shadow-sm overflow-x-auto">
+                  <h3 className="text-base md:text-lg font-bold text-gray-900 mb-3">Desempenho por Agente</h3>
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <table className="w-full text-sm min-w-[600px]">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="px-4 py-2 text-left font-semibold text-gray-900">Agente</th>
+                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Atend.</th>
+                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Dias</th>
+                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Méd/dia</th>
+                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Enviadas</th>
+                          <th className="px-4 py-2 text-center font-semibold text-gray-900">Recebidas</th>
+                          <th className="px-4 py-2 text-center font-semibold text-gray-900">TMA</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {agentData.map((agent, idx) => (
+                          <tr key={idx} className="border-b hover:bg-gray-50">
+                            <td className="px-4 py-2 text-gray-900 font-medium">{agent.name}</td>
+                            <td className="px-4 py-2 text-center text-gray-900">{agent.conversations}</td>
+                            <td className="px-4 py-2 text-center text-gray-900">{agent.days}</td>
+                            <td className="px-4 py-2 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
+                            <td className="px-4 py-2 text-center text-gray-900">{agent.messagesSent}</td>
+                            <td className="px-4 py-2 text-center text-gray-900">{agent.messagesReceived}</td>
+                            <td className="px-4 py-2 text-center text-gray-900">{agent.tma}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </div>
           </>
         )}
       </div>
