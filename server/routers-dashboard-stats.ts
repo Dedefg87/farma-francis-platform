@@ -381,7 +381,7 @@ export const dashboardStatsRouter = router({
       );
 
       // Ordenar por número de atendimentos (decrescente)
-      return agentStats.sort((a, b) => b.atendimentos - a.atendimentos);
+      return agentStats.sort((a, b) => b.conversations - a.conversations);
     }),
 
   // Atendimentos por fila
