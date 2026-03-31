@@ -1,11 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from "react";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Card } from "@/components/ui/card";
-import { Loader2, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 
@@ -14,265 +30,448 @@ interface DashboardStats {
   uniqueCustomers: number;
   messagesSent: number;
   messagesReceived: number;
-  totalAgents?: number;
-  byChannel?: Array<{ channel: string; count: number }>;
-  byStatus?: Array<{ status: string; count: number }>;
-  byHour?: Array<{ hour: number; chats: number }>;
-  byAgent?: Array<{
-    name: string;
-    conversations: number;
-    days: number;
-    avgPerDay: number;
-    messagesSent: number;
-    messagesReceived: number;
-    tma: string;
-  }>;
-  tma?: string; // TMA geral
+  byChannel: Array<{ channel: string; count: number }>;
+  byStatus: Array<{ status: string; count: number }>;
+  byHour: Array<{ hour: number; chats: number }>;
 }
 
 export default function Dashboard() {
+  const [activeTab, setActiveTab] = useState<"atendimentos" | "integracoes">(
+    "atendimentos"
+  );
+  const [selectedQueue, setSelectedQueue] = useState("todas");
   const [selectedPeriod, setSelectedPeriod] = useState("mes");
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  // Usar tRPC para puxar dados REAIS
-  const { data, isLoading, refetch } = trpc.dashboardStats.getStats.useQuery(
+  // Usar hook tRPC para buscar estatísticas
+  const {
+    data: stats,
+    isLoading: loading,
+    refetch: refetchStats,
+    isRefetching: isRefetching,
+  } = trpc.dashboardStats.getStats.useQuery(
     { period: selectedPeriod },
     {
-      onSuccess: (data) => {
-        console.log("[Dashboard] Dados REAIS recebidos:", data);
-        setStats(data as any);
-        setLoading(false);
-      },
-      onError: (error) => {
-        console.error("[Dashboard] Erro ao buscar dados:", error);
-        setLoading(false);
-      },
+      refetchOnWindowFocus: false,
+      staleTime: 2 * 60 * 1000, // 2 minutos
     }
   );
 
-  // Preparar dados para gráficos
-  const channelData = stats?.byChannel?.map((c: any) => ({
-    name: c.channel?.charAt(0).toUpperCase() + c.channel?.slice(1) || "Desconhecido",
-    value: Number(c.count) || 0,
-    color:
-      c.channel === "whatsapp" ? "#25D366" :
-      c.channel === "instagram" ? "#E4405F" :
-      c.channel === "facebook" ? "#1877F2" : "#6B7280",
-  })) || [];
+  // Buscar dados dos gráficos
+  const { data: byChannel } = trpc.dashboardStats.getConversationsByChannel.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
 
-  const statusData = stats?.byStatus?.map((s: any) => {
-    const statusLabels: Record<string, string> = {
-      open: "Em aberto",
-      closed: "Encerrados",
-      pending: "Pendentes",
-      completed: "Completados",
-    };
-    const statusColors: Record<string, string> = {
-      open: "#3B82F6",
-      closed: "#10B981",
-      pending: "#F59E0B",
-      completed: "#8B5CF6",
-    };
-    return {
-      name: statusLabels[s.status] || s.status || "Desconhecido",
-      value: Number(s.count) || 0,
-      color: statusColors[s.status] || "#6B7280",
-    };
-  }) || [];
+  const { data: byStatus } = trpc.dashboardStats.getConversationsByStatus.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
 
-  const hourData = stats?.byHour?.map((h: any) => ({
-    hora: `${String(h.hour).padStart(2, '0')}h`,
-    chats: Number(h.chats) || 0,
-  })) || [];
+  const { data: byHour } = trpc.dashboardStats.getContactsByHour.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
 
-  const agentData = stats?.byAgent || [];
+  const { data: agentStats } = trpc.dashboardStats.getAgentStats.useQuery(
+    { period: selectedPeriod },
+    { enabled: !!stats }
+  );
 
-  // Calcular TMA total (média dos TMAs dos agentes)
-  const calculateTMA = (): string => {
-    if (!agentData || agentData.length === 0) return "00:00:00";
-    
-    let totalSeconds = 0;
-    agentData.forEach((agent) => {
-      if (agent.tma) {
-        const [h, m, s] = agent.tma.split(':').map(Number);
-        totalSeconds += (h * 3600) + (m * 60) + s;
-      }
-    });
+  // Log para debug
+  console.log("[Dashboard] Render:", { stats, loading, byChannel, byStatus, byHour, agentStats });
 
-    const avgSeconds = Math.round(totalSeconds / agentData.length);
-    const hours = Math.floor(avgSeconds / 3600);
-    const minutes = Math.floor((avgSeconds % 3600) / 60);
-    const seconds = avgSeconds % 60;
-
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  // Dados de métricas com valores reais
+  const metricsData = {
+    atendimentos: {
+      value: stats?.totalConversations || 0,
+      change: 0,
+      trend: "up" as const,
+    },
+    clientesUnicos: {
+      value: stats?.uniqueCustomers || 0,
+      change: 0,
+      trend: "up" as const,
+    },
+    mensagensEnviadas: {
+      value: stats?.messagesSent || 0,
+      change: 0,
+      trend: "up" as const,
+    },
+    mensagensRecebidas: {
+      value: stats?.messagesReceived || 0,
+      change: 0,
+      trend: "up" as const,
+    },
+    mediaAtendPorAgente: {
+      value: stats?.avgPerAgent || 0,
+      change: 0,
+      trend: "up" as const,
+    },
+    tma: stats?.avgHandlingTime || "00:00:00",
   };
 
-  const renderMetricCard = (label: string, value: number | string, change?: number) => (
-    <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="text-gray-600 text-xs font-semibold uppercase">{label}</div>
-      <div className="flex items-baseline gap-2 mt-2">
-        <div className="text-2xl font-bold text-gray-900">{value.toString().includes(':') ? value : value.toLocaleString('pt-BR')}</div>
-        {change !== undefined && (
-          <div className="flex items-center gap-1 text-xs text-green-600">
-            <TrendingUp className="w-3 h-3" />
-            {change}%
+  // Dados para gráfico de contatos por hora
+  const contatosPorHoraData = byHour || [];
+
+  // Dados de canal
+  const atendimentosPorCanalData = byChannel || [];
+
+  // Dados de status
+  const atendimentosPorStatusData = byStatus || [];
+
+  // Dados da tabela de agentes
+  const agentesData = agentStats || [];
+
+  const renderMetricCard = (
+    label: string,
+    value: number | string,
+    change?: number,
+    trend?: "up" | "down",
+    isTime?: boolean
+  ) => {
+    // Ensure progressValue is always a valid number between 0-100
+    let progressValue = 0;
+    if (typeof value === "number" && !isNaN(value) && isFinite(value)) {
+      progressValue = Math.min(Math.max(value, 0), 100);
+    }
+
+    return (
+      <div className="flex flex-col h-full">
+        <div className="text-sm text-gray-600 mb-3">{label}</div>
+        <div className="flex items-baseline gap-3 mb-2">
+          <div className="text-3xl font-bold text-gray-900">{value}</div>
+          {change !== undefined && (
+            <div
+              className={`flex items-center gap-1 text-sm ${trend === "up" ? "text-green-600" : "text-red-600"}`}
+            >
+              {trend === "up" ? (
+                <TrendingUp className="w-4 h-4" />
+              ) : (
+                <TrendingDown className="w-4 h-4" />
+              )}
+              {change}%
+            </div>
+          )}
+        </div>
+        {!isTime && (
+          <div className="mt-auto">
+            <div className="relative w-12 h-12">
+              <svg className="w-12 h-12 transform -rotate-90">
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  stroke="#e5e7eb"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="20"
+                  stroke="#10b981"
+                  strokeWidth="4"
+                  fill="none"
+                  strokeDasharray={`${(progressValue / 100) * 125.6} 125.6`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-gray-700">
+                {Math.round(progressValue)}%
+              </div>
+            </div>
           </div>
         )}
       </div>
-    </Card>
-  );
+    );
+  };
 
   return (
     <FarmaDashboardLayout>
-      <div className="space-y-6 p-6 bg-gray-50">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <div className="flex gap-3">
-            <select 
-              value={selectedPeriod} 
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium"
-            >
-              <option value="hoje">Hoje</option>
-              <option value="ontem">Ontem</option>
-              <option value="semana">Esta Semana</option>
-              <option value="mes">Este Mês</option>
-            </select>
+      <div className="space-y-6">
+        {/* Header com Tabs e Filtros */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => refetch()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+              onClick={() => setActiveTab("atendimentos")}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === "atendimentos"
+                  ? "bg-[#1e1b4b] text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
             >
-              ↻ Atualizar
+              Atendimentos
             </button>
+            <button
+              onClick={() => setActiveTab("integracoes")}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === "integracoes"
+                  ? "bg-[#1e1b4b] text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+              }`}
+            >
+              Integrações
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Fila</span>
+              <Select value={selectedQueue} onValueChange={setSelectedQueue}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas</SelectItem>
+                  <SelectItem value="vendas">Vendas</SelectItem>
+                  <SelectItem value="suporte">Suporte</SelectItem>
+                  <SelectItem value="financeiro">Financeiro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Período</span>
+              <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hoje">Hoje</SelectItem>
+                  <SelectItem value="ontem">Ontem</SelectItem>
+                  <SelectItem value="semana">Esta Semana</SelectItem>
+                  <SelectItem value="mes">Este Mês</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              onClick={() => refetchStats()}
+              disabled={isRefetching || loading}
+              className="bg-[#1e1b4b] hover:bg-[#2d2a5b] text-white"
+            >
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${isRefetching ? "animate-spin" : ""}`}
+              />
+              Atualizar
+            </Button>
           </div>
         </div>
 
         {/* Loading State */}
-        {(isLoading || loading) && (
+        {loading && (
           <div className="flex justify-center items-center h-96">
-            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+            <div className="text-gray-600">Carregando dados...</div>
           </div>
         )}
 
-        {!isLoading && !loading && stats && (
+        {/* Conteúdo Principal */}
+        {!loading && stats && (
           <>
-            {/* 6 Métricas Principais */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
-              {renderMetricCard("Atendimentos", stats.totalConversations)}
-              {renderMetricCard("Clientes Únicos", stats.uniqueCustomers)}
-              {renderMetricCard("Mensagens Enviadas", stats.messagesSent)}
-              {renderMetricCard("Mensagens Recebidas", stats.messagesReceived)}
-              {renderMetricCard("Méd. Atend/Agente", Math.round(stats.totalConversations / (stats.totalAgents || 1)))}
-              {renderMetricCard("TMA", calculateTMA())}
+            {/* Métricas Principais */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Atendimentos",
+                  metricsData.atendimentos.value,
+                  metricsData.atendimentos.change,
+                  metricsData.atendimentos.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Clientes únicos",
+                  metricsData.clientesUnicos.value,
+                  metricsData.clientesUnicos.change,
+                  metricsData.clientesUnicos.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Mensagens enviadas",
+                  metricsData.mensagensEnviadas.value,
+                  metricsData.mensagensEnviadas.change,
+                  metricsData.mensagensEnviadas.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Mensagens recebidas",
+                  metricsData.mensagensRecebidas.value,
+                  metricsData.mensagensRecebidas.change,
+                  metricsData.mensagensRecebidas.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "Méd. atend. / agente",
+                  metricsData.mediaAtendPorAgente.value,
+                  metricsData.mediaAtendPorAgente.change,
+                  metricsData.mediaAtendPorAgente.trend
+                )}
+              </Card>
+              <Card className="p-6">
+                {renderMetricCard(
+                  "TMA",
+                  metricsData.tma,
+                  undefined,
+                  undefined,
+                  true
+                )}
+              </Card>
             </div>
 
-            {/* Gráficos - Layout conforme imagem */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Gráfico de Barras - 2/3 da largura */}
-              {hourData.length > 0 && (
-                <Card className="lg:col-span-2 p-6 bg-white">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Contatos por hora</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={hourData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="hora" stroke="#6B7280" fontSize={12} />
-                      <YAxis stroke="#6B7280" />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="chats" fill="#1e3a8a" name="Chats" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Gráfico de Contatos por Hora */}
+              <Card className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Contatos por hora
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-[#1e1b4b]"></div>
+                      Chats
+                    </span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={contatosPorHoraData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="hora" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="chats" fill="#1e1b4b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
 
-              {/* Gráfico de Pizza - 1/3 da largura */}
-              {channelData.length > 0 && (
-                <Card className="p-6 bg-white">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4">Atendimentos por fila</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={channelData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        fill="#1e3a8a"
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
-                        {channelData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-            </div>
-
-            {/* Segundo Gráfico de Pizza */}
-            {statusData.length > 0 && (
-              <Card className="p-6 bg-white">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Atend. por fechamento</h3>
-                <ResponsiveContainer width="100%" height={300}>
+              {/* Gráfico de Atendimentos por Canal */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Atendimentos por canal
+                </h3>
+                <ResponsiveContainer width="100%" height={250}>
                   <PieChart>
                     <Pie
-                      data={statusData}
+                      data={atendimentosPorCanalData}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
-                      outerRadius={100}
-                      fill="#1e3a8a"
+                      outerRadius={90}
+                      paddingAngle={5}
                       dataKey="value"
-                      label={({ name, value }) => `${name}: ${value}`}
                     >
-                      {statusData.map((entry, index) => (
+                      {atendimentosPorCanalData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip />
+                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </Card>
-            )}
 
-            {/* Tabela de Desempenho por Agente */}
-            {agentData.length > 0 && (
-              <Card className="p-6 bg-white overflow-x-auto">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">Desempenho por Agente</h3>
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-semibold text-gray-900">Agente</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Atendimentos</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Dias</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Méd. Atend./Dia</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Msg. Enviadas</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">Msg. Recebidas</th>
-                      <th className="px-4 py-3 text-center font-semibold text-gray-900">TMA</th>
+              {/* Gráfico de Status dos Atendimentos */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Status dos Atendimentos
+                </h3>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={atendimentosPorStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {atendimentosPorStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </Card>
+            </div>
+
+            {/* Tabela de Agentes */}
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Desempenho por Agente
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Agente
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Atendimentos
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Dias
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Méd. Atend. / Dia
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Msg. Enviadas
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        Msg. Recebidas
+                      </th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">
+                        TMA
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {agentData.map((agent, idx) => (
-                      <tr key={idx} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-3 text-gray-900 font-medium">{agent.name}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.conversations}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.days}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.messagesSent}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.messagesReceived}</td>
-                        <td className="px-4 py-3 text-center text-gray-900">{agent.tma}</td>
+                    {agentesData.map((agente: any, index: number) => (
+                      <tr
+                        key={index}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.nome || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.atendimentos}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.dias}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.mediaAtendPorDia.toFixed(1)}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.msgEnviadas}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.msgRecebidas}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-900">
+                          {agente.tma}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </Card>
-            )}
+              </div>
+            </Card>
           </>
+        )}
+
+        {!loading && !stats && (
+          <Card className="p-6 bg-white text-center">
+            <p className="text-red-500 font-medium">Nenhum dado disponível</p>
+          </Card>
         )}
       </div>
     </FarmaDashboardLayout>
