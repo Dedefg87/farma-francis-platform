@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from "./_core/trpc";
+import { router, publicProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import {
   conversations,
@@ -13,7 +13,7 @@ import { getDateRangeFromPeriod } from "./utils/date-range";
 
 export const dashboardStatsRouter = router({
   // Estatísticas gerais do dashboard
-  getStats: protectedProcedure
+  getStats: publicProcedure
     .input(
       z
         .object({
@@ -117,7 +117,7 @@ export const dashboardStatsRouter = router({
     }),
 
   // Atendimentos por canal
-  getConversationsByChannel: protectedProcedure
+  getConversationsByChannel: publicProcedure
     .input(
       z
         .object({
@@ -162,7 +162,7 @@ export const dashboardStatsRouter = router({
     }),
 
   // Atendimentos por status
-  getConversationsByStatus: protectedProcedure
+  getConversationsByStatus: publicProcedure
     .input(
       z
         .object({
@@ -211,7 +211,7 @@ export const dashboardStatsRouter = router({
     }),
 
   // Contatos por hora
-  getContactsByHour: protectedProcedure
+  getContactsByHour: publicProcedure
     .input(
       z
         .object({
@@ -288,7 +288,7 @@ export const dashboardStatsRouter = router({
     }),
 
   // Estatísticas por agente
-  getAgentStats: protectedProcedure
+  getAgentStats: publicProcedure
     .input(
       z
         .object({
@@ -385,7 +385,7 @@ export const dashboardStatsRouter = router({
     }),
 
   // Atendimentos por fila
-  getConversationsByQueue: protectedProcedure
+  getConversationsByQueue: publicProcedure
     .input(
       z
         .object({
@@ -456,7 +456,7 @@ export const dashboardStatsRouter = router({
     }),
 
   // Estatísticas de variação (comparação com período anterior)
-  getVariations: protectedProcedure
+  getVariations: publicProcedure
     .input(
       z
         .object({
