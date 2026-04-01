@@ -37,7 +37,7 @@ export const leadsRouter = router({
         );
       }
       if (stage) {
-        conditions.push(eq(leads.stage, stage));
+        conditions.push(eq(leads.stage, stage as any));
       }
       if (assignedTo !== undefined) {
         conditions.push(eq(leads.assignedTo, assignedTo));
@@ -164,7 +164,7 @@ export const leadsRouter = router({
         email: z.string().email().optional().or(z.string().max(0)),
         phone: z.string().optional(),
         source: z.string().optional(),
-        stage: z.string().optional(),
+        stage: z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost']).optional(),
         value: z.number().optional(),
         assignedTo: z.number().optional(),
         followUpDate: z.string().optional(),
@@ -177,14 +177,26 @@ export const leadsRouter = router({
 
       const now = new Date();
 
+      // Build insert values, converting followUpDate if present
+      const insertValues: any = {
+        name: input.name,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
+        value: input.value ?? null,
+        assignedTo: input.assignedTo ?? null,
+        notes: input.notes ?? null,
+        createdBy: ctx.user?.id ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      if (input.stage) insertValues.stage = input.stage;
+      if (input.source) insertValues.source = input.source;
+      if (input.followUpDate) insertValues.followUpDate = new Date(input.followUpDate);
+
       const newLead = await db
         .insert(leads)
-        .values({
-          ...input,
-          createdBy: ctx.user?.id ?? null,
-          createdAt: now,
-          updatedAt: now,
-        })
+        .values(insertValues)
         .$returningId();
 
       return { id: newLead[0].id };
@@ -199,7 +211,7 @@ export const leadsRouter = router({
         email: z.string().email().optional().or(z.string().max(0)),
         phone: z.string().optional(),
         source: z.string().optional(),
-        stage: z.string().optional(),
+        stage: z.enum(['prospect', 'qualified', 'proposal', 'negotiation', 'closed_won', 'closed_lost']).optional(),
         value: z.number().optional(),
         assignedTo: z.number().optional(),
         followUpDate: z.string().optional(),
@@ -215,7 +227,13 @@ export const leadsRouter = router({
       };
       Object.keys(input).forEach(key => {
         if (key !== 'id' && input[key as keyof typeof input] !== undefined) {
-          update[key] = input[key as keyof typeof input];
+          const value = input[key as keyof typeof input];
+          // Convert undefined to null for optional fields, but keep enums as is
+          if (key === 'stage' || key === 'source' || key === 'email' || key === 'phone' || key === 'value' || key === 'assignedTo' || key === 'followUpDate' || key === 'notes') {
+            update[key] = value ?? null;
+          } else {
+            update[key] = value;
+          }
         }
       });
 

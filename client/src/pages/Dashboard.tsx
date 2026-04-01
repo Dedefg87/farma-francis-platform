@@ -74,7 +74,7 @@ export default function Dashboard() {
   const channelData = channelQuery.data ?? [];
   const statusData = statusQuery.data ?? [];
   const hourData = hourQuery.data?.map((h: any) => ({
-    hora: \`\${String(h.hour).padStart(2, '0')}h\`,
+    hora: `${String(h.hour).padStart(2, '0')}h`,
     chats: Number(h.chats) || 0,
   })) ?? [];
   const agentData = agentQuery.data as AgentPerformance[] ?? [];
@@ -95,7 +95,7 @@ export default function Dashboard() {
     const hours = Math.floor(avgSeconds / 3600);
     const minutes = Math.floor((avgSeconds % 3600) / 60);
     const seconds = Math.round(avgSeconds % 60);
-    return \`\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}\`;
+    return `\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}`;
   };
 
   const renderMetricCard = (label: string, value: number | string | undefined) => (
@@ -151,11 +151,11 @@ export default function Dashboard() {
                   <button
                     key={option.value}
                     onClick={() => handlePeriodChange(option.value)}
-                    className={\`px-3 py-2 rounded-md text-sm font-medium transition-colors
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors
                       \${selectedPeriod === option.value
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                      }\`}
+                      }`}
                   >
                     {option.label}
                   </button>
