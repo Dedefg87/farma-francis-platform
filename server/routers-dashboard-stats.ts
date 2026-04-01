@@ -9,7 +9,7 @@ import {
 } from "../drizzle/schema";
 import { eq, and, sql, gte, count, lte } from "drizzle-orm";
 import { z } from "zod";
-import { getDateRangeFromPeriod } from "./utils/date-range";
+import { getDateRangeFromPeriod } from "../utils/date-range";
 
 // Utilitário para formatar segundos em HH:MM:SS
 function formatSecondsToHMS(totalSeconds: number): string {
