@@ -11,6 +11,14 @@ import { eq, and, sql, gte, count, lte } from "drizzle-orm";
 import { z } from "zod";
 import { getDateRangeFromPeriod } from "./utils/date-range";
 
+// Utilitário para formatar segundos em HH:MM:SS
+function formatSecondsToHMS(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 export const dashboardStatsRouter = router({
   // Estatísticas gerais do dashboard
   getStats: publicProcedure
@@ -107,8 +115,25 @@ export const dashboardStatsRouter = router({
       // Média de atendimentos por agente
       const avgPerAgent = agentsValue > 0 ? Math.round(totalConvValue / agentsValue) : 0;
 
-      // Tempo médio de atendimento (mock)
-      const avgHandlingTime = "00:14:32";
+      // Calcular TMA real: média do tempo entre openedAt e closedAt (apenas conversas fechadas)
+      let avgHandlingTime = "00:00:00";
+      if (period !== "todas") {
+        const { start, end } = getDateRangeFromPeriod(period);
+        const avgTimeResult = await db
+          .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, openedAt, closedAt))` })
+          .from(conversations)
+          .where(
+            and(
+              gte(conversations.openedAt, start),
+              lte(conversations.openedAt, end),
+              sql`${conversations.closedAt} IS NOT NULL`
+            )
+          );
+
+        const avgMs = avgTimeResult[0]?.avgMs || 0;
+        const avgSeconds = avgMs / 1000000;
+        avgHandlingTime = formatSecondsToHMS(avgSeconds);
+      }
 
       return {
         totalConversations: totalConvValue,
@@ -141,6 +166,7 @@ export const dashboardStatsRouter = router({
           COUNT(*) as count
         FROM conversations
         WHERE channel IS NOT NULL
+          AND openedAt BETWEEN ${start} AND ${end}
         GROUP BY channel
         ORDER BY count DESC
       `);
@@ -185,6 +211,7 @@ export const dashboardStatsRouter = router({
           COUNT(*) as count
         FROM conversations
         WHERE status IS NOT NULL
+          AND openedAt BETWEEN ${start} AND ${end}
         GROUP BY status
         ORDER BY count DESC
       `);
@@ -229,13 +256,13 @@ export const dashboardStatsRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
-        // Calculate date range - always use last 30 days for the chart
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - 30);
+        // Use the requested period for filtering
+        const { start, end } = getDateRangeFromPeriod(period);
 
         console.log(
-          "[getContactsByHour] Using last 30 days:",
+          "[getContactsByHour] Using period:",
+          period,
+          "→",
           start,
           "to",
           end
@@ -369,8 +396,19 @@ export const dashboardStatsRouter = router({
               ? (totalConversations.count / activeDays.count).toFixed(1)
               : "0.0";
 
-          // TMA (mock - calcular depois com timestamps reais)
-          const tma = "00:00:00";
+          // TMA real: média do tempo entre openedAt e closedAt
+          const [tmaResult] = await db
+            .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, openedAt, closedAt))` })
+            .from(conversations)
+            .where(
+              and(
+                eq(conversations.assignedTo, agent.id),
+                sql`${conversations.closedAt} IS NOT NULL`
+              )
+            );
+
+          const avgMs = tmaResult?.avgMs || 0;
+          const tma = formatSecondsToHMS(avgMs / 1000000);
 
           return {
             name: agent.name,
