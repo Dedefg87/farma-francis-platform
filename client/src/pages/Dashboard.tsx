@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Loader2, TrendingUp } from "lucide-react";
@@ -8,6 +8,11 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc";
+
+interface PeriodOption {
+  label: string;
+  value: string;
+}
 
 interface DashboardStats {
   totalConversations: number;
@@ -28,31 +33,53 @@ interface AgentPerformance {
 }
 
 export default function Dashboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState("mes");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("mes");
+  const [customStartDate, setCustomStartDate] = useState<string | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<string | undefined>(undefined);
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState<boolean>(false);
+  const [tempStartDate, setTempStartDate] = useState<string | undefined>(undefined);
+  const [tempEndDate, setTempEndDate] = useState<string | undefined>(undefined);
 
-  // Usar tRPC para puxar dados REAIS em paralelo
+  const periodOptions: PeriodOption[] = [
+    { label: "Hoje", value: "hoje" },
+    { label: "Semana", value: "semana" },
+    { label: "Mês", value: "mes" },
+    { label: "7d", value: "7d" },
+    { label: "30d", value: "30d" },
+    { label: "90d", value: "90d" },
+    { label: "Todos", value: "all" },
+    { label: "Personalizado", value: "custom" },
+  ];
+
+  const queryInput = useMemo(() => {
+    if (selectedPeriod === "custom") {
+      return {
+        period: selectedPeriod,
+        startDate: customStartDate,
+        endDate: customEndDate,
+      };
+    }
+    return { period: selectedPeriod };
+  }, [selectedPeriod, customStartDate, customEndDate]);
+
   const statsQuery = trpc.dashboardStats.getStats.useQuery(
-    { period: selectedPeriod },
+    queryInput,
     { refetchOnWindowFocus: false }
   );
-
   const channelQuery = trpc.dashboardStats.getConversationsByChannel.useQuery(
-    { period: selectedPeriod },
+    queryInput,
     { refetchOnWindowFocus: false }
   );
-
   const statusQuery = trpc.dashboardStats.getConversationsByStatus.useQuery(
-    { period: selectedPeriod },
+    queryInput,
     { refetchOnWindowFocus: false }
   );
-
   const hourQuery = trpc.dashboardStats.getContactsByHour.useQuery(
-    { period: selectedPeriod },
+    queryInput,
     { refetchOnWindowFocus: false }
   );
-
   const agentQuery = trpc.dashboardStats.getAgentStats.useQuery(
-    { period: selectedPeriod },
+    queryInput,
     { refetchOnWindowFocus: false }
   );
 
@@ -68,10 +95,18 @@ export default function Dashboard() {
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
   const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
 
-  // Calcular TMA total (média dos TMAs dos agentes)
+  const hasData = useMemo(() => {
+    return (
+      (stats?.totalConversations ?? 0) > 0 ||
+      channelData.length > 0 ||
+      statusData.length > 0 ||
+      hourData.some(item => item.chats > 0) ||
+      agentData.length > 0
+    );
+  }, [stats, channelData, statusData, hourData, agentData]);
+
   const calculateTMA = (): string => {
     if (!agentData || agentData.length === 0) return "00:00:00";
-    
     let totalSeconds = 0;
     agentData.forEach((agent) => {
       if (agent.tma) {
@@ -79,20 +114,20 @@ export default function Dashboard() {
         totalSeconds += (h * 3600) + (m * 60) + s;
       }
     });
-
     const avgSeconds = Math.round(totalSeconds / agentData.length);
     const hours = Math.floor(avgSeconds / 3600);
     const minutes = Math.floor((avgSeconds % 3600) / 60);
     const seconds = Math.round(avgSeconds % 60);
-
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
-  const renderMetricCard = (label: string, value: number | string, change?: number) => (
+  const renderMetricCard = (label: string, value: number | string | undefined, change?: number) => (
     <Card className="p-3 md:p-4 bg-white rounded-lg shadow-sm border border-gray-100">
       <div className="text-gray-600 text-xs font-semibold uppercase">{label}</div>
       <div className="flex items-baseline gap-2 mt-1 md:mt-2">
-        <div className="text-xl md:text-2xl font-bold text-gray-900">{value.toString().includes(':') ? value : value.toLocaleString('pt-BR')}</div>
+        <div className="text-xl md:text-2xl font-bold text-gray-900">
+          {value === undefined || value === null ? "—" : (value.toString().includes(':') ? value : value.toLocaleString('pt-BR'))}
+        </div>
         {change !== undefined && (
           <div className="flex items-center gap-1 text-xs text-green-600">
             <TrendingUp className="w-3 h-3" />
@@ -103,175 +138,227 @@ export default function Dashboard() {
     </Card>
   );
 
+  const handlePeriodChange = (periodValue: string) => {
+    setSelectedPeriod(periodValue);
+    if (periodValue === "custom") {
+      setShowCustomDatePicker(true);
+      setTempStartDate(customStartDate);
+      setTempEndDate(customEndDate);
+    } else {
+      setShowCustomDatePicker(false);
+      setCustomStartDate(undefined);
+      setCustomEndDate(undefined);
+    }
+  };
+
+  const handleApplyCustomDates = () => {
+    if (tempStartDate && tempEndDate) {
+      setCustomStartDate(tempStartDate);
+      setCustomEndDate(tempEndDate);
+      setShowCustomDatePicker(false);
+    }
+  };
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF19AF'];
+
   return (
     <FarmaDashboardLayout>
-      <div className="space-y-4 p-3 md:p-6 bg-gray-50 min-h-screen">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4">
-          <h1 className="text-xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
-          <div className="flex gap-2 md:gap-3 flex-wrap">
-            <select 
-              value={selectedPeriod} 
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="px-3 md:px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium text-sm"
-            >
-              <option value="hoje">Hoje</option>
-              <option value="ontem">Ontem</option>
-              <option value="semana">Esta Semana</option>
-              <option value="mes">Este Mês</option>
-              <option value="todas">Todo Histórico</option>
-            </select>
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">Dashboard de Performance</h1>
+
+        {/* Seleção de Período */}
+        <div className="mb-6 flex flex-wrap gap-2 items-center">
+          {periodOptions.map((option) => (
             <button
-              onClick={() => {
-                statsQuery.refetch();
-                channelQuery.refetch();
-                statusQuery.refetch();
-                hourQuery.refetch();
-                agentQuery.refetch();
-              }}
-              className="px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm whitespace-nowrap"
+              key={option.value}
+              onClick={() => handlePeriodChange(option.value)}
+              className={`px-3 py-2 rounded-md text-sm font-medium transition-colors
+                ${selectedPeriod === option.value
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
             >
-              ↻ Atualizar
+              {option.label}
             </button>
-          </div>
+          ))}
         </div>
 
-        {/* Error State */}
-        {isError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-800">Erro ao carregar dados do dashboard.</p>
-          </div>
+        {/* Seletor de Data Personalizado */}
+        {showCustomDatePicker && (
+          <Card className="p-4 mb-6 bg-white rounded-lg shadow-sm border border-gray-100">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex flex-col">
+                <label htmlFor="startDate" className="text-sm font-medium text-gray-700 mb-1">Data Início:</label>
+                <input
+                  type="date"
+                  id="startDate"
+                  value={tempStartDate || ''}
+                  onChange={(e) => setTempStartDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label htmlFor="endDate" className="text-sm font-medium text-gray-700 mb-1">Data Fim:</label>
+                <input
+                  type="date"
+                  id="endDate"
+                  value={tempEndDate || ''}
+                  onChange={(e) => setTempEndDate(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={handleApplyCustomDates}
+                className="px-4 py-2 bg-green-500 text-white rounded-md text-sm font-medium hover:bg-green-600 transition-colors disabled:opacity-50"
+                disabled={!tempStartDate || !tempEndDate}
+              >
+                Aplicar
+              </button>
+            </div>
+          </Card>
         )}
 
-        {/* Loading State */}
         {isLoading && (
           <div className="flex justify-center items-center h-64">
-            <Loader2 className="animate-spin h-8 w-8 text-blue-500" />
+            <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
+            <span className="ml-3 text-lg text-gray-600">Carregando dados...</span>
           </div>
         )}
 
-        {!isLoading && !isError && stats && (
+        {isError && (
+          <div className="flex justify-center items-center h-64 text-red-600 text-lg">
+            Erro ao carregar dados. Tente novamente.
+          </div>
+        )}
+
+        {!isLoading && !isError && !hasData && (
+          <div className="flex justify-center items-center h-64 text-gray-600 text-lg">
+            Sem dados neste período.
+          </div>
+        )}
+
+        {!isLoading && !isError && hasData && (
           <>
-            {/* 6 Métricas Principais - grid responsivo */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
-              {renderMetricCard("Atendimentos", stats.totalConversations)}
-              {renderMetricCard("Clientes Únicos", stats.uniqueCustomers)}
-              {renderMetricCard("Msg. Enviadas", stats.messagesSent)}
-              {renderMetricCard("Msg. Recebidas", stats.messagesReceived)}
-              {renderMetricCard("Méd. Atend/Agente", Math.round(stats.totalConversations / (stats.totalAgents || 1)))}
-              {renderMetricCard("TMA", calculateTMA())}
+            {/* Cards de Métricas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {renderMetricCard("Total Conversas", stats?.totalConversations)}
+              {renderMetricCard("Clientes Únicos", stats?.uniqueCustomers)}
+              {renderMetricCard("Mensagens Enviadas", stats?.messagesSent)}
+              {renderMetricCard("Mensagens Recebidas", stats?.messagesReceived)}
+              {renderMetricCard("TMA Médio", calculateTMA())}
             </div>
 
-            {/* Gráficos principais */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
-              {/* Gráfico de Barras - Contatos por hora (2 colunas) */}
-              {hourData.length > 0 && (
-                <Card className="lg:col-span-2 p-3 md:p-6 bg-white shadow-sm">
-                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Contatos por hora</h3>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={hourData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                      <XAxis dataKey="hora" stroke="#6B7280" fontSize={10} />
-                      <YAxis stroke="#6B7280" fontSize={10} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: '11px' }} />
-                      <Bar dataKey="chats" fill="#1e3a8a" name="Chats" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )}
-
-              {/* Gráfico de Pizza - Atendimentos por canal (1 coluna) */}
-              {channelData.length > 0 && (
-                <Card className="p-3 md:p-6 bg-white shadow-sm">
-                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Atendimentos por canal</h3>
-                  <ResponsiveContainer width="100%" height={200}>
+            {/* Gráficos */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Conversas por Canal */}
+              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Conversas por Canal</h2>
+                {channelData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
                         data={channelData}
+                        dataKey="count"
+                        nameKey="channel"
                         cx="50%"
                         cy="50%"
-                        innerRadius={40}
-                        outerRadius={70}
-                        fill="#1e3a8a"
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                        labelLine={false}
+                        outerRadius={100}
+                        fill="#8884d8"
+                        label
                       >
                         {channelData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip />
+                      <Legend />
                     </PieChart>
                   </ResponsiveContainer>
-                </Card>
-              )}
-            </div>
+                ) : (
+                  <div className="flex justify-center items-center h-[300px] text-gray-500">Sem dados de canal.</div>
+                )}
+              </Card>
 
-            {/* Segunda linha: Status + Agentes */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-6">
-              {/* Gráfico de Pizza - Atendimentos por status (1 coluna) */}
-              {statusData.length > 0 && (
-                <Card className="p-3 md:p-6 bg-white shadow-sm">
-                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Atendimentos por status</h3>
-                  <ResponsiveContainer width="100%" height={200}>
+              {/* Conversas por Status */}
+              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Conversas por Status</h2>
+                {statusData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
                     <PieChart>
                       <Pie
                         data={statusData}
+                        dataKey="count"
+                        nameKey="status"
                         cx="50%"
                         cy="50%"
-                        innerRadius={40}
-                        outerRadius={70}
-                        fill="#1e3a8a"
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                        labelLine={false}
+                        outerRadius={100}
+                        fill="#82ca9d"
+                        label
                       >
                         {statusData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip />
+                      <Legend />
                     </PieChart>
                   </ResponsiveContainer>
-                </Card>
-              )}
+                ) : (
+                  <div className="flex justify-center items-center h-[300px] text-gray-500">Sem dados de status.</div>
+                )}
+              </Card>
 
-              {/* Tabela de Desempenho por Agente (2 colunas) */}
-              {agentData.length > 0 && (
-                <Card className="lg:col-span-2 p-3 md:p-6 bg-white shadow-sm overflow-x-auto">
-                  <h3 className="text-sm md:text-lg font-bold text-gray-900 mb-2 md:mb-4">Desempenho por Agente</h3>
-                  <div className="overflow-x-auto -mx-2 md:mx-0">
-                    <table className="w-full text-xs md:text-sm min-w-[600px]">
-                      <thead className="bg-gray-50 border-b">
+              {/* Contatos por Hora */}
+              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100 lg:col-span-2">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Contatos por Hora</h2>
+                {hourData.length > 0 && hourData.some(item => item.chats > 0) ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={hourData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="hora" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="chats" fill="#8884d8" name="Chats" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex justify-center items-center h-[300px] text-gray-500">Sem dados de contatos por hora.</div>
+                )}
+              </Card>
+
+              {/* Performance dos Agentes */}
+              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100 lg:col-span-2">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">Performance dos Agentes</h2>
+                {agentData.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-2 md:px-4 py-2 text-left font-semibold text-gray-900">Agente</th>
-                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Atend.</th>
-                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Dias</th>
-                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Méd/dia</th>
-                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Enviadas</th>
-                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">Recebidas</th>
-                          <th className="px-2 md:px-4 py-2 text-center font-semibold text-gray-900">TMA</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agente</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conversas</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Msg Enviadas</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Msg Recebidas</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TMA</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {agentData.map((agent, idx) => (
-                          <tr key={idx} className="border-b hover:bg-gray-50">
-                            <td className="px-2 md:px-4 py-2 text-gray-900 font-medium">{agent.name}</td>
-                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.conversations}</td>
-                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.days}</td>
-                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.avgPerDay.toFixed(1)}</td>
-                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.messagesSent}</td>
-                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.messagesReceived}</td>
-                            <td className="px-2 md:px-4 py-2 text-center text-gray-900">{agent.tma}</td>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {agentData.map((agent, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{agent.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.conversations}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.messagesSent}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.messagesReceived}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agent.tma}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </Card>
-              )}
+                ) : (
+                  <div className="flex justify-center items-center h-[300px] text-gray-500">Sem dados de performance de agentes.</div>
+                )}
+              </Card>
             </div>
           </>
         )}
