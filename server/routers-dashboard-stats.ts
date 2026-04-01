@@ -19,6 +19,11 @@ function formatSecondsToHMS(totalSeconds: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+// Utilitário para converter Date para string SQL (YYYY-MM-DD HH:MM:SS)
+function toSQLDate(date: Date): string {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 export const dashboardStatsRouter = router({
   // Estatísticas gerais do dashboard
   getStats: publicProcedure
@@ -166,7 +171,7 @@ export const dashboardStatsRouter = router({
           COUNT(*) as count
         FROM conversations
         WHERE channel IS NOT NULL
-          AND openedAt BETWEEN ${start} AND ${end}
+          AND openedAt BETWEEN ${toSQLDate(start)} AND ${toSQLDate(end)}
         GROUP BY channel
         ORDER BY count DESC
       `);
@@ -211,7 +216,7 @@ export const dashboardStatsRouter = router({
           COUNT(*) as count
         FROM conversations
         WHERE status IS NOT NULL
-          AND openedAt BETWEEN ${start} AND ${end}
+          AND openedAt BETWEEN ${toSQLDate(start)} AND ${toSQLDate(end)}
         GROUP BY status
         ORDER BY count DESC
       `);
@@ -275,8 +280,8 @@ export const dashboardStatsRouter = router({
             COUNT(DISTINCT conversation_id) as chats
           FROM conversation_messages
           WHERE sender_type = 'customer'
-            AND created_at >= ${start}
-            AND created_at <= ${end}
+            AND created_at >= ${toSQLDate(start)}
+            AND created_at <= ${toSQLDate(end)}
           GROUP BY HOUR(created_at)
           ORDER BY HOUR(created_at)
         `);
@@ -346,21 +351,33 @@ export const dashboardStatsRouter = router({
       // Para cada agente, calcular estatísticas
       const agentStats = await Promise.all(
         agents.map(async agent => {
-          // Total de atendimentos
+          // Total de atendimentos (filtrado por período)
           const [totalConversations] = await db
             .select({ count: sql<number>`count(*)` })
             .from(conversations)
-            .where(eq(conversations.assignedTo, agent.id));
+            .where(
+              and(
+                eq(conversations.assignedTo, agent.id),
+                gte(conversations.openedAt, start),
+                lte(conversations.openedAt, end)
+              )
+            );
 
-          // Dias ativos (dias únicos com atendimentos)
+          // Dias ativos (dias únicos com atendimentos no período)
           const [activeDays] = await db
             .select({
               count: sql<number>`count(DISTINCT DATE(${conversations.openedAt}))`,
             })
             .from(conversations)
-            .where(eq(conversations.assignedTo, agent.id));
+            .where(
+              and(
+                eq(conversations.assignedTo, agent.id),
+                gte(conversations.openedAt, start),
+                lte(conversations.openedAt, end)
+              )
+            );
 
-          // Mensagens enviadas pelo agente
+          // Mensagens enviadas pelo agente (filtrado por período)
           const [messagesSent] = await db
             .select({ count: sql<number>`count(*)` })
             .from(conversationMessages)
@@ -371,11 +388,13 @@ export const dashboardStatsRouter = router({
             .where(
               and(
                 eq(conversations.assignedTo, agent.id),
-                eq(conversationMessages.senderType, "agent")
+                eq(conversationMessages.senderType, "agent"),
+                gte(conversations.openedAt, start),
+                lte(conversations.openedAt, end)
               )
             );
 
-          // Mensagens recebidas nas conversas do agente
+          // Mensagens recebidas nas conversas do agente (filtrado por período)
           const [messagesReceived] = await db
             .select({ count: sql<number>`count(*)` })
             .from(conversationMessages)
@@ -386,7 +405,9 @@ export const dashboardStatsRouter = router({
             .where(
               and(
                 eq(conversations.assignedTo, agent.id),
-                eq(conversationMessages.senderType, "customer")
+                eq(conversationMessages.senderType, "customer"),
+                gte(conversations.openedAt, start),
+                lte(conversations.openedAt, end)
               )
             );
 
@@ -396,13 +417,15 @@ export const dashboardStatsRouter = router({
               ? (totalConversations.count / activeDays.count).toFixed(1)
               : "0.0";
 
-          // TMA real: média do tempo entre openedAt e closedAt
+          // TMA real: média do tempo entre openedAt e closedAt (no período)
           const [tmaResult] = await db
             .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, openedAt, closedAt))` })
             .from(conversations)
             .where(
               and(
                 eq(conversations.assignedTo, agent.id),
+                gte(conversations.openedAt, start),
+                lte(conversations.openedAt, end),
                 sql`${conversations.closedAt} IS NOT NULL`
               )
             );
