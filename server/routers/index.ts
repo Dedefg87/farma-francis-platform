@@ -9,11 +9,13 @@ import { broadcastRouter } from "../routers-broadcast";
 import { contactFetchRouter } from "../routers-contact-fetch";
 import { conversationsRouter } from "../routers-conversations";
 import { crmRouter } from "../routers-crm";
+import { customersRouter } from "../routers-customers";
 import { dashboardDrilldownRouter } from "../routers-dashboard-drilldown";
 import { dashboardStatsRouter } from "../routers-dashboard-stats";
 import { dashboardRouter } from "../routers-dashboard";
 import { executionsRouter } from "../routers-executions";
 import { inboxRouter } from "../routers-inbox";
+import { leadsRouter } from "../routers-leads";
 import { logsRouter } from "../routers-logs";
 import { messagesRouter } from "../routers-messages";
 import { migrationRouter } from "../routers-migration";
@@ -37,6 +39,8 @@ export const appRouter = router({
   contactFetch: contactFetchRouter,
   conversations: conversationsRouter,
   crm: crmRouter,
+  customers: customersRouter,
+  leads: leadsRouter,
   dashboardDrilldown: dashboardDrilldownRouter,
   dashboardStats: dashboardStatsRouter,
   dashboard: dashboardRouter,
