@@ -17,67 +17,70 @@ function formatSecondsToHMS(totalSeconds: number): string {
   const seconds = Math.round(totalSeconds % 60);
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
-
-// Utilitário para calcular range de datas baseado no período selecionado
-// Se startDate e endDate forem fornecidos, usa eles diretamente
 function getDateRangeFromPeriod(period: string, overrideStart?: string, overrideEnd?: string): { start: Date; end: Date } {
-  // Se tem override, use diretamente (converter para Date se for string)
   if (overrideStart && overrideEnd) {
     return {
-      startDate: new Date(overrideStart),
-      endDate: new Date(overrideEnd),
+      start: new Date(overrideStart),
+      end: new Date(overrideEnd),
     };
   }
 
   const now = new Date();
-  const end = now;
   let start: Date;
+  let end: Date;
 
   switch (period) {
-    case 'hoje':
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    case "hoje":
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       break;
-    case 'ontem':
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
-      const endYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-      return { startDate: start, endDate: endYesterday };
-    case 'semana':
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      start = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate(), 0, 0, 0);
+
+    case "semana":
+      const dayOfWeek = now.getDay();
+      const tempStart = new Date(now);
+      tempStart.setDate(now.getDate() - dayOfWeek);
+      start = new Date(tempStart.getFullYear(), tempStart.getMonth(), tempStart.getDate(), 0, 0, 0, 0);
+      end = new Date(tempStart.getFullYear(), tempStart.getMonth(), tempStart.getDate() + 6, 23, 59, 59, 999);
       break;
-    case 'mes':
-      // Últimos 30 dias (último mês completo + today)
-      start = new Date(now);
-      start.setDate(start.getDate() - 30);
+
+    case "mes":
+      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
       break;
-    case '7dias':
-      start = new Date(now);
-      start.setDate(start.getDate() - 7);
+
+    case "7d":
+      start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       break;
-    case '30dias':
-      start = new Date(now);
-      start.setDate(start.getDate() - 30);
+
+    case "30d":
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       break;
-    case '90dias':
-      start = new Date(now);
-      start.setDate(start.getDate() - 90);
+
+    case "90d":
+      start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       break;
-    case 'todas':
-      // Retorna todo o histórico: data bem antiga até agora
-      start = new Date(1970, 0, 1);
-      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+    case "all":
+    case "todas":
+      start = new Date("2000-01-01T00:00:00.000Z");
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       break;
+
     default:
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      break;
   }
 
-  return { startDate: start, endDate: end };
+  return { start, end };
 }
-
-export const dashboardStatsRouter = router({
   // Estatísticas gerais do dashboard
   getStats: publicProcedure
     .input(
