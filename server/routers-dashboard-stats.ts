@@ -74,14 +74,20 @@ export const dashboardStatsRouter = router({
     .input(
       z
         .object({
-          period: z.string().optional().default("todas"),
+          period: z.string().optional().default("all"),
           startDate: z.string().optional(),
           endDate: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "todas";
+      // Normalizar valores do frontend para internos
+      const rawPeriod = input?.period || "all";
+      const period = rawPeriod === "7d" ? "7dias"
+                    : rawPeriod === "30d" ? "30dias"
+                    : rawPeriod === "90d" ? "90dias"
+                    : rawPeriod === "all" ? "todas"
+                    : rawPeriod;
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -224,7 +230,12 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
+      const rawPeriod = input?.period || "hoje";
+      const period = rawPeriod === "7d" ? "7dias"
+                    : rawPeriod === "30d" ? "30dias"
+                    : rawPeriod === "90d" ? "90dias"
+                    : rawPeriod === "all" ? "todas"
+                    : rawPeriod;
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input.startDate,
@@ -339,16 +350,21 @@ export const dashboardStatsRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        const period = input?.period || "hoje";
+        const rawPeriod = input?.period || "hoje";
+        const period = rawPeriod === "7d" ? "7dias"
+                      : rawPeriod === "30d" ? "30dias"
+                      : rawPeriod === "90d" ? "90dias"
+                      : rawPeriod === "all" ? "todas"
+                      : rawPeriod;
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
         // Use the requested period for filtering
         const { startDate: start, endDate: end } = getDateRangeFromPeriod(
-        period,
-        input.startDate,
-        input.endDate
-      );
+          period,
+          input.startDate,
+          input.endDate
+        );
 
         // Convert to SQL strings
         const startStr = start.toISOString().slice(0, 19).replace('T', ' ');
@@ -425,7 +441,12 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
+      const rawPeriod = input?.period || "hoje";
+      const period = rawPeriod === "7d" ? "7dias"
+                    : rawPeriod === "30d" ? "30dias"
+                    : rawPeriod === "90d" ? "90dias"
+                    : rawPeriod === "all" ? "todas"
+                    : rawPeriod;
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input.startDate,
