@@ -26,6 +26,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("todas"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -167,6 +169,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -220,6 +224,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -279,6 +285,10 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -364,6 +374,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -494,6 +506,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -569,6 +583,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
