@@ -24,8 +24,8 @@ function getDateRangeFromPeriod(period: string, overrideStart?: string, override
   // Se tem override, use diretamente (converter para Date se for string)
   if (overrideStart && overrideEnd) {
     return {
-      start: new Date(overrideStart),
-      end: new Date(overrideEnd),
+      startDate: new Date(overrideStart),
+      endDate: new Date(overrideEnd),
     };
   }
 
@@ -42,7 +42,7 @@ function getDateRangeFromPeriod(period: string, overrideStart?: string, override
       yesterday.setDate(yesterday.getDate() - 1);
       start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
       const endYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-      return { start, end: endYesterday };
+      return { startDate: start, endDate: endYesterday };
     case 'semana':
       const startOfWeek = new Date(now);
       startOfWeek.setDate(now.getDate() - now.getDay());
@@ -63,7 +63,7 @@ function getDateRangeFromPeriod(period: string, overrideStart?: string, override
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   }
 
-  return { start, end };
+  return { startDate: start, endDate: end };
 }
 
 export const dashboardStatsRouter = router({
