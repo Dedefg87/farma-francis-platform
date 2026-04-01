@@ -342,7 +342,7 @@ export const agentsRouter = router({
         sortBy: z
           .enum(["satisfaction", "resolved", "response_time", "active"])
           .default("satisfaction"),
-      })
+      ).optional()
     )
     .query(async ({ input }) => {
       const db = await getDb();
@@ -389,7 +389,7 @@ export const agentsRouter = router({
     .input(
       z.object({
         timeRange: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
-      })
+      ).optional()
     )
     .query(async ({ input }) => {
       const db = await getDb();
@@ -475,7 +475,7 @@ export const agentsRouter = router({
     .input(
       z.object({
         timeRange: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
-      })
+      ).optional()
     )
     .query(async ({ input }) => {
       const db = await getDb();
@@ -550,7 +550,7 @@ export const agentsRouter = router({
         agentId: z.number(),
         limit: z.number().min(1).max(50).default(15),
         timeRange: z.enum(["7d", "30d", "90d", "all"]).default("30d"),
-      })
+      ).optional()
     )
     .query(async ({ input }) => {
       const db = await getDb();
