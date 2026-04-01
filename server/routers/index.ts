@@ -28,6 +28,7 @@ import { telemetryRouter } from "../routers-telemetry";
 export const appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
+  employees: agentsRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
   automation: automationRouter,
