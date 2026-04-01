@@ -1,3 +1,4 @@
+import { getDateRangeFromPeriod } from "./utils/date-range";
 import { router, publicProcedure, publicProcedure, publicProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import {
@@ -19,66 +20,6 @@ function formatSecondsToHMS(totalSeconds: number): string {
 }
 
 // Utilitário para calcular range de datas baseado no período selecionado
-function getDateRangeFromPeriod(period: string): { start: Date; end: Date } {
-  const now = new Date();
-  const end = now;
-  let start: Date;
-
-  switch (period) {
-    case 'hoje':
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      break;
-    case 'ontem':
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
-      const endYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
-      return { start, end: endYesterday };
-    case 'semana':
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      start = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate(), 0, 0, 0);
-      break;
-    case 'mes':
-      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-      break;
-    case '7dias':
-      start = new Date(now);
-      start.setDate(start.getDate() - 7);
-      break;
-    case '30dias':
-      start = new Date(now);
-      start.setDate(start.getDate() - 30);
-      break;
-    default:
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  }
-
-  return { start, end };
-}
-
-export const dashboardStatsRouter = router({
-  // Estatísticas gerais do dashboard
-  getStats: publicProcedure
-    .input(
-      z
-        .object({
-          period: z.string().optional().default("todas"),
-          startDate: z.string().optional(),
-          endDate: z.string().optional(),
-        })
-        .optional()
-    )
-    .query(async ({ input }) => {
-      const period = input?.period || "todas";
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-
-      console.log(`[getStats] Period: ${period}`);
-
-      // Se período é "todas", buscar SEM filtro de data
-      // Se for "hoje", "ontem", "semana", "mes" - aplicar filtro em openedAt
-      let whereClause = null;
       if (period !== "todas") {
         const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
