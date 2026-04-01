@@ -320,15 +320,11 @@ export const dashboardStatsRouter = router({
   // Contatos por hora
   getContactsByHour: publicProcedure
     .input(
-      z
-        .object({
-          period: z.string().optional().default("hoje"),
-          startDate: z.string().optional(),
-          endDate: z.string().optional(),
-          startDate: z.string().optional(),
-          endDate: z.string().optional(),
-        })
-        .optional()
+      z.object({
+        period: z.string().optional().default("hoje"),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
     )
     .query(async ({ input }) => {
       try {

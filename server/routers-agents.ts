@@ -342,7 +342,7 @@ export const agentsRouter = router({
         sortBy: z
           .enum(["satisfaction", "resolved", "response_time", "active"])
           .default("satisfaction"),
-      }).optional()
+      })
     )
     .query(async ({ input }) => {
       const db = await getDb();
