@@ -49,7 +49,9 @@ function getDateRangeFromPeriod(period: string, overrideStart?: string, override
       start = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate(), 0, 0, 0);
       break;
     case 'mes':
-      start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+      // Últimos 30 dias (último mês completo + today)
+      start = new Date(now);
+      start.setDate(start.getDate() - 30);
       break;
     case '7dias':
       start = new Date(now);
