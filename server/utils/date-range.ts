@@ -12,6 +12,9 @@ export function getDateRangeFromPeriod(period: string): { startDate: Date; endDa
     case "90d":
       startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       break;
+    case "mes":
+      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      break;
     case "all":
       startDate = new Date("2000-01-01");
       break;
