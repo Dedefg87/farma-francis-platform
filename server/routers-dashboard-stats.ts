@@ -64,6 +64,8 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("todas"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -78,7 +80,11 @@ export const dashboardStatsRouter = router({
       // Se for "hoje", "ontem", "semana", "mes" - aplicar filtro em openedAt
       let whereClause = null;
       if (period !== "todas") {
-        const { start, end } = getDateRangeFromPeriod(period);
+        const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
         console.log(`[getStats] Filtering openedAt between ${start} and ${end}`);
         whereClause = and(
           gte(conversations.openedAt, start),
@@ -106,7 +112,11 @@ export const dashboardStatsRouter = router({
       // Aqui filtramos por createdAt da mensagem, não por openedAt da conversation
       let messagesSentQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "agent"));
       if (period !== "todas") {
-        const { start, end } = getDateRangeFromPeriod(period);
+        const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
         messagesSentQuery = messagesSentQuery.where(
           and(
             gte(conversationMessages.createdAt, start),
@@ -119,7 +129,11 @@ export const dashboardStatsRouter = router({
       // Mensagens recebidas (de clientes)
       let messagesReceivedQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "customer"));
       if (period !== "todas") {
-        const { start, end } = getDateRangeFromPeriod(period);
+        const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
         messagesReceivedQuery = messagesReceivedQuery.where(
           and(
             gte(conversationMessages.createdAt, start),
@@ -156,7 +170,11 @@ export const dashboardStatsRouter = router({
       // Calcular TMA real: média do tempo entre openedAt e closedAt (apenas conversas fechadas)
       let avgHandlingTime = "00:00:00";
       if (period !== "todas") {
-        const { start, end } = getDateRangeFromPeriod(period);
+        const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
         const avgTimeResult = await db
           .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, opened_at, closed_at))` })
           .from(conversations)
@@ -189,12 +207,18 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
       const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -238,12 +262,18 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
       const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -293,6 +323,10 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
@@ -303,7 +337,11 @@ export const dashboardStatsRouter = router({
         if (!db) throw new Error("Database not available");
 
         // Use the requested period for filtering
-        const { start, end } = getDateRangeFromPeriod(period);
+        const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
 
         // Convert to SQL strings
         const startStr = start.toISOString().slice(0, 19).replace('T', ' ');
@@ -374,12 +412,18 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
       const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -500,12 +544,18 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
       const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -571,12 +621,18 @@ export const dashboardStatsRouter = router({
       z
         .object({
           period: z.string().optional().default("hoje"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
         })
         .optional()
     )
     .query(async ({ input }) => {
       const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input.startDate,
+        input.endDate
+      );
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
