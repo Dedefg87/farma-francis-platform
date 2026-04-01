@@ -120,7 +120,7 @@ export const dashboardStatsRouter = router({
       if (period !== "todas") {
         const { start, end } = getDateRangeFromPeriod(period);
         const avgTimeResult = await db
-          .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, openedAt, closedAt))` })
+          .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, opened_at, closed_at))` })
           .from(conversations)
           .where(
             and(
@@ -170,7 +170,7 @@ export const dashboardStatsRouter = router({
           COUNT(*) as count
         FROM conversations
         WHERE channel IS NOT NULL
-          AND openedAt BETWEEN ${startStr} AND ${endStr}
+          AND opened_at BETWEEN ${startStr} AND ${endStr}
         GROUP BY channel
         ORDER BY count DESC
       `);
@@ -219,7 +219,7 @@ export const dashboardStatsRouter = router({
           COUNT(*) as count
         FROM conversations
         WHERE status IS NOT NULL
-          AND openedAt BETWEEN ${startStr} AND ${endStr}
+          AND opened_at BETWEEN ${startStr} AND ${endStr}
         GROUP BY status
         ORDER BY count DESC
       `);
@@ -426,7 +426,7 @@ export const dashboardStatsRouter = router({
 
           // TMA real: média do tempo entre openedAt e closedAt (no período)
           const [tmaResult] = await db
-            .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, openedAt, closedAt))` })
+            .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, opened_at, closed_at))` })
             .from(conversations)
             .where(
               and(
