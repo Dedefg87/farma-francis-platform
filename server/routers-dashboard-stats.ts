@@ -19,11 +19,6 @@ function formatSecondsToHMS(totalSeconds: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-// Utilitário para converter Date para string SQL (YYYY-MM-DD HH:MM:SS)
-function toSQLDate(date: Date): string {
-  return date.toISOString().slice(0, 19).replace('T', ' ');
-}
-
 export const dashboardStatsRouter = router({
   // Estatísticas gerais do dashboard
   getStats: publicProcedure
@@ -165,13 +160,17 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      // Convert to SQL strings
+      const startStr = start.toISOString().slice(0, 19).replace('T', ' ');
+      const endStr = end.toISOString().slice(0, 19).replace('T', ' ');
+
       const rawResult = await db.execute(sql`
         SELECT 
           channel,
           COUNT(*) as count
         FROM conversations
         WHERE channel IS NOT NULL
-          AND openedAt BETWEEN ${toSQLDate(start)} AND ${toSQLDate(end)}
+          AND openedAt BETWEEN ${startStr} AND ${endStr}
         GROUP BY channel
         ORDER BY count DESC
       `);
@@ -210,13 +209,17 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      // Convert to SQL strings
+      const startStr = start.toISOString().slice(0, 19).replace('T', ' ');
+      const endStr = end.toISOString().slice(0, 19).replace('T', ' ');
+
       const rawResult = await db.execute(sql`
         SELECT 
           status,
           COUNT(*) as count
         FROM conversations
         WHERE status IS NOT NULL
-          AND openedAt BETWEEN ${toSQLDate(start)} AND ${toSQLDate(end)}
+          AND openedAt BETWEEN ${startStr} AND ${endStr}
         GROUP BY status
         ORDER BY count DESC
       `);
@@ -264,13 +267,17 @@ export const dashboardStatsRouter = router({
         // Use the requested period for filtering
         const { start, end } = getDateRangeFromPeriod(period);
 
+        // Convert to SQL strings
+        const startStr = start.toISOString().slice(0, 19).replace('T', ' ');
+        const endStr = end.toISOString().slice(0, 19).replace('T', ' ');
+
         console.log(
           "[getContactsByHour] Using period:",
           period,
           "→",
-          start,
+          startStr,
           "to",
-          end
+          endStr
         );
 
         // Contatos por hora = quantidade de conversas com ao menos 1 mensagem do cliente
@@ -280,8 +287,8 @@ export const dashboardStatsRouter = router({
             COUNT(DISTINCT conversation_id) as chats
           FROM conversation_messages
           WHERE sender_type = 'customer'
-            AND created_at >= ${toSQLDate(start)}
-            AND created_at <= ${toSQLDate(end)}
+            AND created_at >= ${startStr}
+            AND created_at <= ${endStr}
           GROUP BY HOUR(created_at)
           ORDER BY HOUR(created_at)
         `);
