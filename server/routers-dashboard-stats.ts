@@ -17,73 +17,77 @@ export const dashboardStatsRouter = router({
     .input(
       z
         .object({
-          period: z.string().optional().default("hoje"),
+          period: z.string().optional().default("todas"),
         })
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
-      const { start, end } = getDateRangeFromPeriod(period);
+      const period = input?.period || "todas";
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      console.log(`[getStats] Period: ${period}, Start: ${start}, End: ${end}`);
+      console.log(`[getStats] Period: ${period}`);
 
-      // Total de atendimentos (conversas) no período
-      const totalConversations = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversations)
-        .where(
-          and(
-            gte(conversations.openedAt, start),
-            lte(conversations.openedAt, end)
-          )
+      // Se período é "todas", buscar SEM filtro de data
+      // Se for "hoje", "ontem", "semana", "mes" - aplicar filtro em openedAt
+      let whereClause = null;
+      if (period !== "todas") {
+        const { start, end } = getDateRangeFromPeriod(period);
+        console.log(`[getStats] Filtering openedAt between ${start} and ${end}`);
+        whereClause = and(
+          gte(conversations.openedAt, start),
+          lte(conversations.openedAt, end)
         );
+      }
 
-      console.log(`[getStats] totalConversations result:`, totalConversations);
+      // Total de atendimentos (conversas)
+      let totalConversationsQuery = db.select({ count: sql<number>`count(*)` }).from(conversations);
+      if (whereClause) {
+        totalConversationsQuery = totalConversationsQuery.where(whereClause);
+      }
+      const totalConversations = await totalConversationsQuery;
 
-      // Clientes únicos no período
-      const uniqueCustomers = await db
-        .select({
-          count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
-        })
-        .from(conversations)
-        .where(
+      // Clientes únicos
+      let uniqueCustomersQuery = db.select({
+        count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
+      }).from(conversations);
+      if (whereClause) {
+        uniqueCustomersQuery = uniqueCustomersQuery.where(whereClause);
+      }
+      const uniqueCustomers = await uniqueCustomersQuery;
+
+      // Mensagens enviadas (por agentes)
+      // Aqui filtramos por createdAt da mensagem, não por openedAt da conversation
+      let messagesSentQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "agent"));
+      if (period !== "todas") {
+        const { start, end } = getDateRangeFromPeriod(period);
+        messagesSentQuery = messagesSentQuery.where(
           and(
-            gte(conversations.openedAt, start),
-            lte(conversations.openedAt, end)
-          )
-        );
-
-      // Mensagens enviadas (por agentes) no período
-      const messagesSent = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversationMessages)
-        .where(
-          and(
-            eq(conversationMessages.senderType, "agent"),
             gte(conversationMessages.createdAt, start),
             lte(conversationMessages.createdAt, end)
           )
         );
+      }
+      const messagesSent = await messagesSentQuery;
 
-      // Mensagens recebidas (de clientes) no período
-      const messagesReceived = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(conversationMessages)
-        .where(
+      // Mensagens recebidas (de clientes)
+      let messagesReceivedQuery = db.select({ count: sql<number>`count(*)` }).from(conversationMessages).where(eq(conversationMessages.senderType, "customer"));
+      if (period !== "todas") {
+        const { start, end } = getDateRangeFromPeriod(period);
+        messagesReceivedQuery = messagesReceivedQuery.where(
           and(
-            eq(conversationMessages.senderType, "customer"),
             gte(conversationMessages.createdAt, start),
             lte(conversationMessages.createdAt, end)
           )
         );
+      }
+      const messagesReceived = await messagesReceivedQuery;
 
-      // Total de agentes ativos
+      // Total de agentes ativos (sempre total, sem filtro)
       const totalAgents = await db
         .select({ count: sql<number>`count(*)` })
         .from(users)
-        .where(eq(users.role, "user")); // Agentes têm role 'user'
+        .where(eq(users.role, "user"));
 
       // Extrair valores
       const totalConvValue = totalConversations[0]?.count || 0;
@@ -92,7 +96,7 @@ export const dashboardStatsRouter = router({
       const msgRecValue = messagesReceived[0]?.count || 0;
       const agentsValue = totalAgents[0]?.count || 0;
 
-      console.log(`[getStats] Values:`, {
+      console.log(`[getStats] Values (period=${period}):`, {
         totalConversations: totalConvValue,
         uniqueCustomers: uniqueCustValue,
         messagesSent: msgSentValue,
@@ -103,7 +107,7 @@ export const dashboardStatsRouter = router({
       // Média de atendimentos por agente
       const avgPerAgent = agentsValue > 0 ? Math.round(totalConvValue / agentsValue) : 0;
 
-      // Tempo médio de atendimento (mock - será calculado depois)
+      // Tempo médio de atendimento (mock)
       const avgHandlingTime = "00:14:32";
 
       return {
