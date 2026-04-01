@@ -346,11 +346,7 @@ export const agentsRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db)
-        return {
-          agents: [],
-          pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
-        };
+      if (!db) return [];
 
       // Ensure input is defined, using defaults if not provided
       const safeInput = input ?? {};
@@ -374,17 +370,8 @@ export const agentsRouter = router({
         }
       });
 
-      const total = sorted.length;
       const offset = (page - 1) * pageSize;
-      return {
-        agents: sorted.slice(offset, offset + pageSize),
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-        },
-      };
+      return sorted.slice(offset, offset + pageSize);
     }),
 
   getChartData: protectedProcedure
