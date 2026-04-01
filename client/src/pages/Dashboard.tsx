@@ -5,7 +5,7 @@ import { Loader2, TrendingUp } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend, LineChart, Line,
+  ResponsiveContainer, Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 
@@ -74,7 +74,7 @@ export default function Dashboard() {
   const channelData = channelQuery.data ?? [];
   const statusData = statusQuery.data ?? [];
   const hourData = hourQuery.data?.map((h: any) => ({
-    hora: \`\${String(h.hour).padStart(2, '0')}h\`,
+    hora: `${String(h.hour).padStart(2, '0')}h`,
     chats: Number(h.chats) || 0,
   })) ?? [];
   const agentData = agentQuery.data as AgentPerformance[] ?? [];
@@ -95,14 +95,14 @@ export default function Dashboard() {
     const hours = Math.floor(avgSeconds / 3600);
     const minutes = Math.floor((avgSeconds % 3600) / 60);
     const seconds = Math.round(avgSeconds % 60);
-    return \`\${String(hours).padStart(2, '0')}:\${String(minutes).padStart(2, '0')}:\${String(seconds).padStart(2, '0')}\`;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
   const renderMetricCard = (label: string, value: number | string | undefined) => (
-    <Card className="p-3 md:p-2 bg-white rounded-lg shadow-sm border border-gray-100 flex flex-col justify-center">
+    <Card className="p-3 md:p-2 bg-white rounded-lg shadow-sm border border-gray-100">
       <div className="text-gray-600 text-xs font-semibold uppercase truncate">{label}</div>
       <div className="text-lg md:text-xl font-bold text-gray-900 mt-1">
-        {value === undefined || value === null ? "—" : (value.toString().includes(':') ? value : value.toLocaleString('pt-BR'))}
+        {value === undefined || value === null ? "—" : (typeof value === 'string' && value.includes(':') ? value : value.toLocaleString('pt-BR'))}
       </div>
     </Card>
   );
@@ -129,7 +129,7 @@ export default function Dashboard() {
   };
 
   const renderEmptyChart = (title: string) => (
-    <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100 h-full">
+    <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
       <h3 className="text-sm font-semibold text-gray-800 mb-4">{title}</h3>
       <div className="flex items-center justify-center h-48 text-gray-400">
         <span className="text-sm">Sem dados disponíveis</span>
@@ -144,18 +144,18 @@ export default function Dashboard() {
           
           {/* Cabeçalho com Filtros */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
               <div className="flex flex-wrap gap-2">
                 {periodOptions.map((option) => (
                   <button
                     key={option.value}
                     onClick={() => handlePeriodChange(option.value)}
-                    className={\`px-3 py-2 rounded-md text-sm font-medium transition-colors
-                      \${selectedPeriod === option.value
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      selectedPeriod === option.value
                         ? "bg-blue-500 text-white"
                         : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                      }\`}
+                    }`}
                   >
                     {option.label}
                   </button>
@@ -163,9 +163,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Seletor de Data Personalizado */}
             {showCustomDatePicker && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="pt-4 border-t border-gray-200">
                 <div className="flex flex-wrap gap-4 items-end">
                   <div className="flex flex-col">
                     <label htmlFor="startDate" className="text-sm font-medium text-gray-700 mb-1">Data Início:</label>
@@ -229,13 +228,9 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* Coluna Esquerda - 2/3 da largura */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Contatos por Hora */}
+                <div className="lg:col-span-2">
                   <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                    <div className="flex gap-2 mb-4">
-                      <h3 className="text-sm font-semibold text-gray-800 flex-1">Contatos por Hora</h3>
-                      <span className="text-xs text-gray-500">ou por dia do mês</span>
-                    </div>
+                    <h3 className="text-sm font-semibold text-gray-800 mb-4">Contatos por Hora</h3>
                     {hourData.length > 0 && hourData.some(item => item.chats > 0) ? (
                       <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={hourData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
@@ -255,12 +250,11 @@ export default function Dashboard() {
                 </div>
 
                 {/* Coluna Direita - 1/3 da largura - Grid 2x2 */}
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:grid-cols-1">
-                    {/* Atendimentos por Fila */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {channelData && channelData.length > 0 ? (
                       <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                        <h3 className="text-sm font-semibold text-gray-800 mb-3">Atendimentos por Fila</h3>
+                        <h3 className="text-sm font-semibold text-gray-800 mb-3">Por Fila</h3>
                         <ResponsiveContainer width="100%" height={150}>
                           <PieChart>
                             <Pie
@@ -276,16 +270,15 @@ export default function Dashboard() {
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
-                            <Tooltip formatter={(value) => value.toString()} />
+                            <Tooltip />
                           </PieChart>
                         </ResponsiveContainer>
                       </Card>
-                    ) : renderEmptyChart("Atendimentos por Fila")}
+                    ) : renderEmptyChart("Por Fila")}
 
-                    {/* Atendimentos por Canal */}
                     {statusData && statusData.length > 0 ? (
                       <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                        <h3 className="text-sm font-semibold text-gray-800 mb-3">Atendimentos por Canal</h3>
+                        <h3 className="text-sm font-semibold text-gray-800 mb-3">Por Status</h3>
                         <ResponsiveContainer width="100%" height={150}>
                           <PieChart>
                             <Pie
@@ -301,17 +294,16 @@ export default function Dashboard() {
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                               ))}
                             </Pie>
-                            <Tooltip formatter={(value) => value.toString()} />
+                            <Tooltip />
                           </PieChart>
                         </ResponsiveContainer>
                       </Card>
-                    ) : renderEmptyChart("Atendimentos por Canal")}
+                    ) : renderEmptyChart("Por Status")}
                   </div>
 
-                  {/* Segunda linha - 2x1 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:grid-cols-1">
-                    {renderEmptyChart("Atend. por Filtro URA")}
-                    {renderEmptyChart("Atend. por Fechamento")}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {renderEmptyChart("Por URA")}
+                    {renderEmptyChart("Por Fechamento")}
                   </div>
                 </div>
               </div>
