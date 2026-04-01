@@ -342,7 +342,7 @@ export const agentsRouter = router({
         sortBy: z
           .enum(["satisfaction", "resolved", "response_time", "active"])
           .default("satisfaction"),
-      })
+      }).optional()
     )
     .query(async ({ input }) => {
       const db = await getDb();
@@ -352,9 +352,11 @@ export const agentsRouter = router({
           pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
         };
 
-      const { page, pageSize, sortBy } = input;
+      // Ensure input is defined, using defaults if not provided
+      const safeInput = input ?? {};
+      const { page = 1, pageSize = 20, sortBy = "satisfaction", timeRange = "30d" } = safeInput;
       const { agentsWithMetrics } = await computeAgentsWithMetrics(db, {
-        timeRange: input.timeRange,
+        timeRange,
       });
 
       const sorted = agentsWithMetrics.sort((a: any, b: any) => {
