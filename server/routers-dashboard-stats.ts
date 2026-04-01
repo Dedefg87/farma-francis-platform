@@ -1,4 +1,3 @@
-import { getDateRangeFromPeriod } from "./utils/date-range";
 import { router, publicProcedure, publicProcedure, publicProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import {
@@ -20,6 +19,92 @@ function formatSecondsToHMS(totalSeconds: number): string {
 }
 
 // Utilitário para calcular range de datas baseado no período selecionado
+// Se startDate e endDate forem fornecidos, usa eles diretamente
+function getDateRangeFromPeriod(period: string, overrideStart?: string, overrideEnd?: string): { start: Date; end: Date } {
+  // Se tem override, use diretamente (converter para Date se for string)
+  if (overrideStart && overrideEnd) {
+    return {
+      startDate: new Date(overrideStart),
+      endDate: new Date(overrideEnd),
+    };
+  }
+
+  const now = new Date();
+  const end = now;
+  let start: Date;
+
+  switch (period) {
+    case 'hoje':
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      break;
+    case 'ontem':
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      start = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 0, 0, 0);
+      const endYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+      return { startDate: start, endDate: endYesterday };
+    case 'semana':
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      start = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate(), 0, 0, 0);
+      break;
+    case 'mes':
+      // Últimos 30 dias (último mês completo + today)
+      start = new Date(now);
+      start.setDate(start.getDate() - 30);
+      break;
+    case '7dias':
+      start = new Date(now);
+      start.setDate(start.getDate() - 7);
+      break;
+    case '30dias':
+      start = new Date(now);
+      start.setDate(start.getDate() - 30);
+      break;
+    case '90dias':
+      start = new Date(now);
+      start.setDate(start.getDate() - 90);
+      break;
+    case 'todas':
+      // Retorna todo o histórico: data bem antiga até agora
+      start = new Date(1970, 0, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      break;
+    default:
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  }
+
+  return { startDate: start, endDate: end };
+}
+
+export const dashboardStatsRouter = router({
+  // Estatísticas gerais do dashboard
+  getStats: publicProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("all"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      // Normalizar valores do frontend para internos
+      const rawPeriod = input?.period || "all";
+      const period = rawPeriod === "7d" ? "7dias"
+                    : rawPeriod === "30d" ? "30dias"
+                    : rawPeriod === "90d" ? "90dias"
+                    : rawPeriod === "all" ? "todas"
+                    : rawPeriod;
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      console.log(`[getStats] Period: ${period}`);
+
+      // Se período é "todas", buscar SEM filtro de data
+      // Se for "hoje", "ontem", "semana", "mes" - aplicar filtro em openedAt
+      let whereClause = null;
       if (period !== "todas") {
         const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
@@ -154,7 +239,12 @@ function formatSecondsToHMS(totalSeconds: number): string {
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
+      const rawPeriod = input?.period || "hoje";
+      const period = rawPeriod === "7d" ? "7dias"
+                    : rawPeriod === "30d" ? "30dias"
+                    : rawPeriod === "90d" ? "90dias"
+                    : rawPeriod === "all" ? "todas"
+                    : rawPeriod;
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input.startDate,
@@ -269,16 +359,21 @@ function formatSecondsToHMS(totalSeconds: number): string {
     )
     .query(async ({ input }) => {
       try {
-        const period = input?.period || "hoje";
+        const rawPeriod = input?.period || "hoje";
+        const period = rawPeriod === "7d" ? "7dias"
+                      : rawPeriod === "30d" ? "30dias"
+                      : rawPeriod === "90d" ? "90dias"
+                      : rawPeriod === "all" ? "todas"
+                      : rawPeriod;
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
         // Use the requested period for filtering
         const { startDate: start, endDate: end } = getDateRangeFromPeriod(
-        period,
-        input.startDate,
-        input.endDate
-      );
+          period,
+          input.startDate,
+          input.endDate
+        );
 
         // Convert to SQL strings
         const startStr = start.toISOString().slice(0, 19).replace('T', ' ');
@@ -355,7 +450,12 @@ function formatSecondsToHMS(totalSeconds: number): string {
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "hoje";
+      const rawPeriod = input?.period || "hoje";
+      const period = rawPeriod === "7d" ? "7dias"
+                    : rawPeriod === "30d" ? "30dias"
+                    : rawPeriod === "90d" ? "90dias"
+                    : rawPeriod === "all" ? "todas"
+                    : rawPeriod;
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input.startDate,
