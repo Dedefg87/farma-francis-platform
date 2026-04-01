@@ -61,6 +61,15 @@ function getDateRangeFromPeriod(period: string, overrideStart?: string, override
       start = new Date(now);
       start.setDate(start.getDate() - 30);
       break;
+    case '90dias':
+      start = new Date(now);
+      start.setDate(start.getDate() - 90);
+      break;
+    case 'todas':
+      // Retorna todo o histórico: data bem antiga até agora
+      start = new Date(1970, 0, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      break;
     default:
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   }
