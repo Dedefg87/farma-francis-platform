@@ -19,7 +19,16 @@ function formatSecondsToHMS(totalSeconds: number): string {
 }
 
 // Utilitário para calcular range de datas baseado no período selecionado
-function getDateRangeFromPeriod(period: string): { start: Date; end: Date } {
+// Se startDate e endDate forem fornecidos, usa eles diretamente
+function getDateRangeFromPeriod(period: string, overrideStart?: string, overrideEnd?: string): { start: Date; end: Date } {
+  // Se tem override, use diretamente (converter para Date se for string)
+  if (overrideStart && overrideEnd) {
+    return {
+      start: new Date(overrideStart),
+      end: new Date(overrideEnd),
+    };
+  }
+
   const now = new Date();
   const end = now;
   let start: Date;
