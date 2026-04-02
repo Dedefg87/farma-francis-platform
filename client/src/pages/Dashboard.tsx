@@ -25,10 +25,6 @@ interface DashboardStats {
 interface AgentPerformance {
   name: string;
   conversations: number;
-  days: number;
-  avgPerDay: number;
-  messagesSent: number;
-  messagesReceived: number;
   tma: string;
 }
 
@@ -77,7 +73,15 @@ export default function Dashboard() {
     hora: `${String(hour).padStart(2, '0')}h`,
     chats: Number(chats) || 0,
   })) ?? [];
-  const agentData = agentQuery.data as AgentPerformance[] ?? [];
+
+  // Mapear dados de agentes para formato esperado pela tabela
+  const agentData = (agentQuery.data ?? []).map((agent: any) => ({
+    name: agent.agentName || agent.name || '—',
+    conversations: agent.totalConversations || 0,
+    tma: agent.avgHandlingTime || '00:00:00',
+    messagesSent: 0, // Não disponível na API atual
+    messagesReceived: 0, // Não disponível na API atual
+  })) as AgentPerformance[];
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
   const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
@@ -318,8 +322,6 @@ export default function Dashboard() {
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Agente</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Conversas</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg Enviadas</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg Recebidas</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">TMA</th>
                         </tr>
                       </thead>
@@ -328,8 +330,6 @@ export default function Dashboard() {
                           <tr key={index} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.name}</td>
                             <td className="px-4 py-3 text-sm text-gray-600">{agent.conversations}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesSent}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesReceived}</td>
                             <td className="px-4 py-3 text-sm text-gray-600">{agent.tma}</td>
                           </tr>
                         ))}
