@@ -208,16 +208,19 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }) => {
-      const period = input?.period || "mes";
+      const rawPeriod = input?.period || "mes";
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
-        period,
+        rawPeriod,
         input?.startDate,
         input?.endDate
       );
 
+      console.log(`[getAgentStats] Período: ${rawPeriod}, Range: ${start.toISOString()} a ${end.toISOString()}`);
+
+      // Query direta: conversations.assignedTo -> users.id (sem passar por queue_agents)
       const agentStats = await db
         .select({
           agentId: users.id,
@@ -226,18 +229,16 @@ export const dashboardStatsRouter = router({
           avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
         })
         .from(users)
-        .leftJoin(queueAgents, eq(users.id, queueAgents.agentId))
-        .leftJoin(conversations, eq(queueAgents.queueId, conversations.queueId))
-        .where(
-          and(
-            eq(users.role, "user"),
-            gte(conversations.openedAt, start),
-            lte(conversations.openedAt, end),
-            isNotNull(conversations.id)
-          )
-        )
+        .leftJoin(conversations, and(
+          eq(conversations.assignedTo, users.id),
+          gte(conversations.openedAt, start),
+          lte(conversations.openedAt, end)
+        ))
+        .where(eq(users.role, "user"))
         .groupBy(users.id, users.name)
         .orderBy(sql`count(${conversations.id}) DESC`);
+
+      console.log(`[getAgentStats] Resultado:`, JSON.stringify(agentStats));
 
       return agentStats.map((stat) => ({
         agentId: stat.agentId,
