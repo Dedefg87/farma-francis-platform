@@ -1,26 +1,77 @@
 import { z } from 'zod';
 import { protectedProcedure, adminProcedure, router } from './_core/trpc.js';
 import { getDb } from './db.js';
-import { users as dbUsers } from '../drizzle/schema.js';
-import { eq, like, desc } from 'drizzle-orm';
+import { users as dbUsers, employees as dbEmployees } from '../drizzle/schema.js';
+import { eq, or, like, desc, leftJoin } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 
 export const employeesRouter = router({
   list: protectedProcedure
-    .input(z.object({ page: z.number().min(1).default(1), pageSize: z.number().min(1).max(100).default(20), search: z.string().optional().nullish(), role: z.string().optional().nullish() }).nullish())
-    .output(z.object({ employees: z.array(z.object({ userId: z.number(), name: z.string(), email: z.string().nullable(), role: z.enum(['user', 'admin']), status: z.string(), department: z.string().nullable(), position: z.string().nullable(), cpf: z.string().nullable(), phone: z.string().nullable(), hireDate: z.string().nullable(), skills: z.array(z.string()), photoUrl: z.string().nullable(), createdAt: z.string(), updatedAt: z.string() })), pagination: z.object({ page: z.number(), pageSize: z.number(), total: z.number(), totalPages: z.number() }) }))
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(20),
+      search: z.string().optional().nullish(),
+      role: z.string().optional().nullish(),
+      status: z.string().optional().nullish(),
+    }).nullish())
+    .output(z.object({
+      employees: z.array(z.object({
+        userId: z.number(),
+        username: z.string(),          // login name
+        displayName: z.string(),       // name shown to agents
+        email: z.string().nullable(),
+        role: z.enum(['user', 'admin']),
+        status: z.string(),
+        department: z.string().nullable(),
+        position: z.string().nullable(),
+        cpf: z.string().nullable(),
+        phone: z.string().nullable(),
+        hireDate: z.string().nullable(),
+        skills: z.array(z.string()),
+        photoUrl: z.string().nullable(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      })),
+      pagination: z.object({ page: z.number(), pageSize: z.number(), total: z.number(), totalPages: z.number() })
+    }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
       const safeInput = (input && typeof input === 'object') ? input : {};
-      const { page, pageSize, search, role } = safeInput;
+      const { page, pageSize, search, role, status } = safeInput;
 
-      let query = db.select({ id: dbUsers.id, name: dbUsers.name, email: dbUsers.email, role: dbUsers.role, createdAt: dbUsers.createdAt, updatedAt: dbUsers.updatedAt }).from(dbUsers);
-      if (search) query = query.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`)));
+      // Query: users LEFT JOIN employees
+      let query = db.select({
+        id: dbUsers.id,
+        username: dbUsers.name, // name is the login username
+        displayName: dbUsers.displayName,
+        email: dbUsers.email,
+        role: dbUsers.role,
+        createdAt: dbUsers.createdAt,
+        updatedAt: dbUsers.updatedAt,
+        empStatus: dbEmployees.status,
+        department: dbEmployees.department,
+        position: dbEmployees.position,
+        cpf: dbEmployees.cpf,
+        phone: dbEmployees.phone,
+        hireDate: dbEmployees.hireDate,
+        skills: dbEmployees.skills,
+        photoUrl: dbEmployees.photoUrl,
+      }).from(dbUsers).leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
+
+      if (search) query = query.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`), like(dbEmployees.cpf, `%${search}%`), like(dbEmployees.phone, `%${search}%`)));
       if (role && ['user', 'admin'].includes(role)) query = query.where(eq(dbUsers.role, role));
+      if (status) query = query.where(eq(dbEmployees.status, status));
 
-      const allRows = await query;
-      const total = allRows.length;
+      // Count
+      let countQ = db.select({ count: sql`COUNT(*)` }).from(dbUsers).leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
+      if (search) countQ = countQ.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`), like(dbEmployees.cpf, `%${search}%`), like(dbEmployees.phone, `%${search}%`)));
+      if (role && ['user', 'admin'].includes(role)) countQ = countQ.where(eq(dbUsers.role, role));
+      if (status) countQ = countQ.where(eq(dbEmployees.status, status));
+      const countRes = await countQ.limit(1);
+      const total = Number(countRes[0].count) || 0;
+
+      // Pagination
       const effectivePage = page || 1;
       const effectivePageSize = pageSize || 20;
       const offset = (effectivePage - 1) * effectivePageSize;
@@ -28,17 +79,18 @@ export const employeesRouter = router({
 
       const employees = rows.map(r => ({
         userId: r.id,
-        name: r.name || '',
+        username: r.username || '',
+        displayName: r.displayName || r.username || '',
         email: r.email || null,
         role: r.role || 'user',
-        status: 'active',
-        department: null,
-        position: null,
-        cpf: null,
-        phone: null,
-        hireDate: null,
-        skills: [],
-        photoUrl: null,
+        status: r.empStatus || 'active',
+        department: r.department || null,
+        position: r.position || null,
+        cpf: r.cpf || null,
+        phone: r.phone || null,
+        hireDate: r.hireDate?.toISOString() || null,
+        skills: r.skills ? JSON.parse(r.skills) : [],
+        photoUrl: r.photoUrl || null,
         createdAt: r.createdAt?.toISOString() || new Date().toISOString(),
         updatedAt: r.updatedAt?.toISOString() || new Date().toISOString(),
       }));
@@ -48,31 +100,67 @@ export const employeesRouter = router({
 
   get: protectedProcedure
     .input(z.object({ userId: z.number() }).nullish())
-    .output(z.object({ employee: z.object({ userId: z.number(), name: z.string(), email: z.string().nullable(), role: z.enum(['user', 'admin']), status: z.string(), department: z.string().nullable(), position: z.string().nullable(), cpf: z.string().nullable(), phone: z.string().nullable(), hireDate: z.string().nullable(), skills: z.array(z.string()), photoUrl: z.string().nullable(), createdAt: z.string(), updatedAt: z.string() }) }))
+    .output(z.object({
+      employee: z.object({
+        userId: z.number(),
+        username: z.string(),
+        displayName: z.string(),
+        email: z.string().nullable(),
+        role: z.enum(['user', 'admin']),
+        status: z.string(),
+        department: z.string().nullable(),
+        position: z.string().nullable(),
+        cpf: z.string().nullable(),
+        phone: z.string().nullable(),
+        hireDate: z.string().nullable(),
+        skills: z.array(z.string()),
+        photoUrl: z.string().nullable(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      })
+    }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
       const userId = input?.userId;
       if (userId === undefined) throw new Error('userId obrigatório');
 
-      const res = await db.select({ id: dbUsers.id, name: dbUsers.name, email: dbUsers.email, role: dbUsers.role, createdAt: dbUsers.createdAt, updatedAt: dbUsers.updatedAt }).from(dbUsers).where(eq(dbUsers.id, userId)).limit(1);
+      const res = await db.select({
+        id: dbUsers.id,
+        username: dbUsers.name,
+        displayName: dbUsers.displayName,
+        email: dbUsers.email,
+        role: dbUsers.role,
+        createdAt: dbUsers.createdAt,
+        updatedAt: dbUsers.updatedAt,
+        empStatus: dbEmployees.status,
+        department: dbEmployees.department,
+        position: dbEmployees.position,
+        cpf: dbEmployees.cpf,
+        phone: dbEmployees.phone,
+        hireDate: dbEmployees.hireDate,
+        skills: dbEmployees.skills,
+        photoUrl: dbEmployees.photoUrl,
+      }).from(dbUsers).leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId)).where(eq(dbUsers.id, userId)).limit(1);
+
       if (res.length === 0) throw new Error('Funcionário não encontrado');
 
       const r = res[0];
       return {
         employee: {
           userId: r.id,
-          name: r.name || '',
+          username: r.username || '',
+          displayName: r.displayName || r.username || '',
           email: r.email || null,
           role: r.role || 'user',
-          status: 'active',
-          department: null,
-          position: null,
-          cpf: null,
-          phone: null,
-          hireDate: null,
-          skills: [],
-          photoUrl: null,
+          status: r.empStatus || 'active',
+          department: r.department || null,
+          position: r.position || null,
+          cpf: r.cpf || null,
+          phone: r.phone || null,
+          hireDate: r.hireDate?.toISOString() || null,
+          skills: r.skills ? JSON.parse(r.skills) : [],
+          photoUrl: r.photoUrl || null,
           createdAt: r.createdAt?.toISOString() || new Date().toISOString(),
           updatedAt: r.updatedAt?.toISOString() || new Date().toISOString(),
         },
@@ -80,20 +168,33 @@ export const employeesRouter = router({
     }),
 
   create: adminProcedure
-    .input(z.object({ name: z.string().min(1, 'Nome é obrigatório'), password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'), role: z.enum(['user', 'admin']).default('user') }).nullish())
+    .input(z.object({
+      username: z.string().min(1, 'Nome de usuário é obrigatório'),
+      displayName: z.string().min(1, 'Nome de exibição é obrigatório'),
+      password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+      role: z.enum(['user', 'admin']).default('user'),
+    }).nullish())
     .output(z.object({ success: z.boolean(), userId: z.number(), message: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      // Verificar se nome de usuário já existe
-      const existing = await db.select().from(dbUsers).where(eq(dbUsers.name, input.name)).limit(1);
+      // Verificar se username já existe (campo name na tabela users)
+      const existing = await db.select().from(dbUsers).where(eq(dbUsers.name, input.username)).limit(1);
       if (existing.length > 0) throw new Error('Nome de usuário já cadastrado');
 
       const passwordHash = await bcrypt.hash(input.password, 10);
       const openId = `local:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      const [newUser] = await db.insert(dbUsers).values({ openId, name: input.name, email: null, passwordHash, loginMethod: 'local', role: input.role }).returning();
+      const [newUser] = await db.insert(dbUsers).values({
+        openId,
+        name: input.username,
+        displayName: input.displayName,
+        email: null,
+        passwordHash,
+        loginMethod: 'local',
+        role: input.role,
+      }).returning();
 
       if (!newUser) throw new Error('Falha ao criar funcionário');
 
@@ -101,7 +202,13 @@ export const employeesRouter = router({
     }),
 
   update: adminProcedure
-    .input(z.object({ userId: z.number(), name: z.string().optional().nullish(), role: z.enum(['user', 'admin']).optional().nullish(), password: z.string().min(6).optional().nullish() }).nullish())
+    .input(z.object({
+      userId: z.number(),
+      username: z.string().optional().nullish(),
+      displayName: z.string().optional().nullish(),
+      role: z.enum(['user', 'admin']).optional().nullish(),
+      password: z.string().min(6).optional().nullish(),
+    }).nullish())
     .output(z.object({ success: z.boolean(), message: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -111,7 +218,8 @@ export const employeesRouter = router({
       if (existing.length === 0) throw new Error('Funcionário não encontrado');
 
       const updates: any = {};
-      if (input.name) updates.name = input.name;
+      if (input.username) updates.name = input.username;
+      if (input.displayName !== undefined) updates.displayName = input.displayName;
       if (input.role) updates.role = input.role;
       if (input.password) updates.passwordHash = await bcrypt.hash(input.password, 10);
       if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
