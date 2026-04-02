@@ -9,11 +9,11 @@ export const employeesRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        page: z.number().min(1).default(1),
-        pageSize: z.number().min(1).max(100).default(20),
-        search: z.string().optional(),
-        role: z.string().optional(),
-      }).optional()
+        page: z.number().min(1).default(1).nullish(),
+        pageSize: z.number().min(1).max(100).default(20).nullish(),
+        search: z.string().optional().nullish(),
+        role: z.string().optional().nullish(),
+      }).nullish()
     )
     .output(
       z.object({
@@ -45,10 +45,10 @@ export const employeesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      // Ensure input is an object
-      const safeInput = input || {};
+      // input pode ser null, undefined ou object
+      const safeInput = (input && typeof input === 'object') ? input : {};
       const { page, pageSize, search, role } = safeInput;
-      console.log('[employees.list] input:', input, 'parsed:', { page, pageSize, search, role });
+      console.log('[employees.list] raw input:', input, 'safe:', safeInput);
 
       // Simple query: only users table
       let query = db.select({
@@ -100,7 +100,11 @@ export const employeesRouter = router({
     }),
 
   get: protectedProcedure
-    .input(z.object({ userId: z.number() }))
+    .input(
+      z.object({
+        userId: z.number(),
+      }).nullish()
+    )
     .output(
       z.object({
         employee: z.object({
@@ -164,7 +168,7 @@ export const employeesRouter = router({
         email: z.string().email(),
         password: z.string().min(6),
         role: z.enum(['user', 'admin']).default('user'),
-      })
+      }).nullish()
     )
     .output(z.object({ success: z.boolean(), userId: z.number(), message: z.string() }))
     .mutation(async ({ input }) => {
@@ -193,11 +197,11 @@ export const employeesRouter = router({
     .input(
       z.object({
         userId: z.number(),
-        name: z.string().optional(),
-        email: z.string().email().optional(),
-        role: z.enum(['user', 'admin']).optional(),
-        password: z.string().min(6).optional(),
-      })
+        name: z.string().optional().nullish(),
+        email: z.string().email().optional().nullish(),
+        role: z.enum(['user', 'admin']).optional().nullish(),
+        password: z.string().min(6).optional().nullish(),
+      }).nullish()
     )
     .output(z.object({ success: z.boolean(), message: z.string() }))
     .mutation(async ({ input }) => {
@@ -222,7 +226,7 @@ export const employeesRouter = router({
     }),
 
   delete: adminProcedure
-    .input(z.object({ userId: z.number() }))
+    .input(z.object({ userId: z.number() }).nullish())
     .output(z.object({ success: z.boolean(), message: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
