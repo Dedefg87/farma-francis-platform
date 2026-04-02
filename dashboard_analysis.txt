@@ -1,0 +1,1463 @@
+Dashboard Technical Analysis
+================================
+1. ROTAS E CÓDIGO TYPESCRIPT
+Files in server/ related to dashboard:
+server/routers-dashboard-drilldown.ts
+server/dashboard-hour-fix.test.ts
+server/routers-dashboard-stats.ts
+server/routers-dashboard.ts
+File: server/routers-dashboard-drilldown.ts
+Full content:
+import { router, protectedProcedure } from './_core/trpc';
+import { z } from 'zod';
+import { getDb } from './db';
+import { conversations, customers } from '../drizzle/schema';
+import { sql, and, gte, lte, eq } from 'drizzle-orm';
+
+/**
+ * Router para drill-down de dados do dashboard
+ * Permite visualizar detalhes de métricas agregadas
+ */
+
+export const dashboardDrilldownRouter = router({
+  /**
+   * Buscar conversas de uma hora específica
+   * Usado no drill-down do gráfico "Contatos por hora"
+   */
+  getConversationsByHour: protectedProcedure
+    .input(
+      z.object({
+        hour: z.number().min(0).max(23), // Hora do dia (0-23)
+        date: z.string().optional(), // Data no formato YYYY-MM-DD (padrão: hoje)
+        status: z.enum(['all', 'chats', 'abandoned']).optional().default('all'),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      // Calcular range de tempo para a hora específica
+      const targetDate = input.date ? new Date(input.date) : new Date();
+      targetDate.setHours(input.hour, 0, 0, 0);
+      
+      const startTime = new Date(targetDate);
+      const endTime = new Date(targetDate);
+      endTime.setHours(input.hour + 1, 0, 0, 0);
+
+      // Construir filtro de status
+      let statusFilter;
+      if (input.status === 'chats') {
+        statusFilter = sql`${conversations.status} IN ('assigned', 'closed')`;
+      } else if (input.status === 'abandoned') {
+        statusFilter = sql`${conversations.status} = 'abandoned'`;
+      } else {
+        statusFilter = sql`1=1`; // Todos
+      }
+
+      // Buscar conversas da hora específica
+      const result = await db
+        .select({
+          id: conversations.id,
+          customerName: conversations.customerName,
+          customerPhone: conversations.customerPhone,
+          channel: conversations.channel,
+          status: conversations.status,
+          openedAt: conversations.openedAt,
+          closedAt: conversations.closedAt,
+          assignedTo: conversations.assignedTo,
+          queueId: conversations.queueId,
+        })
+        .from(conversations)
+        .where(
+          and(
+            gte(conversations.openedAt, startTime),
+            lte(conversations.openedAt, endTime),
+            statusFilter
+          )
+        )
+        .orderBy(conversations.openedAt);
+
+      return {
+        hour: input.hour,
+        date: targetDate.toISOString().split('T')[0],
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        total: result.length,
+        conversations: result,
+      };
+    }),
+
+  /**
+   * Buscar conversas de um período específico
+   * Usado para drill-down de métricas agregadas
+   */
+  getConversationsByPeriod: protectedProcedure
+    .input(
+      z.object({
+        startDate: z.string(), // YYYY-MM-DD
+        endDate: z.string(), // YYYY-MM-DD
+        status: z.enum(['all', 'open', 'assigned', 'closed']).optional().default('all'),
+        channel: z.enum(['all', 'whatsapp', 'instagram', 'telegram', 'email']).optional().default('all'),
+        limit: z.number().min(1).max(100).optional().default(50),
+        offset: z.number().min(0).optional().default(0),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+
+      const startTime = new Date(input.startDate);
+      startTime.setHours(0, 0, 0, 0);
+      
+      const endTime = new Date(input.endDate);
+      endTime.setHours(23, 59, 59, 999);
+
+      // Construir filtros
+      const filters = [
+        gte(conversations.openedAt, startTime),
+        lte(conversations.openedAt, endTime),
+      ];
+
+      if (input.status !== 'all') {
+        filters.push(sql`${conversations.status} = ${sql.raw(`'${input.status}'`)}`);
+      }
+
+      if (input.channel !== 'all') {
+        filters.push(sql`${conversations.channel} = ${sql.raw(`'${input.channel}'`)}`);
+      }
+
+      // Buscar conversas
+      const result = await db
+        .select({
+          id: conversations.id,
+          customerName: conversations.customerName,
+          customerPhone: conversations.customerPhone,
+          channel: conversations.channel,
+          status: conversations.status,
+          openedAt: conversations.openedAt,
+          closedAt: conversations.closedAt,
+          assignedTo: conversations.assignedTo,
+          queueId: conversations.queueId,
+        })
+        .from(conversations)
+        .where(and(...filters))
+        .orderBy(conversations.openedAt)
+        .limit(input.limit)
+        .offset(input.offset);
+
+      // Contar total (para paginação)
+      const [{ total }] = await db
+        .select({ total: sql<number>`count(*)` })
+        .from(conversations)
+        .where(and(...filters));
+
+      return {
+        startDate: input.startDate,
+        endDate: input.endDate,
+        total,
+        showing: result.length,
+        offset: input.offset,
+        limit: input.limit,
+        hasMore: input.offset + result.length < total,
+        conversations: result,
+      };
+    }),
+});
+Imports:
+import { router, protectedProcedure } from './_core/trpc';
+import { z } from 'zod';
+import { getDb } from './db';
+import { conversations, customers } from '../drizzle/schema';
+import { sql, and, gte, lte, eq } from 'drizzle-orm';
+Dependencies:
+import { router, protectedProcedure } from './_core/trpc';
+import { z } from 'zod';
+import { getDb } from './db';
+import { conversations, customers } from '../drizzle/schema';
+import { sql, and, gte, lte, eq } from 'drizzle-orm';
+Exported functions:
+export const dashboardDrilldownRouter = router({
+
+File: server/dashboard-hour-fix.test.ts
+Full content:
+import { describe, it, expect } from 'vitest';
+
+/**
+ * Testes para correção do erro SQL no endpoint getContactsByHour
+ */
+
+describe('Correção de Erro SQL - getContactsByHour', () => {
+  it('deve ter corrigido query SQL usando db.execute', () => {
+    const fs = require('fs');
+    const routerContent = fs.readFileSync('/home/ubuntu/farma-francis-platform/server/routers-dashboard-stats.ts', 'utf-8');
+    
+    // Verifica que usa db.execute ao invés de db.select problemático
+    expect(routerContent).toContain('db.execute');
+    expect(routerContent).toContain('HOUR(opened_at)');
+  });
+
+  it('deve usar query raw SQL para HOUR()', () => {
+    const fs = require('fs');
+    const routerContent = fs.readFileSync('/home/ubuntu/farma-francis-platform/server/routers-dashboard-stats.ts', 'utf-8');
+    
+    // Verifica que a query está usando SQL raw
+    expect(routerContent).toContain('SELECT');
+    expect(routerContent).toContain('GROUP BY HOUR(opened_at)');
+    expect(routerContent).toContain('ORDER BY HOUR(opened_at)');
+  });
+
+  it('deve retornar array com 24 horas', async () => {
+    const { dashboardStatsRouter } = await import('./routers-dashboard-stats');
+    
+    // Criar caller mock para testar
+    const caller = dashboardStatsRouter.createCaller({
+      user: {
+        id: 1,
+        openId: 'test',
+        name: 'Test User',
+        email: 'test@example.com',
+        passwordHash: null,
+        loginMethod: 'google',
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      },
+    });
+
+    const result = await caller.getContactsByHour();
+    
+    // Deve retornar array com 24 elementos (uma para cada hora)
+    expect(result).toHaveLength(24);
+    
+    // Cada elemento deve ter a estrutura correta
+    expect(result[0]).toHaveProperty('hour');
+    expect(result[0]).toHaveProperty('chats');
+    expect(result[0]).toHaveProperty('calls');
+    expect(result[0]).toHaveProperty('abandoned');
+  });
+
+  it('deve formatar horas corretamente (00h-23h)', async () => {
+    const { dashboardStatsRouter } = await import('./routers-dashboard-stats');
+    
+    const caller = dashboardStatsRouter.createCaller({
+      user: {
+        id: 1,
+        openId: 'test',
+        name: 'Test User',
+        email: 'test@example.com',
+        passwordHash: null,
+        loginMethod: 'google',
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      },
+    });
+
+    const result = await caller.getContactsByHour();
+    
+    // Verificar formato das horas
+    expect(result[0].hour).toBe('00h');
+    expect(result[12].hour).toBe('12h');
+    expect(result[23].hour).toBe('23h');
+  });
+
+  it('deve preencher horas sem dados com zeros', async () => {
+    const { dashboardStatsRouter } = await import('./routers-dashboard-stats');
+    
+    const caller = dashboardStatsRouter.createCaller({
+      user: {
+        id: 1,
+        openId: 'test',
+        name: 'Test User',
+        email: 'test@example.com',
+        passwordHash: null,
+        loginMethod: 'google',
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      },
+    });
+
+    const result = await caller.getContactsByHour();
+    
+    // Todas as horas devem ter valores numéricos (mesmo que zero)
+    result.forEach((hour) => {
+      expect(typeof hour.chats).toBe('number');
+      expect(typeof hour.calls).toBe('number');
+      expect(typeof hour.abandoned).toBe('number');
+      expect(hour.chats).toBeGreaterThanOrEqual(0);
+      expect(hour.calls).toBeGreaterThanOrEqual(0);
+      expect(hour.abandoned).toBeGreaterThanOrEqual(0);
+    });
+  });
+});
+Imports:
+import { describe, it, expect } from 'vitest';
+Dependencies:
+import { describe, it, expect } from 'vitest';
+Exported functions:
+
+File: server/routers-dashboard-stats.ts
+Full content:
+// server/routers-dashboard-stats.ts
+
+// Imports necessários
+import { router, publicProcedure } from "./_core/trpc";
+import { getDb } from "./db";
+import {
+  conversations,
+  conversationMessages,
+  users,
+  queues,
+  queueAgents,
+} from "../drizzle/schema";
+import { eq, and, sql, gte, lte, isNotNull } from "drizzle-orm";
+import { z } from "zod";
+
+// IMPORT DA FUNÇÃO getDateRangeFromPeriod
+import { getDateRangeFromPeriod } from "./utils/date-range";
+
+// Utilitário para formatar segundos em HH:MM:SS
+function formatSecondsToHMS(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+export const dashboardStatsRouter = router({
+  // getStats: Retorna estatísticas gerais
+  getStats: publicProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("mes"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "mes";
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input?.startDate,
+        input?.endDate
+      );
+
+      console.log(`[getStats] Período: ${period}, Filtrando entre ${start.toISOString()} e ${end.toISOString()}`);
+
+      const dateFilter = and(
+        gte(conversations.openedAt, start),
+        lte(conversations.openedAt, end)
+      );
+
+      const totalConversationsResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversations)
+        .where(dateFilter);
+      const totalConversations = totalConversationsResult[0]?.count || 0;
+
+      const uniqueCustomersResult = await db
+        .select({
+          count: sql<number>`count(DISTINCT ${conversations.customerPhone})`,
+        })
+        .from(conversations)
+        .where(dateFilter);
+      const uniqueCustomers = uniqueCustomersResult[0]?.count || 0;
+
+      const messagesSentResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.senderType, "agent"),
+            gte(conversationMessages.createdAt, start),
+            lte(conversationMessages.createdAt, end)
+          )
+        );
+      const messagesSent = messagesSentResult[0]?.count || 0;
+
+      const messagesReceivedResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(conversationMessages)
+        .where(
+          and(
+            eq(conversationMessages.senderType, "customer"),
+            gte(conversationMessages.createdAt, start),
+            lte(conversationMessages.createdAt, end)
+          )
+        );
+      const messagesReceived = messagesReceivedResult[0]?.count || 0;
+
+      const totalAgentsResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(users)
+        .where(eq(users.role, "user"));
+      const totalAgents = totalAgentsResult[0]?.count || 0;
+
+      const avgPerAgent = totalAgents > 0 ? Math.round(totalConversations / totalAgents) : 0;
+
+      let avgHandlingTime = "00:00:00";
+      const avgTimeResult = await db
+        .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))` })
+        .from(conversations)
+        .where(
+          and(
+            dateFilter,
+            isNotNull(conversations.closedAt)
+          )
+        );
+
+      const avgMs = avgTimeResult[0]?.avgMs || 0;
+      const avgSeconds = avgMs / 1000000;
+      avgHandlingTime = formatSecondsToHMS(avgSeconds);
+
+      return {
+        totalConversations,
+        uniqueCustomers,
+        messagesSent,
+        messagesReceived,
+        avgPerAgent,
+        avgHandlingTime,
+      };
+    }),
+
+  getConversationsByChannel: publicProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("mes"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "mes";
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input?.startDate,
+        input?.endDate
+      );
+
+      const result = await db
+        .select({
+          channel: conversations.channel,
+          count: sql<number>`count(*)`,
+        })
+        .from(conversations)
+        .where(and(
+          gte(conversations.openedAt, start),
+          lte(conversations.openedAt, end)
+        ))
+        .groupBy(conversations.channel);
+
+      return result;
+    }),
+
+  getConversationsByStatus: publicProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("mes"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "mes";
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input?.startDate,
+        input?.endDate
+      );
+
+      const result = await db
+        .select({
+          status: conversations.status,
+          count: sql<number>`count(*)`,
+        })
+        .from(conversations)
+        .where(and(
+          gte(conversations.openedAt, start),
+          lte(conversations.openedAt, end)
+        ))
+        .groupBy(conversations.status);
+
+      return result;
+    }),
+
+  getAgentStats: publicProcedure
+    .input(
+      z
+        .object({
+          period: z.string().optional().default("mes"),
+          startDate: z.string().optional(),
+          endDate: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const period = input?.period || "mes";
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
+        period,
+        input?.startDate,
+        input?.endDate
+      );
+
+      const agentStats = await db
+        .select({
+          agentId: users.id,
+          agentName: users.name,
+          totalConversations: sql<number>`count(${conversations.id})`,
+          avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
+        })
+        .from(users)
+        .leftJoin(queueAgents, eq(users.id, queueAgents.agentId))
+        .leftJoin(conversations, eq(queueAgents.queueId, conversations.queueId))
+        .where(
+          and(
+            eq(users.role, "user"),
+            gte(conversations.openedAt, start),
+            lte(conversations.openedAt, end),
+            isNotNull(conversations.id)
+          )
+        )
+        .groupBy(users.id, users.name)
+        .orderBy(sql`count(${conversations.id}) DESC`);
+
+      return agentStats.map((stat) => ({
+        agentId: stat.agentId,
+        agentName: stat.agentName,
+        totalConversations: stat.totalConversations || 0,
+        avgHandlingTime: formatSecondsToHMS((stat.avgHandlingTime || 0) / 1000000),
+      }));
+    }),
+});
+Imports:
+import { router, publicProcedure } from "./_core/trpc";
+import { getDb } from "./db";
+import {
+import { eq, and, sql, gte, lte, isNotNull } from "drizzle-orm";
+import { z } from "zod";
+import { getDateRangeFromPeriod } from "./utils/date-range";
+Dependencies:
+import { router, publicProcedure } from "./_core/trpc";
+import { getDb } from "./db";
+} from "../drizzle/schema";
+import { eq, and, sql, gte, lte, isNotNull } from "drizzle-orm";
+import { z } from "zod";
+import { getDateRangeFromPeriod } from "./utils/date-range";
+Exported functions:
+export const dashboardStatsRouter = router({
+
+File: server/routers-dashboard.ts
+Full content:
+import { z } from "zod";
+import { protectedProcedure, router } from "./_core/trpc";
+import { getDb } from "./db";
+import { tickets, customers, receivedMessages, messages, employees } from "../drizzle/schema";
+import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+
+/**
+ * Dashboard router for real-time statistics
+ */
+export const dashboardRouter = router({
+  /**
+   * Get main dashboard statistics
+   */
+  getStats: protectedProcedure
+    .input(
+      z.object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db)
+        return {
+          totalTickets: 0,
+          uniqueCustomers: 0,
+          messagesSent: 0,
+          messagesReceived: 0,
+          avgHandlingTime: 0,
+        };
+
+      // Count tickets
+      const ticketCount = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(tickets);
+
+      // Count unique customers
+      const customerCount = await db
+        .select({ count: sql<number>`COUNT(DISTINCT ${customers.id})` })
+        .from(customers);
+
+      // Count messages sent
+      const sentCount = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(messages)
+        .where(eq(messages.direction, "outbound"));
+
+      // Count messages received
+      const receivedCount = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(receivedMessages);
+
+      // Calculate average handling time (in minutes)
+      const avgTime = await db
+        .select({ avg: sql<number>`AVG(${tickets.timeSpentMinutes})` })
+        .from(tickets)
+        .where(sql`${tickets.timeSpentMinutes} > 0`);
+
+      return {
+        totalTickets: Number(ticketCount[0]?.count || 0),
+        uniqueCustomers: Number(customerCount[0]?.count || 0),
+        messagesSent: Number(sentCount[0]?.count || 0),
+        messagesReceived: Number(receivedCount[0]?.count || 0),
+        avgHandlingTime: Math.round(Number(avgTime[0]?.avg || 0)),
+      };
+    }),
+
+  /**
+   * Get messages by hour for chart
+   */
+  getMessagesByHour: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    // Get messages grouped by hour
+    const result = await db
+      .select({
+        hour: sql<number>`HOUR(FROM_UNIXTIME(${receivedMessages.timestamp} / 1000))`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(receivedMessages)
+      .groupBy(sql`HOUR(FROM_UNIXTIME(${receivedMessages.timestamp} / 1000))`)
+      .orderBy(sql`HOUR(FROM_UNIXTIME(${receivedMessages.timestamp} / 1000))`);
+
+    return result.map((r) => ({
+      hour: Number(r.hour),
+      count: Number(r.count),
+    }));
+  }),
+
+  /**
+   * Get tickets by status
+   */
+  getTicketsByStatus: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const result = await db
+      .select({
+        status: tickets.status,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(tickets)
+      .groupBy(tickets.status);
+
+    return result.map((r) => ({
+      status: r.status,
+      count: Number(r.count),
+    }));
+  }),
+
+  /**
+   * Get tickets by channel
+   */
+  getTicketsByChannel: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    const result = await db
+      .select({
+        channel: tickets.channel,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(tickets)
+      .where(sql`${tickets.channel} IS NOT NULL`)
+      .groupBy(tickets.channel);
+
+    return result.map((r) => ({
+      channel: r.channel,
+      count: Number(r.count),
+    }));
+  }),
+
+  /**
+   * Get employee performance metrics
+   */
+  getEmployeeMetrics: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+
+    // Get tickets assigned to each employee
+    const result = await db
+      .select({
+        employeeId: tickets.assignedTo,
+        ticketsHandled: sql<number>`COUNT(*)`,
+        avgTime: sql<number>`AVG(${tickets.timeSpentMinutes})`,
+      })
+      .from(tickets)
+      .where(sql`${tickets.assignedTo} IS NOT NULL`)
+      .groupBy(tickets.assignedTo);
+
+    return result.map((r) => ({
+      employeeId: r.employeeId,
+      ticketsHandled: Number(r.ticketsHandled),
+      avgHandlingTime: Math.round(Number(r.avgTime || 0)),
+    }));
+  }),
+
+  /**
+   * Get recent tickets
+   */
+  getRecentTickets: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().optional().default(10),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const result = await db
+        .select()
+        .from(tickets)
+        .orderBy(desc(tickets.createdAt))
+        .limit(input.limit);
+
+      return result;
+    }),
+});
+Imports:
+import { z } from "zod";
+import { protectedProcedure, router } from "./_core/trpc";
+import { getDb } from "./db";
+import { tickets, customers, receivedMessages, messages, employees } from "../drizzle/schema";
+import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+Dependencies:
+import { z } from "zod";
+import { protectedProcedure, router } from "./_core/trpc";
+import { getDb } from "./db";
+import { tickets, customers, receivedMessages, messages, employees } from "../drizzle/schema";
+import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+Exported functions:
+export const dashboardRouter = router({
+
+2. TABELAS E SCHEMAS
+3. ENDPOINTS tRPC
+Router file not found
+4. CONSISTÊNCIA
+Column AVG used in code but not in DB
+Column Buscar used in code but not in DB
+Column COUNT used in code but not in DB
+Column Cada used in code but not in DB
+Column Calcular used in code but not in DB
+Column Calculate used in code but not in DB
+Column Construir used in code but not in DB
+Column Contar used in code but not in DB
+Column Contatos used in code but not in DB
+Column id not used in code
+Column hash not used in code
+Column created_at not used in code
+Column id not used in code
+Column migration_name not used in code
+Column applied_at not used in code
+Column id not used in code
+Column account_id not used in code
+Column customer_id not used in code
+Column role not used in code
+Column is_primary not used in code
+Column created_at not used in code
+Column id not used in code
+Column name not used in code
+Column legal_name not used in code
+Column cnpj not used in code
+Column industry not used in code
+Column website not used in code
+Column phone not used in code
+Column address not used in code
+Column city not used in code
+Column state not used in code
+Column zip_code not used in code
+Column status not used in code
+Column owner_user_id not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column agent_id not used in code
+Column pause_type not used in code
+Column started_at not used in code
+Column ended_at not used in code
+Column duration_minutes not used in code
+Column status not used in code
+Column id not used in code
+Column user_id not used in code
+Column channel not used in code
+Column status not used in code
+Column last_activity not used in code
+Column id not used in code
+Column user_id not used in code
+Column ticket_id not used in code
+Column role not used in code
+Column content not used in code
+Column metadata not used in code
+Column created_at not used in code
+Column id not used in code
+Column provider not used in code
+Column token not used in code
+Column phone_number_id not used in code
+Column page_id not used in code
+Column webhook_url not used in code
+Column webhook_verify_token not used in code
+Column is_active not used in code
+Column last_tested_at not used in code
+Column test_status not used in code
+Column test_message not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column app_secret not used in code
+Column id not used in code
+Column ticket_id not used in code
+Column customer_id not used in code
+Column file_name not used in code
+Column file_key not used in code
+Column file_url not used in code
+Column mime_type not used in code
+Column file_size not used in code
+Column uploaded_by not used in code
+Column created_at not used in code
+Column id not used in code
+Column user_id not used in code
+Column action not used in code
+Column entity_type not used in code
+Column entity_id not used in code
+Column changes not used in code
+Column ip_address not used in code
+Column user_agent not used in code
+Column created_at not used in code
+Column id not used in code
+Column name not used in code
+Column description not used in code
+Column channel not used in code
+Column trigger not used in code
+Column is_active not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column response not used in code
+Column response_count not used in code
+Column id not used in code
+Column mother_customer_id not used in code
+Column event_code not used in code
+Column event_name not used in code
+Column expected_due_date not used in code
+Column event_date not used in code
+Column status not used in code
+Column wallet_balance not used in code
+Column total_diapers_count not used in code
+Column available_diapers_count not used in code
+Column target_amount not used in code
+Column total_guests not used in code
+Column public_link not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column closed_at not used in code
+Column whatsapp_number not used in code
+Column welcome_message not used in code
+Column baby_name not used in code
+Column id not used in code
+Column event_id not used in code
+Column package_name not used in code
+Column description not used in code
+Column gift_type not used in code
+Column quantity_represented not used in code
+Column size_label not used in code
+Column price not used in code
+Column stock_limit not used in code
+Column sold_count not used in code
+Column is_active not used in code
+Column created_at not used in code
+Column image_url not used in code
+Column display_order not used in code
+Column id not used in code
+Column event_id not used in code
+Column name not used in code
+Column description not used in code
+Column price not used in code
+Column stock_limit not used in code
+Column sold_count not used in code
+Column is_active not used in code
+Column created_at not used in code
+Column id not used in code
+Column event_id not used in code
+Column package_id not used in code
+Column guest_customer_id not used in code
+Column guest_name not used in code
+Column guest_phone not used in code
+Column guest_email not used in code
+Column message_to_parents not used in code
+Column payment_status not used in code
+Column amount_paid not used in code
+Column payment_method not used in code
+Column payment_reference not used in code
+Column paid_at not used in code
+Column notification_sent not used in code
+Column notification_sent_at not used in code
+Column created_at not used in code
+Column confirmation_token not used in code
+Column id not used in code
+Column event_id not used in code
+Column related_task_id not used in code
+Column withdrawal_type not used in code
+Column diaper_size not used in code
+Column quantity not used in code
+Column requested_at not used in code
+Column fulfilled_at not used in code
+Column status not used in code
+Column fulfilled_by not used in code
+Column delivery_method not used in code
+Column notes not used in code
+Column id not used in code
+Column list_id not used in code
+Column customer_id not used in code
+Column added_at not used in code
+Column id not used in code
+Column list_id not used in code
+Column customer_id not used in code
+Column added_at not used in code
+Column id not used in code
+Column name not used in code
+Column description not used in code
+Column created_by not used in code
+Column last_sent_at not used in code
+Column status not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column message_id not used in code
+Column customer_id not used in code
+Column phone not used in code
+Column status not used in code
+Column error_message not used in code
+Column sent_at not used in code
+Column delivered_at not used in code
+Column read_at not used in code
+Column created_at not used in code
+Column id not used in code
+Column list_id not used in code
+Column message_text not used in code
+Column caption not used in code
+Column file_url not used in code
+Column file_name not used in code
+Column file_type not used in code
+Column file_size not used in code
+Column sender_id not used in code
+Column sender_type not used in code
+Column total_recipients not used in code
+Column successful_sends not used in code
+Column failed_sends not used in code
+Column status not used in code
+Column sent_at not used in code
+Column error_message not used in code
+Column id not used in code
+Column external_id not used in code
+Column remote_jid not used in code
+Column provider not used in code
+Column conversation_id not used in code
+Column sender_id not used in code
+Column sender_type not used in code
+Column content not used in code
+Column read_at not used in code
+Column created_at not used in code
+Column file_url not used in code
+Column file_name not used in code
+Column file_type not used in code
+Column file_size not used in code
+Column id not used in code
+Column conversationId not used in code
+Column tagId not used in code
+Column createdAt not used in code
+Column id not used in code
+Column customer_id not used in code
+Column channel not used in code
+Column status not used in code
+Column assigned_to not used in code
+Column opened_at not used in code
+Column closed_at not used in code
+Column close_reason not used in code
+Column last_message_at not used in code
+Column unread_count not used in code
+Column queue_id not used in code
+Column customer_name not used in code
+Column customer_phone not used in code
+Column id not used in code
+Column entity_type not used in code
+Column entity_id not used in code
+Column activity_type not used in code
+Column title not used in code
+Column body not used in code
+Column metadata_json not used in code
+Column actor_user_id not used in code
+Column occurred_at not used in code
+Column created_at not used in code
+Column id not used in code
+Column action not used in code
+Column entity_type not used in code
+Column entity_id not used in code
+Column actor_user_id not used in code
+Column before_json not used in code
+Column after_json not used in code
+Column request_id not used in code
+Column ip not used in code
+Column user_agent not used in code
+Column created_at not used in code
+Column id not used in code
+Column event_name not used in code
+Column entity_type not used in code
+Column entity_id not used in code
+Column actor_user_id not used in code
+Column payload_json not used in code
+Column idempotency_key not used in code
+Column status not used in code
+Column error not used in code
+Column created_at not used in code
+Column processed_at not used in code
+Column code not used in code
+Column name not used in code
+Column template not used in code
+Column variables_json not used in code
+Column is_active not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column title not used in code
+Column description not used in code
+Column due_at not used in code
+Column status not used in code
+Column priority not used in code
+Column related_entity_type not used in code
+Column related_entity_id not used in code
+Column assigned_to not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column completed_at not used in code
+Column id not used in code
+Column entity_type not used in code
+Column key not used in code
+Column label not used in code
+Column field_type not used in code
+Column options_json not used in code
+Column is_required not used in code
+Column is_active not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column entity_type not used in code
+Column entity_id not used in code
+Column field_definition_id not used in code
+Column value_text not used in code
+Column updated_by not used in code
+Column updated_at not used in code
+Column id not used in code
+Column customer_id not used in code
+Column tag_id not used in code
+Column added_by not used in code
+Column added_at not used in code
+Column id not used in code
+Column customer_id not used in code
+Column nome_medicamento not used in code
+Column posologia_diaria not used in code
+Column qtd_caixa not used in code
+Column data_ultima_compra not used in code
+Column data_fim_previsto not used in code
+Column observacoes not used in code
+Column is_active not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column name not used in code
+Column email not used in code
+Column phone not used in code
+Column cpf_cnpj not used in code
+Column address not used in code
+Column city not used in code
+Column state not used in code
+Column zip_code not used in code
+Column tags not used in code
+Column notes not used in code
+Column status not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column photo_url not used in code
+Column birth_date not used in code
+Column health_tags_json not used in code
+Column whatsapp_opt_in not used in code
+Column whatsapp_opt_in_at not used in code
+Column ltv_value not used in code
+Column last_purchase_at not used in code
+Column expected_due_date not used in code
+Column id not used in code
+Column name not used in code
+Column is_active not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column pipeline_id not used in code
+Column name not used in code
+Column sort_order not used in code
+Column probability not used in code
+Column is_won not used in code
+Column is_lost not used in code
+Column created_at not used in code
+Column id not used in code
+Column account_id not used in code
+Column customer_id not used in code
+Column pipeline_id not used in code
+Column stage_id not used in code
+Column title not used in code
+Column amount_cents not used in code
+Column currency not used in code
+Column close_date not used in code
+Column status not used in code
+Column owner_user_id not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column user_id not used in code
+Column cpf not used in code
+Column phone not used in code
+Column position not used in code
+Column department not used in code
+Column hire_date not used in code
+Column status not used in code
+Column skills not used in code
+Column photo_url not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column execution_id not used in code
+Column node_id not used in code
+Column node_name not used in code
+Column node_type not used in code
+Column status not used in code
+Column started_at not used in code
+Column finished_at not used in code
+Column execution_time not used in code
+Column input_data not used in code
+Column output_data not used in code
+Column error not used in code
+Column retry_count not used in code
+Column created_at not used in code
+Column id not used in code
+Column flow_id not used in code
+Column trigger_type not used in code
+Column status not used in code
+Column started_at not used in code
+Column finished_at not used in code
+Column error not used in code
+Column input not used in code
+Column created_at not used in code
+Column id not used in code
+Column user_id not used in code
+Column page not used in code
+Column event_name not used in code
+Column payload_json not used in code
+Column occurred_at not used in code
+Column created_at not used in code
+Column id not used in code
+Column integration_type not used in code
+Column name not used in code
+Column is_active not used in code
+Column config not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column last_tested_at not used in code
+Column test_status not used in code
+Column test_message not used in code
+Column id not used in code
+Column customer_id not used in code
+Column ticket_id not used in code
+Column lead_id not used in code
+Column type not used in code
+Column subject not used in code
+Column content not used in code
+Column user_id not used in code
+Column created_at not used in code
+Column id not used in code
+Column customer_id not used in code
+Column name not used in code
+Column email not used in code
+Column phone not used in code
+Column source not used in code
+Column stage not used in code
+Column value not used in code
+Column assigned_to not used in code
+Column follow_up_date not used in code
+Column notes not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column customer_id not used in code
+Column ticket_id not used in code
+Column channel not used in code
+Column direction not used in code
+Column content not used in code
+Column message_id not used in code
+Column status not used in code
+Column metadata not used in code
+Column created_at not used in code
+Column id not used in code
+Column user_id not used in code
+Column title not used in code
+Column content not used in code
+Column type not used in code
+Column is_read not used in code
+Column related_id not used in code
+Column created_at not used in code
+Column ean not used in code
+Column name not used in code
+Column category not used in code
+Column substance not used in code
+Column days_duration not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column purchase_id not used in code
+Column product_ean not used in code
+Column product_name not used in code
+Column quantity not used in code
+Column price not used in code
+Column id not used in code
+Column customer_id not used in code
+Column external_id not used in code
+Column purchase_date not used in code
+Column total_value not used in code
+Column channel not used in code
+Column created_at not used in code
+Column id not used in code
+Column processed_at not used in code
+Column provider not used in code
+Column id not used in code
+Column queue_id not used in code
+Column agent_id not used in code
+Column is_active not used in code
+Column joined_at not used in code
+Column id not used in code
+Column name not used in code
+Column channel not used in code
+Column max_wait_minutes not used in code
+Column is_active not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column name not used in code
+Column description not used in code
+Column status not used in code
+Column max_concurrent_chats not used in code
+Column priority not used in code
+Column color not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column title not used in code
+Column content not used in code
+Column category not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column provider not used in code
+Column external_id not used in code
+Column from_number not used in code
+Column from_name not used in code
+Column message_type not used in code
+Column message_text not used in code
+Column media_url not used in code
+Column media_id not used in code
+Column mime_type not used in code
+Column caption not used in code
+Column latitude not used in code
+Column longitude not used in code
+Column timestamp not used in code
+Column raw_payload not used in code
+Column processed not used in code
+Column processed_at not used in code
+Column customer_id not used in code
+Column ticket_id not used in code
+Column automation_flow_id not used in code
+Column created_at not used in code
+Column remote_jid not used in code
+Column read_at not used in code
+Column file_url not used in code
+Column file_name not used in code
+Column file_type not used in code
+Column file_size not used in code
+Column id not used in code
+Column conversation_id not used in code
+Column customer_id not used in code
+Column rating not used in code
+Column feedback not used in code
+Column close_reason not used in code
+Column agent_id not used in code
+Column created_at not used in code
+Column id not used in code
+Column name not used in code
+Column color not used in code
+Column icon not used in code
+Column createdAt not used in code
+Column description not used in code
+Column created_by not used in code
+Column id not used in code
+Column id not used in code
+Column ticket_id not used in code
+Column user_id not used in code
+Column content not used in code
+Column is_internal not used in code
+Column created_at not used in code
+Column id not used in code
+Column ticketId not used in code
+Column tagId not used in code
+Column createdAt not used in code
+Column id not used in code
+Column ticket_number not used in code
+Column customer_id not used in code
+Column subject not used in code
+Column description not used in code
+Column status not used in code
+Column priority not used in code
+Column category not used in code
+Column channel not used in code
+Column assigned_to not used in code
+Column sla_deadline not used in code
+Column resolved_at not used in code
+Column closed_at not used in code
+Column time_spent_minutes not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column name not used in code
+Column description not used in code
+Column start_time not used in code
+Column end_time not used in code
+Column start_time_weekend not used in code
+Column end_time_weekend not used in code
+Column inactivity_timeout not used in code
+Column is_active not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column name not used in code
+Column welcome_message not used in code
+Column menu_data not used in code
+Column working_hours not used in code
+Column off_hours_message not used in code
+Column is_active not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column config_id not used in code
+Column type not used in code
+Column content not used in code
+Column include_survey not used in code
+Column is_active not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column openId not used in code
+Column name not used in code
+Column email not used in code
+Column loginMethod not used in code
+Column role not used in code
+Column createdAt not used in code
+Column updatedAt not used in code
+Column lastSignedIn not used in code
+Column passwordHash not used in code
+Column created_by not used in code
+Column updated_at not used in code
+Column username not used in code
+Column id not used in code
+Column name not used in code
+Column description not used in code
+Column flow_data not used in code
+Column is_active not used in code
+Column execution_count not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column is_test_mode not used in code
+Column template_type not used in code
+Column tags not used in code
+Column id not used in code
+Column name not used in code
+Column type not used in code
+Column data not used in code
+Column created_by not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column workflow_id not used in code
+Column status not used in code
+Column mode not used in code
+Column started_at not used in code
+Column finished_at not used in code
+Column execution_time not used in code
+Column error not used in code
+Column triggered_by not used in code
+Column trigger_data not used in code
+Column created_at not used in code
+Column id not used in code
+Column workflow_id not used in code
+Column cron_expression not used in code
+Column timezone not used in code
+Column is_active not used in code
+Column last_run_at not used in code
+Column next_run_at not used in code
+Column run_count not used in code
+Column created_at not used in code
+Column updated_at not used in code
+Column id not used in code
+Column workflow_id not used in code
+Column webhook_id not used in code
+Column path not used in code
+Column method not used in code
+Column is_active not used in code
+Column last_triggered_at not used in code
+Column trigger_count not used in code
+Column created_at not used in code
+5. CÓDIGO FRONTEND
+Files in client/ related to dashboard:

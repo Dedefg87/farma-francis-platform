@@ -41,7 +41,7 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const { start, end } = getDateRangeFromPeriod(
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input?.startDate,
         input?.endDate
@@ -140,7 +140,7 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const { start, end } = getDateRangeFromPeriod(
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input?.startDate,
         input?.endDate
@@ -176,7 +176,7 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const { start, end } = getDateRangeFromPeriod(
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input?.startDate,
         input?.endDate
@@ -212,7 +212,7 @@ export const dashboardStatsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const { start, end } = getDateRangeFromPeriod(
+      const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
         input?.startDate,
         input?.endDate
