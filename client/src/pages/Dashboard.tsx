@@ -17,58 +17,13 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc";
-
-// ========== INTERFACES ==========
-
-interface PeriodOption {
-  label: string;
-  value: string;
-}
-
-interface DashboardStats {
-  totalConversations: number;
-  uniqueCustomers: number;
-  messagesSent: number;
-  messagesReceived: number;
-  totalAgents: number;
-}
-
-interface ApiAgentStats {
-  agentId: number;
-  agentName: string;
-  totalConversations: number;
-  conversationDays: number;
-  mediaAtendimentosDia: number;
-  messagesSent: number;
-  messagesReceived: number;
-  avgHandlingTime: string;
-}
-
-interface AgentPerformance {
-  agentId: number;
-  name: string;
-  atendimentos: number;
-  dias: number;
-  mediaAtendimentosDia: number;
-  msgEnviadas: number;
-  msgRecebidas: number;
-  tma: string;
-}
-
-interface ApiChannelStats {
-  channel: string;
-  count: number;
-}
-
-interface ApiStatusStats {
-  status: string;
-  count: number;
-}
-
-interface HourlyData {
-  hora: string;
-  chats: number;
-}
+import type {
+  DashboardStatsOutput,
+  AgentStatsOutput,
+  ContactsByHourOutput,
+  ConversationsByChannelOutput,
+  ConversationsByStatusOutput,
+} from "@/lib/shared-types";
 
 // ========== CONSTANTES ==========
 
@@ -95,7 +50,7 @@ export default function Dashboard() {
   const [tempEndDate, setTempEndDate] = useState<string | undefined>(undefined);
 
   // --- OPÇÕES DE PERÍODO (MEMOIZADO) ---
-  const periodOptions: PeriodOption[] = useMemo(() => [
+  const periodOptions = useMemo(() => [
     { label: "Hoje", value: "hoje" },
     { label: "Ontem", value: "ontem" },
     { label: "Esta semana", value: "semana" },
@@ -132,44 +87,21 @@ export default function Dashboard() {
   
   const hourQuery = trpc.dashboardStats.getContactsByHour.useQuery(queryInput, {
     ...queryConfig,
-    select: (data): HourlyData[] => data?.map((chats: number, hour: number) => ({
-      hora: `${String(hour).padStart(2, '0')}h`,
-      chats: Number(chats) || 0,
-    })) ?? [],
+    select: (data: ContactsByHourOutput | undefined): { hora: string; chats: number }[] => 
+      (data ?? []).map((chats: number, hour: number) => ({
+        hora: `${String(hour).padStart(2, '0')}h`,
+        chats: Number(chats) || 0,
+      })),
   });
   
-  const agentQuery = trpc.dashboardStats.getAgentStats.useQuery(queryInput, {
-    ...queryConfig,
-    select: (data): AgentPerformance[] => (data ?? []).map((agent: ApiAgentStats) => ({
-      agentId: agent.agentId,
-      name: agent.agentName || '—',
-      atendimentos: agent.totalConversations || 0,
-      dias: agent.conversationDays || 0,
-      mediaAtendimentosDia: agent.mediaAtendimentosDia || 0,
-      msgEnviadas: agent.messagesSent || 0,
-      msgRecebidas: agent.messagesReceived || 0,
-      tma: agent.avgHandlingTime || '00:00:00',
-    })),
-  });
+  const agentQuery = trpc.dashboardStats.getAgentStats.useQuery(queryInput, queryConfig);
 
   // --- DADOS EXTRAÍDOS ---
-  const stats = statsQuery.data;
-  const channelData = channelQuery.data ?? [];
-  const statusData = statusQuery.data ?? [];
+  const stats = statsQuery.data as DashboardStatsOutput | undefined;
+  const channelData = (channelQuery.data ?? []) as ConversationsByChannelOutput[];
+  const statusData = (statusQuery.data ?? []) as ConversationsByStatusOutput[];
   const hourData = hourQuery.data ?? [];
-  const agentData = agentQuery.data ?? [];
-
-  // Mapear dados de agentes da API para formato da tabela
-  const agentData: AgentPerformance[] = (agentQuery.data ?? []).map((agent: any) => ({
-    agentId: agent.agentId,
-    name: agent.agentName || agent.name || '—',
-    atendimentos: agent.totalConversations || 0,
-    dias: agent.daysActive || 0,
-    mediaAtendimentosDia: agent.avgPerDay || 0,
-    msgEnviadas: agent.messagesSent || 0,
-    msgRecebidas: agent.messagesReceived || 0,
-    tma: agent.tma || '00:00:00',
-  }));
+  const agentData = (agentQuery.data ?? []) as AgentStatsOutput[];
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
   const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
@@ -333,7 +265,7 @@ export default function Dashboard() {
                 {renderMetricCard("Msg Recebidas", stats.messagesReceived)}
                 {renderMetricCard(
                   "Méd. Atend./Agente",
-                  stats.totalAgents > 0 ? (stats.totalConversations / stats.totalAgents).toFixed(1) : "0.0"
+                  stats.avgPerAgent?.toFixed(1) ?? "0.0"
                 )}
                 {renderMetricCard("TMA Médio", calculateAverageTMA)}
                 {renderMetricCard("% SLA", "—")}
@@ -472,7 +404,7 @@ export default function Dashboard() {
                   <tbody className="divide-y divide-gray-200">
                     {agentData.map((agent) => (
                       <tr key={agent.agentId} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.name}</td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{agent.atendimentos}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{agent.dias}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{agent.mediaAtendimentosDia.toFixed(1)}</td>

@@ -26,15 +26,15 @@ export * from "./schema_executions";
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: varchar("open_id", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
-  passwordHash: varchar("passwordHash", { length: 255 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
+  passwordHash: varchar("password_hash", { length: 255 }),
+  loginMethod: varchar("login_method", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  lastSignedIn: timestamp("last_signed_in").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -48,12 +48,15 @@ export const customers = mysqlTable("customers", {
   name: text("name").notNull(),
   phone: varchar("phone", { length: 32 }).notNull(),
   email: varchar("email", { length: 255 }),
-  photoUrl: text("photoUrl"),
+  photoUrl: text("photo_url"),
   status: varchar("status", { length: 32 }).default("active").notNull(),
   notes: text("notes"),
   source: varchar("source", { length: 64 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  lastPurchaseAt: timestamp("last_purchase_at"),
+  ltvValue: decimal("ltv_value", { precision: 10, scale: 2 }).default("0.00"),
+  tags: json("tags"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Customer = typeof customers.$inferSelect;
@@ -858,9 +861,10 @@ export const agentPauses = mysqlTable("agent_pauses", {
     .references(() => users.id)
     .notNull(),
   reason: text("reason"),
+  pauseType: varchar("pause_type", { length: 32 }),
+  durationMinutes: int("duration_minutes"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
-
   status: varchar("status", { length: 16 }).default("active").notNull(),
 });
 
@@ -878,6 +882,8 @@ export const queues = mysqlTable("queues", {
   channel: varchar("channel", { length: 16 }).notNull(),
   priority: int("priority").default(0).notNull(),
   status: varchar("status", { length: 16 }).default("active").notNull(),
+  color: varchar("color", { length: 7 }).default("#3b82f6"),
+  createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -1214,15 +1220,11 @@ export const broadcastLists = mysqlTable("broadcast_lists", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  createdBy: int("createdBy")
-    .references(() => users.id)
-    .notNull(),
-  status: mysqlEnum("status", ["active", "paused", "deleted"])
-    .default("active")
-    .notNull(),
-  lastSentAt: timestamp("lastSentAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdBy: int("created_by").references(() => users.id).notNull(),
+  status: mysqlEnum("status", ["active", "paused", "deleted"]).default("active").notNull(),
+  lastSentAt: timestamp("last_sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
 export type BroadcastList = typeof broadcastLists.$inferSelect;

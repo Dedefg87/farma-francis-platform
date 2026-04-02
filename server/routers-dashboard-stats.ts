@@ -12,6 +12,15 @@ import {
 } from "../drizzle/schema";
 import { eq, and, sql, gte, lte, isNotNull } from "drizzle-orm";
 import { z } from "zod";
+import type {
+  AgentStats,
+  DashboardSummary,
+  ChannelStats,
+  StatusStats,
+  HourlyContacts,
+  QueueStats,
+  VariationMetrics,
+} from '@shared/types/dashboard';
 
 // IMPORT DA FUNÇÃO getDateRangeFromPeriod
 import { getDateRangeFromPeriod } from "./utils/date-range";
@@ -207,7 +216,7 @@ export const dashboardStatsRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<AgentStats[]> => {
       const rawPeriod = input?.period || "mes";
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -251,11 +260,11 @@ export const dashboardStatsRouter = router({
       return agentStats.map((stat) => ({
         agentId: stat.agentId,
         agentName: stat.agentName,
-        atendimentos: stat.totalConversations || 0,
-        dias: stat.conversationDays || 0,
-        mediaAtendimentosDia: stat.conversationDays > 0 ? Math.round((stat.totalConversations || 0) / stat.conversationDays * 10) / 10 : 0,
-        msgEnviadas: Number(stat.messagesSent) || 0,
-        msgRecebidas: Number(stat.messagesReceived) || 0,
+        totalConversations: stat.totalConversations || 0,
+        daysActive: stat.conversationDays || 0,
+        avgPerDay: stat.conversationDays > 0 ? Math.round((stat.totalConversations || 0) / stat.conversationDays * 10) / 10 : 0,
+        messagesSent: Number(stat.messagesSent) || 0,
+        messagesReceived: Number(stat.messagesReceived) || 0,
         tma: stat.avgHandlingTime ? formatSecondsToHMS(Number(stat.avgHandlingTime) / 1000000) : '00:00:00',
       }));
     }),
