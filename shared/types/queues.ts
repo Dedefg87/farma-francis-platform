@@ -1,4 +1,5 @@
 // Tipos compartilhados para Filas (Queues)
+import { ConversationChannel } from './conversations';
 
 export interface Queue {
   id: string;

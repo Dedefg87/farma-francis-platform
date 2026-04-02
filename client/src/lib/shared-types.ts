@@ -27,3 +27,13 @@ export type CustomerDetailOutput = inferRouterOutputs<AppRouter>['customers']['g
 export type ConversationsListActiveOutput = inferRouterOutputs<AppRouter>['conversations']['listActive'];
 // Tipo de uma conversa individual (após mapeamento)
 // export type Conversation = NonNullable<ConversationsListActiveOutput>[number];
+
+// Queues - queuesRouter
+export type QueuesListOutput = inferRouterOutputs<AppRouter>['queues']['list'];
+export type QueuesListWithCountsOutput = inferRouterOutputs<AppRouter>['queues']['listWithCounts'];
+export type QueuesMyQueuesOutput = inferRouterOutputs<AppRouter>['queues']['myQueues'];
+
+// Item types (unwrapped)
+export type QueueListItem = Awaited<QueuesListOutput>[number];
+export type QueueBasicItem = Awaited<QueuesListWithCountsOutput>[number];
+export type MyQueueItem = Awaited<QueuesMyQueuesOutput>[number];

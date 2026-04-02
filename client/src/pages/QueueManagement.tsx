@@ -10,7 +10,7 @@ import { toast } from "sonner";
 export default function QueueManagement() {
   const { user } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { data: queues, isLoading: queuesLoading } = trpc.agent.queues.list.useQuery();
+  const { data: queues, isLoading: queuesLoading } = trpc.queues.list.useQuery();
   const { data: myQueues, isLoading: myQueuesLoading, refetch: refetchMyQueues } = trpc.queues.myQueues.useQuery();
   const { data: agentStatuses, refetch: refetchStatus } = trpc.agent.status.get.useQuery();
   const { data: metrics } = trpc.agent.metrics.realtime.useQuery(undefined, {
