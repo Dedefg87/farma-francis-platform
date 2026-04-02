@@ -158,8 +158,6 @@ export default function Dashboard() {
   const statusData = statusQuery.data ?? [];
   const hourData = hourQuery.data ?? [];
   const agentData = agentQuery.data ?? [];
-    tma: agent.tma || '00:00:00',
-  }));
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
   const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
