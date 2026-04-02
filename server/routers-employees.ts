@@ -7,77 +7,24 @@ import * as bcrypt from 'bcrypt';
 
 export const employeesRouter = router({
   list: protectedProcedure
-    .input(
-      z.object({
-        page: z.number().min(1).default(1).nullish(),
-        pageSize: z.number().min(1).max(100).default(20).nullish(),
-        search: z.string().optional().nullish(),
-        role: z.string().optional().nullish(),
-      }).nullish()
-    )
-    .output(
-      z.object({
-        employees: z.array(z.object({
-          userId: z.number(),
-          name: z.string(),
-          email: z.string().nullable(),
-          role: z.enum(['user', 'admin']),
-          status: z.string(),
-          department: z.string().nullable(),
-          position: z.string().nullable(),
-          cpf: z.string().nullable(),
-          phone: z.string().nullable(),
-          hireDate: z.string().nullable(),
-          skills: z.array(z.string()),
-          photoUrl: z.string().nullable(),
-          createdAt: z.string(),
-          updatedAt: z.string(),
-        })),
-        pagination: z.object({
-          page: z.number(),
-          pageSize: z.number(),
-          total: z.number(),
-          totalPages: z.number(),
-        }),
-      })
-    )
+    .input(z.object({ page: z.number().min(1).default(1), pageSize: z.number().min(1).max(100).default(20), search: z.string().optional().nullish(), role: z.string().optional().nullish() }).nullish())
+    .output(z.object({ employees: z.array(z.object({ userId: z.number(), name: z.string(), email: z.string().nullable(), role: z.enum(['user', 'admin']), status: z.string(), department: z.string().nullable(), position: z.string().nullable(), cpf: z.string().nullable(), phone: z.string().nullable(), hireDate: z.string().nullable(), skills: z.array(z.string()), photoUrl: z.string().nullable(), createdAt: z.string(), updatedAt: z.string() })), pagination: z.object({ page: z.number(), pageSize: z.number(), total: z.number(), totalPages: z.number() }) }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
-
-      // input pode ser null, undefined ou object
       const safeInput = (input && typeof input === 'object') ? input : {};
       const { page, pageSize, search, role } = safeInput;
-      console.log('[employees.list] raw input:', input, 'safe:', safeInput);
 
-      // Simple query: only users table
-      let query = db.select({
-        id: dbUsers.id,
-        name: dbUsers.name,
-        email: dbUsers.email,
-        role: dbUsers.role,
-        createdAt: dbUsers.createdAt,
-        updatedAt: dbUsers.updatedAt,
-      }).from(dbUsers);
+      let query = db.select({ id: dbUsers.id, name: dbUsers.name, email: dbUsers.email, role: dbUsers.role, createdAt: dbUsers.createdAt, updatedAt: dbUsers.updatedAt }).from(dbUsers);
+      if (search) query = query.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`)));
+      if (role && ['user', 'admin'].includes(role)) query = query.where(eq(dbUsers.role, role));
 
-      if (search) {
-        query = query.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`)));
-      }
-      if (role && ['user', 'admin'].includes(role)) {
-        query = query.where(eq(dbUsers.role, role));
-      }
-
-      // Count total - get all filtered rows count
       const allRows = await query;
       const total = allRows.length;
-      console.log('[employees.list] total count:', total);
-
-      // Pagination
       const effectivePage = page || 1;
       const effectivePageSize = pageSize || 20;
       const offset = (effectivePage - 1) * effectivePageSize;
       const rows = await query.orderBy(desc(dbUsers.createdAt)).limit(effectivePageSize).offset(offset);
-      console.log('[employees.list] fetched rows:', rows.length);
 
       const employees = rows.map(r => ({
         userId: r.id,
@@ -100,44 +47,15 @@ export const employeesRouter = router({
     }),
 
   get: protectedProcedure
-    .input(
-      z.object({
-        userId: z.number(),
-      }).nullish()
-    )
-    .output(
-      z.object({
-        employee: z.object({
-          userId: z.number(),
-          name: z.string(),
-          email: z.string().nullable(),
-          role: z.enum(['user', 'admin']),
-          status: z.string(),
-          department: z.string().nullable(),
-          position: z.string().nullable(),
-          cpf: z.string().nullable(),
-          phone: z.string().nullable(),
-          hireDate: z.string().nullable(),
-          skills: z.array(z.string()),
-          photoUrl: z.string().nullable(),
-          createdAt: z.string(),
-          updatedAt: z.string(),
-        }),
-      })
-    )
+    .input(z.object({ userId: z.number() }).nullish())
+    .output(z.object({ employee: z.object({ userId: z.number(), name: z.string(), email: z.string().nullable(), role: z.enum(['user', 'admin']), status: z.string(), department: z.string().nullable(), position: z.string().nullable(), cpf: z.string().nullable(), phone: z.string().nullable(), hireDate: z.string().nullable(), skills: z.array(z.string()), photoUrl: z.string().nullable(), createdAt: z.string(), updatedAt: z.string() }) }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
+      const userId = input?.userId;
+      if (userId === undefined) throw new Error('userId obrigatório');
 
-      const res = await db.select({
-        id: dbUsers.id,
-        name: dbUsers.name,
-        email: dbUsers.email,
-        role: dbUsers.role,
-        createdAt: dbUsers.createdAt,
-        updatedAt: dbUsers.updatedAt,
-      }).from(dbUsers).where(eq(dbUsers.id, input.userId)).limit(1);
-
+      const res = await db.select({ id: dbUsers.id, name: dbUsers.name, email: dbUsers.email, role: dbUsers.role, createdAt: dbUsers.createdAt, updatedAt: dbUsers.updatedAt }).from(dbUsers).where(eq(dbUsers.id, userId)).limit(1);
       if (res.length === 0) throw new Error('Funcionário não encontrado');
 
       const r = res[0];
@@ -162,31 +80,20 @@ export const employeesRouter = router({
     }),
 
   create: adminProcedure
-    .input(
-      z.object({
-        name: z.string().min(1),
-        email: z.string().min(1), // Removido .email() pattern quebrado
-        password: z.string().min(6),
-        role: z.enum(['user', 'admin']).default('user'),
-      }).nullish()
-    )
+    .input(z.object({ name: z.string().min(1, 'Nome é obrigatório'), password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'), role: z.enum(['user', 'admin']).default('user') }).nullish())
     .output(z.object({ success: z.boolean(), userId: z.number(), message: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      const existing = await db.select().from(dbUsers).where(eq(dbUsers.email, input.email)).limit(1);
-      if (existing.length > 0) throw new Error('Email já cadastrado');
+      // Verificar se nome de usuário já existe
+      const existing = await db.select().from(dbUsers).where(eq(dbUsers.name, input.name)).limit(1);
+      if (existing.length > 0) throw new Error('Nome de usuário já cadastrado');
 
       const passwordHash = await bcrypt.hash(input.password, 10);
-      const [newUser] = await db.insert(dbUsers).values({
-        openId: `email:${input.email}`,
-        name: input.name,
-        email: input.email,
-        passwordHash,
-        loginMethod: 'email',
-        role: input.role,
-      }).returning();
+      const openId = `local:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const [newUser] = await db.insert(dbUsers).values({ openId, name: input.name, email: null, passwordHash, loginMethod: 'local', role: input.role }).returning();
 
       if (!newUser) throw new Error('Falha ao criar funcionário');
 
@@ -194,15 +101,7 @@ export const employeesRouter = router({
     }),
 
   update: adminProcedure
-    .input(
-      z.object({
-        userId: z.number(),
-        name: z.string().optional().nullish(),
-        email: z.string().optional().nullish(),
-        role: z.enum(['user', 'admin']).optional().nullish(),
-        password: z.string().min(6).optional().nullish(),
-      }).nullish()
-    )
+    .input(z.object({ userId: z.number(), name: z.string().optional().nullish(), role: z.enum(['user', 'admin']).optional().nullish(), password: z.string().min(6).optional().nullish() }).nullish())
     .output(z.object({ success: z.boolean(), message: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -213,7 +112,6 @@ export const employeesRouter = router({
 
       const updates: any = {};
       if (input.name) updates.name = input.name;
-      if (input.email) updates.email = input.email;
       if (input.role) updates.role = input.role;
       if (input.password) updates.passwordHash = await bcrypt.hash(input.password, 10);
       if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
