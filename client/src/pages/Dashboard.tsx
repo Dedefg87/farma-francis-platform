@@ -73,9 +73,9 @@ export default function Dashboard() {
   const stats = statsQuery.data as DashboardStats | undefined;
   const channelData = channelQuery.data ?? [];
   const statusData = statusQuery.data ?? [];
-  const hourData = hourQuery.data?.map((h: any) => ({
-    hora: `${String(h.hour).padStart(2, '0')}h`,
-    chats: Number(h.chats) || 0,
+  const hourData = hourQuery.data?.map((chats: number, hour: number) => ({
+    hora: `${String(hour).padStart(2, '0')}h`,
+    chats: Number(chats) || 0,
   })) ?? [];
   const agentData = agentQuery.data as AgentPerformance[] ?? [];
 
