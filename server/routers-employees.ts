@@ -46,6 +46,7 @@ export const employeesRouter = router({
       if (!db) throw new Error('Database not available');
 
       const { page, pageSize, search, role } = input || {};
+      console.log('[employees.list] input:', JSON.stringify(input), 'user:', input?.user?.id);
 
       // Simple query: only users table
       let query = db.select({
