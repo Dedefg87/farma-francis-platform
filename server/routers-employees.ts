@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { protectedProcedure, adminProcedure, router } from './_core/trpc.js';
 import { getDb } from './db.js';
 import { users as dbUsers, employees as dbEmployees } from '../drizzle/schema.js';
-import { eq, or, like, desc, leftJoin } from 'drizzle-orm';
+import { eq, or, like, desc, sql } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 
 export const employeesRouter = router({
@@ -49,36 +49,26 @@ export const employeesRouter = router({
       const { page, pageSize, search, role, status } = input || {};
 
       // Base query: users LEFT JOIN employees
-      let query = db
-        .select({
-          id: dbUsers.id,
-          name: dbUsers.name,
-          email: dbUsers.email,
-          role: dbUsers.role,
-          createdAt: dbUsers.createdAt,
-          updatedAt: dbUsers.updatedAt,
-          empStatus: dbEmployees.status,
-          department: dbEmployees.department,
-          position: dbEmployees.position,
-          cpf: dbEmployees.cpf,
-          phone: dbEmployees.phone,
-          hireDate: dbEmployees.hireDate,
-          skills: dbEmployees.skills,
-          photoUrl: dbEmployees.photoUrl,
-        })
-        .from(dbUsers)
-        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
+      let query = db.select({
+        id: dbUsers.id,
+        name: dbUsers.name,
+        email: dbUsers.email,
+        role: dbUsers.role,
+        createdAt: dbUsers.createdAt,
+        updatedAt: dbUsers.updatedAt,
+        empStatus: dbEmployees.status,
+        department: dbEmployees.department,
+        position: dbEmployees.position,
+        cpf: dbEmployees.cpf,
+        phone: dbEmployees.phone,
+        hireDate: dbEmployees.hireDate,
+        skills: dbEmployees.skills,
+        photoUrl: dbEmployees.photoUrl,
+      }).from(dbUsers).leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
 
       // Filters
       if (search) {
-        query = query.where(
-          or(
-            like(dbUsers.name, `%${search}%`),
-            like(dbUsers.email, `%${search}%`),
-            like(dbEmployees.cpf, `%${search}%`),
-            like(dbEmployees.phone, `%${search}%`)
-          )
-        );
+        query = query.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`), like(dbEmployees.cpf, `%${search}%`), like(dbEmployees.phone, `%${search}%`)));
       }
       if (role && ['user', 'admin'].includes(role)) {
         query = query.where(eq(dbUsers.role, role));
@@ -89,15 +79,9 @@ export const employeesRouter = router({
 
       // Count
       let countQ = db.select({ count: sql`COUNT(*)` }).from(dbUsers).leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
-      if (search) {
-        countQ = countQ.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`), like(dbEmployees.cpf, `%${search}%`), like(dbEmployees.phone, `%${search}%`)));
-      }
-      if (role && ['user', 'admin'].includes(role)) {
-        countQ = countQ.where(eq(dbUsers.role, role));
-      }
-      if (status) {
-        countQ = countQ.where(eq(dbEmployees.status, status));
-      }
+      if (search) countQ = countQ.where(or(like(dbUsers.name, `%${search}%`), like(dbUsers.email, `%${search}%`), like(dbEmployees.cpf, `%${search}%`), like(dbEmployees.phone, `%${search}%`)));
+      if (role && ['user', 'admin'].includes(role)) countQ = countQ.where(eq(dbUsers.role, role));
+      if (status) countQ = countQ.where(eq(dbEmployees.status, status));
       const countRes = await countQ.limit(1);
       const total = Number(countRes[0].count) || 0;
 
@@ -149,27 +133,22 @@ export const employeesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      const res = await db
-        .select({
-          id: dbUsers.id,
-          name: dbUsers.name,
-          email: dbUsers.email,
-          role: dbUsers.role,
-          createdAt: dbUsers.createdAt,
-          updatedAt: dbUsers.updatedAt,
-          empStatus: dbEmployees.status,
-          department: dbEmployees.department,
-          position: dbEmployees.position,
-          cpf: dbEmployees.cpf,
-          phone: dbEmployees.phone,
-          hireDate: dbEmployees.hireDate,
-          skills: dbEmployees.skills,
-          photoUrl: dbEmployees.photoUrl,
-        })
-        .from(dbUsers)
-        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId))
-        .where(eq(dbUsers.id, input.userId))
-        .limit(1);
+      const res = await db.select({
+        id: dbUsers.id,
+        name: dbUsers.name,
+        email: dbUsers.email,
+        role: dbUsers.role,
+        createdAt: dbUsers.createdAt,
+        updatedAt: dbUsers.updatedAt,
+        empStatus: dbEmployees.status,
+        department: dbEmployees.department,
+        position: dbEmployees.position,
+        cpf: dbEmployees.cpf,
+        phone: dbEmployees.phone,
+        hireDate: dbEmployees.hireDate,
+        skills: dbEmployees.skills,
+        photoUrl: dbEmployees.photoUrl,
+      }).from(dbUsers).leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId)).where(eq(dbUsers.id, input.userId)).limit(1);
 
       if (res.length === 0) throw new Error('Funcionário não encontrado');
 
@@ -208,13 +187,7 @@ export const employeesRouter = router({
         status: z.enum(['active', 'inactive', 'vacation']).default('active'),
       })
     )
-    .output(
-      z.object({
-        success: z.boolean(),
-        userId: z.number(),
-        message: z.string(),
-      })
-    )
+    .output(z.object({ success: z.boolean(), userId: z.number(), message: z.string() }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
@@ -223,10 +196,8 @@ export const employeesRouter = router({
       if (existing.length > 0) throw new Error('Email já cadastrado');
 
       const passwordHash = await bcrypt.hash(input.password, 10);
-      const openId = `email:${input.email}`;
-
       const [newUser] = await db.insert(dbUsers).values({
-        openId,
+        openId: `email:${input.email}`,
         name: input.name,
         email: input.email,
         passwordHash,
