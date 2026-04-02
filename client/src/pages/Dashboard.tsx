@@ -44,12 +44,12 @@ export default function Dashboard() {
 
   const periodOptions: PeriodOption[] = [
     { label: "Hoje", value: "hoje" },
-    { label: "Semana", value: "semana" },
-    { label: "Mês", value: "mes" },
-    { label: "7d", value: "7d" },
-    { label: "30d", value: "30d" },
-    { label: "90d", value: "90d" },
-    { label: "Todos", value: "all" },
+    { label: "Ontem", value: "ontem" },
+    { label: "Esta semana", value: "semana" },
+    { label: "Este mês", value: "mes" },
+    { label: "Mês anterior", value: "mes_anterior" },
+    { label: "Últimos 30 dias", value: "30d" },
+    { label: "Últimos 365 dias", value: "365d" },
     { label: "Personalizado", value: "custom" },
   ];
 
