@@ -25,11 +25,11 @@ export function getDateRangeFromPeriod(
       break;
 
     case "semana":
+      // Domingo a sábado da semana atual
       const dayOfWeek = now.getDay();
       const tempStartDateWeek = new Date(now);
       tempStartDateWeek.setDate(now.getDate() - dayOfWeek);
       startDate = setStartOfDay(tempStartDateWeek);
-      
       const tempEndDateWeek = new Date(startDate);
       tempEndDateWeek.setDate(startDate.getDate() + 6);
       endDate = setEndOfDay(tempEndDateWeek);
@@ -50,11 +50,6 @@ export function getDateRangeFromPeriod(
       endDate = setEndOfDay(lastDayPreviousMonth);
       break;
 
-    case "7d":
-      startDate = setStartOfDay(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
-      endDate = setEndOfDay(now);
-      break;
-
     case "30d":
       startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
       endDate = setEndOfDay(now);
@@ -65,38 +60,23 @@ export function getDateRangeFromPeriod(
       endDate = setEndOfDay(now);
       break;
 
-    case "90d":
-      startDate = setStartOfDay(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000));
-      endDate = setEndOfDay(now);
-      break;
-
-    case "all":
-    case "todas":
-      startDate = setStartOfDay(new Date("2000-01-01T00:00:00.000Z"));
-      endDate = setEndOfDay(now);
-      break;
-
     case "custom":
       if (customStart && customEnd) {
         startDate = setStartOfDay(new Date(customStart));
         endDate = setEndOfDay(new Date(customEnd));
       } else {
+        // Fallback para últimos 30 dias se custom sem datas
         startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
         endDate = setEndOfDay(now);
       }
       break;
 
     default:
-      startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-      endDate = setEndOfDay(now);
-      break;
+      throw new Error(`Período não suportado: ${period}`);
   }
 
-  if (isNaN(startDate.getTime())) {
-    startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-  }
-  if (isNaN(endDate.getTime())) {
-    endDate = setEndOfDay(now);
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    throw new Error(`Datas inválidas geradas para período: ${period}`);
   }
 
   return { startDate, endDate };
