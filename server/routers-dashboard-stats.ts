@@ -229,23 +229,32 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getAgentStats] Período: ${rawPeriod}, Range: ${start.toISOString()} a ${end.toISOString()}`);
 
-      // Query completa: busca estatísticas de conversas e mensagens por agente
+      // Estratégia: Filtros independentes
+      // - Conversas: filtradas por openedAt (período)
+      // - Mensagens: filtradas por createdAt (período), vinculadas a conversas do período
+      // Isso evita que mensagens de conversas antigas entrem ou que conversas sem mensagens no período sejam incluídas nas contagens de mensagens
+
       const agentStats = await db
         .select({
           agentId: users.id,
           agentName: users.name,
+          // Conversas no período (abertas no período)
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
           daysActive: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
+          // TMA baseado apenas em conversas ENCERRADAS no período
           avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
-          messagesSent: sql<number>`COALESCE(SUM(${conversationMessages.senderType} = 'agent'), 0)`,
-          messagesReceived: sql<number>`COALESCE(SUM(${conversationMessages.senderType} = 'customer'), 0)`,
+          // Mensagens no período VINCULADAS a conversas do período (senderType analisado via CASE)
+          messagesSent: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'agent' THEN 1 ELSE 0 END)`,
+          messagesReceived: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'customer' THEN 1 ELSE 0 END)`,
         })
         .from(users)
+        // LEFT JOIN conversations: apenas conversas do agente no período
         .leftJoin(conversations, and(
           eq(conversations.assignedTo, users.id),
           gte(conversations.openedAt, start),
           lte(conversations.openedAt, end)
         ))
+        // LEFT JOIN messages: apenas mensagens no período E daquelas conversas
         .leftJoin(conversationMessages, and(
           eq(conversationMessages.conversationId, conversations.id),
           gte(conversationMessages.createdAt, start),
@@ -303,9 +312,10 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getContactsByHour] Período: ${rawPeriod}, Range: ${startDate.toISOString()} a ${endDate.toISOString()}`);
 
-      // Consulta: contar conversas únicas por hora (baseado em mensagens de clientes)
+      // Consulta: contar conversas únicas por data+hora
       const result = await db
         .select({
+          date: sql<Date>`DATE(${conversationMessages.createdAt})`,
           hour: sql<number>`HOUR(${conversationMessages.createdAt})`,
           chats: sql<number>`COUNT(DISTINCT ${conversationMessages.conversationId})`,
         })
@@ -317,16 +327,16 @@ export const dashboardStatsRouter = router({
             lte(conversationMessages.createdAt, endDate)
           )
         )
-        .groupBy(sql`HOUR(${conversationMessages.createdAt})`)
-        .orderBy(sql`HOUR(${conversationMessages.createdAt})`);
+        .groupBy(sql`DATE(${conversationMessages.createdAt})`, sql`HOUR(${conversationMessages.createdAt})`)
+        .orderBy(sql`DATE(${conversationMessages.createdAt})`, sql`HOUR(${conversationMessages.createdAt})`);
 
       console.log(`[getContactsByHour] Resultado bruto:`, JSON.stringify(result));
 
-      // Transformar em array de 24 horas (0-23)
-      const hoursArray = Array(24).fill(0).map((_, hour) => {
-        const found = result.find(r => r.hour === hour);
-        return found ? found.chats : 0;
-      });
+      // Consolidar: somar todas as horas de todos os dias do período, retornar array[24]
+      const hoursArray = Array(24).fill(0);
+      for (const row of result) {
+        hoursArray[row.hour] += row.chats;
+      }
 
       return hoursArray;
     }),
