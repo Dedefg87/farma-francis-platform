@@ -3,71 +3,101 @@ export function getDateRangeFromPeriod(
   customStart?: string | Date,
   customEnd?: string | Date
 ): { startDate: Date; endDate: Date } {
+  // Use UTC para garantir consistência com banco de dados (tudo em UTC)
   const now = new Date();
 
-  const setEndOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-  const setStartOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+  const setEndOfDayUTC = (date: Date) => {
+    const utc = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      23, 59, 59, 999
+    ));
+    return utc;
+  };
+
+  const setStartOfDayUTC = (date: Date) => {
+    const utc = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    return utc;
+  };
 
   let startDate: Date;
   let endDate: Date;
 
   switch (period) {
     case "hoje":
-      startDate = setStartOfDay(now);
-      endDate = setEndOfDay(now);
+      startDate = setStartOfDayUTC(now);
+      endDate = setEndOfDayUTC(now);
       break;
 
     case "ontem":
       const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      startDate = setStartOfDay(yesterday);
-      endDate = setEndOfDay(yesterday);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      startDate = setStartOfDayUTC(yesterday);
+      endDate = setEndOfDayUTC(yesterday);
       break;
 
     case "semana":
-      // Domingo a sábado da semana atual
-      const dayOfWeek = now.getDay();
+      // Domingo a sábado da semana atual (UTC)
+      const dayOfWeek = now.getUTCDay(); // 0 ( Domingo)
       const tempStartDateWeek = new Date(now);
-      tempStartDateWeek.setDate(now.getDate() - dayOfWeek);
-      startDate = setStartOfDay(tempStartDateWeek);
+      tempStartDateWeek.setUTCDate(now.getUTCDate() - dayOfWeek);
+      startDate = setStartOfDayUTC(tempStartDateWeek);
       const tempEndDateWeek = new Date(startDate);
-      tempEndDateWeek.setDate(startDate.getDate() + 6);
-      endDate = setEndOfDay(tempEndDateWeek);
+      tempEndDateWeek.setUTCDate(startDate.getUTCDate() + 6);
+      endDate = setEndOfDayUTC(tempEndDateWeek);
       break;
 
     case "mes":
-      // MÊS CALENDÁRIO ATUAL (corrigido)
-      startDate = setStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
-      endDate = setEndOfDay(now);
+      // Mês calendário atual (UTC)
+      startDate = setStartOfDayUTC(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+      endDate = setEndOfDayUTC(now);
       break;
 
     case "mes_anterior":
-      // Mês anterior completo (ex: se hoje é 2-abr, retorna 1-mar a 31-mar)
-      const firstDayCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastDayPreviousMonth = new Date(firstDayCurrentMonth.getTime() - 1);
-      const firstDayPreviousMonth = new Date(lastDayPreviousMonth.getFullYear(), lastDayPreviousMonth.getMonth(), 1);
-      startDate = setStartOfDay(firstDayPreviousMonth);
-      endDate = setEndOfDay(lastDayPreviousMonth);
+      // Mês anterior completo (UTC)
+      const firstDayCurrentMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const lastDayPreviousMonth = new Date(firstDayCurrentMonth);
+      lastDayPreviousMonth.setUTCDate(lastDayPreviousMonth.getUTCDate() - 1);
+      const firstDayPreviousMonth = new Date(Date.UTC(
+        lastDayPreviousMonth.getUTCFullYear(),
+        lastDayPreviousMonth.getUTCMonth(),
+        1
+      ));
+      startDate = setStartOfDayUTC(firstDayPreviousMonth);
+      endDate = setEndOfDayUTC(lastDayPreviousMonth);
       break;
 
     case "30d":
-      startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-      endDate = setEndOfDay(now);
+      const ThirtyDaysAgo = new Date(now);
+      ThirtyDaysAgo.setUTCDate(ThirtyDaysAgo.getUTCDate() - 30);
+      startDate = setStartOfDayUTC(ThirtyDaysAgo);
+      endDate = setEndOfDayUTC(now);
       break;
 
     case "365d":
-      startDate = setStartOfDay(new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000));
-      endDate = setEndOfDay(now);
+      const YearAgo = new Date(now);
+      YearAgo.setUTCDate(YearAgo.getUTCDate() - 365);
+      startDate = setStartOfDayUTC(YearAgo);
+      endDate = setEndOfDayUTC(now);
       break;
 
     case "custom":
       if (customStart && customEnd) {
-        startDate = setStartOfDay(new Date(customStart));
-        endDate = setEndOfDay(new Date(customEnd));
+        const customStartDate = new Date(customStart);
+        const customEndDate = new Date(customEnd);
+        startDate = setStartOfDayUTC(customStartDate);
+        endDate = setEndOfDayUTC(customEndDate);
       } else {
-        // Fallback para últimos 30 dias se custom sem datas
-        startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
-        endDate = setEndOfDay(now);
+        const ThirtyDaysAgoCustom = new Date(now);
+        ThirtyDaysAgoCustom.setUTCDate(ThirtyDaysAgoCustom.getUTCDate() - 30);
+        startDate = setStartOfDayUTC(ThirtyDaysAgoCustom);
+        endDate = setEndOfDayUTC(now);
       }
       break;
 
