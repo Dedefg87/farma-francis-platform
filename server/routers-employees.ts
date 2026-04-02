@@ -1,29 +1,35 @@
 import { z } from 'zod';
 import { protectedProcedure, adminProcedure, router } from './_core/trpc.js';
 import { getDb } from './db.js';
-import { users as dbUsers } from '../drizzle/schema.js';
-import { eq, or, like, desc, sql } from 'drizzle-orm';
+import { users as dbUsers, employees as dbEmployees } from '../drizzle/schema.js';
+import { eq, or, like, desc, sql, leftJoin } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 
-// Helper: Converte row do banco para Employee type (compatível com frontend)
-function mapDbUserToEmployee(row: any) {
+// Helper: Converte row do banco (JOIN users + employees) para Employee type completo
+function mapDbToEmployee(row: any) {
+  const user = row.users || {};
+  const employee = row.employees || {};
+
   return {
-    userId: row.id,
-    name: row.name || '',
-    email: row.email || null,
-    role: row.role || 'user',
-    status: 'active', // users não tem status, assumimos active se existe
-    department: null, // não existe ainda
-    position: null,   // não existe ainda
-    cpf: null,        // não existe ainda
-    phone: null,      // não existe ainda
-    createdAt: row.createdAt?.toISOString() || new Date().toISOString(),
-    updatedAt: row.updatedAt?.toISOString() || new Date().toISOString(),
+    userId: user.id,
+    name: user.name || '',
+    email: user.email || null,
+    role: user.role || 'user',
+    status: employee.status || 'active',
+    department: employee.department || null,
+    position: employee.position || null,
+    cpf: employee.cpf || null,
+    phone: employee.phone || null,
+    hireDate: employee.hireDate?.toISOString() || null,
+    skills: employee.skills ? JSON.parse(employee.skills) : [],
+    photoUrl: employee.photoUrl || null,
+    createdAt: user.createdAt?.toISOString() || new Date().toISOString(),
+    updatedAt: user.updatedAt?.toISOString() || new Date().toISOString(),
   };
 }
 
 export const employeesRouter = router({
-  // Listar funcionários com paginação e busca
+  // Listar funcionários com paginação e busca (JOIN users + employees)
   list: protectedProcedure
     .input(
       z.object({
@@ -31,6 +37,7 @@ export const employeesRouter = router({
         pageSize: z.number().min(1).max(100).default(20),
         search: z.string().optional(),
         role: z.string().optional(),
+        status: z.string().optional(),
       }).optional()
     )
     .output(
@@ -45,6 +52,9 @@ export const employeesRouter = router({
           position: z.string().nullable(),
           cpf: z.string().nullable(),
           phone: z.string().nullable(),
+          hireDate: z.string().nullable(),
+          skills: z.array(z.string()),
+          photoUrl: z.string().nullable(),
           createdAt: z.string(),
           updatedAt: z.string(),
         })),
@@ -60,35 +70,11 @@ export const employeesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      const { page, pageSize, search, role } = input || {};
+      const { page, pageSize, search, role, status } = input || {};
       const offset = (page - 1) * pageSize;
 
-      // Build where clause
-      const conditions: any[] = [];
-      if (search) {
-        conditions.push(
-          or(
-            like(dbUsers.name, `%${search}%`),
-            like(dbUsers.email, `%${search}%`)
-          )
-        );
-      }
-      if (role && ['user', 'admin'].includes(role)) {
-        conditions.push(eq(dbUsers.role, role));
-      }
-
-      const whereClause = conditions.length > 0 ? sql`${conditions[0]}` : undefined;
-
-      // Count total
-      const countResult = await db
-        .select({ count: sql<number>`COUNT(*)` })
-        .from(dbUsers)
-        .where(whereClause)
-        .limit(1);
-      const total = Number(countResult[0].count) || 0;
-
-      // Fetch data
-      const results = await db
+      // Build JOIN query base: users LEFT JOIN employees
+      let baseQuery = db
         .select({
           id: dbUsers.id,
           name: dbUsers.name,
@@ -96,14 +82,69 @@ export const employeesRouter = router({
           role: dbUsers.role,
           createdAt: dbUsers.createdAt,
           updatedAt: dbUsers.updatedAt,
+          employeeStatus: dbEmployees.status,
+          department: dbEmployees.department,
+          position: dbEmployees.position,
+          cpf: dbEmployees.cpf,
+          phone: dbEmployees.phone,
+          hireDate: dbEmployees.hireDate,
+          skills: dbEmployees.skills,
+          photoUrl: dbEmployees.photoUrl,
         })
         .from(dbUsers)
-        .where(whereClause)
+        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
+
+      // Apply filters
+      if (search) {
+        baseQuery = baseQuery.where(
+          or(
+            like(dbUsers.name, `%${search}%`),
+            like(dbUsers.email, `%${search}%`),
+            like(dbEmployees.cpf, `%${search}%`),
+            like(dbEmployees.phone, `%${search}%`)
+          )
+        );
+      }
+      if (role && ['user', 'admin'].includes(role)) {
+        baseQuery = baseQuery.where(eq(dbUsers.role, role));
+      }
+      if (status) {
+        baseQuery = baseQuery.where(eq(dbEmployees.status, status));
+      }
+
+      // Count total
+      let countQuery = db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(dbUsers)
+        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
+
+      if (search) {
+        countQuery = countQuery.where(
+          or(
+            like(dbUsers.name, `%${search}%`),
+            like(dbUsers.email, `%${search}%`),
+            like(dbEmployees.cpf, `%${search}%`),
+            like(dbEmployees.phone, `%${search}%`)
+          )
+        );
+      }
+      if (role && ['user', 'admin'].includes(role)) {
+        countQuery = countQuery.where(eq(dbUsers.role, role));
+      }
+      if (status) {
+        countQuery = countQuery.where(eq(dbEmployees.status, status));
+      }
+
+      const countResult = await countQuery.limit(1);
+      const total = Number(countResult[0].count) || 0;
+
+      // Fetch data
+      const results = await baseQuery
         .orderBy(desc(dbUsers.createdAt))
         .limit(pageSize)
         .offset(offset);
 
-      const mappedEmployees = results.map(row => mapDbUserToEmployee(row));
+      const mappedEmployees = results.map(row => mapDbToEmployee(row));
 
       return {
         employees: mappedEmployees,
@@ -116,7 +157,7 @@ export const employeesRouter = router({
       };
     }),
 
-  // Buscar um funcionário específico por ID
+  // Buscar um funcionário específico por ID (completo)
   get: protectedProcedure
     .input(
       z.object({
@@ -135,6 +176,9 @@ export const employeesRouter = router({
           position: z.string().nullable(),
           cpf: z.string().nullable(),
           phone: z.string().nullable(),
+          hireDate: z.string().nullable(),
+          skills: z.array(z.string()),
+          photoUrl: z.string().nullable(),
           createdAt: z.string(),
           updatedAt: z.string(),
         }),
@@ -152,8 +196,17 @@ export const employeesRouter = router({
           role: dbUsers.role,
           createdAt: dbUsers.createdAt,
           updatedAt: dbUsers.updatedAt,
+          employeeStatus: dbEmployees.status,
+          department: dbEmployees.department,
+          position: dbEmployees.position,
+          cpf: dbEmployees.cpf,
+          phone: dbEmployees.phone,
+          hireDate: dbEmployees.hireDate,
+          skills: dbEmployees.skills,
+          photoUrl: dbEmployees.photoUrl,
         })
         .from(dbUsers)
+        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId))
         .where(eq(dbUsers.id, input.userId))
         .limit(1);
 
@@ -162,11 +215,11 @@ export const employeesRouter = router({
       }
 
       return {
-        employee: mapDbUserToEmployee(result[0]),
+        employee: mapDbToEmployee(result[0]),
       };
     }),
 
-  // Criar novo funcionário
+  // Criar novo funcionário (cria user + employee)
   create: adminProcedure
     .input(
       z.object({
@@ -174,6 +227,12 @@ export const employeesRouter = router({
         email: z.string().email('Email inválido'),
         password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
         role: z.enum(['user', 'admin']).default('user'),
+        // Campos extras de employee (opcionais)
+        department: z.string().optional(),
+        position: z.string().optional(),
+        cpf: z.string().optional(),
+        phone: z.string().optional(),
+        status: z.enum(['active', 'inactive', 'vacation']).default('active'),
       })
     )
     .output(
@@ -200,11 +259,9 @@ export const employeesRouter = router({
 
       // Hash da senha
       const passwordHash = await bcrypt.hash(input.password, 10);
-
-      // openId único (pode ser email ou UUID)
       const openId = `email:${input.email}`;
 
-      // Inserir novo usuário
+      // Transação: criar user + employee
       const [newUser] = await db.insert(dbUsers).values({
         openId,
         name: input.name,
@@ -218,6 +275,19 @@ export const employeesRouter = router({
         throw new Error('Falha ao criar funcionário');
       }
 
+      // Criar registro na tabela employees
+      await db.insert(dbEmployees).values({
+        userId: newUser.id,
+        cpf: input.cpf || null,
+        phone: input.phone || null,
+        position: input.position || null,
+        department: input.department || null,
+        status: input.status,
+        skills: null,
+        hireDate: new Date(),
+        photoUrl: null,
+      });
+
       return {
         success: true,
         userId: newUser.id,
@@ -225,7 +295,7 @@ export const employeesRouter = router({
       };
     }),
 
-  // Atualizar funcionário
+  // Atualizar funcionário (atualiza user + employee)
   update: adminProcedure
     .input(
       z.object({
@@ -233,7 +303,13 @@ export const employeesRouter = router({
         name: z.string().optional(),
         email: z.string().email().optional(),
         role: z.enum(['user', 'admin']).optional(),
-        password: z.string().min(6).optional(), // se fornecida, atualiza senha
+        password: z.string().min(6).optional(),
+        // Campos de employee
+        department: z.string().optional(),
+        position: z.string().optional(),
+        cpf: z.string().optional(),
+        phone: z.string().optional(),
+        status: z.enum(['active', 'inactive', 'vacation']).optional(),
       })
     )
     .output(
@@ -257,22 +333,60 @@ export const employeesRouter = router({
         throw new Error('Funcionário não encontrado');
       }
 
-      const updateData: any = {
-        ...(input.name && { name: input.name }),
-        ...(input.email && { email: input.email }),
-        ...(input.role && { role: input.role }),
-        updatedAt: new Date(),
-      };
-
-      // Se senha fornecida, hash e atualiza
+      // Atualizar users
+      const userUpdateData: any = {};
+      if (input.name) userUpdateData.name = input.name;
+      if (input.email) userUpdateData.email = input.email;
+      if (input.role) userUpdateData.role = input.role;
       if (input.password) {
-        updateData.passwordHash = await bcrypt.hash(input.password, 10);
+        userUpdateData.passwordHash = await bcrypt.hash(input.password, 10);
+      }
+      if (Object.keys(userUpdateData).length > 0) {
+        userUpdateData.updatedAt = new Date();
+        await db
+          .update(dbUsers)
+          .set(userUpdateData)
+          .where(eq(dbUsers.id, input.userId));
       }
 
-      await db
-        .update(dbUsers)
-        .set(updateData)
-        .where(eq(dbUsers.id, input.userId));
+      // Atualizar employees (se existir, senão insere)
+      const existingEmployee = await db
+        .select()
+        .from(dbEmployees)
+        .where(eq(dbEmployees.userId, input.userId))
+        .limit(1);
+
+      const employeeData: any = {};
+      if (input.department !== undefined) employeeData.department = input.department;
+      if (input.position !== undefined) employeeData.position = input.position;
+      if (input.cpf !== undefined) employeeData.cpf = input.cpf;
+      if (input.phone !== undefined) employeeData.phone = input.phone;
+      if (input.status !== undefined) employeeData.status = input.status;
+      if (Object.keys(employeeData).length > 0) {
+        employeeData.updatedAt = new Date();
+      }
+
+      if (existingEmployee.length > 0) {
+        if (Object.keys(employeeData).length > 0) {
+          await db
+            .update(dbEmployees)
+            .set(employeeData)
+            .where(eq(dbEmployees.userId, input.userId));
+        }
+      } else {
+        // Criar registro employees se não existir
+        await db.insert(dbEmployees).values({
+          userId: input.userId,
+          cpf: input.cpf || null,
+          phone: input.phone || null,
+          position: input.position || null,
+          department: input.department || null,
+          status: input.status || 'active',
+          skills: null,
+          hireDate: new Date(),
+          photoUrl: null,
+        });
+      }
 
       return {
         success: true,
@@ -280,7 +394,7 @@ export const employeesRouter = router({
       };
     }),
 
-  // Excluir funcionário
+  // Excluir funcionário (deleta employees + users)
   delete: adminProcedure
     .input(
       z.object({
@@ -308,11 +422,13 @@ export const employeesRouter = router({
         throw new Error('Funcionário não encontrado');
       }
 
-      // Impedir exclusão do próprio admin (opcional, segurança)
+      // Impedir exclusão do admin principal
       if (input.userId === 1) {
         throw new Error('Não é possível excluir o administrador principal');
       }
 
+      // Deletar employees primeiro (foreign key com cascade deve funcionar, mas garantimos ordem)
+      await db.delete(dbEmployees).where(eq(dbEmployees.userId, input.userId));
       await db.delete(dbUsers).where(eq(dbUsers.id, input.userId));
 
       return {
