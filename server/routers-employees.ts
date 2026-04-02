@@ -29,7 +29,7 @@ function mapDbToEmployee(row: any) {
 }
 
 export const employeesRouter = router({
-  // Listar funcionários - VERSÃO SIMPLE PARA DEBUG
+  // Listar funcionários com paginação e busca (JOIN users + employees)
   list: protectedProcedure
     .input(
       z.object({
@@ -73,41 +73,66 @@ export const employeesRouter = router({
       const { page, pageSize, search, role, status } = input || {};
       console.log('[employees.list] input:', JSON.stringify(input));
 
-      // SIMPLE: only users table for now
-      let baseQuery = db.select({
-        id: dbUsers.id,
-        name: dbUsers.name,
-        email: dbUsers.email,
-        role: dbUsers.role,
-        createdAt: dbUsers.createdAt,
-        updatedAt: dbUsers.updatedAt,
-      }).from(dbUsers);
+      // Build JOIN query base: users LEFT JOIN employees
+      let baseQuery = db
+        .select({
+          id: dbUsers.id,
+          name: dbUsers.name,
+          email: dbUsers.email,
+          role: dbUsers.role,
+          createdAt: dbUsers.createdAt,
+          updatedAt: dbUsers.updatedAt,
+          employeeStatus: dbEmployees.status,
+          department: dbEmployees.department,
+          position: dbEmployees.position,
+          cpf: dbEmployees.cpf,
+          phone: dbEmployees.phone,
+          hireDate: dbEmployees.hireDate,
+          skills: dbEmployees.skills,
+          photoUrl: dbEmployees.photoUrl,
+        })
+        .from(dbUsers)
+        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
 
-      // Apply simple filters
+      // Apply filters
       if (search) {
         baseQuery = baseQuery.where(
           or(
             like(dbUsers.name, `%${search}%`),
-            like(dbUsers.email, `%${search}%`)
+            like(dbUsers.email, `%${search}%`),
+            like(dbEmployees.cpf, `%${search}%`),
+            like(dbEmployees.phone, `%${search}%`)
           )
         );
       }
       if (role && ['user', 'admin'].includes(role)) {
         baseQuery = baseQuery.where(eq(dbUsers.role, role));
       }
+      if (status) {
+        baseQuery = baseQuery.where(eq(dbEmployees.status, status));
+      }
 
       // Count total
-      let countQuery = db.select({ count: sql<number>`COUNT(*)` }).from(dbUsers);
+      let countQuery = db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(dbUsers)
+        .leftJoin(dbEmployees, eq(dbUsers.id, dbEmployees.userId));
+
       if (search) {
         countQuery = countQuery.where(
           or(
             like(dbUsers.name, `%${search}%`),
-            like(dbUsers.email, `%${search}%`)
+            like(dbUsers.email, `%${search}%`),
+            like(dbEmployees.cpf, `%${search}%`),
+            like(dbEmployees.phone, `%${search}%`)
           )
         );
       }
       if (role && ['user', 'admin'].includes(role)) {
         countQuery = countQuery.where(eq(dbUsers.role, role));
+      }
+      if (status) {
+        countQuery = countQuery.where(eq(dbEmployees.status, status));
       }
 
       const countResult = await countQuery.limit(1);
@@ -121,34 +146,8 @@ export const employeesRouter = router({
         .offset((page - 1) * pageSize);
 
       console.log('[employees.list] results length:', results.length);
-      // Map simples (sem employees)
-      const simpleEmployees = results.map(row => ({
-        userId: row.id,
-        name: row.name || '',
-        email: row.email || null,
-        role: row.role || 'user',
-        status: 'active', // padrão
-        department: null,
-        position: null,
-        cpf: null,
-        phone: null,
-        hireDate: null,
-        skills: [],
-        photoUrl: null,
-        createdAt: row.createdAt?.toISOString() || new Date().toISOString(),
-        updatedAt: row.updatedAt?.toISOString() || new Date().toISOString(),
-      }));
-
-      return {
-        employees: simpleEmployees,
-        pagination: {
-          page,
-          pageSize,
-          total,
-          totalPages: Math.ceil(total / pageSize),
-        },
-      };
-    }),
+      const mappedEmployees = results.map(row => mapDbToEmployee(row));
+      console.log('[employees.list] mapped employees count:', mappedEmployees.length);
 
       return {
         employees: mappedEmployees,
