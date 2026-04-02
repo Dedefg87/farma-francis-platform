@@ -17,6 +17,7 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc";
+import { TabbedPieCard } from "@/components/TabbedPieCard";
 import type {
   DashboardStatsOutput,
   AgentStatsOutput,
@@ -28,6 +29,34 @@ import type {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF19AF'];
 
+// Dados mockados para gráficos com abas
+const mockFilaData = [
+  { name: "Suporte Farmácia", value: 45, color: "#3b82f6" },
+  { name: "Vendas", value: 28, color: "#10b981" },
+  { name: "Financeiro", value: 17, color: "#ef4444" },
+  { name: "Sem fila", value: 10, color: "#6b7280" },
+];
+
+const mockStatusData = [
+  { name: "Finalizados", value: 65, color: "#10b981" },
+  { name: "Em andamento", value: 22, color: "#f59e0b" },
+  { name: "Aguardando", value: 13, color: "#3b82f6" },
+];
+
+const mockUraData = [
+  { name: "Opção 1 - Vendas", value: 40, color: "#3b82f6" },
+  { name: "Opção 2 - Suporte", value: 35, color: "#10b981" },
+  { name: "Opção 3 - Financeiro", value: 15, color: "#ef4444" },
+  { name: "Direto com agente", value: 10, color: "#8b5cf6" },
+];
+
+const mockFechamentoData = [
+  { name: "Venda concluída", value: 38, color: "#10b981" },
+  { name: "Orçamento", value: 25, color: "#f59e0b" },
+  { name: "Fora de estoque", value: 15, color: "#ef4444" },
+  { name: "Cliente não respondeu", value: 12, color: "#6b7280" },
+  { name: "Outros", value: 10, color: "#8b5cf6" },
+];
 
 /**
  * SkeletonLoader: Componente de placeholder para carregamento
@@ -301,83 +330,9 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* GRÁFICOS DE PIZZA */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* POR FILA */}
-                {channelQuery.isLoading ? (
-                  <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100"><SkeletonLoader height="h-48" /></Card>
-                ) : channelQuery.isError ? (
                   renderErrorState(`Falha ao carregar gráfico por fila: ${channelQuery.error?.message || 'Erro desconhecido'}`, channelQuery.refetch)
                 ) : channelData && channelData.length > 0 ? (
                   <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Por Fila</h3>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <PieChart>
-                        <Pie
-                          data={channelData}
-                          dataKey="count"
-                          nameKey="channel"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={50}
-                          fill="#8884d8"
-                          labelLine={false}
-                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                        >
-                          {channelData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Card>
-                ) : (
-                  renderEmptyState("Sem dados por fila")
-                )}
-
-                {/* POR STATUS */}
-                {statusQuery.isLoading ? (
-                  <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100"><SkeletonLoader height="h-48" /></Card>
-                ) : statusQuery.isError ? (
-                  renderErrorState(`Falha ao carregar gráfico por status: ${statusQuery.error?.message || 'Erro desconhecido'}`, statusQuery.refetch)
-                ) : statusData && statusData.length > 0 ? (
-                  <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">Por Status</h3>
-                    <ResponsiveContainer width="100%" height={150}>
-                      <PieChart>
-                        <Pie
-                          data={statusData}
-                          dataKey="count"
-                          nameKey="status"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={50}
-                          fill="#82ca9d"
-                          labelLine={false}
-                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                        >
-                          {statusData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Card>
-                ) : (
-                  renderEmptyState("Sem dados por status")
-                )}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {renderEmptyState("Por URA (em breve)")}
-                {renderEmptyState("Por Fechamento (em breve)")}
-              </div>
-            </div>
-          </div>
-
-          {/* TABELA DE AGENTES */}
           <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
             <h2 className="text-lg font-semibold text-gray-800 mb-4">Performance dos Agentes</h2>
             {agentQuery.isLoading ? (
