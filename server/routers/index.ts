@@ -14,6 +14,7 @@ import { dashboardDrilldownRouter } from "../routers-dashboard-drilldown";
 import { dashboardStatsRouter } from "../routers-dashboard-stats";
 import { dashboardRouter } from "../routers-dashboard";
 import { executionsRouter } from "../routers-executions";
+import { employeesRouter } from "../routers-employees";
 import { inboxRouter } from "../routers-inbox";
 import { leadsRouter } from "../routers-leads";
 import { logsRouter } from "../routers-logs";
@@ -30,7 +31,7 @@ import { telemetryRouter } from "../routers-telemetry";
 export const appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
-  employees: agentsRouter,
+  employees: employeesRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
   automation: automationRouter,
