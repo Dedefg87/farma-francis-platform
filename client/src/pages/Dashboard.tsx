@@ -5,6 +5,7 @@
  * @date 02 de abril de 2026
  * @description Dashboard com estatísticas, gráficos e performance de agentes
  *              com tratamento robusto de erros, skeleton loaders e otimizações
+ *              Fix: JSX structure corrected for Railway build (2026-04-02 17:41)
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
