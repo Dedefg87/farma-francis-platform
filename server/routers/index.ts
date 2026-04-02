@@ -27,6 +27,7 @@ import { surveyRouter } from "../routers-survey";
 import { systemRouter } from "../routers-system";
 import { tagsRouter } from "../routers-tags";
 import { telemetryRouter } from "../routers-telemetry";
+import { testRouter } from "../routers-test";
 
 export const appRouter = router({
   auth: authRouter,
@@ -57,6 +58,7 @@ export const appRouter = router({
   system: systemRouter,
   tags: tagsRouter,
   telemetry: telemetryRouter,
+  test: testRouter,
 });
 
 export type AppRouter = typeof appRouter;
