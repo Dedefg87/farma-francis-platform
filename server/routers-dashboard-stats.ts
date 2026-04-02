@@ -228,8 +228,8 @@ export const dashboardStatsRouter = router({
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
           conversationDays: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
           avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
-          messagesSent: sql<number>`SUM(${conversationMessages.senderType} = 'agent')`,
-          messagesReceived: sql<number>`SUM(${conversationMessages.senderType} = 'customer')`,
+          messagesSent: sql<number>`COALESCE(SUM(${conversationMessages.senderType} = 'agent'), 0)`,
+          messagesReceived: sql<number>`COALESCE(SUM(${conversationMessages.senderType} = 'customer'), 0)`,
         })
         .from(users)
         .leftJoin(conversations, and(
@@ -254,9 +254,9 @@ export const dashboardStatsRouter = router({
         atendimentos: stat.totalConversations || 0,
         dias: stat.conversationDays || 0,
         mediaAtendimentosDia: stat.conversationDays > 0 ? Math.round((stat.totalConversations || 0) / stat.conversationDays * 10) / 10 : 0,
-        msgEnviadas: stat.messagesSent || 0,
-        msgRecebidas: stat.messagesReceived || 0,
-        tma: formatSecondsToHMS((stat.avgHandlingTime || 0) / 1000000),
+        msgEnviadas: Number(stat.messagesSent) || 0,
+        msgRecebidas: Number(stat.messagesReceived) || 0,
+        tma: stat.avgHandlingTime ? formatSecondsToHMS(Number(stat.avgHandlingTime) / 1000000) : '00:00:00',
       }));
     }),
 
