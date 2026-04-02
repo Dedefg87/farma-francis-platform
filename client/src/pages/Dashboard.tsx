@@ -25,11 +25,9 @@ import type {
   ConversationsByStatusOutput,
 } from "@/lib/shared-types";
 
-// ========== CONSTANTES ==========
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF19AF'];
 
-// ========== COMPONENTES AUXILIARES ==========
 
 /**
  * SkeletonLoader: Componente de placeholder para carregamento
@@ -38,7 +36,6 @@ const SkeletonLoader: React.FC<{ height?: string; width?: string }> = ({ height 
   <div className={`animate-pulse bg-gray-200 rounded ${height} ${width}`}></div>
 );
 
-// ========== COMPONENTE PRINCIPAL ==========
 
 export default function Dashboard() {
   // --- ESTADOS ---

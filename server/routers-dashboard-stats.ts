@@ -235,7 +235,7 @@ export const dashboardStatsRouter = router({
           agentId: users.id,
           agentName: users.name,
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
-          conversationDays: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
+          daysActive: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
           avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
           messagesSent: sql<number>`COALESCE(SUM(${conversationMessages.senderType} = 'agent'), 0)`,
           messagesReceived: sql<number>`COALESCE(SUM(${conversationMessages.senderType} = 'customer'), 0)`,
