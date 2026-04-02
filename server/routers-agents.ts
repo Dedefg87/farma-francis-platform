@@ -19,6 +19,7 @@ import {
   surveyResponses,
 } from "../drizzle/schema";
 import { desc, eq, gte, sql } from "drizzle-orm";
+import type { AgentStats } from '@shared/types/dashboard';
 
 type TimeRange = "7d" | "30d" | "90d" | "all";
 
@@ -344,7 +345,7 @@ export const agentsRouter = router({
           .default("satisfaction"),
       }).optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input }): Promise<AgentStats[]> => {
       const db = await getDb();
       if (!db) return [];
 
@@ -371,7 +372,7 @@ export const agentsRouter = router({
       });
 
       const offset = (page - 1) * pageSize;
-      return sorted.slice(offset, offset + pageSize);
+      return sorted.slice(offset, offset + pageSize) as AgentStats[];
     }),
 
   getChartData: protectedProcedure
