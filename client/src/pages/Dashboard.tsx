@@ -84,11 +84,11 @@ export default function Dashboard() {
     agentId: agent.agentId,
     name: agent.agentName || agent.name || '—',
     atendimentos: agent.totalConversations || 0,
-    dias: agent.conversationDays || 0,
-    mediaAtendimentosDia: agent.mediaAtendimentosDia || 0,
+    dias: agent.daysActive || 0,
+    mediaAtendimentosDia: agent.avgPerDay || 0,
     msgEnviadas: agent.messagesSent || 0,
     msgRecebidas: agent.messagesReceived || 0,
-    tma: agent.avgHandlingTime || '00:00:00',
+    tma: agent.tma || '00:00:00',
   })) as AgentPerformance[];
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
