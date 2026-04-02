@@ -36,8 +36,8 @@ export function getDateRangeFromPeriod(
       break;
 
     case "mes":
-      // Últimos 30 dias (não o mês calendário)
-      startDate = setStartOfDay(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+      // MÊS CALENDÁRIO ATUAL (corrigido)
+      startDate = setStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
       endDate = setEndOfDay(now);
       break;
 
