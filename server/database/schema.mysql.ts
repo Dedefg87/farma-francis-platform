@@ -173,6 +173,7 @@ export const queues = mysqlTable("queues", {
   channel: varchar("channel", { length: 16 }).notNull(),
   priority: int("priority").default(0).notNull(),
   status: varchar("status", { length: 16 }).default("active").notNull(),
+  color: varchar("color", { length: 7 }).default("#3b82f6"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
