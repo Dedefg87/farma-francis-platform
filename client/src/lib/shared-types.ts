@@ -23,4 +23,6 @@ export type AgentsOutput = inferRouterOutputs<AppRouter>['agents']['getAgents'];
 export type CustomersOutput = inferRouterOutputs<AppRouter>['customers']['getCustomers'];
 
 // Conversations - routers-conversations
-export type ConversationsOutput = inferRouterOutputs<AppRouter>['conversations']['getConversations'];
+export type ConversationsListActiveOutput = inferRouterOutputs<AppRouter>['conversations']['listActive'];
+// Tipo de uma conversa individual (após mapeamento)
+// export type Conversation = NonNullable<ConversationsListActiveOutput>[number];

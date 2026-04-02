@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from "react";
 import { trpc } from "@/lib/trpc";
+import type { Conversation } from "@shared/types/conversations";
 import AgentTopBar from "@/components/AgentTopBar";
 import { PDFPreview } from "@/components/PDFPreview";
 import { ImageLightbox } from "@/components/ImageLightbox";
@@ -388,7 +389,7 @@ export default function AgentMessages() {
         conv =>
           (conv.customerName || "").toLowerCase().includes(query) ||
           conv.customerPhone?.toLowerCase().includes(query) ||
-          conv.lastMessage?.toLowerCase().includes(query)
+          (conv.lastMessagePreview || "").toLowerCase().includes(query)
       );
     }
 
@@ -952,7 +953,7 @@ export default function AgentMessages() {
                         )}
                       </div>
                       <p className="text-sm text-gray-600 truncate">
-                        {conv.lastMessage}
+                        {conv.lastMessagePreview}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         {/* Badge de tempo */}
