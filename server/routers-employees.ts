@@ -214,18 +214,21 @@ export const employeesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      const existing = await db.select().from(dbUsers).where(eq(dbUsers.id, input.userId)).limit(1);
+      if (!input) throw new Error('Dados inválidos');
+      const { userId, username, displayName, role, password } = input;
+
+      const existing = await db.select().from(dbUsers).where(eq(dbUsers.id, userId)).limit(1);
       if (existing.length === 0) throw new Error('Funcionário não encontrado');
 
       const updates: any = {};
-      if (input.username) updates.name = input.username;
-      if (input.displayName !== undefined) updates.displayName = input.displayName;
-      if (input.role) updates.role = input.role;
-      if (input.password) updates.passwordHash = await bcrypt.hash(input.password, 10);
+      if (username) updates.name = username;
+      if (displayName !== undefined) updates.displayName = displayName;
+      if (role) updates.role = role;
+      if (password) updates.passwordHash = await bcrypt.hash(password, 10);
       if (Object.keys(updates).length > 0) updates.updatedAt = new Date();
 
       if (Object.keys(updates).length > 0) {
-        await db.update(dbUsers).set(updates).where(eq(dbUsers.id, input.userId));
+        await db.update(dbUsers).set(updates).where(eq(dbUsers.id, userId));
       }
 
       return { success: true, message: 'Funcionário atualizado com sucesso' };
