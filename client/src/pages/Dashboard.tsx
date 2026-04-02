@@ -330,51 +330,116 @@ export default function Dashboard() {
               </Card>
             </div>
 
-                  renderErrorState(`Falha ao carregar gráfico por fila: ${channelQuery.error?.message || 'Erro desconhecido'}`, channelQuery.refetch)
+            {/* GRÁFICOS DE CANAL E STATUS */}
+            <div className="space-y-6">
+              {/* Gráfico de Canais */}
+              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-800 mb-4">Distribuição por Canal</h3>
+                {channelQuery.isLoading ? (
+                  <SkeletonLoader height="h-64" />
+                ) : channelQuery.isError ? (
+                  renderErrorState(`Falha ao carregar gráfico por canal: ${channelQuery.error?.message || 'Erro desconhecido'}`, channelQuery.refetch)
                 ) : channelData && channelData.length > 0 ? (
-                  <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-          <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Performance dos Agentes</h2>
-            {agentQuery.isLoading ? (
-              <SkeletonLoader height="h-64" />
-            ) : agentQuery.isError ? (
-              renderErrorState(`Falha ao carregar tabela de agentes: ${agentQuery.error?.message || 'Erro desconhecido'}`, agentQuery.refetch)
-            ) : agentData.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Agente</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Atendimentos</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Dias</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Med. Atend./dia</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg. Enviadas</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg.Recebidas</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">TMA</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {agentData.map((agent) => (
-                      <tr key={agent.agentId} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.totalConversations}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.daysActive}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{(agent.avgPerDay ?? 0).toFixed(1)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesSent}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesReceived}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.tma}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              renderEmptyState("Sem dados de agentes neste período.")
-            )}
-          </Card>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={channelData.map(c => ({ name: c.channel, value: c.count }))}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        nameKey="name"
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      >
+                        {channelData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  renderEmptyState("Sem dados de canais neste período.")
+                )}
+              </Card>
 
-        </div>
-      </div>
-    </FarmaDashboardLayout>
-  );
-}
+              {/* Gráfico de Status */}
+              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-800 mb-4">Status das Conversas</h3>
+                {statusQuery.isLoading ? (
+                  <SkeletonLoader height="h-64" />
+                ) : statusQuery.isError ? (
+                  renderErrorState(`Falha ao carregar gráfico por status: ${statusQuery.error?.message || 'Erro desconhecido'}`, statusQuery.refetch)
+                ) : statusData && statusData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={statusData.map(s => ({ name: s.status, value: s.count }))}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                        nameKey="name"
+                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      >
+                        {statusData.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  renderEmptyState("Sem dados de status neste período.")
+                )}
+              </Card>
+            </div>
+
+          </div>
+
+          {/* TABELA DE PERFORMANCE DOS AGENTES */}
+          <div className="mt-6">
+            <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Performance dos Agentes</h2>
+              {agentQuery.isLoading ? (
+                <SkeletonLoader height="h-64" />
+              ) : agentQuery.isError ? (
+                renderErrorState(`Falha ao carregar tabela de agentes: ${agentQuery.error?.message || 'Erro desconhecido'}`, agentQuery.refetch)
+              ) : agentData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Agente</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Atendimentos</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Dias</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Med. Atend./dia</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg. Enviadas</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg.Recebidas</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">TMA</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {agentData.map((agent) => (
+                        <tr key={agent.agentId} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{agent.totalConversations}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{agent.daysActive}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{(agent.avgPerDay ?? 0).toFixed(1)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesSent}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesReceived}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{agent.tma}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                renderEmptyState("Sem dados de agentes neste período.")
+              )}
+            </Card>
+          </div>
