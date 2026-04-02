@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { protectedProcedure, adminProcedure, router } from './_core/trpc.js';
 import { getDb } from './db.js';
 import { users as dbUsers } from '../drizzle/schema.js';
-import { eq, like } from 'drizzle-orm';
+import { eq, like, desc } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 
 export const employeesRouter = router({
@@ -45,8 +45,10 @@ export const employeesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      const { page, pageSize, search, role } = input || {};
-      console.log('[employees.list] input:', JSON.stringify(input), 'user:', input?.user?.id);
+      // Ensure input is an object
+      const safeInput = input || {};
+      const { page, pageSize, search, role } = safeInput;
+      console.log('[employees.list] input:', input, 'parsed:', { page, pageSize, search, role });
 
       // Simple query: only users table
       let query = db.select({
@@ -65,13 +67,17 @@ export const employeesRouter = router({
         query = query.where(eq(dbUsers.role, role));
       }
 
-      // Count total - just count the filtered result set size
+      // Count total - get all filtered rows count
       const allRows = await query;
       const total = allRows.length;
+      console.log('[employees.list] total count:', total);
 
-      // Pagination - apply limit/offset after count
-      const offset = (page - 1) * pageSize;
-      const rows = await query.orderBy(desc(dbUsers.createdAt)).limit(pageSize).offset(offset);
+      // Pagination
+      const effectivePage = page || 1;
+      const effectivePageSize = pageSize || 20;
+      const offset = (effectivePage - 1) * effectivePageSize;
+      const rows = await query.orderBy(desc(dbUsers.createdAt)).limit(effectivePageSize).offset(offset);
+      console.log('[employees.list] fetched rows:', rows.length);
 
       const employees = rows.map(r => ({
         userId: r.id,
@@ -90,7 +96,7 @@ export const employeesRouter = router({
         updatedAt: r.updatedAt?.toISOString() || new Date().toISOString(),
       }));
 
-      return { employees, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } };
+      return { employees, pagination: { page: effectivePage, pageSize: effectivePageSize, total, totalPages: Math.ceil(total / effectivePageSize) } };
     }),
 
   get: protectedProcedure
