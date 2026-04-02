@@ -36,6 +36,10 @@ export interface Conversation {
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
   unreadCount: number;
+  // Campos adicionais para exibição no frontend
+  customerName?: string;
+  customerPhone?: string;
+  customerAvatar?: string;
 }
 
 export interface ConversationMessage {
