@@ -20,7 +20,8 @@ export type ConversationsByStatusOutput = inferRouterOutputs<AppRouter>['dashboa
 export type AgentsOutput = inferRouterOutputs<AppRouter>['agents']['getAgents'];
 
 // Customers - routers-customers
-export type CustomersOutput = inferRouterOutputs<AppRouter>['customers']['getCustomers'];
+export type CustomersListOutput = inferRouterOutputs<AppRouter>['customers']['list'];
+export type CustomerDetailOutput = inferRouterOutputs<AppRouter>['customers']['get'];
 
 // Conversations - routers-conversations
 export type ConversationsListActiveOutput = inferRouterOutputs<AppRouter>['conversations']['listActive'];
