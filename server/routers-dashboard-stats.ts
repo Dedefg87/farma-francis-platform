@@ -220,13 +220,16 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getAgentStats] Período: ${rawPeriod}, Range: ${start.toISOString()} a ${end.toISOString()}`);
 
-      // Query direta: conversations.assignedTo -> users.id (sem passar por queue_agents)
+      // Query completa: busca estatísticas de conversas e mensagens por agente
       const agentStats = await db
         .select({
           agentId: users.id,
           agentName: users.name,
-          totalConversations: sql<number>`count(${conversations.id})`,
+          totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
+          conversationDays: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
           avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
+          messagesSent: sql<number>`SUM(${conversationMessages.senderType} = 'agent')`,
+          messagesReceived: sql<number>`SUM(${conversationMessages.senderType} = 'customer')`,
         })
         .from(users)
         .leftJoin(conversations, and(
@@ -234,17 +237,26 @@ export const dashboardStatsRouter = router({
           gte(conversations.openedAt, start),
           lte(conversations.openedAt, end)
         ))
+        .leftJoin(conversationMessages, and(
+          eq(conversationMessages.conversationId, conversations.id),
+          gte(conversationMessages.createdAt, start),
+          lte(conversationMessages.createdAt, end)
+        ))
         .where(eq(users.role, "user"))
         .groupBy(users.id, users.name)
-        .orderBy(sql`count(${conversations.id}) DESC`);
+        .orderBy(sql`COUNT(DISTINCT ${conversations.id}) DESC`);
 
       console.log(`[getAgentStats] Resultado:`, JSON.stringify(agentStats));
 
       return agentStats.map((stat) => ({
         agentId: stat.agentId,
         agentName: stat.agentName,
-        totalConversations: stat.totalConversations || 0,
-        avgHandlingTime: formatSecondsToHMS((stat.avgHandlingTime || 0) / 1000000),
+        atendimentos: stat.totalConversations || 0,
+        dias: stat.conversationDays || 0,
+        mediaAtendimentosDia: stat.conversationDays > 0 ? Math.round((stat.totalConversations || 0) / stat.conversationDays * 10) / 10 : 0,
+        msgEnviadas: stat.messagesSent || 0,
+        msgRecebidas: stat.messagesReceived || 0,
+        tma: formatSecondsToHMS((stat.avgHandlingTime || 0) / 1000000),
       }));
     }),
 

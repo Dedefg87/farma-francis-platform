@@ -23,8 +23,13 @@ interface DashboardStats {
 }
 
 interface AgentPerformance {
+  agentId: number;
   name: string;
-  conversations: number;
+  atendimentos: number;
+  dias: number;
+  mediaAtendimentosDia: number;
+  msgEnviadas: number;
+  msgRecebidas: number;
   tma: string;
 }
 
@@ -74,13 +79,16 @@ export default function Dashboard() {
     chats: Number(chats) || 0,
   })) ?? [];
 
-  // Mapear dados de agentes para formato esperado pela tabela
+  // Mapear dados de agentes da API para formato da tabela
   const agentData = (agentQuery.data ?? []).map((agent: any) => ({
+    agentId: agent.agentId,
     name: agent.agentName || agent.name || '—',
-    conversations: agent.totalConversations || 0,
+    atendimentos: agent.totalConversations || 0,
+    dias: agent.conversationDays || 0,
+    mediaAtendimentosDia: agent.mediaAtendimentosDia || 0,
+    msgEnviadas: agent.messagesSent || 0,
+    msgRecebidas: agent.messagesReceived || 0,
     tma: agent.avgHandlingTime || '00:00:00',
-    messagesSent: 0, // Não disponível na API atual
-    messagesReceived: 0, // Não disponível na API atual
   })) as AgentPerformance[];
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
@@ -321,15 +329,23 @@ export default function Dashboard() {
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Agente</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Conversas</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Atendimentos</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Dias</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Med. Atend./dia</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg. Enviadas</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Msg.Recebidas</th>
                           <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">TMA</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {agentData.map((agent, index) => (
-                          <tr key={index} className="hover:bg-gray-50">
+                        {agentData.map((agent) => (
+                          <tr key={agent.agentId} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.name}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{agent.conversations}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{agent.atendimentos}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{agent.dias}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{agent.mediaAtendimentosDia.toFixed(1)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{agent.msgEnviadas}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{agent.msgRecebidas}</td>
                             <td className="px-4 py-3 text-sm text-gray-600">{agent.tma}</td>
                           </tr>
                         ))}
