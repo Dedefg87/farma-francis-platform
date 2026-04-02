@@ -1,0 +1,21 @@
+diff --git a/client/src/pages/Dashboard.tsx b/client/src/pages/Dashboard.tsx
+index 0000000..1111111 100644
+--- a/client/src/pages/Dashboard.tsx
++++ b/client/src/pages/Dashboard.tsx
+@@ -402,11 +402,11 @@
+                     {agentData.map((agent) => (
+                       <tr key={agent.agentId} className="hover:bg-gray-50">
+                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
+-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.atendimentos}</td>
+-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.dias}</td>
+-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.mediaAtendimentosDia.toFixed(1)}</td>
+-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.msgEnviadas}</td>
+-                        <td className="px-4 py-3 text-sm text-gray-600">{agent.msgRecebidas}</td>
++                        <td className="px-4 py-3 text-sm text-gray-600">{agent.totalConversations}</td>
++                        <td className="px-4 py-3 text-sm text-gray-600">{agent.daysActive}</td>
++                        <td className="px-4 py-3 text-sm text-gray-600">{(agent.avgPerDay ?? 0).toFixed(1)}</td>
++                        <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesSent}</td>
++                        <td className="px-4 py-3 text-sm text-gray-600">{agent.messagesReceived}</td>
+                         <td className="px-4 py-3 text-sm text-gray-600">{agent.tma}</td>
+                       </tr>
+                     ))}
