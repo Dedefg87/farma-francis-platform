@@ -71,7 +71,7 @@ export const employeesRouter = router({
       if (!db) throw new Error('Database not available');
 
       const { page, pageSize, search, role, status } = input || {};
-      const offset = (page - 1) * pageSize;
+      console.log('[employees.list] input:', JSON.stringify(input));
 
       // Build JOIN query base: users LEFT JOIN employees
       let baseQuery = db
@@ -137,6 +137,7 @@ export const employeesRouter = router({
 
       const countResult = await countQuery.limit(1);
       const total = Number(countResult[0].count) || 0;
+      console.log('[employees.list] total count:', total);
 
       // Fetch data
       const results = await baseQuery
@@ -144,7 +145,9 @@ export const employeesRouter = router({
         .limit(pageSize)
         .offset(offset);
 
+      console.log('[employees.list] results length:', results.length);
       const mappedEmployees = results.map(row => mapDbToEmployee(row));
+      console.log('[employees.list] mapped employees count:', mappedEmployees.length);
 
       return {
         employees: mappedEmployees,
