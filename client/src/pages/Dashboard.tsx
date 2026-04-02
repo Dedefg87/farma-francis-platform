@@ -158,16 +158,6 @@ export default function Dashboard() {
   const statusData = statusQuery.data ?? [];
   const hourData = hourQuery.data ?? [];
   const agentData = agentQuery.data ?? [];
-
-  // Mapear dados de agentes da API para formato da tabela
-  const agentData: AgentPerformance[] = (agentQuery.data ?? []).map((agent: any) => ({
-    agentId: agent.agentId,
-    name: agent.agentName || agent.name || '—',
-    atendimentos: agent.totalConversations || 0,
-    dias: agent.daysActive || 0,
-    mediaAtendimentosDia: agent.avgPerDay || 0,
-    msgEnviadas: agent.messagesSent || 0,
-    msgRecebidas: agent.messagesReceived || 0,
     tma: agent.tma || '00:00:00',
   }));
 
