@@ -4,5 +4,13 @@ export const systemRouter = router({
   health: publicProcedure.query(() => {
     return { status: "ok", timestamp: new Date().toISOString() };
   }),
-  // Add other system procedures as needed
+  debugTime: publicProcedure.query(() => {
+    const now = new Date();
+    return {
+      nowISO: now.toISOString(),
+      nowUTC: now.getTime(),
+      timezoneOffset: now.getTimezoneOffset(),
+      timezoneName: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+  }),
 });

@@ -227,7 +227,11 @@ export const dashboardStatsRouter = router({
         input?.endDate
       );
 
-      console.log(`[getAgentStats] Período: ${rawPeriod}, Range: ${start.toISOString()} a ${end.toISOString()}`);
+      console.log(`[getAgentStats] Período: ${rawPeriod}`);
+      console.log(`[getAgentStats] startDate (local): ${start.toString()}`);
+      console.log(`[getAgentStats] startDate (ISO):   ${start.toISOString()}`);
+      console.log(`[getAgentStats] endDate (local):   ${end.toString()}`);
+      console.log(`[getAgentStats] endDate (ISO):     ${end.toISOString()}`);
 
       // Estratégia: Filtros independentes
       // - Conversas: filtradas por openedAt (período)
@@ -310,7 +314,11 @@ export const dashboardStatsRouter = router({
         endDate = e;
       }
 
-      console.log(`[getContactsByHour] Período: ${rawPeriod}, Range: ${startDate.toISOString()} a ${endDate.toISOString()}`);
+      console.log(`[getContactsByHour] Período: ${rawPeriod}`);
+      console.log(`[getContactsByHour] startDate (local): ${startDate.toString()}`);
+      console.log(`[getContactsByHour] startDate (ISO):   ${startDate.toISOString()}`);
+      console.log(`[getContactsByHour] endDate (local):   ${endDate.toString()}`);
+      console.log(`[getContactsByHour] endDate (ISO):     ${endDate.toISOString()}`);
 
       // Consulta: contar conversas únicas por data+hora
       const result = await db
