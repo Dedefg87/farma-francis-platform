@@ -165,7 +165,7 @@ export const employeesRouter = router({
     .input(
       z.object({
         name: z.string().min(1),
-        email: z.string().email(),
+        email: z.string().min(1), // Removido .email() pattern quebrado
         password: z.string().min(6),
         role: z.enum(['user', 'admin']).default('user'),
       }).nullish()
@@ -198,7 +198,7 @@ export const employeesRouter = router({
       z.object({
         userId: z.number(),
         name: z.string().optional().nullish(),
-        email: z.string().email().optional().nullish(),
+        email: z.string().optional().nullish(),
         role: z.enum(['user', 'admin']).optional().nullish(),
         password: z.string().min(6).optional().nullish(),
       }).nullish()
