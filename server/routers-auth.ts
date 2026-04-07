@@ -2,6 +2,9 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "./_core/env";
+import bcrypt from "bcrypt";
+import { getDb } from "./db";
+import { users as usersTable } from "../drizzle/schema";
 
 export const authRouter = router({
   // Login procedure
@@ -15,27 +18,52 @@ export const authRouter = router({
     .mutation(async ({ input }) => {
       try {
         const { username, password } = input;
+        const db = await getDb();
 
-        // TODO: Buscar no banco de dados e validar senha
-        // Hardcoded para teste: admin/admin
-        if (username === "admin" && password === "admin") {
-          const user = {
-            id: "1",
-            name: "Admin",
-            username: "admin",
-            role: "admin",
-          };
+        if (!db) throw new Error("Database unavailable");
 
-          const token = jwt.sign(user, JWT_SECRET, { expiresIn: "7d" });
+        // Buscar usuário pelo username (campo 'name' na tabela users)
+        const users = await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.name, username))
+          .limit(1);
 
-          return {
-            success: true,
-            user,
-            token,
-          };
+        if (users.length === 0) {
+          throw new Error("Username ou senha inválidos");
         }
 
-        throw new Error("Username ou senha inválidos");
+        const user = users[0];
+
+        // Validar senha
+        const valid = await bcrypt.compare(password, user.passwordHash);
+        if (!valid) {
+          throw new Error("Username ou senha inválidos");
+        }
+
+        // Atualizar lastSignedIn
+        await db
+          .update(usersTable)
+          .set({ lastSignedIn: new Date() })
+          .where(eq(usersTable.id, user.id));
+
+        // Retornar dados para token (excluir campos sensíveis)
+        const userForToken = {
+          id: user.id,
+          name: user.name,
+          username: user.name,
+          displayName: user.displayName,
+          email: user.email,
+          role: user.role,
+        };
+
+        const token = jwt.sign(userForToken, JWT_SECRET, { expiresIn: "7d" });
+
+        return {
+          success: true,
+          user: userForToken,
+          token,
+        };
       } catch (error: any) {
         throw new Error(error.message || "Falha no login");
       }

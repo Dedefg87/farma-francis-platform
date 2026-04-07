@@ -23,7 +23,7 @@ import type {
 } from '@shared/types/dashboard';
 
 // IMPORT DA FUNÇÃO getDateRangeFromPeriod
-import { getDateRangeFromPeriod } from "../utils/date-range";
+import { getDateRangeFromPeriod } from "./utils/date-range";
 
 // Utilitário para formatar segundos em HH:MM:SS
 function formatSecondsToHMS(totalSeconds: number): string {
