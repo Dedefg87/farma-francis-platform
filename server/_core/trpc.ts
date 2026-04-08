@@ -1,4 +1,4 @@
-import { initTRPC, TRPCError, middleware } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { Context } from "./context";
 
@@ -9,7 +9,7 @@ const t = initTRPC.context<Context>().create({
 export const router = t.router;
 
 // 📝 Middleware para logging de inputs (debug)
-const inputLogger = middleware(async ({ next, input, ctx }) => {
+const inputLogger = t.middleware(async ({ next, input, ctx }) => {
   console.log(`[TRPC INPUT] ${ctx.path}:`, {
     input,
     hasInput: input !== undefined,
@@ -20,7 +20,7 @@ const inputLogger = middleware(async ({ next, input, ctx }) => {
 });
 
 // 🔐 Middleware de autenticação
-const isAuthed = middleware(({ ctx, next }) => {
+const isAuthed = t.middleware(({ ctx, next }) => {
   if (!ctx.user) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
@@ -31,7 +31,7 @@ const isAuthed = middleware(({ ctx, next }) => {
 });
 
 // 🔒 Middleware para admin
-const isAdmin = middleware(({ ctx, next }) => {
+const isAdmin = t.middleware(({ ctx, next }) => {
   if (!ctx.user || ctx.user.role !== "admin") {
     throw new TRPCError({
       code: "FORBIDDEN",
@@ -45,19 +45,3 @@ const isAdmin = middleware(({ ctx, next }) => {
 export const publicProcedure = t.procedure.use(inputLogger);
 export const protectedProcedure = t.procedure.use(isAuthed).use(inputLogger);
 export const adminProcedure = t.procedure.use(isAuthed).use(isAdmin).use(inputLogger);
-
-// 📝 Middleware para logging de inputs (debug)
-const inputLogger = t.middleware(async ({ next, input, ctx }) => {
-  console.log(`[TRPC INPUT] ${ctx.path}:`, {
-    input,
-    hasInput: input !== undefined,
-    type: typeof input,
-    jsonInput: JSON.stringify(input)?.substring(0, 500),
-  });
-  return next({ input, ctx });
-});
-
-// Aplicar inputLogger em todos os procedures para debug
-export const loggedPublicProcedure = t.procedure.use(inputLogger);
-export const loggedProtectedProcedure = t.procedure.use(isAuthed).use(inputLogger);
-export const loggedAdminProcedure = t.procedure.use(isAuthed).use(isAdmin).use(inputLogger);
