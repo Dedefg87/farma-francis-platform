@@ -1,9 +1,11 @@
-// System Monitoring Endpoints (PostgreSQL)
 import express from "express";
+import { getDb } from "../../db";
+import { sql } from "drizzle-orm";
+import type { Pool } from "mysql2/promise";
 
 export const systemRouter = express.Router();
 
-// GET /api/system/storage
+// GET /api/system/storage (unchanged - uses shell commands)
 systemRouter.get("/storage", async (req, res) => {
   try {
     const { exec } = await import("child_process");
@@ -24,177 +26,230 @@ systemRouter.get("/storage", async (req, res) => {
   }
 });
 
-// GET /api/system/database/size
+// GET /api/system/database/size (MySQL version)
 systemRouter.get("/database/size", async (req, res) => {
   try {
-    const { Client } = await import("pg");
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
-    await client.connect();
-    try {
-      const result = await client.query(
-        `SELECT ROUND(SUM(pg_total_relation_size(quote_ident(table_name)) / 1024.0 / 1024.0), 2) as size_mb FROM information_schema.tables WHERE table_schema = 'public'`
-      );
-      res.json({ success: true, size_mb: Number(result.rows[0]?.size_mb || 0), timestamp: new Date().toISOString() });
-    } finally {
-      await client.end();
-    }
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: "Database unavailable" });
+
+    // MySQL: total size from information_schema
+    const result = await db.execute(sql`
+      SELECT
+        ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE()
+    `);
+
+    const rows = (result as any).rows || result || [];
+    const size_mb = Number(rows[0]?.size_mb || 0);
+
+    res.json({ success: true, size_mb, timestamp: new Date().toISOString() });
   } catch (error) {
+    console.error("[System/Size] Error:", error);
     res.status(500).json({ error: String(error) });
   }
 });
 
-// GET /api/system/database/tables
+// GET /api/system/database/tables (MySQL version)
 systemRouter.get("/database/tables", async (req, res) => {
   try {
-    const { Client } = await import("pg");
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
-    await client.connect();
-    try {
-      const query = `
-        SELECT 
-          table_name,
-          ROUND(pg_total_relation_size(quote_ident(table_name)) / 1024.0 / 1024.0, 2) as size_mb,
-          (SELECT COUNT(*) FROM "${table_name}") as table_rows
-        FROM information_schema.tables 
-        WHERE table_schema = 'public'
-        ORDER BY pg_total_relation_size(quote_ident(table_name)) DESC
-      `;
-      const result = await client.query(query);
-      const tables = result.rows.map((row) => ({
-        table_name: row.table_name,
-        size_mb: Number(row.size_mb),
-        table_rows: Number(row.table_rows)
-      }));
-      res.json({ success: true, tables, timestamp: new Date().toISOString() });
-    } finally {
-      await client.end();
-    }
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: "Database unavailable" });
+
+    const result = await db.execute(sql`
+      SELECT
+        table_name,
+        ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
+        table_rows
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE()
+        AND table_name NOT LIKE '\\_%'
+        AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied')
+      ORDER BY (data_length + index_length) DESC
+    `);
+
+    const rows = (result as any).rows || result || [];
+    const tables = rows.map((row: any) => ({
+      table_name: row.table_name,
+      size_mb: Number(row.size_mb || 0),
+      table_rows: Number(row.table_rows || 0),
+    }));
+
+    res.json({ success: true, tables, timestamp: new Date().toISOString() });
   } catch (error) {
+    console.error("[System/Tables] Error:", error);
     res.status(500).json({ error: String(error) });
   }
 });
 
-// POST /api/system/clean
+// Helper: check if table exists
+async function tableExists(db: any, tableName: string): Promise<boolean> {
+  try {
+    const r = await db.execute(sql`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = ${tableName}
+    `);
+    const rows = (r as any).rows || r || [];
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Helper: count rows in table
+async function countRows(db: any, tableName: string): Promise<number> {
+  try {
+    const r = await db.execute(sql`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    const rows = (r as any).rows || r || [];
+    return Number(rows[0]?.cnt || 0);
+  } catch {
+    return 0;
+  }
+}
+
+// Helper: delete old rows from table
+async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<number> {
+  try {
+    const r = await db.execute(sql`DELETE FROM ${tableName} WHERE created_at < ${cutoff}`);
+    return (r as any).affectedRows || 0;
+  } catch (error: any) {
+    // Se tabela não tem created_at, ignorar
+    if (error.message?.includes('Unknown column')) {
+      return 0;
+    }
+    throw error;
+  }
+}
+
+// POST /api/system/clean (MySQL version - cleans logs and sessions)
 systemRouter.post("/clean", async (req, res) => {
   try {
     const { types } = req.body;
-    const results = [];
-    const { Client } = await import("pg");
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
-    await client.connect();
-    try {
-      // Logs
-      if (!types || types.includes('logs')) {
-        const cutoffDate = new Date(); cutoffDate.setDate(cutoffDate.getDate() - 30);
-        const logTables = ['system_logs', 'audit_logs', 'crm_audit_logs', 'workflow_executions', 'execution_data'];
-        let totalDeleted = 0, tablesFound = 0;
-        for (const tableName of logTables) {
-          try {
-            const columnCheck = await client.query(
-              `SELECT column_name FROM information_schema.columns WHERE table_name = '${tableName}' AND column_name = 'created_at'`
-            );
-            if (columnCheck.rows.length > 0) {
-              tablesFound++;
-              const result = await client.query(`DELETE FROM "${tableName}" WHERE created_at < $1`, [cutoffDate]);
-              totalDeleted += result.rowCount;
-            }
-          } catch (e) {
-            if (!e.message.includes('does not exist')) console.log(`[System/Clean] Erro ${tableName}: ${e.message}`);
-          }
-        }
-        results.push({ type: 'logs', deleted: totalDeleted, message: `Removidos ${totalDeleted} logs de ${tablesFound} tabela${tablesFound !== 1 ? 's' : ''}` });
-      }
+    const results: any[] = [];
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-      // Sessões
-      if (!types || types.includes('sessions')) {
+    // Clean logs (older than 30 days)
+    if (!types || types.includes('logs')) {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 30);
+      const logTables = ['system_logs', 'audit_logs', 'crm_audit_logs', 'workflow_executions', 'execution_data'];
+      let totalDeleted = 0, tablesFound = 0;
+
+      for (const tableName of logTables) {
         try {
-          const [tablesCheck] = await client.query("SELECT table_name FROM information_schema.tables WHERE table_name = 'sessions'");
-          if (tablesCheck.rows.length > 0) {
-            const cutoffDate = new Date(); cutoffDate.setDate(cutoffDate.getDate() - 7);
-            const result = await client.query('DELETE FROM sessions WHERE expires_at < $1', [cutoffDate]);
-            results.push({ type: 'sessions', deleted: result.rowCount, message: `Removidas ${result.rowCount} sessões` });
-          } else {
-            results.push({ type: 'sessions', deleted: 0, message: 'Tabela de sessões não encontrada' });
+          if (await tableExists(db, tableName)) {
+            // Check if table has created_at column
+            const deleted = await deleteOld(db, tableName, cutoffDate);
+            tablesFound++;
+            totalDeleted += deleted;
           }
-        } catch (e) {
-          results.push({ type: 'sessions', deleted: 0, message: `Erro: ${e.message}` });
+        } catch (e: any) {
+          if (!e.message?.includes('does not exist')) {
+            console.log(`[System/Clean] Erro ${tableName}: ${e.message}`);
+          }
         }
       }
-    } finally {
-      await client.end();
+      results.push({
+        type: 'logs',
+        deleted: totalDeleted,
+        message: `Removidos ${totalDeleted} logs de ${tablesFound} tabela${tablesFound !== 1 ? 's' : ''}`
+      });
     }
+
+    // Clean sessions (older than 7 days)
+    if (!types || types.includes('sessions')) {
+      const exists = await tableExists(db, 'sessions');
+      if (exists) {
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 7);
+        try {
+          const deleted = await deleteOld(db, 'sessions', cutoffDate);
+          results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
+        } catch (e: any) {
+          // sessions pode ter expires_at em vez de created_at
+          try {
+            const r = await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${cutoffDate}`);
+            const deleted = (r as any).affectedRows || 0;
+            results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
+          } catch (e2) {
+            results.push({ type: 'sessions', deleted: 0, message: `Erro: ${e2.message}` });
+          }
+        }
+      } else {
+        results.push({ type: 'sessions', deleted: 0, message: 'Tabela de sessões não encontrada' });
+      }
+    }
+
     res.json({ success: true, results, timestamp: new Date().toISOString() });
   } catch (error) {
+    console.error("[System/Clean] Error:", error);
     res.status(500).json({ error: String(error) });
   }
 });
 
-// POST /api/system/clean-messages - Limpa mensagens antigas (cuidado!)
+// POST /api/system/clean-messages (MySQL version)
 systemRouter.post("/clean-messages", async (req, res) => {
   try {
     const { days = 90, dryRun = false } = req.body;
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
-    const { Client } = await import("pg");
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
-    await client.connect();
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    try {
-      // 1. Contar quantas mensagens serão afetadas
-      const countQuery = `
-        SELECT 
-          COUNT(*) as total_messages,
-          COUNT(DISTINCT conversation_id) as affected_conversations,
-          SUM(CASE WHEN file_url IS NOT NULL THEN 1 ELSE 0 END) as with_media
-        FROM conversation_messages 
-        WHERE created_at < $1
-      `;
-      const countResult = await client.query(countQuery, [cutoffDate]);
-      const stats = countResult.rows[0];
+    // Count stats
+    const statsResult = await db.execute(sql`
+      SELECT
+        COUNT(*) as total_messages,
+        COUNT(DISTINCT conversation_id) as affected_conversations,
+        SUM(CASE WHEN file_url IS NOT NULL THEN 1 ELSE 0 END) as with_media
+      FROM conversation_messages
+      WHERE created_at < ${cutoffDate}
+    `);
+    const statsRows = (statsResult as any).rows || statsResult || [];
+    const stats = statsRows[0];
 
-      if (dryRun) {
-        return res.json({
-          success: true,
-          dryRun: true,
-          stats: {
-            messages: Number(stats.total_messages),
-            conversations: Number(stats.affected_conversations),
-            withMedia: Number(stats.with_media),
-            cutoffDate: cutoffDate.toISOString(),
-          },
-          message: `Simulação: ${stats.total_messages} mensagens em ${stats.affected_conversations} conversas seriam deletadas`
-        });
-      }
-
-      // 2. Deletar mensagens antigas
-      const deleteResult = await client.query(
-        'DELETE FROM conversation_messages WHERE created_at < $1 RETURNING id',
-        [cutoffDate]
-      );
-
-      const deletedCount = deleteResult.rowCount;
-
-      res.json({
+    if (dryRun) {
+      return res.json({
         success: true,
+        dryRun: true,
         stats: {
-          messages: Number(deletedCount),
-          conversations: Number(stats.affected_conversations),
-          withMedia: Number(stats.with_media),
+          messages: Number(stats.total_messages || 0),
+          conversations: Number(stats.affected_conversations || 0),
+          withMedia: Number(stats.with_media || 0),
           cutoffDate: cutoffDate.toISOString(),
         },
-        message: `Removidas ${deletedCount} mensagens antigas`
+        message: `Simulação: ${stats.total_messages || 0} mensagens em ${stats.affected_conversations || 0} conversas seriam deletadas`
       });
-    } finally {
-      await client.end();
     }
+
+    // Delete messages
+    const deleteResult = await db.execute(sql`
+      DELETE FROM conversation_messages
+      WHERE created_at < ${cutoffDate}
+    `);
+
+    const deletedCount = (deleteResult as any).affectedRows || 0;
+
+    res.json({
+      success: true,
+      stats: {
+        messages: Number(deletedCount),
+        conversations: Number(stats.affected_conversations || 0),
+        withMedia: Number(stats.with_media || 0),
+        cutoffDate: cutoffDate.toISOString(),
+      },
+      message: `Removidas ${deletedCount} mensagens antigas`
+    });
   } catch (error) {
     console.error("[System/CleanMessages] Error:", error);
     res.status(500).json({ error: String(error) });
   }
 });
 
-// POST /api/system/clean-database
+// POST /api/system/clean-database (MySQL version - drops multiple tables)
 systemRouter.post("/clean-database", async (req, res) => {
   try {
     const { confirm } = req.body;
@@ -202,82 +257,76 @@ systemRouter.post("/clean-database", async (req, res) => {
       return res.status(400).json({ error: "Confirmação necessária" });
     }
 
-    const { Client } = await import("pg");
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
-    await client.connect();
-    
-    try {
-      // Lista de tabelas descartáveis (logs, sessões, mensagens antigas, etc.)
-      const tables = [
-        'conversation_messages',
-        'received_messages', 
-        'system_logs',
-        'audit_logs',
-        'notifications',
-        'sessions',
-        'flow_executions',
-        'execution_logs',
-        'broadcast_messages',
-        'quick_replies_cache',
-        'webhook_logs'
-      ];
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-      const results = [];
-      
-      for (const tableName of tables) {
-        try {
-          // Verificar se tabela existe
-          const checkResult = await client.query(
-            "SELECT table_name FROM information_schema.tables WHERE table_name = $1 AND table_schema = 'public'",
-            [tableName]
-          );
-          
-          if (checkResult.rows.length > 0) {
-            // Contar linhas antes
-            const beforeCount = await client.query(`SELECT COUNT(*) FROM "${tableName}"`);
-            const countBefore = Number(beforeCount.rows[0].count);
-            
-            // Deletar todas as linhas
-            const deleteResult = await client.query(`DELETE FROM "${tableName}"`);
-            const deletedCount = deleteResult.rowCount;
-            
+    // Tables that can be safely truncated (non-critical data)
+    const tables = [
+      'conversation_messages',
+      'received_messages',
+      'system_logs',
+      'audit_logs',
+      'notifications',
+      'sessions',
+      'flow_executions',
+      'execution_logs',
+      'broadcast_messages',
+      'quick_replies_cache',
+      'webhook_logs',
+    ];
+
+    const results: any[] = [];
+
+    for (const tableName of tables) {
+      try {
+        const exists = await tableExists(db, tableName);
+        if (exists) {
+          const beforeCount = await countRows(db, tableName);
+
+          // Truncate is faster than DELETE for full table clear
+          try {
+            await db.execute(sql`TRUNCATE TABLE ${tableName}`);
             results.push({
               table: tableName,
               success: true,
-              rows: deletedCount,
-              message: `Tabela ${tableName}: ${deletedCount} linha${deletedCount !== 1 ? 's' : ''} removida${deletedCount !== 1 ? 's' : ''} (era ${countBefore})`
+              rows: beforeCount,
+              message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? 's' : ''} removida${beforeCount !== 1 ? 's' : ''}`
             });
-          } else {
+          } catch (truncateError) {
+            // Fallback to DELETE if TRUNCATE fails (e.g., foreign key constraints)
+            await db.execute(sql`DELETE FROM ${tableName}`);
             results.push({
               table: tableName,
-              success: false,
-              error: 'Tabela não encontrada'
+              success: true,
+              rows: beforeCount,
+              message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? 's' : ''} removida${beforeCount !== 1 ? 's' : ''} (via DELETE)`
             });
           }
-        } catch (e) {
-          results.push({
-            table: tableName,
-            success: false,
-            error: e.message
-          });
+        } else {
+          results.push({ table: tableName, success: false, error: 'Tabela não encontrada' });
         }
+      } catch (e: any) {
+        results.push({ table: tableName, success: false, error: e.message });
       }
-      
-      // Vacuum para liberar espaço (executa em transação separada)
-      try {
-        await client.query('VACUUM FULL');
-      } catch (vacuumError) {
-        console.warn("VACUUM falhou (ignorado):", vacuumError);
-      }
-      
-      res.json({ 
-        success: true, 
-        results, 
-        message: "Limpeza do banco de dados concluída" 
-      });
-    } finally {
-      await client.end();
     }
+
+    // OPTIMIZE tables to reclaim space (best-effort, non-blocking)
+    for (const tableName of tables) {
+      try {
+        if (await tableExists(db, tableName)) {
+          await db.execute(sql`OPTIMIZE TABLE ${tableName}`);
+        }
+      } catch (optimizeError) {
+        // OPTIMIZE can fail on large tables or replicas — ignore
+        console.warn(`[System/Optimize] ${tableName}: ${optimizeError.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      results,
+      message: "Limpeza do banco de dados concluída"
+    });
   } catch (error) {
     console.error("[System/CleanDatabase] Error:", error);
     res.status(500).json({ error: String(error) });
