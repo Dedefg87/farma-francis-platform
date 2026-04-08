@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/mysql2";
 import * as mysql from "mysql2/promise";
 
 import { ENV } from "./_core/env";
+import { sdk } from "./_core/sdk";
 import {
   users,
   customers,
@@ -17,6 +18,9 @@ import { formatPhoneBR } from "./utils/phone";
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: mysql.Pool | null = null;
 let _dbHealthCheck: number = 0;
+
+// Exportações para compatibilidade com routers-sse.ts e outros
+export { _db as db }; // Exportar a referência interna como named export 'db'
 
 export async function getDb() {
   // Se temos um DB cacheado, verificar se ainda está saudável (health check a cada 30s)
@@ -148,5 +152,24 @@ export async function upsertUser(userData: {
     });
 
     return await getUserByOpenId(userData.openId);
+  }
+}
+
+// SESSION HELPER para routers-sse.ts
+// Retorna { userId: string } ou null
+export async function getSession(sessionId: string): Promise<{ userId: string } | null> {
+  try {
+    const session = await sdk.verifySession(sessionId);
+    if (!session) {
+      return null;
+    }
+    // Verificar se usuário existe no banco (opcional, mas sseAuth já faz essa verificação)
+    // Aqui retornamos apenas o openId como userId
+    return {
+      userId: session.openId,
+    };
+  } catch (error) {
+    console.error("[Session] Error verifying session:", error);
+    return null;
   }
 }

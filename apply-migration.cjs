@@ -1,52 +1,41 @@
-#!/usr/bin/env node
-/**
- * Aplica migration broadcast_messages no banco Railway
- * Uso: DATABASE_URL=<sua_url> node apply-migration.cjs
- */
+const mysql = require('mysql2/promise').default || require('mysql2/promise');
 
-import { drizzle } from 'drizzle-orm/mysql-2';
-import mysql from 'mysql2/promise';
-import { readFile } from 'fs/promises';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+const DATABASE_URL = process.env.DATABASE_URL || 'mysql://root:fPEIIcrxEJrOwqgcFacSejAgNjAbwxhC@trolley.proxy.rlwy.net:10194/railway';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    console.error('❌ DATABASE_URL não encontrada');
-    console.log('💡 No Railway: DATABASE_URL está automática');
-    process.exit(1);
+async function runMigration() {
+  console.log('🔌 Connecting to apply migration...');
+  const conn = await mysql.createConnection(DATABASE_URL);
+  
+  try {
+    console.log('📝 Running migration: 0007_add_channel_to_queues.sql');
+    await conn.query(`
+      ALTER TABLE queues 
+      ADD COLUMN channel VARCHAR(16) NOT NULL DEFAULT 'whatsapp' 
+      AFTER description;
+    `);
+    console.log('✅ Migration applied successfully!');
+    
+    // Verificar resultado
+    const [desc] = await conn.execute('DESCRIBE queues');
+    console.log('\n📊 New table structure:');
+    for (const col of desc) {
+      console.log(`  - ${col.Field}: ${col.Type} ${col.Null === 'YES' ? 'NULL' : 'NOT NULL'} ${col.Default ? `default ${col.Default}` : ''}`);
+    }
+    
+  } catch (err) {
+    console.error('❌ Migration failed:', err.message);
+    if (err.message.includes('Duplicate column name')) {
+      console.log('ℹ️ Column already exists, skipping.');
+    } else {
+      throw err;
+    }
+  } finally {
+    await conn.end();
+    console.log('✅ Connection closed.');
   }
-
-  console.log('🔗 Conectando...');
-  const conn = await mysql.createConnection(databaseUrl);
-
-  // Ler SQL migration
-  const sqlPath = join(__dirname, 'server/database/migrations/20250324_migrate_broadcast_messages_definitive.sql');
-  const sql = await readFile(sqlPath, 'utf8');
-
-  console.log('⚡ Aplicando migration...');
-  await conn.query(sql);
-
-  console.log('✅ Migration aplicada com sucesso!');
-
-  // Verificar estrutura
-  const [rows] = await conn.query(`
-    SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'broadcast_messages'
-    ORDER BY ORDINAL_POSITION
-  `);
-
-  console.table(rows);
-  await conn.end();
 }
 
-main().catch(err => {
-  console.error('❌ Erro:', err);
+runMigration().catch(err => {
+  console.error('Fatal:', err);
   process.exit(1);
 });
