@@ -25,22 +25,30 @@ export const authRouter = router({
 
         // Buscar usuário pelo username (campo 'name' na tabela users) — raw SQL para evitar bind em LIMIT
         const rawResult = await db.execute(
-          sql`SELECT id, open_id, name, email, password_hash, login_method, role, created_at, updated_at, last_signed_in 
+          sql`SELECT id, open_id, name, email, password_hash, login_method, role, created_at, updated_at, last_signed_in, display_name 
               FROM users 
               WHERE name = ${username} 
               LIMIT 1`
         );
         const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-        const users = Array.isArray(rows) ? rows : [rows];
+        const usersList = Array.isArray(rows) ? rows : [rows];
 
-        if (users.length === 0) {
+        if (usersList.length === 0) {
           throw new Error("Username ou senha inválidos");
         }
 
-        const user = users[0];
+        const user = usersList[0];
+
+        // ❌ BUG: raw mode retorna snake_case (password_hash), não passwordHash
+        // Corrigido: fallback para ambos os formatos
+        const passwordHash = (user as any).passwordHash ?? (user as any).password_hash;
+        if (!passwordHash) {
+          console.error("[auth] password_hash missing from user row:", user);
+          throw new Error("Username ou senha inválidos");
+        }
 
         // Validar senha
-        const valid = await bcrypt.compare(password, user.passwordHash);
+        const valid = await bcrypt.compare(password, passwordHash);
         if (!valid) {
           throw new Error("Username ou senha inválidos");
         }
@@ -52,13 +60,15 @@ export const authRouter = router({
           .where(eq(usersTable.id, user.id));
 
         // Retornar dados para token (excluir campos sensíveis)
+        // Nota: raw mode retorna snake_case (ex: password_hash), então usamos fallback
+        const safeUser: any = user;
         const userForToken = {
-          id: user.id,
-          name: user.name,
-          username: user.name,
-          displayName: user.displayName,
-          email: user.email,
-          role: user.role,
+          id: safeUser.id,
+          name: safeUser.name,
+          username: safeUser.name,
+          displayName: safeUser.displayName ?? safeUser.display_name ?? safeUser.name,
+          email: safeUser.email,
+          role: safeUser.role,
         };
 
         const token = jwt.sign(userForToken, JWT_SECRET, { expiresIn: "7d" });
