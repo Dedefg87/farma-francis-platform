@@ -31,7 +31,7 @@ RUN npm install -g pnpm@10 && pnpm install --prod --no-frozen-lockfile
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
 # Note: public assets are inside dist/public (Vite output)
-COPY --from=builder /app/.env* ./.env* 2>/dev/null || true
+# .env files are optional (handled by Railway variables)
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
