@@ -188,6 +188,9 @@ importers:
       multer:
         specifier: ^2.1.1
         version: 2.1.1
+      mysql2:
+        specifier: ^3.20.0
+        version: 3.20.0(@types/node@24.11.0)
       nanoid:
         specifier: ^5.1.5
         version: 5.1.6
@@ -333,12 +336,12 @@ importers:
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
+      fdir:
+        specifier: ^6.5.0
+        version: 6.5.0(picomatch@4.0.3)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0
-      mysql2:
-        specifier: ^3.20.0
-        version: 3.20.0(@types/node@24.11.0)
       playwright:
         specifier: ^1.58.2
         version: 1.58.2
