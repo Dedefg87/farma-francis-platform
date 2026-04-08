@@ -1,11 +1,11 @@
 [phases.setup]
-nixPkgs = ['nodejs_20', 'pnpm', 'openssl']
+nixPkgs = ['nodejs_20', 'pnpm_10_30', 'openssl']
 
 [phases.install]
-cmds = ['npm install -g corepack@0.24.1 && corepack enable', 'pnpm install --frozen-lockfile']
+cmds = ['npm install -g corepack@0.24.1 && corepack enable && corepack prepare pnpm@10.30.3 --activate', 'pnpm install --frozen-lockfile']
 
 [phases.build]
 cmds = ['pnpm run build']
 
 [start]
-cmd = 'pnpm start'
+cmd = 'NODE_ENV=production node dist/index.js'
