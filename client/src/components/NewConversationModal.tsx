@@ -99,7 +99,7 @@ export default function NewConversationModal({
     }
   }, [phoneOrEmail, channel, mode]);
 
-  const handleCreateWithInput = () => {
+  const handleCreateWithInput = async () => {
     if (!phoneOrEmail.trim()) return;
 
     // Normalizar número para WhatsApp
@@ -114,10 +114,32 @@ export default function NewConversationModal({
       channel,
     });
 
-    createConversationMutation.mutate({
-      phoneOrEmail: finalPhone,
-      channel,
-    });
+    // Buscar customer primeiro (necessário para customerId)
+    try {
+      const searchResults = await trpc.customers.search.useQuery(
+        { query: finalPhone },
+        { enabled: false }
+      ).refetch();
+
+      const customer = searchResults.data?.find(
+        c => c.phone === finalPhone || c.email === finalPhone || c.fullName.toLowerCase().includes(finalPhone.toLowerCase())
+      );
+
+      if (!customer) {
+        toast.error("Cliente não encontrado. Cadastre o cliente primeiro.");
+        return;
+      }
+
+      createConversationMutation.mutate({
+        customerId: customer.id,
+        channel,
+        customerName: customer.fullName || undefined,
+        customerPhone: customer.phone || undefined,
+        // queueId: undefined (não enviar se for undefined)
+      });
+    } catch (error) {
+      toast.error(`Erro ao buscar cliente: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    }
   };
 
   const handleSelectCustomer = (customerId: number) => {
