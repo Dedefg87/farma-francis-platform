@@ -5,7 +5,7 @@ import { JWT_SECRET } from "./_core/env";
 import bcrypt from "bcrypt";
 import { getDb } from "./db";
 import { users as usersTable } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export const authRouter = router({
   // Login procedure
@@ -23,12 +23,15 @@ export const authRouter = router({
 
         if (!db) throw new Error("Database unavailable");
 
-        // Buscar usuário pelo username (campo 'name' na tabela users)
-        const users = await db
-          .select()
-          .from(usersTable)
-          .where(eq(usersTable.name, username))
-          .limit(1);
+        // Buscar usuário pelo username (campo 'name' na tabela users) — raw SQL para evitar bind em LIMIT
+        const rawResult = await db.execute(
+          sql`SELECT id, open_id, name, email, password_hash, login_method, role, created_at, updated_at, last_signed_in 
+              FROM users 
+              WHERE name = ${username} 
+              LIMIT 1`
+        );
+        const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+        const users = Array.isArray(rows) ? rows : [rows];
 
         if (users.length === 0) {
           throw new Error("Username ou senha inválidos");

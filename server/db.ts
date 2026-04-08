@@ -61,7 +61,7 @@ export async function getDb() {
         timezone: 'Z',
       });
 
-      _db = drizzle(_pool, { mode: "default" });
+      _db = drizzle(_pool, { mode: "raw" });
       _dbHealthCheck = Date.now();
       console.log("[Database] New connection pool created (50 connections)");
     } catch (error) {

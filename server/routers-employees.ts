@@ -179,8 +179,12 @@ export const employeesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      // Verificar se username já existe (campo name na tabela users)
-      const existing = await db.select().from(dbUsers).where(eq(dbUsers.name, input.username)).limit(1);
+      // Verificar se username já existe (campo name na tabela users) — raw SQL para evitar bind em LIMIT
+      const rawResult = await db.execute(
+        sql`SELECT id FROM users WHERE name = ${input.username} LIMIT 1`
+      );
+      const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+      const existing = Array.isArray(rows) ? rows : [rows];
       if (existing.length > 0) throw new Error('Nome de usuário já cadastrado');
 
       const passwordHash = await bcrypt.hash(input.password, 10);
