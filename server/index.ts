@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
+import createSSERouter from "./routers-sse";
 
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -48,6 +49,9 @@ async function startServer() {
       createContext,
     })
   );
+
+  // SSE endpoint para notificações em tempo real
+  app.use("/api/events", createSSERouter());
 
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
