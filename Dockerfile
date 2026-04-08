@@ -30,7 +30,7 @@ RUN npm install -g pnpm@10 && pnpm install --prod --no-frozen-lockfile
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
+# Note: public assets are inside dist/public (Vite output)
 COPY --from=builder /app/.env* ./.env* 2>/dev/null || true
 
 # Create non-root user
