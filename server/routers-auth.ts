@@ -5,6 +5,7 @@ import { JWT_SECRET } from "./_core/env";
 import bcrypt from "bcrypt";
 import { getDb } from "./db";
 import { users as usersTable } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 export const authRouter = router({
   // Login procedure

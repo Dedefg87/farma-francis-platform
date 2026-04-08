@@ -1,3 +1,7 @@
+import { eq } from 'drizzle-orm';
+import { getDb } from './db';
+import { customers, queues, conversations } from '../drizzle/schema';
+
 // ==============================================
 // Ingest inbound conversation message (WhatsApp/Instagram)
 // ==============================================
