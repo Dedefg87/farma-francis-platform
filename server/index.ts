@@ -47,6 +47,17 @@ async function startServer() {
     } catch (tableErr: any) {
       console.warn("[DB] ⚠️ Could not create internal_messages:", tableErr.message);
     }
+
+    // Safety net: ensure customers.source column exists
+    try {
+      const [colRows] = await db.execute(sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
+      if (!Array.isArray(colRows) || colRows.length === 0) {
+        await db.execute(sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
+        console.log("[DB] ✅ customers.source column added");
+      }
+    } catch (colErr: any) {
+      console.warn("[DB] ⚠️ Could not add customers.source:", colErr.message);
+    }
   } catch (error) {
     console.error("[Startup Error]", error);
     throw error;
