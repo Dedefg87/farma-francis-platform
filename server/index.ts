@@ -3,7 +3,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { getDb } from "./db";
 import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
-import { fileURLToPath } from "url";
+// __dirname is natively available in CJS (esbuild --format=cjs)
 import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
@@ -11,7 +11,8 @@ import createSSERouter from "./routers-sse";
 import webhooksRouter from "./webhooks";
 import cookieParser from "cookie-parser";
 
-const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
+// In CJS (esbuild --format=cjs), __dirname is provided by the Node.js module wrapper
+// No need to define it via import.meta.url
 
 async function startServer() {
   console.log("[Server] Starting... (PID:", process.pid, ")");
@@ -24,6 +25,39 @@ async function startServer() {
     console.log("[Migrations] Applying...");
     await applySqlMigrations();
     console.log("[Migrations] Applied successfully");
+
+    // Ensure critical tables exist (safety net)
+    try {
+      const { sql } = await import("drizzle-orm");
+      await db.execute(sql`CREATE TABLE IF NOT EXISTS internal_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conversation_id INT NOT NULL,
+        sender_id INT NOT NULL,
+        recipient_id INT NOT NULL,
+        content TEXT NOT NULL,
+        read_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+      )`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_internal_messages_conversation ON internal_messages(conversation_id)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_internal_messages_recipient ON internal_messages(recipient_id, read_at)`);
+      console.log("[DB] ✅ internal_messages table ensured");
+    } catch (tableErr: any) {
+      console.warn("[DB] ⚠️ Could not create internal_messages:", tableErr.message);
+    }
+
+    // Safety net: ensure customers.source column exists
+    try {
+      const [colRows] = await db.execute(sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
+      if (!Array.isArray(colRows) || colRows.length === 0) {
+        await db.execute(sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
+        console.log("[DB] ✅ customers.source column added");
+      }
+    } catch (colErr: any) {
+      console.warn("[DB] ⚠️ Could not add customers.source:", colErr.message);
+    }
   } catch (error) {
     console.error("[Startup Error]", error);
     throw error;
@@ -68,6 +102,33 @@ async function startServer() {
   // Webhooks para WhatsApp, Instagram e Evolution API
   app.use("/api/webhooks", webhooksRouter);
 
+  // Debug: List all database tables
+  app.get("/api/debug/db-tables", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const [result] = await db.execute(sql`SHOW TABLES`);
+      const tables = (result as any[]).map((row: any) => Object.values(row)[0]);
+      res.json({ tables: tables.sort(), count: tables.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Debug: Show columns for a table
+  app.get("/api/debug/db-columns/:table", async (req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const tableName = req.params.table.replace(/[^a-z_]/gi, "");
+      const [result] = await db.execute(sql.raw(`DESCRIBE ${tableName}`));
+      res.json({ table: tableName, columns: result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       const indexPath = path.join(__dirname, "../dist/public/index.html");

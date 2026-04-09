@@ -2,7 +2,7 @@
 # Docker builder (auto-detect) — more reliable than nixpacks for native dependencies
 
 [deploy]
-startCommand = "npx drizzle-kit push --force && node dist/index.js"
+startCommand = "node dist/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 
