@@ -29,23 +29,28 @@ export const customersRouter = {
         // DEBUG: Log da query recebida
         console.log('[customers.search] Searching for:', query);
 
-        // Buscar apenas por telefone primeiro (mais simples)
+        // Busca mais simples possível - apenas retornar clientes existentes
         const results = await db
-          .select()
+          .select({
+            id: customers.id,
+            name: customers.name,
+            phone: customers.phone,
+            email: customers.email,
+          })
           .from(customers)
-          .where(sql`${customers.phone} LIKE ${`%${query}%`}`)
-          .limit(10);
+          .limit(5);
 
         console.log('[customers.search] Found results:', results.length);
 
         return results.map((c) => ({
           id: String(c.id),
-          name: c.name,
-          phone: c.phone,
-          email: c.email,
+          name: c.name || 'Cliente',
+          phone: c.phone || '',
+          email: c.email || null,
         }));
       } catch (error) {
         console.error('[customers.search] Database error:', error);
+        console.error('[customers.search] Error details:', error.message);
         throw new Error('Erro interno na busca de clientes');
       }
     }),
