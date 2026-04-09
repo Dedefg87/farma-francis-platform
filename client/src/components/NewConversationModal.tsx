@@ -143,7 +143,7 @@ export default function NewConversationModal({
       const searchResults = await trpcClient.customers.search.query({ query: finalPhone });
 
       const customer = searchResults?.find(
-        c => c.phone === finalPhone || c.email === finalPhone || c.fullName.toLowerCase().includes(finalPhone.toLowerCase())
+        c => c.phone === finalPhone || c.email === finalPhone || c.name.toLowerCase().includes(finalPhone.toLowerCase())
       );
 
       if (!customer) {
@@ -154,7 +154,7 @@ export default function NewConversationModal({
       createConversationMutation.mutate({
         customerId: customer.id,
         channel,
-        customerName: customer.fullName || undefined,
+        customerName: customer.name || undefined,
         customerPhone: customer.phone || undefined,
         // queueId: undefined (não enviar se for undefined)
       });

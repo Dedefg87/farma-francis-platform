@@ -16,7 +16,7 @@ export const customersRouter = {
       z.array(
         z.object({
           id: z.string(),
-          fullName: z.string(),
+          name: z.string(),
           phone: z.string(),
           email: z.string().nullable(),
         })
@@ -30,16 +30,16 @@ export const customersRouter = {
         .from(customers)
         .where(
           sql`
-            LOWER(${customers.fullName}) LIKE LOWER(${query})
-            OR ${customers.phone} LIKE ${query}
-            OR ${customers.email} LIKE ${query}
+            LOWER(${customers.name}) LIKE LOWER(${`%${query}%`})
+            OR ${customers.phone} LIKE ${`%${query}%`}
+            OR LOWER(${customers.email}) LIKE LOWER(${`%${query}%`})
           `
         )
         .limit(50);
 
       return results.map((c) => ({
         id: String(c.id),
-        fullName: c.fullName,
+        name: c.name,
         phone: c.phone,
         email: c.email,
       }));
@@ -55,7 +55,7 @@ export const customersRouter = {
     .output(
       z.object({
         id: z.string(),
-        fullName: z.string(),
+        name: z.string(),
         phone: z.string(),
         email: z.string().nullable(),
         tags: z.array(z.string()).nullable(),
@@ -73,7 +73,7 @@ export const customersRouter = {
 
       return {
         id: String(customer.id),
-        fullName: customer.fullName,
+        name: customer.name,
         phone: customer.phone,
         email: customer.email,
         tags: customer.tags || [],
