@@ -25,15 +25,14 @@ export const customersRouter = {
     .mutation(async ({ input }) => {
       const { query } = input;
       // Buscar clientes por nome, telefone ou email
+      const searchTerm = `%${query}%`;
       const results = await db
         .select()
         .from(customers)
         .where(
-          sql`
-            LOWER(${customers.name}) LIKE LOWER(${`%${query}%`})
-            OR ${customers.phone} LIKE ${`%${query}%`}
-            OR LOWER(${customers.email}) LIKE LOWER(${`%${query}%`})
-          `
+          sql`${customers.name} LIKE ${searchTerm}
+              OR ${customers.phone} LIKE ${searchTerm}
+              OR ${customers.email} LIKE ${searchTerm}`
         )
         .limit(50);
 
