@@ -240,6 +240,17 @@ export default function AgentMessages() {
 
               // Invalidate queries to refresh data
               queryClient.invalidateQueries({ queryKey: ["conversations"] });
+
+              // Invalidate specific message query for this conversation
+              const conversationId = data.data?.conversationId;
+              if (conversationId) {
+                console.log(`[AgentSSE] Invalidating messages for conversation ${conversationId}`);
+                queryClient.invalidateQueries({
+                  queryKey: ["messages", "list", { conversation_id: conversationId }]
+                });
+              }
+
+              // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
               console.log("[AgentSSE] Queries invalidated");
             } else {
@@ -415,6 +426,8 @@ export default function AgentMessages() {
   }, [sortedConversations, searchQuery, channelFilter]);
 
   // Buscar mensagens da conversa selecionada
+  console.log(`[AgentMessages] Querying messages for conversation: ${selectedConversationId}`);
+
   const {
     data: messages,
     isLoading: loadingMessages,
@@ -424,6 +437,15 @@ export default function AgentMessages() {
     {
       enabled: !!selectedConversationId,
       refetchInterval: selectedConversationId ? 800 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
+      onSuccess: (data) => {
+        console.log(`[AgentMessages] Messages loaded: ${data?.length || 0} messages`);
+        if (data && data.length > 0) {
+          console.log(`[AgentMessages] Latest message: ${data[data.length - 1].content?.substring(0, 50)}...`);
+        }
+      },
+      onError: (error) => {
+        console.error(`[AgentMessages] Error loading messages:`, error);
+      }
     }
   );
 
