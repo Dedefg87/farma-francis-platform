@@ -23,17 +23,19 @@ export async function checkAndFinishExpiredPauses() {
       console.error('[PauseAutoFinisher] Raw client not available');
       return { finishedCount: 0, error: 'Raw client not available' };
     }
+    // CORREÇÃO APLICADA: Usar durationMinutes ao invés de duration_minutes
     const [rawPauses] = await client.execute(
       "SELECT id, agent_id, status, started_at, ended_at, durationMinutes FROM agent_pauses WHERE status = ?",
       ['active']
     );
+    // CORREÇÃO: Mapear durationMinutes (não duration_minutes)
     const activePauses = (rawPauses as any[]).map(r => ({
       id: r.id,
       agentId: r.agent_id,
       status: r.status,
       startedAt: r.started_at,
       endedAt: r.ended_at,
-      durationMinutes: r.durationMinutes,
+      durationMinutes: r.durationMinutes, // Campo corrigido
     }));
 
     let finishedCount = 0;
