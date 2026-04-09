@@ -26,8 +26,8 @@ export const authRouter = router({
         // Login: campo 'name' é o username (login), 'display_name' é o nome de exibição
         // NOTA: O banco Railway usa camelCase nas colunas
         const rawResult = await db.execute(
-          sql`SELECT id, openId, name, username, email, passwordHash, loginMethod, role, createdAt, updatedAt, lastSignedIn, display_name 
-              FROM users 
+          sql`SELECT id, openId, name, email, passwordHash, loginMethod, role, createdAt, updatedAt, lastSignedIn, display_name
+              FROM users
               WHERE name = ${username}
               LIMIT 1`
         );
