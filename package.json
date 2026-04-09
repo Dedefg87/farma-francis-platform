@@ -99,7 +99,8 @@
     "vaul": "^1.1.2",
     "wouter": "^3.7.1",
     "xlsx": "^0.18.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "drizzle-kit": "^0.31.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.1",
@@ -124,7 +125,7 @@
     "add": "^2.0.6",
     "autoprefixer": "^10.4.20",
     "better-sqlite3": "^12.6.2",
-    "drizzle-kit": "^0.31.4",
+
     "esbuild": "^0.25.0",
     "fdir": "^6.5.0",
     "jsdom": "^28.1.0",
