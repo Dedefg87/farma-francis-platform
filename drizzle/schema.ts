@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   date,
+  datetime,
   decimal,
   int,
   json,
