@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Keyboard, Search, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
+import superjson from "superjson";
 import { toast } from "sonner";
 
 interface NewConversationModalProps {
@@ -116,12 +118,31 @@ export default function NewConversationModal({
 
     // Buscar customer primeiro (necessário para customerId)
     try {
-      const searchResults = await trpc.customers.search.useQuery(
-        { query: finalPhone },
-        { enabled: false }
-      ).refetch();
+      // Criar cliente tRPC diretamente para evitar hooks fora do contexto React
+      const trpcClient = createTRPCProxyClient({
+        links: [
+          httpBatchLink({
+            url: "/api/trpc",
+            transformer: superjson,
+            headers() {
+              const token = localStorage.getItem("authToken");
+              return token
+                ? { Authorization: `Bearer ${token}` }
+                : {};
+            },
+            fetch(input, init) {
+              return fetch(input, {
+                ...init,
+                credentials: "include",
+              });
+            },
+          }),
+        ],
+      });
 
-      const customer = searchResults.data?.find(
+      const searchResults = await trpcClient.customers.search.query({ query: finalPhone });
+
+      const customer = searchResults?.find(
         c => c.phone === finalPhone || c.email === finalPhone || c.fullName.toLowerCase().includes(finalPhone.toLowerCase())
       );
 
