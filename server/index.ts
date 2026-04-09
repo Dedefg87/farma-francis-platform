@@ -8,6 +8,7 @@ import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
 import createSSERouter from "./routers-sse";
+import webhooksRouter from "./webhooks";
 import cookieParser from "cookie-parser";
 
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
@@ -56,6 +57,9 @@ async function startServer() {
 
   // SSE endpoint para notificações em tempo real
   app.use("/api/events", createSSERouter());
+
+  // Webhooks para WhatsApp, Instagram e Evolution API
+  app.use("/api/webhooks", webhooksRouter);
 
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
