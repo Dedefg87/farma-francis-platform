@@ -25,6 +25,28 @@ async function startServer() {
     console.log("[Migrations] Applying...");
     await applySqlMigrations();
     console.log("[Migrations] Applied successfully");
+
+    // Ensure critical tables exist (safety net)
+    try {
+      const { sql } = await import("drizzle-orm");
+      await db.execute(sql`CREATE TABLE IF NOT EXISTS internal_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conversation_id INT NOT NULL,
+        sender_id INT NOT NULL,
+        recipient_id INT NOT NULL,
+        content TEXT NOT NULL,
+        read_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+      )`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_internal_messages_conversation ON internal_messages(conversation_id)`);
+      await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_internal_messages_recipient ON internal_messages(recipient_id, read_at)`);
+      console.log("[DB] ✅ internal_messages table ensured");
+    } catch (tableErr: any) {
+      console.warn("[DB] ⚠️ Could not create internal_messages:", tableErr.message);
+    }
   } catch (error) {
     console.error("[Startup Error]", error);
     throw error;
