@@ -23,12 +23,13 @@ export const authRouter = router({
 
         if (!db) throw new Error("Database unavailable");
 
-        // Buscar usuário pelo username (campo 'name' na tabela users)
-        // NOTA: O banco Railway usa camelCase nas colunas (openId, passwordHash, etc.)
+        // Buscar usuário pelo username OU name (case-insensitive)
+        // Campo 'username' é o login name, 'name' é o display name
+        // NOTA: O banco Railway usa camelCase nas colunas
         const rawResult = await db.execute(
-          sql`SELECT id, openId, name, email, passwordHash, loginMethod, role, createdAt, updatedAt, lastSignedIn, display_name 
+          sql`SELECT id, openId, name, username, email, passwordHash, loginMethod, role, createdAt, updatedAt, lastSignedIn, display_name 
               FROM users 
-              WHERE name = ${username} 
+              WHERE (username = ${username} OR name = ${username})
               LIMIT 1`
         );
         const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
@@ -65,8 +66,8 @@ export const authRouter = router({
         const userForToken = {
           id: safeUser.id,
           name: safeUser.name,
-          username: safeUser.name,
-          displayName: safeUser.displayName ?? safeUser.display_name ?? safeUser.name,
+          username: safeUser.username ?? safeUser.name,
+          displayName: safeUser.displayName ?? safeUser.display_name ?? safeUser.username ?? safeUser.name,
           email: safeUser.email,
           role: safeUser.role,
         };
