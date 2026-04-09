@@ -8,6 +8,7 @@ import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
 import createSSERouter from "./routers-sse";
+import cookieParser from "cookie-parser";
 
 const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -22,6 +23,7 @@ async function startServer() {
 
   const app = express();
   app.use(express.json());
+  app.use(cookieParser());
 
   const publicPath = path.join(__dirname, "../dist/public");
   app.use(express.static(publicPath));

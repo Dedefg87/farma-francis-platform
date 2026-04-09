@@ -23,11 +23,12 @@ export const authRouter = router({
 
         if (!db) throw new Error("Database unavailable");
 
-        // Buscar usuário pelo username (campo 'name' na tabela users) — raw SQL para evitar bind em LIMIT
+        // Login: campo 'name' é o username (login), 'display_name' é o nome de exibição
+        // NOTA: O banco Railway usa camelCase nas colunas
         const rawResult = await db.execute(
-          sql`SELECT id, open_id, name, email, password_hash, login_method, role, created_at, updated_at, last_signed_in, display_name 
+          sql`SELECT id, openId, name, username, email, passwordHash, loginMethod, role, createdAt, updatedAt, lastSignedIn, display_name 
               FROM users 
-              WHERE name = ${username} 
+              WHERE name = ${username}
               LIMIT 1`
         );
         const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
@@ -39,8 +40,7 @@ export const authRouter = router({
 
         const user = usersList[0];
 
-        // ❌ BUG: raw mode retorna snake_case (password_hash), não passwordHash
-        // Corrigido: fallback para ambos os formatos
+        // Fallback: raw mode pode retornar camelCase ou snake_case dependendo do driver
         const passwordHash = (user as any).passwordHash ?? (user as any).password_hash;
         if (!passwordHash) {
           console.error("[auth] password_hash missing from user row:", user);
@@ -64,9 +64,8 @@ export const authRouter = router({
         const safeUser: any = user;
         const userForToken = {
           id: safeUser.id,
-          name: safeUser.name,
-          username: safeUser.name,
-          displayName: safeUser.displayName ?? safeUser.display_name ?? safeUser.name,
+          name: safeUser.display_name ?? safeUser.name,  // display_name é o nome real (atendimento)
+          username: safeUser.name,                        // name é o login
           email: safeUser.email,
           role: safeUser.role,
         };

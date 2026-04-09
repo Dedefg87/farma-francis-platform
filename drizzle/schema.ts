@@ -26,15 +26,16 @@ export * from "./schema_executions";
  */
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
-  openId: varchar("open_id", { length: 64 }).notNull().unique(),
+  openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
+  displayName: varchar("display_name", { length: 255 }),
   email: varchar("email", { length: 320 }),
-  passwordHash: varchar("password_hash", { length: 255 }),
-  loginMethod: varchar("login_method", { length: 64 }),
+  passwordHash: varchar("passwordHash", { length: 255 }),
+  loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("last_signed_in").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;

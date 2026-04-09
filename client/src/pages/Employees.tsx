@@ -37,7 +37,13 @@ import { toast } from "sonner";
 
 export default function Employees() {
   const { user } = useAuth();
-  const { data: employees = [], isLoading } = trpc.employees.list.useQuery();
+  const { data, isLoading } = trpc.employees.list.useQuery();
+  // Adaptar estrutura plana do backend para o formato esperado pelo frontend
+  const employees = (data?.employees ?? []).map((emp: any) => ({
+    ...emp,
+    user: { id: emp.userId, name: emp.displayName, role: emp.role },
+    employee: { status: emp.status, department: emp.department, position: emp.position, cpf: emp.cpf, phone: emp.phone },
+  }));
 
   if (user && user.role !== 'admin') {
     return (
