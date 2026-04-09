@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { protectedProcedure, adminProcedure, router } from './_core/trpc.js';
 import { getDb } from './db.js';
 import { users as dbUsers, employees as dbEmployees } from '../drizzle/schema.js';
-import { eq, or, like, desc, leftJoin } from 'drizzle-orm';
+import { eq, or, like, desc, leftJoin, sql } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 
 export const employeesRouter = router({
