@@ -1383,7 +1383,6 @@ async function processEvolutionWebhook(body: any) {
               mediaUrl: mediaUrl || existing.mediaUrl,
               mimeType: mimeType || existing.mimeType,
               caption: caption || existing.caption,
-              updatedAt: new Date(),
             })
             .where(eq(receivedMessages.id, existing.id));
           console.log(`[Evolution Webhook] Updated existing message ${messageId}`);

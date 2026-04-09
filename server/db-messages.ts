@@ -556,17 +556,21 @@ export async function ingestInboundConversationMessage(message: {
         .where(eq(integrationSettings.integrationType, "evolution_api"))
         .limit(1);
       
-      if (configRecord?.settings) {
-        const settings = JSON.parse(configRecord.settings as string);
-        const instance = settings.instances?.find((i: any) => i.name === "Meu") || settings.instances?.[0];
+      if (configRecord?.config) {
+        const configData = typeof configRecord.config === "string"
+          ? JSON.parse(configRecord.config as string)
+          : configRecord.config;
+        const apiUrl = (configData.apiUrl as string)?.replace(/\/$/, "");
+        const apiKey = (configData.apiKey as string) || (configData.accessToken as string);
+        const instanceName = configData.instanceName as string;
 
-        if (instance?.url && instance?.apiKey) {
-          const downloadUrl = `${instance.url}/message/download/${message.externalId}`;
+        if (apiUrl && apiKey && instanceName) {
+          const downloadUrl = `${apiUrl}/message/download/${instanceName}/${message.externalId}`;
           console.log("[S3] Calling Evolution download endpoint:", downloadUrl);
           
           const response = await fetch(downloadUrl, {
             headers: {
-              "apikey": instance.apiKey,
+              "apikey": apiKey,
             },
             signal: AbortSignal.timeout(15000),
           });
