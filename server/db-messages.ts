@@ -602,7 +602,12 @@ export async function ingestInboundConversationMessage(message: {
     }
   }
 
-  console.log("[Ingest] ✅ Message ingested successfully:", { conversationId, messageDbId });
+  console.log("[Ingest] ✅ Message ingested successfully:", {
+    conversationId,
+    messageDbId,
+    content: buildInboundContent(message).substring(0, 50),
+    assignedUserId
+  });
 
   // 10. Notify connected agents via SSE (real-time update)
   const messageContent = message.messageText || message.caption || "[Mídia]";

@@ -9,10 +9,20 @@ export const messagesRouter = router({
   list: protectedProcedure
     .input(z.object({ conversation_id: z.number() }))
     .query(async ({ input }) => {
-      return await conversationMessages
+      console.log(`[messages.list] 🔍 Fetching messages for conversation_id: ${input.conversation_id}`);
+
+      const messages = await conversationMessages
         .select()
         .where(eq(conversationMessages.conversationId, input.conversation_id))
         .orderBy(conversationMessages.createdAt);
+
+      console.log(`[messages.list] 📊 Found ${messages.length} messages for conversation ${input.conversation_id}`);
+      if (messages.length > 0) {
+        console.log(`[messages.list] 🕐 Latest message: ${messages[messages.length - 1].content?.substring(0, 50)}...`);
+        console.log(`[messages.list] 🆔 Latest message ID: ${messages[messages.length - 1].id}`);
+      }
+
+      return messages;
     }),
 
   send: protectedProcedure
