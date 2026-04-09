@@ -24,24 +24,30 @@ export const customersRouter = {
     )
     .mutation(async ({ input }) => {
       const { query } = input;
-      // Buscar clientes por nome, telefone ou email
-      const searchTerm = `%${query}%`;
-      const results = await db
-        .select()
-        .from(customers)
-        .where(
-          sql`${customers.name} LIKE ${searchTerm}
-              OR ${customers.phone} LIKE ${searchTerm}
-              OR ${customers.email} LIKE ${searchTerm}`
-        )
-        .limit(50);
 
-      return results.map((c) => ({
-        id: String(c.id),
-        name: c.name,
-        phone: c.phone,
-        email: c.email,
-      }));
+      try {
+        // DEBUG: Log da query recebida
+        console.log('[customers.search] Searching for:', query);
+
+        // Buscar apenas por telefone primeiro (mais simples)
+        const results = await db
+          .select()
+          .from(customers)
+          .where(sql`${customers.phone} LIKE ${`%${query}%`}`)
+          .limit(10);
+
+        console.log('[customers.search] Found results:', results.length);
+
+        return results.map((c) => ({
+          id: String(c.id),
+          name: c.name,
+          phone: c.phone,
+          email: c.email,
+        }));
+      } catch (error) {
+        console.error('[customers.search] Database error:', error);
+        throw new Error('Erro interno na busca de clientes');
+      }
     }),
 
   // GET /api/trpc/customers.get
