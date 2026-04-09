@@ -4,6 +4,8 @@ import { sseManager, type SseEvent } from "./_core/sse";
 import { db } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import jwt from "jsonwebtoken";
+import { JWT_SECRET } from "./_core/env";
 
 export default function createSSERouter(): Router {
   const router = Router();
@@ -17,8 +19,6 @@ export default function createSSERouter(): Router {
       const authHeader = req.headers.authorization || req.headers.Authorization;
       if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.slice(7); // Remove "Bearer "
-        const jwt = require("jsonwebtoken");
-        const { JWT_SECRET } = require("./_core/env");
 
         try {
           const decoded = jwt.verify(token, JWT_SECRET) as any;
@@ -47,9 +47,6 @@ export default function createSSERouter(): Router {
       if (!userId) {
         const tokenCookie = req.cookies?.authToken;
         if (tokenCookie) {
-          const jwt = require("jsonwebtoken");
-          const { JWT_SECRET } = require("./_core/env");
-
           try {
             const decoded = jwt.verify(tokenCookie, JWT_SECRET) as any;
             userId = decoded.id;
