@@ -32,21 +32,21 @@ class SseManager extends EventEmitter {
   emitToUser(userId: string, event: SseEvent): void {
     const clientSet = this.clients.get(userId);
     console.log(`[SSE] emitToUser called for userId=${userId}, connected=${!!clientSet}, clients=${clientSet?.size || 0}`);
-    
+
     if (!clientSet) {
       console.log(`[SSE] No clients connected for userId=${userId}. Connected users: ${this.getConnectedUsers().join(", ")}`);
       return;
     }
 
     const data = `data: ${JSON.stringify(event)}\n\n`;
-    console.log(`[SSE] Sending event to ${clientSet.size} client(s) for userId=${userId}:`, event.type);
-    
+    console.log(`[SSE] 📤 SENDING EVENT to ${clientSet.size} client(s) for userId=${userId}:`, event);
+
     for (const res of clientSet) {
       try {
         res.write(data);
-        console.log(`[SSE] Event sent successfully to client for userId=${userId}`);
+        console.log(`[SSE] ✅ Event sent successfully to client for userId=${userId}`);
       } catch (e) {
-        console.error(`[SSE] Error sending to client for userId=${userId}:`, e);
+        console.error(`[SSE] ❌ Error sending to client for userId=${userId}:`, e);
         clientSet.delete(res);
       }
     }

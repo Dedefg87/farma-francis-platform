@@ -219,16 +219,20 @@ export default function AgentMessages() {
 
         eventSource.onopen = () => {
           console.log("[AgentSSE] Connected successfully");
+          console.log("[AgentSSE] User ID:", user?.id);
+          console.log("[AgentSSE] ReadyState:", eventSource.readyState);
           setIsConnected(true);
           reconnectAttempt = 0;
         };
 
         eventSource.onmessage = event => {
           try {
+            console.log("[AgentSSE] Raw event received:", event.data);
             const data = JSON.parse(event.data);
-            console.log("[AgentSSE] Event received:", data);
+            console.log("[AgentSSE] Parsed event:", data);
 
             if (data.type === "message:new" || data.type === "MESSAGE_NEW") {
+              console.log("[AgentSSE] 🎯 MESSAGE EVENT - refreshing data");
               // Play notification sound if not muted
               if (!notificationsMuted) {
                 playNotificationSound();
@@ -237,9 +241,12 @@ export default function AgentMessages() {
               // Invalidate queries to refresh data
               queryClient.invalidateQueries({ queryKey: ["conversations"] });
               queryClient.invalidateQueries({ queryKey: ["messages"] });
+              console.log("[AgentSSE] Queries invalidated");
+            } else {
+              console.log("[AgentSSE] 📝 Other event type:", data.type);
             }
           } catch (e) {
-            console.error("[AgentSSE] Parse error:", e);
+            console.error("[AgentSSE] Parse error:", e, "Raw data:", event.data);
           }
         };
 
