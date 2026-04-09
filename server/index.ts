@@ -3,7 +3,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { getDb } from "./db";
 import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
-import { fileURLToPath } from "url";
+// __dirname is natively available in CJS (esbuild --format=cjs)
 import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
@@ -11,7 +11,8 @@ import createSSERouter from "./routers-sse";
 import webhooksRouter from "./webhooks";
 import cookieParser from "cookie-parser";
 
-const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
+// In CJS (esbuild --format=cjs), __dirname is provided by the Node.js module wrapper
+// No need to define it via import.meta.url
 
 async function startServer() {
   console.log("[Server] Starting... (PID:", process.pid, ")");
