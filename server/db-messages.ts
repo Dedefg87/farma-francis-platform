@@ -538,7 +538,8 @@ export async function ingestInboundConversationMessage(message: {
     createdAt: now,
   });
 
-  const messageDbId = insertResult.insertId as number;
+  const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
+  const messageDbId = Number(rawMessageId) || undefined;
 
   // 9. If it's a WhatsApp media message with a temporary URL, trigger Evolution download to upload to R2
   if (
