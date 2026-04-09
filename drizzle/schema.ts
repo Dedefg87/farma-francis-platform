@@ -861,12 +861,11 @@ export const agentPauses = mysqlTable("agent_pauses", {
   agentId: int("agent_id")
     .references(() => users.id)
     .notNull(),
-  reason: text("reason"),
-  pauseType: varchar("pause_type", { length: 32 }),
+  pauseType: mysqlEnum("pause_type", ["lunch", "snack", "bathroom", "other"]).notNull(),
   durationMinutes: int("duration_minutes"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
-  status: varchar("status", { length: 16 }).default("active").notNull(),
+  status: mysqlEnum("status", ["active", "completed"]).default("active").notNull(),
 });
 
 export type AgentPause = typeof agentPauses.$inferSelect;
