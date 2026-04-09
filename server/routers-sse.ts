@@ -42,7 +42,7 @@ export default function createSSERouter(): Router {
     }
   };
 
-  router.get("/events", sseAuth, (req: any, res: any) => {
+  router.get("/", sseAuth, (req: any, res: any) => {
     const userId = req.userId;
 
     // Set headers for SSE
