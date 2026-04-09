@@ -28,6 +28,7 @@ export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("open_id", { length: 64 }).notNull().unique(),
   name: text("name"),
+  displayName: varchar("display_name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   passwordHash: varchar("password_hash", { length: 255 }),
   loginMethod: varchar("login_method", { length: 64 }),
