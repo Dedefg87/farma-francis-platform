@@ -1,3 +1,6 @@
+// 🚨 DEPLOY FORCE - VERSION 2 🚨
+// Corrigido: durationMinutes (não duration_minutes)
+// Esta linha garante que o deploy seja forçado
 import { getDb } from '../db';
 import { agentPauses } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -23,7 +26,8 @@ export async function checkAndFinishExpiredPauses() {
       console.error('[PauseAutoFinisher] Raw client not available');
       return { finishedCount: 0, error: 'Raw client not available' };
     }
-    // CORREÇÃO APLICADA: Usar durationMinutes ao invés de duration_minutes
+    // 🚨 CORREÇÃO FORÇADA - DEPLOY VERSION 2 🚨
+    // Campo durationMinutes corrigido (era duration_minutes)
     const [rawPauses] = await client.execute(
       "SELECT id, agent_id, status, started_at, ended_at, durationMinutes FROM agent_pauses WHERE status = ?",
       ['active']
