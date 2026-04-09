@@ -15,12 +15,19 @@ const __dirname = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 
 async function startServer() {
   console.log("[Server] Starting... (PID:", process.pid, ")");
-  
-  const db = await getDb();
-  console.log("[DB] Connected");
 
-  await applySqlMigrations();
-  console.log("[Migrations] Applied");
+  try {
+    console.log("[DB] Connecting...");
+    const db = await getDb();
+    console.log("[DB] Connected successfully");
+
+    console.log("[Migrations] Applying...");
+    await applySqlMigrations();
+    console.log("[Migrations] Applied successfully");
+  } catch (error) {
+    console.error("[Startup Error]", error);
+    throw error;
+  }
 
   const app = express();
   // Aumentar limite do body-parser para 50MB (padrão é 100kb)
@@ -76,9 +83,16 @@ async function startServer() {
   });
 
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log("[Server] Listening on port", PORT);
+  console.log(`[Server] Attempting to listen on port ${PORT}...`);
+
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    console.log("[Server] ✅ Successfully listening on port", PORT);
     console.log("[Server] Environment:", process.env.NODE_ENV || "development");
+    console.log("[Server] Health check endpoint: /api/health");
+  });
+
+  server.on('error', (error) => {
+    console.error("[Server] ❌ Failed to start server:", error);
   });
 }
 
