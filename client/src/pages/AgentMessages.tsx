@@ -231,10 +231,16 @@ export default function AgentMessages() {
             const data = JSON.parse(event.data);
             console.log("[AgentSSE] Parsed event:", data);
 
-            if (data.type === "message:new" || data.type === "MESSAGE_NEW") {
-              console.log("[AgentSSE] 🎯 MESSAGE EVENT - refreshing data");
-              // Play notification sound if not muted
-              if (!notificationsMuted) {
+            if (
+              data.type === "message:new" ||
+              data.type === "MESSAGE_NEW" ||
+              data.type === "conversation:update" ||
+              data.type === "conversation:new" ||
+              data.type === "conversation:read"
+            ) {
+              console.log("[AgentSSE] 🎯 EVENT - refreshing data:", data.type);
+              // Play notification sound if not muted (only for new messages)
+              if (!notificationsMuted && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
                 playNotificationSound();
               }
 
@@ -252,9 +258,19 @@ export default function AgentMessages() {
 
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
+<<<<<<< HEAD
               console.log("[AgentSSE] Queries invalidated");
             } else {
               console.log("[AgentSSE] 📝 Other event type:", data.type);
+=======
+
+              // For conversation:update, also force-refetch current messages
+              if (data.type === "conversation:update" && data.data?.conversationId) {
+                queryClient.invalidateQueries({
+                  queryKey: ["messages", data.data.conversationId],
+                });
+              }
+>>>>>>> 65a72cd (fix(agent): SSE handler agora trata conversation:update/new/read - mensagens aparecem na tela)
             }
           } catch (e) {
             console.error("[AgentSSE] Parse error:", e, "Raw data:", event.data);
@@ -529,7 +545,7 @@ export default function AgentMessages() {
       (old: any) => {
         if (!old) return old;
         return old.map((c: any) =>
-          c.id === conversationId ? { ...c, unreadCount: 0 } : c
+          Number(c.id) === conversationId ? { ...c, unreadCount: 0 } : c
         );
       }
     );
@@ -633,7 +649,7 @@ export default function AgentMessages() {
   useEffect(() => {
     if (!selectedConversationId || !conversations) return;
 
-    const activeConversation = conversations.find(c => c.id === selectedConversationId);
+    const activeConversation = conversations.find(c => Number(c.id) === selectedConversationId);
     
     // Se a conversa ativa tem mensagens não lidas, marcar como lida
     if (activeConversation && activeConversation.unreadCount > 0) {
@@ -645,7 +661,7 @@ export default function AgentMessages() {
         (old: any) => {
           if (!old) return old;
           return old.map((c: any) =>
-            c.id === selectedConversationId ? { ...c, unreadCount: 0 } : c
+            Number(c.id) === selectedConversationId ? { ...c, unreadCount: 0 } : c
           );
         }
       );
@@ -746,7 +762,7 @@ export default function AgentMessages() {
   };
 
   const selectedConversation = conversations?.find(
-    c => c.id === selectedConversationId
+    c => Number(c.id) === selectedConversationId
   );
 
   // Ensure we don't leak customerId across conversations
@@ -955,9 +971,9 @@ export default function AgentMessages() {
               filteredConversations.map(conv => (
                 <button
                   key={conv.id}
-                  onClick={() => handleSelectConversation(conv.id)}
+                  onClick={() => handleSelectConversation(Number(conv.id))}
                   className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
-                    selectedConversationId === conv.id
+                    selectedConversationId === Number(conv.id)
                       ? "bg-blue-50 border-l-4 border-l-blue-500"
                       : conv.unreadCount > 0 
                         ? "bg-orange-50 border-l-4 border-l-orange-400"

@@ -66,6 +66,12 @@ export const conversationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      // Admins veem todas; agentes comuns veem só as suas
+      const isUser = (ctx as any)?.user?.role === 'user';
+      const conditions = isUser
+        ? eq(conversations.assignedTo, ctx.user.id)
+        : undefined;
+
       const rows = await db
         .select({
           id: conversations.id,
@@ -92,7 +98,7 @@ export const conversationsRouter = router({
         })
         .from(conversations)
         .leftJoin(customers, eq(conversations.customerId, customers.id))
-        .where(eq(conversations.assignedTo, ctx.user.id))
+        .where(conditions)
         .orderBy(desc(conversations.lastMessageAt));
 
       return rows.map(mapConversation);
@@ -106,6 +112,15 @@ export const conversationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      // Admins veem todas as conversas abertas (incluindo sem agente); agentes comuns veem só as suas
+      const isUser = (ctx as any)?.user?.role === 'user';
+      const conditions = isUser
+        ? and(
+            eq(conversations.assignedTo, ctx.user.id),
+            inArray(conversations.status, ["open", "assigned"])
+          )
+        : inArray(conversations.status, ["open", "assigned"]);
+
       const rows = await db
         .select({
           id: conversations.id,
@@ -132,12 +147,7 @@ export const conversationsRouter = router({
         })
         .from(conversations)
         .leftJoin(customers, eq(conversations.customerId, customers.id))
-        .where(
-          and(
-            eq(conversations.assignedTo, ctx.user.id),
-            inArray(conversations.status, ["open", "assigned"])
-          )
-        )
+        .where(conditions)
         .orderBy(desc(conversations.lastMessageAt));
 
       return rows.map(mapConversation);
@@ -187,8 +197,9 @@ export const conversationsRouter = router({
       const row = rows[0];
       if (!row) return null;
 
-      // Garante que a conversa pertence ao agente (ou é pública no futuro)
-      if (row.assignedTo !== ctx.user.id) {
+      // Admins podem ver qualquer conversa; agentes só veem as suas
+      const isUser = (ctx as any)?.user?.role === 'user';
+      if (isUser && row.assignedTo !== ctx.user.id) {
         return null;
       }
 
