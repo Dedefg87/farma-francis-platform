@@ -69,6 +69,19 @@ async function startServer() {
   // Webhooks para WhatsApp, Instagram e Evolution API
   app.use("/api/webhooks", webhooksRouter);
 
+  // Debug: List all database tables
+  app.get("/api/debug/db-tables", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const [result] = await db.execute(sql`SHOW TABLES`);
+      const tables = (result as any[]).map((row: any) => Object.values(row)[0]);
+      res.json({ tables: tables.sort(), count: tables.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       const indexPath = path.join(__dirname, "../dist/public/index.html");
