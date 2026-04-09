@@ -208,7 +208,13 @@ export default function AgentMessages() {
 
     const connect = () => {
       try {
-        // withCredentials: true sends cookies automatically - no need to extract token manually
+        // Set JWT token in cookie for SSE authentication
+        const token = localStorage.getItem("authToken");
+        if (token) {
+          document.cookie = `authToken=${token}; path=/; secure; samesite=strict`;
+        }
+
+        // withCredentials: true sends cookies automatically
         eventSource = new EventSource("/api/events", { withCredentials: true });
 
         eventSource.onopen = () => {

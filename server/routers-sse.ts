@@ -8,40 +8,74 @@ import { eq } from "drizzle-orm";
 export default function createSSERouter(): Router {
   const router = Router();
 
-  // Middleware de autenticação SSE (JWT token do header Authorization)
+  // Middleware de autenticação SSE (suporta tanto JWT quanto cookies)
   const sseAuth = async (req: any, res: any, next: () => void) => {
     try {
-      // Tentar obter JWT token do header Authorization
+      let userId: number | null = null;
+
+      // Primeiro tentar JWT token do header Authorization
       const authHeader = req.headers.authorization || req.headers.Authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.slice(7); // Remove "Bearer "
+        const jwt = require("jsonwebtoken");
+        const { JWT_SECRET } = require("./_core/env");
+
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET) as any;
+          userId = decoded.id;
+        } catch (jwtError) {
+          console.log("[SSE Auth] JWT token invalid, trying cookies");
+        }
+      }
+
+      // Se não conseguiu com JWT, tentar cookie de sessão
+      if (!userId) {
+        const sessionId = req.cookies?.session;
+        if (sessionId) {
+          try {
+            const session = await getSession(sessionId);
+            if (session?.userId) {
+              userId = session.userId;
+            }
+          } catch (sessionError) {
+            console.log("[SSE Auth] Session invalid, trying localStorage token");
+          }
+        }
+      }
+
+      // Se ainda não conseguiu, tentar token do localStorage (via cookie especial)
+      if (!userId) {
+        const tokenCookie = req.cookies?.authToken;
+        if (tokenCookie) {
+          const jwt = require("jsonwebtoken");
+          const { JWT_SECRET } = require("./_core/env");
+
+          try {
+            const decoded = jwt.verify(tokenCookie, JWT_SECRET) as any;
+            userId = decoded.id;
+          } catch (tokenError) {
+            console.log("[SSE Auth] Auth token cookie invalid");
+          }
+        }
+      }
+
+      if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
 
-      const token = authHeader.slice(7); // Remove "Bearer "
-      const jwt = require("jsonwebtoken");
-      const { JWT_SECRET } = require("./_core/env");
-
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET) as any;
-        const userId = decoded.id;
-
-        // Buscar user para ter certeza que existe
-        const userRows = await db.select().from(users).where(eq(users.id, userId));
-        const user = userRows[0];
-        if (!user) {
-          res.status(401).json({ error: "User not found" });
-          return;
-        }
-
-        // Anexar userId ao request
-        (req as any).userId = user.id;
-        (req as any).user = user;
-        next();
-      } catch (jwtError) {
-        res.status(401).json({ error: "Invalid token" });
+      // Buscar user para ter certeza que existe
+      const userRows = await db.select().from(users).where(eq(users.id, userId));
+      const user = userRows[0];
+      if (!user) {
+        res.status(401).json({ error: "User not found" });
         return;
       }
+
+      // Anexar userId ao request
+      (req as any).userId = user.id;
+      (req as any).user = user;
+      next();
     } catch (error) {
       console.error("[SSE Auth] Error:", error);
       res.status(500).json({ error: "Authentication error" });
