@@ -602,6 +602,44 @@ export async function ingestInboundConversationMessage(message: {
   }
 
   console.log("[Ingest] ✅ Message ingested successfully:", { conversationId, messageDbId });
+
+  // 10. Notify connected agents via SSE (real-time update)
+  const messageContent = message.messageText || message.caption || "[Mídia]";
+  const sseMessage = {
+    type: EVENTS.MESSAGE_NEW,
+    data: {
+      conversationId,
+      message: {
+        id: messageDbId,
+        content: buildInboundContent(message),
+        senderType: "customer",
+        fileUrl: fileUrlToSave,
+        fileType: message.mimeType || null,
+        createdAt: now.toISOString(),
+      },
+    },
+    timestamp: Date.now(),
+  };
+
+  const sseConvUpdate = {
+    type: EVENTS.CONVERSATION_UPDATE,
+    data: {
+      conversationId,
+      lastMessageAt: now.toISOString(),
+      lastMessage: messageContent,
+    },
+    timestamp: Date.now(),
+  };
+
+  if (assignedUserId) {
+    sseManager.emitToUser(String(assignedUserId), sseMessage);
+    sseManager.emitToUser(String(assignedUserId), sseConvUpdate);
+  } else {
+    // No assigned agent — notify all connected users
+    sseManager.emitToAll(sseMessage);
+    sseManager.emitToAll(sseConvUpdate);
+  }
+
   return { conversationId, customerId: customer.id };
 }
 
