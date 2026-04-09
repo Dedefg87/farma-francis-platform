@@ -8,6 +8,20 @@
       "when": 1774546709104,
       "tag": "0000_living_dorian_gray",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1775750849281,
+      "tag": "0001_black_chameleon",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775751458118,
+      "tag": "0002_salty_tempest",
+      "breakpoints": true
     }
   ]
 }
