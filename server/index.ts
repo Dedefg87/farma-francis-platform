@@ -82,6 +82,20 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // Debug: Show columns for a table
+  app.get("/api/debug/db-columns/:table", async (req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const tableName = req.params.table.replace(/[^a-z_]/gi, "");
+      const [result] = await db.execute(sql.raw(`DESCRIBE ${tableName}`));
+      res.json({ table: tableName, columns: result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       const indexPath = path.join(__dirname, "../dist/public/index.html");
