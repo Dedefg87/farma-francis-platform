@@ -30,6 +30,9 @@ RUN npm install -g pnpm@10 && pnpm install --prod --no-frozen-lockfile
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
+# Copy Drizzle schema files needed for auto DB push on startup
+COPY --from=builder /app/drizzle.config.ts ./
+COPY --from=builder /app/drizzle ./drizzle
 # Note: public assets are inside dist/public (Vite output)
 # .env files are optional (handled by Railway variables)
 
