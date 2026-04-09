@@ -22,7 +22,9 @@ async function startServer() {
   console.log("[Migrations] Applied");
 
   const app = express();
-  app.use(express.json());
+  // Aumentar limite do body-parser para 50MB (padrão é 100kb)
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(cookieParser());
 
   const publicPath = path.join(__dirname, "../dist/public");
