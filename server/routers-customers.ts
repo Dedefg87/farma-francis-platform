@@ -4,6 +4,7 @@ import { db } from "../db";
 import { customers } from "../drizzle/schema";
 import { eq, like, sql } from "drizzle-orm";
 
+// 🚨 FORCE REBUILD - CUSTOMERS SEARCH FIXED 🚨
 export const customersRouter = {
   // GET /api/trpc/customers.search
   search: publicProcedure
@@ -26,7 +27,8 @@ export const customersRouter = {
       const { query } = input;
 
       try {
-        // DEBUG: Log da query recebida
+        // 🚨 FORCE REBUILD - VERSION 2 🚨
+        console.log('[customers.search] 🚨 FORCE REBUILD VERSION 2 🚨');
         console.log('[customers.search] Searching for:', query);
 
         // Busca mais simples possível - apenas retornar clientes existentes
