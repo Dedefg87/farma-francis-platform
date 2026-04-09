@@ -24,7 +24,7 @@ export async function checkAndFinishExpiredPauses() {
       return { finishedCount: 0, error: 'Raw client not available' };
     }
     const [rawPauses] = await client.execute(
-      "SELECT id, agent_id, status, started_at, ended_at, duration_minutes FROM agent_pauses WHERE status = ?",
+      "SELECT id, agent_id, status, started_at, ended_at, durationMinutes FROM agent_pauses WHERE status = ?",
       ['active']
     );
     const activePauses = (rawPauses as any[]).map(r => ({
@@ -33,7 +33,7 @@ export async function checkAndFinishExpiredPauses() {
       status: r.status,
       startedAt: r.started_at,
       endedAt: r.ended_at,
-      durationMinutes: r.duration_minutes,
+      durationMinutes: r.durationMinutes,
     }));
 
     let finishedCount = 0;

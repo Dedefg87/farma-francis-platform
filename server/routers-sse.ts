@@ -8,34 +8,40 @@ import { eq } from "drizzle-orm";
 export default function createSSERouter(): Router {
   const router = Router();
 
-  // Middleware de autenticação SSE (baseado em session cookie)
+  // Middleware de autenticação SSE (JWT token do header Authorization)
   const sseAuth = async (req: any, res: any, next: () => void) => {
     try {
-      // Tentar obter session ID do cookie
-      const sessionId = req.cookies?.session;
-      if (!sessionId) {
+      // Tentar obter JWT token do header Authorization
+      const authHeader = req.headers.authorization || req.headers.Authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
 
-      const session = await getSession(sessionId);
-      if (!session?.userId) {
-        res.status(401).json({ error: "Invalid session" });
+      const token = authHeader.slice(7); // Remove "Bearer "
+      const jwt = require("jsonwebtoken");
+      const { JWT_SECRET } = require("./_core/env");
+
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const userId = decoded.id;
+
+        // Buscar user para ter certeza que existe
+        const userRows = await db.select().from(users).where(eq(users.id, userId));
+        const user = userRows[0];
+        if (!user) {
+          res.status(401).json({ error: "User not found" });
+          return;
+        }
+
+        // Anexar userId ao request
+        (req as any).userId = user.id;
+        (req as any).user = user;
+        next();
+      } catch (jwtError) {
+        res.status(401).json({ error: "Invalid token" });
         return;
       }
-
-      // Buscar user para ter certeza que existe
-      const userRows = await db.select().from(users).where(eq(users.id, session.userId));
-      const user = userRows[0];
-      if (!user) {
-        res.status(401).json({ error: "User not found" });
-        return;
-      }
-
-      // Anexar userId ao request
-      (req as any).userId = user.id;
-      (req as any).user = user;
-      next();
     } catch (error) {
       console.error("[SSE Auth] Error:", error);
       res.status(500).json({ error: "Authentication error" });
