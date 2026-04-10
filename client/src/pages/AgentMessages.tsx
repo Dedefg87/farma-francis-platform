@@ -245,7 +245,7 @@ export default function AgentMessages() {
               }
 
               // Invalidate queries to refresh data
-              queryClient.invalidateQueries({ queryKey: ["conversations"] });
+              queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
 
               // Invalidate specific message query for this conversation
               const conversationId = data.data?.conversationId;
@@ -522,6 +522,7 @@ export default function AgentMessages() {
       toast.success("Conversa encerrada");
       setShowCloseDialog(false);
       setSelectedConversationId(null);
+      queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
       refetchConversations();
     },
     onError: error => {
