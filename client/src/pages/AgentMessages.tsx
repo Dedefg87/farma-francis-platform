@@ -266,7 +266,6 @@ export default function AgentMessages() {
                   queryKey: ["messages", data.data.conversationId],
                 });
               }
->>>>>>> 65a72cd (fix(agent): SSE handler agora trata conversation:update/new/read - mensagens aparecem na tela)
             }
           } catch (e) {
             console.error("[AgentSSE] Parse error:", e, "Raw data:", event.data);
