@@ -247,7 +247,7 @@ export default function AgentMessages() {
               }
 
               // Invalidate queries to refresh data
-              queryClient.invalidateQueries({ queryKey: ["conversations"] });
+              queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
 
               // Invalidate specific message query for this conversation
               const conversationId = data.data?.conversationId;
@@ -260,14 +260,15 @@ export default function AgentMessages() {
 
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
+              
+              console.log("[AgentSSE] Queries invalidated");
+
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
                 queryClient.invalidateQueries({
                   queryKey: ["messages", data.data.conversationId],
                 });
               }
-
-              console.log("[AgentSSE] Queries invalidated");
             } else {
               console.log("[AgentSSE] 📝 Other event type:", data.type);
             }
@@ -361,7 +362,7 @@ export default function AgentMessages() {
     isLoading: loadingConversations,
     refetch: refetchConversations,
   } = trpc.conversations.list.useQuery(
-    { status: "assigned" },
+    {},
     {
       enabled: hasSession(),
       refetchInterval: 1000, // Atualizar a cada 1 segundo
@@ -526,6 +527,7 @@ export default function AgentMessages() {
       toast.success("Conversa encerrada");
       setShowCloseDialog(false);
       setSelectedConversationId(null);
+      queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
       refetchConversations();
     },
     onError: error => {
@@ -1544,7 +1546,7 @@ export default function AgentMessages() {
                     reason: closeReason as any,
                   });
                 }}
-                disabled={closeConversationMutation.isPending}
+                disabled={closeConversationMutation.isPending || !closeReason}
               >
                 Encerrar
               </Button>

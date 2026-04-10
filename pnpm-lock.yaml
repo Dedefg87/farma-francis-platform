@@ -336,9 +336,6 @@ importers:
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
-      fdir:
-        specifier: ^6.5.0
-        version: 6.5.0(picomatch@4.0.3)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0
