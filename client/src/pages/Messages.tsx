@@ -23,6 +23,21 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   MessageSquare,
@@ -41,6 +56,7 @@ import {
   Lightbulb,
   ChevronRight,
   Building,
+  CheckCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -67,6 +83,8 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState<"venda" | "orcamento" | "conversa_anterior" | "engano" | "">("");
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -211,6 +229,26 @@ export default function Messages() {
       toast.error(`Erro ao enviar mensagem interna: ${error.message}`);
     },
   });
+
+  const closeConversationMutation = trpc.conversations.close.useMutation({
+    onSuccess: () => {
+      toast.success("Conversa encerrada com sucesso!");
+      setIsCloseDialogOpen(false);
+      setCloseReason("");
+      setSelectedConversation(null);
+    },
+    onError: error => {
+      toast.error(`Erro ao encerrar conversa: ${error.message}`);
+    },
+  });
+
+  const handleCloseConversation = () => {
+    if (!selectedConversation || !closeReason) return;
+    closeConversationMutation.mutate({
+      conversationId: selectedConversation,
+      reason: closeReason as "venda" | "orcamento" | "conversa_anterior" | "engano",
+    });
+  };
 
   const handleSendMessage = async () => {
     if (!selectedConversation) {
@@ -551,7 +589,16 @@ export default function Messages() {
                           )}
                         </div>
                       </div>
-                      <Sheet
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setIsCloseDialogOpen(true)}
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          Encerrar
+                        </Button>
+                        <Sheet
                         open={isProfileOpen}
                         onOpenChange={setIsProfileOpen}
                       >
@@ -763,6 +810,58 @@ export default function Messages() {
                         </SheetContent>
                       </Sheet>
                     </div>
+
+                  {/* Dialog: Encerrar Conversa */}
+                  <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
+                    <DialogContent className="sm:max-w-[425px]">
+                      <DialogHeader>
+                        <DialogTitle>Encerrar Conversa</DialogTitle>
+                        <DialogDescription>
+                          Selecione o motivo para encerrar esta conversa. Esta ação não pode ser desfeita.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="py-4">
+                        <Label htmlFor="close-reason" className="text-sm font-medium mb-2 block">
+                          Motivo do encerramento
+                        </Label>
+                        <Select
+                          value={closeReason}
+                          onValueChange={(v) => setCloseReason(v as any)}
+                        >
+                          <SelectTrigger id="close-reason">
+                            <SelectValue placeholder="Selecione um motivo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="venda">✅ Venda realizada</SelectItem>
+                            <SelectItem value="orcamento">📋 Orçamento enviado</SelectItem>
+                            <SelectItem value="conversa_anterior">🔄 Conversa anterior</SelectItem>
+                            <SelectItem value="engano">❌ Engano / Spam</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => { setIsCloseDialogOpen(false); setCloseReason(""); }}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleCloseConversation}
+                          disabled={!closeReason || closeConversationMutation.isPending}
+                        >
+                          {closeConversationMutation.isPending ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 mr-2" />
+                          )}
+                          Encerrar Conversa
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                   </CardHeader>
 
                   {/* Tabs */}
