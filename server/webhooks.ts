@@ -564,7 +564,7 @@ async function processEvolutionWebhookAsync(req: Request) {
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
     // Aceitar variações de eventos de mensagem
-    const allowedEvents = ["messages_upsert"];
+    const allowedEvents = ["messages_upsert", "messages_update"];
     
     // Ignorar TUDO que não for mensagem nova
     if (!allowedEvents.includes(normalizedEvent)) {

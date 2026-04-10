@@ -42,12 +42,13 @@ import {
   ChevronRight,
   Building,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import { SoundSelector } from "@/components/SoundSelector";
+import { renderContentWithLinks } from "@/utils/text-format";
+import { ImageLightbox } from "@/components/ImageLightbox";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -67,6 +68,32 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [imageLightbox, setImageLightbox] = useState<{
+    open: boolean;
+    initialIndex: number;
+  }>({ open: false, initialIndex: 0 });
+
+  function getImageSrc(
+    url: string | null | undefined,
+    messageId?: number
+  ): string {
+    if (!url) return "";
+
+    // Se já for data URL, retornar direto
+    if (url.startsWith?.("data:")) {
+      return url;
+    }
+
+    // Se for URL absoluta (http/https), usar como está
+    if (url.startsWith?.("http")) {
+      return url;
+    }
+
+    // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
+    const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+    const cleanUrl = url.replace(/^\//, "");
+    return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
+  }
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -80,6 +107,29 @@ export default function Messages() {
       { conversation_id: selectedConversation || 0 },
       { enabled: selectedConversation !== null }
     );
+
+  // Lista de imagens para o lightbox
+  const imageItems = useMemo(() => {
+    if (!messages) return [];
+    return messages
+      .filter(msg => msg.fileUrl && msg.fileType?.startsWith?.("image/"))
+      .map(msg => ({
+        id: msg.id,
+        fileUrl: msg.fileUrl!,
+        fileName: msg.fileName,
+      }));
+  }, [messages]);
+
+  // Função para abrir lightbox de imagens
+  const handleImageClick = useCallback(
+    (messageId: number) => {
+      const index = imageItems.findIndex((img) => img.id === messageId);
+      if (index >= 0) {
+        setImageLightbox({ open: true, initialIndex: index });
+      }
+    },
+    [imageItems]
+  );
 
   // Buscar mensagens internas da conversa selecionada
   const { data: internalMessages, isLoading: loadingInternalMessages } =
@@ -342,6 +392,7 @@ export default function Messages() {
   };
 
   return (
+    <>
     <FarmaDashboardLayout>
       <div className="space-y-6">
         {/* Header */}
@@ -1258,5 +1309,12 @@ export default function Messages() {
         </Card>
       </div>
     </FarmaDashboardLayout>
+    <ImageLightbox
+      open={imageLightbox.open}
+      onOpenChange={(open) => setImageLightbox({ ...imageLightbox, open })}
+      images={imageItems}
+      initialIndex={imageLightbox.initialIndex}
+    />
+    </>
   );
 }
