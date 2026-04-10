@@ -258,11 +258,7 @@ export default function AgentMessages() {
 
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
-<<<<<<< HEAD
               console.log("[AgentSSE] Queries invalidated");
-            } else {
-              console.log("[AgentSSE] 📝 Other event type:", data.type);
-=======
 
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
