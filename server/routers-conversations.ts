@@ -346,10 +346,14 @@ export const conversationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      console.log(`[conversations.close] Closing conversation ${input.conversationId} with reason ${input.reason}`);
+
       await db
         .update(conversations)
         .set({ status: "closed", closeReason: input.reason, closedAt: new Date() })
         .where(eq(conversations.id, input.conversationId));
+
+      console.log(`[conversations.close] Conversation ${input.conversationId} closed successfully`);
 
       return { success: true };
     }),

@@ -227,7 +227,7 @@ function normalizeInboundNumber(value: string | undefined | null) {
 
   // Usar a função de normalização estrita
   const normalized = formatPhoneBR(stripped);
-  return normalized.startsWith('+') ? normalized : `+${normalized}`;
+  return normalized; // return without +, as formatPhoneBR does
 }
 
 /**

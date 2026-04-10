@@ -1494,7 +1494,7 @@ export default function AgentMessages() {
                     reason: closeReason as any,
                   });
                 }}
-                disabled={closeConversationMutation.isPending}
+                disabled={closeConversationMutation.isPending || !closeReason}
               >
                 Encerrar
               </Button>
