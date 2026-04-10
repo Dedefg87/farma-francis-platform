@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, desc, inArray } from "drizzle-orm";
+import { and, eq, or, desc, inArray } from "drizzle-orm";
 import { conversations, customers, conversationMessages } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
@@ -391,7 +391,7 @@ export const conversationsRouter = router({
         })
         .from(conversations)
         .leftJoin(customers, eq(conversations.customerId, customers.id))
-        .where(eq(conversations.assignedTo, ctx.user!.id))
+        .where(or(eq(conversations.assignedTo, ctx.user!.id), eq(conversations.status, "open")))
         .orderBy(desc(conversations.lastMessageAt))
         .limit(input.limit);
 

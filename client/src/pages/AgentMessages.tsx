@@ -357,7 +357,7 @@ export default function AgentMessages() {
     isLoading: loadingConversations,
     refetch: refetchConversations,
   } = trpc.conversations.list.useQuery(
-    { status: "assigned" },
+    {},
     {
       enabled: hasSession(),
       refetchInterval: 1000, // Atualizar a cada 1 segundo
