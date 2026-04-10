@@ -49,7 +49,7 @@ export const customers = mysqlTable("customers", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }),
-  phone: varchar("phone", { length: 100 }),
+  phone: varchar("phone", { length: 100 }).unique(),
   cpfCnpj: varchar("cpf_cnpj", { length: 18 }),
   address: text("address"),
   city: varchar("city", { length: 100 }),
@@ -929,7 +929,7 @@ export type InsertQueueAgent = typeof queueAgents.$inferInsert;
 export const conversationMessages = mysqlTable("conversation_messages", {
   id: int("id").autoincrement().primaryKey(),
   conversationId: int("conversation_id")
-    .references(() => conversations.id)
+    .references(() => conversations.id, { onDelete: "cascade" })
     .notNull(),
   externalId: varchar("external_id", { length: 255 }), // Evolution API message ID for idempotency
   remoteJid: varchar("remote_jid", { length: 255 }), // JID do remetente (WhatsApp)

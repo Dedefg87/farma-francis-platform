@@ -89,6 +89,7 @@ import {
   X,
   Megaphone,
   Keyboard,
+  Trash2,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -171,6 +172,7 @@ export default function AgentMessages() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
@@ -258,19 +260,16 @@ export default function AgentMessages() {
 
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
-<<<<<<< HEAD
-              console.log("[AgentSSE] Queries invalidated");
-            } else {
-              console.log("[AgentSSE] 📝 Other event type:", data.type);
-=======
-
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
                 queryClient.invalidateQueries({
                   queryKey: ["messages", data.data.conversationId],
                 });
               }
->>>>>>> 65a72cd (fix(agent): SSE handler agora trata conversation:update/new/read - mensagens aparecem na tela)
+
+              console.log("[AgentSSE] Queries invalidated");
+            } else {
+              console.log("[AgentSSE] 📝 Other event type:", data.type);
             }
           } catch (e) {
             console.error("[AgentSSE] Parse error:", e, "Raw data:", event.data);
@@ -728,6 +727,17 @@ export default function AgentMessages() {
     setFilePreview(null);
   };
 
+  const deleteConversationMutation = trpc.conversations.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Conversa excluida com sucesso");
+      setSelectedConversationId(null);
+      refetchConversations();
+    },
+    onError: (err: any) => {
+      toast.error("Erro ao excluir conversa: " + err.message);
+    },
+  });
+
   const handleSendMessage = () => {
     if ((!message.trim() && !selectedFile) || !selectedConversationId) return;
 
@@ -1125,6 +1135,14 @@ export default function AgentMessages() {
                     >
                       <XCircle className="w-4 h-4 text-red-500" />
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Excluir tudo"
+                      onClick={() => setShowDeleteDialog(true)}
+                    >
+                      <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
+                    </Button>
                   </div>
                 </div>
                 {showMessageSearch ? (
@@ -1464,6 +1482,34 @@ export default function AgentMessages() {
                 disabled={transferConversationMutation.isPending}
               >
                 Transferir
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Excluir Conversa Permanentemente?</DialogTitle>
+              <DialogDescription>
+                Esta acao nao pode ser desfeita. Isso removera todas as mensagens, midias e o historico desta conversa do sistema.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => {
+                  if (selectedConversationId) {
+                    deleteConversationMutation.mutate({ id: selectedConversationId });
+                    setShowDeleteDialog(false);
+                  }
+                }}
+                disabled={deleteConversationMutation.isPending}
+              >
+                {deleteConversationMutation.isPending ? "Excluindo..." : "Excluir Permanentemente"}
               </Button>
             </DialogFooter>
           </DialogContent>
