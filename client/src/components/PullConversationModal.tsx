@@ -19,8 +19,8 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
     },
   });
 
-  const handlePullFromQueue = (queueId: number) => {
-    pullConversationMutation.mutate({ queueId });
+  const handlePullFromQueue = (queueId: string) => {
+    pullConversationMutation.mutate({ queueId: parseInt(queueId, 10) });
   };
 
   return (
