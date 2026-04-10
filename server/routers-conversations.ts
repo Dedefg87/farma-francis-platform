@@ -342,4 +342,65 @@ export const conversationsRouter = router({
 
       return { success: true };
     }),
+
+  /**
+   * List conversations assigned to the current agent
+   */
+  list: protectedProcedure
+    .input(
+      z.object({
+        status: z.enum(["open", "assigned", "closed"]).optional(),
+        limit: z.number().optional().default(50),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      console.log(`[conversations.list] Fetching conversations for agent ${ctx.user?.id}`);
+
+      let query = db
+        .select({
+          id: conversations.id,
+          channel: conversations.channel,
+          customerId: conversations.customerId,
+          customerName: conversations.customerName,
+          customerPhone: conversations.customerPhone,
+          status: conversations.status,
+          assignedTo: conversations.assignedTo,
+          openedAt: conversations.openedAt,
+          lastMessageAt: conversations.lastMessageAt,
+          lastMessage: sql<string>`(
+            SELECT content
+            FROM conversation_messages cm
+            WHERE cm.conversation_id = conversations.id
+            ORDER BY cm.created_at DESC
+            LIMIT 1
+          )`,
+        })
+        .from(conversations)
+        .leftJoin(customers, eq(conversations.customerId, customers.id))
+        .where(eq(conversations.assignedTo, ctx.user!.id))
+        .orderBy(desc(conversations.lastMessageAt))
+        .limit(input.limit);
+
+      if (input.status) {
+        query = query.where(eq(conversations.status, input.status)) as any;
+      }
+
+      const results = await query;
+      console.log(`[conversations.list] Found ${results.length} conversations for agent ${ctx.user?.id}`);
+
+      return results.map(row => ({
+        id: String(row.id),
+        channel: row.channel,
+        customerName: row.customerName,
+        customerPhone: row.customerPhone,
+        status: row.status,
+        assignedTo: row.assignedTo,
+        openedAt: row.openedAt?.toISOString(),
+        lastMessageAt: row.lastMessageAt?.toISOString(),
+        lastMessage: row.lastMessage,
+      }));
+    }),
 });
