@@ -84,7 +84,8 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-<<<<<<< HEAD
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState<"venda" | "orcamento" | "conversa_anterior" | "engano" | "">("");
   const [imageLightbox, setImageLightbox] = useState<{
     open: boolean;
     initialIndex: number;
@@ -111,10 +112,6 @@ export default function Messages() {
     const cleanUrl = url.replace(/^\//, "");
     return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
   }
-=======
-  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
-  const [closeReason, setCloseReason] = useState<"venda" | "orcamento" | "conversa_anterior" | "engano" | "">("");
->>>>>>> 2d0b94aa61c585ca68e11fc26ea2fad90b5545b8
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
