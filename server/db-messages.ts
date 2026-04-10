@@ -623,25 +623,41 @@ export async function ingestInboundConversationMessage(message: {
         fileType: message.mimeType || null,
         createdAt: now.toISOString(),
       },
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      customerAvatar: customer.photoUrl,
     },
     timestamp: Date.now(),
   };
 
   const sseConvUpdate = {
-    type: EVENTS.CONVERSATION_UPDATE,
+    type: !existingConversation ? EVENTS.CONVERSATION_NEW : EVENTS.CONVERSATION_UPDATE,
     data: {
+      id: conversationId,
       conversationId,
       lastMessageAt: now.toISOString(),
       lastMessage: messageContent,
+      unreadCount: existingConversation ? (existingConversation.unreadCount + 1) : 1,
+      status: assignedUserId ? "assigned" : "open",
+      assignedTo: assignedUserId,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      customerAvatar: customer.photoUrl,
     },
     timestamp: Date.now(),
   };
 
+  // BROADCAST STRATEGY: 
+  // 1. Notify the assigned agent specifically
+  // 2. Notify ALL connected users if it's a NEW conversation or UNASSIGNED
   if (assignedUserId) {
     sseManager.emitToUser(String(assignedUserId), sseMessage);
     sseManager.emitToUser(String(assignedUserId), sseConvUpdate);
+    
+    // Also notify ALL because admins need to see the update in the list
+    sseManager.emitToAll(sseConvUpdate);
   } else {
-    // No assigned agent — notify all connected users
+    // No assigned agent — notify all connected users (Admins/Available Agents)
     sseManager.emitToAll(sseMessage);
     sseManager.emitToAll(sseConvUpdate);
   }

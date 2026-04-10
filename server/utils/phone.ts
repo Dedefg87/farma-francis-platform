@@ -15,9 +15,18 @@ function extractDigits(raw: string): string {
 export function normalizePhone(raw: string | null | undefined): string {
   if (!raw) return '';
   let digits = extractDigits(raw);
+  
+  // Remove leading 0 if present (common in some formats)
+  if (digits.length > 13 && digits.startsWith('0')) digits = digits.slice(1);
+  
   if (digits.length > 13) return '';
   if (!digits.startsWith('55')) digits = '55' + digits;
-  if (digits.length === 12) digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  
+  // If it's 12 digits (55 + DDD + 8 digits), add the 9
+  if (digits.length === 12) {
+    digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  }
+  
   if (digits.length !== 13) return '';
   return digits;
 }
@@ -25,8 +34,11 @@ export function normalizePhone(raw: string | null | undefined): string {
 export function generatePhoneVariants(phone: string): string[] {
   if (!phone) return [];
   let digits = extractDigits(phone);
-  if (digits.length > 13) return [];
+  if (digits.length > 14) return [];
   if (!digits.startsWith('55')) digits = '55' + digits;
+  // Normalize to 13 digits
+  if (digits.length === 12) digits = digits.slice(0, 4) + '9' + digits.slice(4);
+  if (digits.length === 14) digits = digits.slice(0, 13);
   const variants = new Set<string>();
   if (digits.length === 13) {
     const sem9 = digits.slice(0, 4) + digits.slice(5);
