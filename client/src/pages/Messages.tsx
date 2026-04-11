@@ -23,21 +23,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import {
   MessageSquare,
@@ -56,15 +41,13 @@ import {
   Lightbulb,
   ChevronRight,
   Building,
-  CheckCircle,
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
 import { SoundSelector } from "@/components/SoundSelector";
-import { renderContentWithLinks } from "@/utils/text-format";
-import { ImageLightbox } from "@/components/ImageLightbox";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -84,34 +67,6 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
-  const [closeReason, setCloseReason] = useState<"venda" | "orcamento" | "conversa_anterior" | "engano" | "">("");
-  const [imageLightbox, setImageLightbox] = useState<{
-    open: boolean;
-    initialIndex: number;
-  }>({ open: false, initialIndex: 0 });
-
-  function getImageSrc(
-    url: string | null | undefined,
-    messageId?: number
-  ): string {
-    if (!url) return "";
-
-    // Se já for data URL, retornar direto
-    if (url.startsWith?.("data:")) {
-      return url;
-    }
-
-    // Se for URL absoluta (http/https), usar como está
-    if (url.startsWith?.("http")) {
-      return url;
-    }
-
-    // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
-    const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-    const cleanUrl = url.replace(/^\//, "");
-    return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
-  }
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -125,29 +80,6 @@ export default function Messages() {
       { conversation_id: selectedConversation || 0 },
       { enabled: selectedConversation !== null }
     );
-
-  // Lista de imagens para o lightbox
-  const imageItems = useMemo(() => {
-    if (!messages) return [];
-    return messages
-      .filter(msg => msg.fileUrl && msg.fileType?.startsWith?.("image/"))
-      .map(msg => ({
-        id: msg.id,
-        fileUrl: msg.fileUrl!,
-        fileName: msg.fileName,
-      }));
-  }, [messages]);
-
-  // Função para abrir lightbox de imagens
-  const handleImageClick = useCallback(
-    (messageId: number) => {
-      const index = imageItems.findIndex((img) => img.id === messageId);
-      if (index >= 0) {
-        setImageLightbox({ open: true, initialIndex: index });
-      }
-    },
-    [imageItems]
-  );
 
   // Buscar mensagens internas da conversa selecionada
   const { data: internalMessages, isLoading: loadingInternalMessages } =
@@ -280,26 +212,6 @@ export default function Messages() {
     },
   });
 
-  const closeConversationMutation = trpc.conversations.close.useMutation({
-    onSuccess: () => {
-      toast.success("Conversa encerrada com sucesso!");
-      setIsCloseDialogOpen(false);
-      setCloseReason("");
-      setSelectedConversation(null);
-    },
-    onError: error => {
-      toast.error(`Erro ao encerrar conversa: ${error.message}`);
-    },
-  });
-
-  const handleCloseConversation = () => {
-    if (!selectedConversation || !closeReason) return;
-    closeConversationMutation.mutate({
-      conversationId: selectedConversation,
-      reason: closeReason as "venda" | "orcamento" | "conversa_anterior" | "engano",
-    });
-  };
-
   const handleSendMessage = async () => {
     if (!selectedConversation) {
       toast.error("Selecione uma conversa primeiro");
@@ -430,7 +342,6 @@ export default function Messages() {
   };
 
   return (
-    <>
     <FarmaDashboardLayout>
       <div className="space-y-6">
         {/* Header */}
@@ -496,7 +407,7 @@ export default function Messages() {
         </div>
 
         {/* Messages Interface */}
-        <Card>
+        <Card className="h-[calc(100vh-280px)] min-h-[500px] overflow-hidden">
           <div className="grid grid-cols-12 h-full">
             {/* Conversations List */}
             <div className="col-span-4 border-r border-gray-200 flex flex-col">
@@ -590,9 +501,13 @@ export default function Messages() {
             </div>
 
             {/* Chat Area */}
-             <div className="col-span-8 flex flex-col h-full">
-             
-              <div>Chat area</div>
+            <div className="col-span-8 flex flex-col h-full">
+              {selectedConversation ? (
+                <>
+                  {/* Chat Header */}
+                  <CardHeader className="border-b border-gray-200 py-3 flex-shrink-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
                         <Avatar>
                           {selectedConversationData?.customerAvatar ? (
                             <AvatarImage
@@ -633,19 +548,10 @@ export default function Messages() {
                                 Atendente: {selectedConversationData.assignedAgentName}
                               </span>
                             </div>
-                         ) }
-                         </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => setIsCloseDialogOpen(true)}
-                        >
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Encerrar
-                        </Button>
-                        <Sheet
+                      <Sheet
                         open={isProfileOpen}
                         onOpenChange={setIsProfileOpen}
                       >
@@ -857,59 +763,7 @@ export default function Messages() {
                         </SheetContent>
                       </Sheet>
                     </div>
-
-                  {/* Dialog: Encerrar Conversa */}
-                  <Dialog open={isCloseDialogOpen} onOpenChange={setIsCloseDialogOpen}>
-                    <DialogContent className="sm:max-w-[425px]">
-                      <DialogHeader>
-                        <DialogTitle>Encerrar Conversa</DialogTitle>
-                        <DialogDescription>
-                          Selecione o motivo para encerrar esta conversa. Esta ação não pode ser desfeita.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="py-4">
-                        <Label htmlFor="close-reason" className="text-sm font-medium mb-2 block">
-                          Motivo do encerramento
-                        </Label>
-                        <Select
-                          value={closeReason}
-                          onValueChange={(v) => setCloseReason(v as any)}
-                        >
-                          <SelectTrigger id="close-reason">
-                            <SelectValue placeholder="Selecione um motivo..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="venda">✅ Venda realizada</SelectItem>
-                            <SelectItem value="orcamento">📋 Orçamento enviado</SelectItem>
-                            <SelectItem value="conversa_anterior">🔄 Conversa anterior</SelectItem>
-                            <SelectItem value="engano">❌ Engano / Spam</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <DialogFooter>
-                        <Button
-                          variant="outline"
-                          onClick={() => { setIsCloseDialogOpen(false); setCloseReason(""); }}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={handleCloseConversation}
-                          disabled={!closeReason || closeConversationMutation.isPending}
-                        >
-                          {closeConversationMutation.isPending ? (
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                          )}
-                          Encerrar Conversa
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                   </Dialog>
-
-                   </div>
+                  </CardHeader>
 
                   {/* Tabs */}
                   <div className="flex border-b border-gray-200 flex-shrink-0">
@@ -950,8 +804,8 @@ export default function Messages() {
                     )}
                   </div>
 
-                   {/* Messages */}
-                    <ScrollArea className="flex-1 p-4">
+                  {/* Messages */}
+                  <ScrollArea className="flex-1 p-4">
                     {activeTab === "messages" ? (
                       <div className="space-y-4">
                         {loadingMessages ? (
@@ -995,7 +849,7 @@ export default function Messages() {
                                               msg.fileUrl,
                                               msg.id
                                             )
-                       }
+                                          }
                                           onError={e => {
                                             const el =
                                               e.currentTarget as HTMLImageElement;
@@ -1038,8 +892,8 @@ export default function Messages() {
                                         {msg.fileName || "Arquivo"}
                                       </a>
                                     )}
-                           </div>
- )}
+                                  </div>
+                                )}
                                 <span
                                   className={`text-xs mt-1 block ${
                                     msg.senderType === "agent"
@@ -1051,10 +905,9 @@ export default function Messages() {
                                     "pt-BR",
                                     {
                                       hour: "2-digit",
-                                      minute: "2-digit"
+                                      minute: "2-digit",
                                     }
-                                  )
-                                }
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -1127,19 +980,18 @@ export default function Messages() {
                                       "pt-BR",
                                       {
                                         hour: "2-digit",
-                                        minute: "2-digit"
+                                        minute: "2-digit",
                                       }
-                                    )
-                                  }
+                                    )}
                                   </span>
                                 </div>
                               </div>
                             ))}
                           </div>
-
+                        )}
                       </div>
                     )}
-                    </ScrollArea>
+                  </ScrollArea>
 
                   {/* Message Input */}
                   <div className="p-4 border-t border-gray-200 flex-shrink-0">
@@ -1148,7 +1000,38 @@ export default function Messages() {
                         {/* File Preview */}
                         {selectedFile && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            {selectedConversation ? <div>Chat area</div> : <div>No conversation</div> }
+                            <div className="flex items-center gap-3">
+                              {filePreview ? (
+                                <img
+                                  src={filePreview}
+                                  alt="Preview"
+                                  className="w-16 h-16 object-cover rounded"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
+                                  <FileText className="w-8 h-8 text-gray-500" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {selectedFile.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
+                                  MB
+                                </p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleRemoveFile}
+                                className="text-gray-500 hover:text-red-600"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
 
                         <div className="flex gap-2">
                           <input
@@ -1290,15 +1173,18 @@ export default function Messages() {
                       </div>
                     )}
                   </div>
-                </div>
+                </>
               ) : (
-                <div>
-                  <p>No conversation selected</p>
+                <div className="flex-1 flex items-center justify-center text-gray-500 h-full">
+                  <div className="text-center">
+                    <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                    <p>Selecione uma conversa para começar</p>
+                  </div>
                 </div>
               )}
             </div>
           </div>
-      </Card>
+        </Card>
 
         {/* Integration Info */}
         <Card>
@@ -1372,17 +1258,5 @@ export default function Messages() {
         </Card>
       </div>
     </FarmaDashboardLayout>
-    <ImageLightbox
-      open={imageLightbox.open}
-      onOpenChange={(open) => setImageLightbox({ ...imageLightbox, open })}
-      images={imageItems}
-      initialIndex={imageLightbox.initialIndex}
-    />
- }
-    </div>
-    </div>
-   </Card>
-   </div>
- </FarmaDashboardLayout>
-);
+  );
 }
