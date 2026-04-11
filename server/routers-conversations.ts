@@ -224,9 +224,28 @@ export const conversationsRouter = router({
       if (!db) throw new Error("Database not available");
 
       const now = new Date();
+      const numericCustomerId = parseInt(input.customerId, 10);
+
+      // ✅ Bug 3 fix: Check for existing open/assigned conversation with the same customer
+      const [existing] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.customerId, numericCustomerId),
+            inArray(conversations.status, ["open", "assigned"])
+          )
+        )
+        .orderBy(desc(conversations.lastMessageAt))
+        .limit(1);
+
+      if (existing) {
+        // Return existing conversation instead of creating a duplicate
+        return mapConversation(existing);
+      }
 
       const insertValues: any = {
-        customerId: parseInt(input.customerId, 10),
+        customerId: numericCustomerId,
         channel: input.channel,
         status: "open",
         openedAt: now,

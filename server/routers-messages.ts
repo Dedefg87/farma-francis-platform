@@ -6,6 +6,22 @@ import { getDb } from "./db";
 import { sseManager, EVENTS } from "./_core/sse";
 
 export const messagesRouter = router({
+  /**
+   * Deleta uma mensagem por ID.
+   */
+  delete: protectedProcedure
+    .input(z.object({ messageId: z.number() }))
+    .mutation(async ({ input }): Promise<{ success: boolean }> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      await db
+        .delete(conversationMessages)
+        .where(eq(conversationMessages.id, input.messageId));
+
+      return { success: true };
+    }),
+
   list: protectedProcedure
     .input(z.object({ conversation_id: z.number() }))
     .query(async ({ input }) => {

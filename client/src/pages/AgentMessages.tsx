@@ -132,7 +132,11 @@ export default function AgentMessages() {
   const [, setLocation] = useLocation();
   const [selectedConversationId, setSelectedConversationId] = useState<
     number | null
-  >(null);
+  >(() => {
+    // Bug 2 fix: Restore selected conversation from sessionStorage
+    const saved = sessionStorage.getItem('selectedConversationId');
+    return saved ? parseInt(saved, 10) : null;
+  });
   const [crmCustomerId, setCrmCustomerId] = useState<number | null>(null);
   const [crmCustomerName, setCrmCustomerName] = useState<string>("");
   const [crmCustomerPhone, setCrmCustomerPhone] = useState<string>("");
@@ -260,8 +264,6 @@ export default function AgentMessages() {
 
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
-              
-              console.log("[AgentSSE] Queries invalidated");
 
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
@@ -269,8 +271,6 @@ export default function AgentMessages() {
                   queryKey: ["messages", data.data.conversationId],
                 });
               }
-            } else {
-              console.log("[AgentSSE] 📝 Other event type:", data.type);
             }
           } catch (e) {
             console.error("[AgentSSE] Parse error:", e, "Raw data:", event.data);
@@ -527,11 +527,23 @@ export default function AgentMessages() {
       toast.success("Conversa encerrada");
       setShowCloseDialog(false);
       setSelectedConversationId(null);
+      sessionStorage.removeItem('selectedConversationId');
       queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
-      refetchConversations();
+      refetchConversations();;
     },
     onError: error => {
       toast.error(`Erro ao encerrar: ${error.message}`);
+    },
+  });
+
+  // Bug 1 fix: Delete message mutation
+  const deleteMessageMutation = trpc.messages.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Mensagem excluída");
+      refetchMessages();
+    },
+    onError: error => {
+      toast.error(`Erro ao excluir mensagem: ${error.message}`);
     },
   });
 
@@ -539,6 +551,8 @@ export default function AgentMessages() {
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
     setSelectedConversationId(conversationId);
+    // Bug 2 fix: Persist to sessionStorage
+    sessionStorage.setItem('selectedConversationId', String(conversationId));
 
     // Atualização otimista - zerar contador imediatamente na UI
     queryClient.setQueryData(
@@ -1172,15 +1186,28 @@ export default function AgentMessages() {
                   filteredMessages.map(msg => (
                     <div
                       key={msg.id}
-                      className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
+                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[70%] rounded-lg p-3 ${
+                        className={`relative max-w-[70%] rounded-lg p-3 ${
                           msg.senderType === "agent"
                             ? "bg-blue-500 text-white"
                             : "bg-white text-gray-900 border border-gray-200"
                         }`}
                       >
+                        {/* Bug 1 fix: Delete button - appears on hover */}
+                        <button
+                          onClick={() => {
+                            if (confirm("Excluir esta mensagem?")) {
+                              deleteMessageMutation.mutate({ messageId: msg.id });
+                            }
+                          }}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                          title="Excluir mensagem"
+                          disabled={deleteMessageMutation.isPending}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
