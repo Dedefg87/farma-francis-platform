@@ -441,8 +441,17 @@ export const broadcastRouter = router({
           .set({ lastSentAt: new Date() })
           .where(eq(broadcastLists.id, input.listId));
 
-        // Enfileirar job de broadcast (Bull) ao invés de processar síncrono
-        await enqueueBroadcastMessage(messageId, input.listId);
+        // Tentar enfileirar via Bull (Redis). Se falhar, processar diretamente.
+        try {
+          await enqueueBroadcastMessage(messageId, input.listId);
+        } catch (queueErr: any) {
+          console.warn('[Broadcast] Bull queue falhou, processando diretamente:', queueErr.message);
+          const { processBroadcastMessage } = await import('./workers/broadcast-sender.js');
+          // Processar em background (não bloquear a resposta)
+          setImmediate(() => processBroadcastMessage(messageId).catch((e: any) =>
+            console.error('[Broadcast] processBroadcastMessage error:', e.message)
+          ));
+        }
 
         return { messageId: Number(messageId), status: 'queued' };
       } catch (error) {
