@@ -592,8 +592,7 @@ export default function Messages() {
             {/* Chat Area */}
              <div className="col-span-8 flex flex-col h-full">
              
-              {selectedConversation ? (
-                <div className="flex items-center gap-3">
+              <div>Chat area</div>
                         <Avatar>
                           {selectedConversationData?.customerAvatar ? (
                             <AvatarImage
@@ -633,8 +632,8 @@ export default function Messages() {
                               <span className="text-xs text-green-600 font-medium">
                                 Atendente: {selectedConversationData.assignedAgentName}
                               </span>
-                  </div>
-                        )}
+                            </div>
+                         ) }
                          </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1040,9 +1039,7 @@ export default function Messages() {
                                       </a>
                                     )}
                            </div>
-                          ) : (
-                            <div>No conversation</div>
-                          )}
+ )}
                                 <span
                                   className={`text-xs mt-1 block ${
                                     msg.senderType === "agent"
@@ -1139,10 +1136,11 @@ export default function Messages() {
                               </div>
                             ))}
                           </div>
-                          ) : null }
+
                       </div>
                     )}
-                  </ScrollArea>
+                    ) }
+                    </ScrollArea>
 
                   {/* Message Input */}
                   <div className="p-4 border-t border-gray-200 flex-shrink-0">
@@ -1151,38 +1149,7 @@ export default function Messages() {
                         {/* File Preview */}
                         {selectedFile && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            {selectedConversation ? (
-                       <div className="flex items-center gap-3">
-                              {filePreview ? (
-                                <img
-                                  src={filePreview}
-                                  alt="Preview"
-                                  className="w-16 h-16 object-cover rounded"
-                                />
-                              ) : (
-                                <div className="w-16 h-16 bg-gray-200 rounded flex items-center justify-center">
-                                  <FileText className="w-8 h-8 text-gray-500" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">
-                                  {selectedFile.name}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {(selectedFile.size / 1024 / 1024).toFixed(2)}{" "}
-                                  MB
-                                </p>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleRemoveFile}
-                                className="text-gray-500 hover:text-red-600"
-                              >
-                                <X className="w-4 h-4" />
-                               </Button>
-                           </div>
-                        )}
+                            {selectedConversation ? <div>Chat area</div> : <div>No conversation</div> }
 
                         <div className="flex gap-2">
                           <input
@@ -1412,6 +1379,11 @@ export default function Messages() {
       images={imageItems}
       initialIndex={imageLightbox.initialIndex}
     />
-    </>
-  );
+ }
+    </div>
+    </div>
+   </Card>
+   </div>
+ </FarmaDashboardLayout>
+);
 }
