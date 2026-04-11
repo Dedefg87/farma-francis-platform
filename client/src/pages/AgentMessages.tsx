@@ -200,7 +200,6 @@ export default function AgentMessages() {
 
   // DEBUG: Log pdfPreview state changes
   useEffect(() => {
-    console.log("[PDFPreview] State changed:", pdfPreview);
   }, [pdfPreview]);
 
   // === SSE Connection for Real-time Messages ===
@@ -894,11 +893,9 @@ export default function AgentMessages() {
         onOpenChange={(open) => {
           // Prevenir fechamento imediato após abrir
           if (!open && pdfPreviewJustOpened.current) {
-            console.log("[PDFPreview] Preventing immediate close");
             pdfPreviewJustOpened.current = false;
             return;
           }
-          console.log("[PDFPreview] onOpenChange called with:", open);
           setPdfPreview({ ...pdfPreview, open });
         }}
         url={pdfPreview.url || ""}
@@ -1699,6 +1696,9 @@ export default function AgentMessages() {
       {/* Broadcast List Modal */}
       <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>
         <DialogContent className="max-w-4xl h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Lista de Transmissão</DialogTitle>
+          </DialogHeader>
           <BroadcastListManager onClose={() => setShowBroadcastModal(false)} />
         </DialogContent>
       </Dialog>
