@@ -196,7 +196,6 @@ export default function AgentMessages() {
 
   // DEBUG: Log component mount
   useEffect(() => {
-    console.log("[AgentMessages] Component mounted - PDFPreview version 2.0");
   }, []);
 
   // DEBUG: Log pdfPreview state changes
@@ -224,18 +223,13 @@ export default function AgentMessages() {
         eventSource = new EventSource("/api/events", { withCredentials: true });
 
         eventSource.onopen = () => {
-          console.log("[AgentSSE] Connected successfully");
-          console.log("[AgentSSE] User ID:", user?.id);
-          console.log("[AgentSSE] ReadyState:", eventSource.readyState);
           setIsConnected(true);
           reconnectAttempt = 0;
         };
 
         eventSource.onmessage = event => {
           try {
-            console.log("[AgentSSE] Raw event received:", event.data);
             const data = JSON.parse(event.data);
-            console.log("[AgentSSE] Parsed event:", data);
 
             if (
               data.type === "message:new" ||
@@ -244,7 +238,6 @@ export default function AgentMessages() {
               data.type === "conversation:new" ||
               data.type === "conversation:read"
             ) {
-              console.log("[AgentSSE] 🎯 EVENT - refreshing data:", data.type);
               // Play notification sound if not muted (only for new messages)
               if (!notificationsMuted && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
                 playNotificationSound();
@@ -256,7 +249,6 @@ export default function AgentMessages() {
               // Invalidate specific message query for this conversation
               const conversationId = data.data?.conversationId;
               if (conversationId) {
-                console.log(`[AgentSSE] Invalidating messages for conversation ${conversationId}`);
                 queryClient.invalidateQueries({
                   queryKey: ["messages", "list", { conversation_id: conversationId }]
                 });
@@ -441,8 +433,31 @@ export default function AgentMessages() {
     return filtered;
   }, [sortedConversations, searchQuery, channelFilter]);
 
+  // Auto-selecionar primeira conversa se nenhuma estiver selecionada
+  useEffect(() => {
+    if (!selectedConversationId && filteredConversations.length > 0) {
+      const firstConv = filteredConversations[0];
+      const convId = Number(firstConv.id);
+      setSelectedConversationId(convId);
+      sessionStorage.setItem('selectedConversationId', String(convId));
+    }
+  }, [filteredConversations, selectedConversationId]);
+
+  // Validar se a conversa selecionada ainda existe na lista
+  useEffect(() => {
+    if (selectedConversationId && filteredConversations.length > 0) {
+      const exists = filteredConversations.find(c => Number(c.id) === selectedConversationId);
+      if (!exists) {
+        // Conversa não está mais na lista — selecionar a primeira
+        const firstConv = filteredConversations[0];
+        const convId = Number(firstConv.id);
+        setSelectedConversationId(convId);
+        sessionStorage.setItem('selectedConversationId', String(convId));
+      }
+    }
+  }, [filteredConversations, selectedConversationId]);
+
   // Buscar mensagens da conversa selecionada
-  console.log(`[AgentMessages] Querying messages for conversation: ${selectedConversationId}`);
 
   const {
     data: messages,
@@ -454,9 +469,7 @@ export default function AgentMessages() {
       enabled: !!selectedConversationId,
       refetchInterval: selectedConversationId ? 800 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
       onSuccess: (data) => {
-        console.log(`[AgentMessages] Messages loaded: ${data?.length || 0} messages`);
         if (data && data.length > 0) {
-          console.log(`[AgentMessages] Latest message: ${data[data.length - 1].content?.substring(0, 50)}...`);
         }
       },
       onError: (error) => {
@@ -589,7 +602,6 @@ export default function AgentMessages() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      console.log("[AgentMessages] Conversa marcada como lida");
     } catch (error) {
       console.error("[AgentMessages] Erro ao marcar como lida:", error);
     }
@@ -686,7 +698,6 @@ export default function AgentMessages() {
     
     // Se a conversa ativa tem mensagens não lidas, marcar como lida
     if (activeConversation && activeConversation.unreadCount > 0) {
-      console.log(`[AgentMessages] Auto-marcing conversation ${selectedConversationId} as read`);
       
       // Atualização otimista
       queryClient.setQueryData(
