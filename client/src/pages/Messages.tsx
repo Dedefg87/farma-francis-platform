@@ -496,7 +496,7 @@ export default function Messages() {
         </div>
 
         {/* Messages Interface */}
-        <Card className="h-[calc(100vh-280px)] min-h-[500px] overflow-hidden">
+        <Card>
           <div className="grid grid-cols-12 h-full">
             {/* Conversations List */}
             <div className="col-span-4 border-r border-gray-200 flex flex-col">
@@ -590,12 +590,8 @@ export default function Messages() {
             </div>
 
             {/* Chat Area */}
-            <div className="col-span-8 flex flex-col h-full">
-              {selectedConversation ? (
-                <>
-                  {/* Chat Header */}
-                  <CardHeader className="border-b border-gray-200 py-3 flex-shrink-0">
-                    <div className="flex items-center justify-between">
+             <div className="col-span-8 flex flex-col h-full">
+
                       <div className="flex items-center gap-3">
                         <Avatar>
                           {selectedConversationData?.customerAvatar ? (
@@ -636,9 +632,9 @@ export default function Messages() {
                               <span className="text-xs text-green-600 font-medium">
                                 Atendente: {selectedConversationData.assignedAgentName}
                               </span>
-                            </div>
-                          )}
-                        </div>
+                  </div>
+                        )}
+                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -911,9 +907,9 @@ export default function Messages() {
                         </Button>
                       </DialogFooter>
                     </DialogContent>
-                  </Dialog>
+                   </Dialog>
 
-                  </CardHeader>
+                   </div>
 
                   {/* Tabs */}
                   <div className="flex border-b border-gray-200 flex-shrink-0">
@@ -954,8 +950,8 @@ export default function Messages() {
                     )}
                   </div>
 
-                  {/* Messages */}
-                  <ScrollArea className="flex-1 p-4">
+                   {/* Messages */}
+                    <ScrollArea className="flex-1 p-4">
                     {activeTab === "messages" ? (
                       <div className="space-y-4">
                         {loadingMessages ? (
@@ -999,7 +995,7 @@ export default function Messages() {
                                               msg.fileUrl,
                                               msg.id
                                             )
-                                          }
+                       }
                                           onError={e => {
                                             const el =
                                               e.currentTarget as HTMLImageElement;
@@ -1055,9 +1051,10 @@ export default function Messages() {
                                     "pt-BR",
                                     {
                                       hour: "2-digit",
-                                      minute: "2-digit",
+                                      minute: "2-digit"
                                     }
-                                  )}
+                                  )
+                                }
                                 </span>
                               </div>
                             </div>
@@ -1130,9 +1127,10 @@ export default function Messages() {
                                       "pt-BR",
                                       {
                                         hour: "2-digit",
-                                        minute: "2-digit",
+                                        minute: "2-digit"
                                       }
-                                    )}
+                                    )
+                                  }
                                   </span>
                                 </div>
                               </div>
@@ -1150,7 +1148,8 @@ export default function Messages() {
                         {/* File Preview */}
                         {selectedFile && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                            <div className="flex items-center gap-3">
+                            {selectedConversation ? (
+                       <div className="flex items-center gap-3">
                               {filePreview ? (
                                 <img
                                   src={filePreview}
@@ -1323,18 +1322,15 @@ export default function Messages() {
                       </div>
                     )}
                   </div>
-                </>
+                </div>
               ) : (
-                <div className="flex-1 flex items-center justify-center text-gray-500 h-full">
-                  <div className="text-center">
-                    <MessageSquare className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                    <p>Selecione uma conversa para começar</p>
-                  </div>
+                <div>
+                  <p>No conversation selected</p>
                 </div>
               )}
             </div>
           </div>
-        </Card>
+      </Card>
 
         {/* Integration Info */}
         <Card>
