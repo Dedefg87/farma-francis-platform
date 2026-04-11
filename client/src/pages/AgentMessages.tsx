@@ -554,6 +554,17 @@ export default function AgentMessages() {
     // Bug 2 fix: Persist to sessionStorage
     sessionStorage.setItem('selectedConversationId', String(conversationId));
 
+    // Auto-assign se a conversa não tem agente
+    const conv = conversations?.find(c => Number(c.id) === conversationId);
+    if (conv && !conv.assignedAgentId) {
+      try {
+        await trpc.conversations.assign.mutate({ conversationId });
+        refetchConversations();
+      } catch (err) {
+        console.error('[AgentMessages] Auto-assign failed:', err);
+      }
+    }
+
     // Atualização otimista - zerar contador imediatamente na UI
     queryClient.setQueryData(
       ["trpc", "conversations", "listActive", { input: undefined }],

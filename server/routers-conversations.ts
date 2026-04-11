@@ -112,11 +112,18 @@ export const conversationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Admins veem todas as conversas abertas (incluindo sem agente); agentes comuns veem só as suas
+      // Todos veem:
+      // 1. Conversas atribuídas a si mesmo
+      // 2. Conversas sem agente (na fila, status='open', assignedTo=null)
+      // Admins adicionalmente veem conversas de outros agentes
       const isUser = (ctx as any)?.user?.role === 'user';
       const conditions = isUser
         ? and(
-            eq(conversations.assignedTo, ctx.user.id),
+            or(
+              eq(conversations.assignedTo, ctx.user.id),
+              // Conversas sem agente (na fila) — qualquer agente pode ver
+              sql`(${conversations.assignedTo} IS NULL AND ${conversations.status} = 'open')`
+            ),
             inArray(conversations.status, ["open", "assigned"])
           )
         : inArray(conversations.status, ["open", "assigned"]);
