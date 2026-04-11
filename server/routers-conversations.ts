@@ -66,11 +66,12 @@ export const conversationsRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Admins veem todas; agentes comuns veem só as suas
+      // Só retorna conversas abertas/atribuídas (não fechadas)
       const isUser = (ctx as any)?.user?.role === 'user';
+      const baseConditions = inArray(conversations.status, ["open", "assigned"]);
       const conditions = isUser
-        ? eq(conversations.assignedTo, ctx.user.id)
-        : undefined;
+        ? and(baseConditions, eq(conversations.assignedTo, ctx.user.id))
+        : baseConditions;
 
       const rows = await db
         .select({

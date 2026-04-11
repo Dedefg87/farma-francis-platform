@@ -3,6 +3,8 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { getDb } from "./db";
 import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
+import { eq, and, sql } from "drizzle-orm";
+import { conversations, conversationMessages } from "../drizzle/schema";
 // __dirname is natively available in CJS (esbuild --format=cjs)
 import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
@@ -129,6 +131,33 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // Mark conversation as read
+  app.post("/api/conversations/:id/mark-read", async (req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
+      const conversationId = parseInt(req.params.id, 10);
+      if (isNaN(conversationId)) { res.status(400).json({ error: "Invalid ID" }); return; }
+      await db
+        .update(conversationMessages)
+        .set({ readAt: new Date() })
+        .where(and(
+          eq(conversationMessages.conversationId, conversationId),
+          eq(conversationMessages.senderType, "customer"),
+          sql`${conversationMessages.readAt} IS NULL`
+        ));
+      await db
+        .update(conversations)
+        .set({ unreadCount: 0 })
+        .where(eq(conversations.id, conversationId));
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("[mark-read] Error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       const indexPath = path.join(__dirname, "../dist/public/index.html");

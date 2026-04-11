@@ -540,6 +540,9 @@ export default function AgentMessages() {
   const deleteMessageMutation = trpc.messages.delete.useMutation({
     onSuccess: () => {
       toast.success("Mensagem excluída");
+      // Force immediate cache invalidation
+      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
       refetchMessages();
     },
     onError: error => {
@@ -558,7 +561,11 @@ export default function AgentMessages() {
     const conv = conversations?.find(c => Number(c.id) === conversationId);
     if (conv && !conv.assignedAgentId) {
       try {
-        await trpc.conversations.assign.mutate({ conversationId });
+        await trpc.conversations.update.mutate({
+          id: String(conversationId),
+          assignedTo: String(user?.id),
+          status: 'assigned'
+        });
         refetchConversations();
       } catch (err) {
         console.error('[AgentMessages] Auto-assign failed:', err);

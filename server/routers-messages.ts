@@ -15,9 +15,15 @@ export const messagesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      await db
+      const result = await db
         .delete(conversationMessages)
         .where(eq(conversationMessages.id, input.messageId));
+
+      // MySQL delete returns affected rows
+      const affected = (result as any)?.[0]?.affectedRows ?? 0;
+      if (affected === 0) {
+        throw new Error("Mensagem não encontrada");
+      }
 
       return { success: true };
     }),
