@@ -591,8 +591,9 @@ export default function Messages() {
 
             {/* Chat Area */}
              <div className="col-span-8 flex flex-col h-full">
-
-                      <div className="flex items-center gap-3">
+             
+              {selectedConversation ? (
+                <div className="flex items-center gap-3">
                         <Avatar>
                           {selectedConversationData?.customerAvatar ? (
                             <AvatarImage
@@ -1038,8 +1039,10 @@ export default function Messages() {
                                         {msg.fileName || "Arquivo"}
                                       </a>
                                     )}
-                                  </div>
-                                )}
+                           </div>
+                          ) : (
+                            <div>No conversation</div>
+                          )}
                                 <span
                                   className={`text-xs mt-1 block ${
                                     msg.senderType === "agent"
@@ -1136,7 +1139,7 @@ export default function Messages() {
                               </div>
                             ))}
                           </div>
-                        )}
+                          ) : null }
                       </div>
                     )}
                   </ScrollArea>
@@ -1177,9 +1180,8 @@ export default function Messages() {
                                 className="text-gray-500 hover:text-red-600"
                               >
                                 <X className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
+                               </Button>
+                           </div>
                         )}
 
                         <div className="flex gap-2">
