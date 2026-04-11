@@ -6,7 +6,7 @@ import {
   broadcastMembersSent,
   customers,
 } from "../drizzle/schema";
-import { eq, sql, asc, desc, and, or, inArray } from "drizzle-orm";
+import { eq, sql, asc, desc, and, or, inArray, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { formatPhoneBR, generatePhoneVariants } from "./utils/phone";
@@ -20,7 +20,6 @@ export const broadcastRouter = router({
       limit: z.number().int().min(1).max(100).optional().default(20),
     }))
     .query(async ({ input, ctx }) => {
-      console.log('[BroadcastList] query started. input:', JSON.stringify(input), 'user:', ctx.user?.id);
       const db = await getDb();
       if (!db) {
         console.error('[BroadcastList] Database not available');
@@ -30,7 +29,6 @@ export const broadcastRouter = router({
       try {
         const offset = (input.page - 1) * input.limit;
 
-        console.log('[BroadcastList] Executing main query with groupBy...');
         const lists = await db
           .select({
             id: broadcastLists.id,
@@ -47,13 +45,10 @@ export const broadcastRouter = router({
           .limit(Number(input.limit))
           .offset(offset);
 
-        console.log('[BroadcastList] Main query returned', lists.length, 'rows');
 
-        console.log('[BroadcastList] Executing count query...');
         const [{ total }] = await db
           .select({ total: sql<number>`COUNT(*)` })
           .from(broadcastLists);
-        console.log('[BroadcastList] Count returned total:', total);
 
         // Sanitize: convert Date objects to ISO strings
         const sanitizedLists = lists.map(item => {
@@ -66,7 +61,6 @@ export const broadcastRouter = router({
           };
         });
 
-        console.log('[BroadcastList] Sanitized dates, returning', sanitizedLists.length, 'items');
 
         return {
           lists: sanitizedLists,
@@ -158,7 +152,6 @@ export const broadcastRouter = router({
 
       try {
         const listId = input.listId;
-        console.log(`[BroadcastDelete] Starting deletion for list ID: ${listId}`);
 
         // 1. Selecionar IDs das mensagens associadas a esta lista
         const messageIds = await db
@@ -167,32 +160,25 @@ export const broadcastRouter = router({
           .where(eq(broadcastMessages.listId, listId));
 
         const idsToDelete = messageIds.map(m => m.id);
-        console.log(`[BroadcastDelete] Found ${idsToDelete.length} message IDs for list ${listId}`);
 
         // 2. Deletar broadcast_members_sent em chunks (evita SIGTERM e MySQL 1093)
         if (idsToDelete.length > 0) {
           const chunkSize = 20; // chunk menor para evitar timeout/lock
           for (let i = 0; i < idsToDelete.length; i += chunkSize) {
             const chunk = idsToDelete.slice(i, i + chunkSize);
-            console.log(`[BroadcastDelete] Deleting broadcast_members_sent chunk: ${chunk.length} items (batch ${Math.floor(i / chunkSize) + 1})`);
             await db.delete(broadcastMembersSent).where(
               inArray(broadcastMembersSent.broadcastMessageId, chunk)
             );
           }
-          console.log(`[BroadcastDelete] Completed deletion of broadcast_members_sent (${idsToDelete.length} total)`);
         } else {
-          console.log(`[BroadcastDelete] No messages found, skipping broadcast_members_sent deletion`);
         }
 
         // 3. Deletar as mensagens
-        console.log(`[BroadcastDelete] Deleting broadcastMessages for listId: ${listId}`);
         await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, listId));
 
         // 4. Deletar a lista
-        console.log(`[BroadcastDelete] Deleting broadcastLists for listId: ${listId}`);
         await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
 
-        console.log(`[BroadcastDelete] List ${listId} and associated data deleted successfully.`);
         return { success: true };
       } catch (err: any) {
         console.error(`[BroadcastDelete] Failed to delete list ${input.listId}:`, err.message);
@@ -233,7 +219,6 @@ export const broadcastRouter = router({
       memberId: z.number().int().positive(),
     }))
     .mutation(async ({ input }) => {
-      console.log(`[BroadcastRemoveMember] Removing memberId: ${input.memberId}`);
 
       const db = await getDb();
       if (!db) {
@@ -245,7 +230,6 @@ export const broadcastRouter = router({
         eq(broadcastListMembers.id, input.memberId)
       );
 
-      console.log(`[BroadcastRemoveMember] MemberId ${input.memberId} removed successfully.`);
       return { success: true };
     }),
 
@@ -254,7 +238,6 @@ export const broadcastRouter = router({
       listIds: z.array(z.number().int().positive()),
     }))
     .mutation(async ({ input }) => {
-      console.log(`[BroadcastDeleteMany] Starting bulk deletion for ${input.listIds.length} lists:`, input.listIds);
 
       const db = await getDb();
       if (!db) {
@@ -265,7 +248,6 @@ export const broadcastRouter = router({
       try {
         // Process each list deletion sequentially to maintain order
         for (const listId of input.listIds) {
-          console.log(`[BroadcastDeleteMany] Processing list ID: ${listId}`);
 
           // 1. Get message IDs for this list
           const messageIds = await db
@@ -274,7 +256,6 @@ export const broadcastRouter = router({
             .where(eq(broadcastMessages.listId, listId));
 
           const idsToDelete = messageIds.map(m => m.id);
-          console.log(`[BroadcastDeleteMany] List ${listId}: Found ${idsToDelete.length} messages`);
 
           // 2. Delete broadcast_members_sent in chunks (avoids MySQL 1093 error)
           if (idsToDelete.length > 0) {
@@ -284,24 +265,19 @@ export const broadcastRouter = router({
               await db.delete(broadcastMembersSent).where(
                 inArray(broadcastMembersSent.broadcastMessageId, chunk)
               );
-              console.log(`[BroadcastDeleteMany] List ${listId}: Deleted chunk ${i / chunkSize + 1} of broadcast_members_sent`);
             }
           }
 
           // 3. Delete broadcast_messages
           await db.delete(broadcastMessages).where(eq(broadcastMessages.listId, listId));
-          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_messages`);
 
           // 4. Delete broadcast_list_members
           await db.delete(broadcastListMembers).where(eq(broadcastListMembers.listId, listId));
-          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_list_members`);
 
           // 5. Delete the list itself
           await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
-          console.log(`[BroadcastDeleteMany] List ${listId}: Deleted broadcast_lists`);
         }
 
-        console.log(`[BroadcastDeleteMany] Successfully deleted ${input.listIds.length} lists`);
         return { success: true, deletedCount: input.listIds.length };
       } catch (err: any) {
         console.error(`[BroadcastDeleteMany] Failed:`, err.message);
@@ -317,7 +293,6 @@ export const broadcastRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      console.log(`[BroadcastListMembers] Fetching members for listId: ${input.listId}`);
 
       // Buscar membros com JOIN à tabela customers para obter nome e telefone
       const members = await db
@@ -333,7 +308,6 @@ export const broadcastRouter = router({
         .where(eq(broadcastListMembers.listId, input.listId))
         .orderBy(asc(broadcastListMembers.addedAt));
 
-      console.log(`[BroadcastListMembers] Raw members found: ${members.length}`);
 
       // Deduplicar por telefone (manter apenas 1 contato por número)
       const uniqueMembersMap = new Map<string, any>();
@@ -344,7 +318,6 @@ export const broadcastRouter = router({
       }
       const deduplicatedMembers = Array.from(uniqueMembersMap.values());
 
-      console.log(`[BroadcastListMembers] Unique members (by phone): ${deduplicatedMembers.length}`);
 
       return deduplicatedMembers;
     }),
@@ -359,25 +332,36 @@ export const broadcastRouter = router({
       if (!db) throw new Error("Database not available");
 
       const searchPattern = `%${input.query}%`;
-      const query = db.select({
-        id: customers.id,
-        name: customers.name,
-        phone: customers.phone,
-        email: customers.email,
-        photoUrl: customers.photoUrl,
-      }).from(customers);
-
       const whereClause = or(
         sql`LOWER(${customers.name}) LIKE LOWER(${searchPattern})`,
         sql`LOWER(${customers.email}) LIKE LOWER(${searchPattern})`,
         sql`${customers.phone} LIKE ${searchPattern}`
       );
 
+      let query = db.select({
+        id: customers.id,
+        name: customers.name,
+        phone: customers.phone,
+        email: customers.email,
+        photoUrl: customers.photoUrl,
+      }).from(customers).where(whereClause);
+
       if (input.excludeListId) {
-        const subquery = sql`SELECT customer_id FROM broadcast_list_members WHERE list_id = ${input.excludeListId}`;
-        query.where(and(whereClause, sql`customers.id NOT IN (${subquery})`));
-      } else {
-        query.where(whereClause);
+        // Exclude customers already in the list
+        const excludeIds = await db.select({ customerId: broadcastListMembers.customerId })
+          .from(broadcastListMembers)
+          .where(eq(broadcastListMembers.listId, input.excludeListId));
+        const excludeIdList = excludeIds.map(r => r.customerId);
+        
+        if (excludeIdList.length > 0) {
+          query = db.select({
+            id: customers.id,
+            name: customers.name,
+            phone: customers.phone,
+            email: customers.email,
+            photoUrl: customers.photoUrl,
+          }).from(customers).where(and(whereClause, notInArray(customers.id, excludeIdList)));
+        }
       }
 
       return query.limit(50);
@@ -394,7 +378,6 @@ export const broadcastRouter = router({
       fileSize: z.number().int().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
-      console.log('[BroadcastSendMessage] 🚀 Mutation iniciada - input:', JSON.stringify(input, null, 2));
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
@@ -426,7 +409,6 @@ export const broadcastRouter = router({
         errorMessage: null,
       };
 
-      console.log('[BroadcastInsert] Normalized values:', JSON.stringify(values));
 
       try {
         // Use Drizzle ORM (schema aligned with MySQL)
@@ -452,7 +434,6 @@ export const broadcastRouter = router({
             sentAt: null,
           }));
 
-          console.log(`[BroadcastSendMessage] Inserting batch of ${valuesToInsert.length} members`);
           await db.insert(broadcastMembersSent).values(valuesToInsert);
         }
 
@@ -463,7 +444,6 @@ export const broadcastRouter = router({
         // Enfileirar job de broadcast (Bull) ao invés de processar síncrono
         await enqueueBroadcastMessage(messageId, input.listId);
 
-        console.log(`[BroadcastSendMessage] Job enfileirado (Bull) — messageId=${messageId}`);
         return { messageId: Number(messageId), status: 'queued' };
       } catch (error) {
         console.error('[BroadcastSendMessage] Error:', error);

@@ -1270,7 +1270,7 @@ export const broadcastMessages = mysqlTable("broadcast_messages", {
   listId: int("list_id")
     .references(() => broadcastLists.id)
     .notNull(),
-  messageText: text("content").notNull(),
+  messageText: text("message_text"),
   caption: text("caption"),
   fileUrl: text("file_url"),
   fileName: text("file_name"),
@@ -1472,12 +1472,13 @@ export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
   id: int("id").primaryKey().autoincrement(),
   broadcastMessageId: int("message_id").notNull(),
   customerId: int("customer_id").notNull(),
-  phone: varchar("phone", { length: 32 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
   status: varchar("status", { length: 16 }).default("pending").notNull(),
   errorMessage: text("error_message"),
   sentAt: timestamp("sent_at"),
   deliveredAt: timestamp("delivered_at"),
   readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type BroadcastMemberSent = typeof broadcastMembersSent.$inferSelect;

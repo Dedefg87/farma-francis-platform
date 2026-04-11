@@ -158,6 +158,81 @@ async function startServer() {
     }
   });
 
+  // Broadcast file upload
+  app.post("/api/broadcast/upload-temp-file", async (req, res) => {
+    try {
+      // Parse multipart manually (simple approach for single file)
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', async () => {
+        const rawBody = Buffer.concat(chunks);
+        const contentType = req.headers['content-type'] || '';
+        
+        // Parse multipart form data
+        const boundary = contentType.split('boundary=')[1];
+        if (!boundary) {
+          res.status(400).json({ error: 'No boundary in multipart' });
+          return;
+        }
+        
+        const boundaryBuf = Buffer.from(`--${boundary}`);
+        const parts: { headers: string; body: Buffer }[] = [];
+        let start = 0;
+        
+        while (true) {
+          const idx = rawBody.indexOf(boundaryBuf, start);
+          if (idx === -1) break;
+          if (start > 0) {
+            const partData = rawBody.slice(start, idx - 2); // -2 for \r\n before boundary
+            const headerEnd = partData.indexOf('\r\n\r\n');
+            if (headerEnd !== -1) {
+              parts.push({
+                headers: partData.slice(0, headerEnd).toString(),
+                body: partData.slice(headerEnd + 4),
+              });
+            }
+          }
+          start = idx + boundaryBuf.length + 2; // +2 for \r\n after boundary
+        }
+        
+        // Find the file part
+        let filePart = parts.find(p => p.headers.includes('filename='));
+        if (!filePart) {
+          res.status(400).json({ error: 'No file found in upload' });
+          return;
+        }
+        
+        // Extract filename
+        const filenameMatch = filePart.headers.match(/filename="([^"]+)"/);
+        const originalName = filenameMatch?.[1] || 'file';
+        
+        // Extract content type from part headers
+        const ctMatch = filePart.headers.match(/Content-Type:\s*([^\r\n]+)/i);
+        const mimetype = ctMatch?.[1] || 'application/octet-stream';
+        
+        // Remove trailing \r\n from body
+        let fileBuffer = filePart.body;
+        if (fileBuffer.length >= 2 && fileBuffer[fileBuffer.length - 2] === 0x0D && fileBuffer[fileBuffer.length - 1] === 0x0A) {
+          fileBuffer = fileBuffer.slice(0, -2);
+        }
+        
+        // Upload to R2
+        const { uploadToR2 } = await import('./r2-client.js');
+        const result = await uploadToR2(fileBuffer, originalName, mimetype);
+        
+        res.json({
+          fileUrl: result.url,
+          fileName: originalName,
+          fileType: mimetype,
+          fileSize: fileBuffer.length,
+        });
+      });
+    } catch (err: any) {
+      console.error('[broadcast/upload] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       const indexPath = path.join(__dirname, "../dist/public/index.html");

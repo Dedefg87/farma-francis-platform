@@ -143,9 +143,10 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   });
 
   const sendMessage = trpc.broadcast.sendMessage.useMutation({
-    onSuccess: data => {
-      toast.success(`Mensagem enviada para ${data.totalRecipients} contatos!`);
+    onSuccess: (data, variables) => {
+      toast.success(`Mensagem enfileirada para envio! (ID: ${data.messageId})`);
       setMessageContent("");
+      setFileAttachment(null);
     },
     onError: error => {
       toast.error(`Erro ao enviar: ${error.message}`);
@@ -234,7 +235,6 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       });
 
       const data = await res.json();
-      console.log("[Broadcast] Upload response:", data); // DEBUG
       
       if (!res.ok) throw new Error(data.error || "Upload falhou");
 
@@ -283,7 +283,6 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       payload.fileSize = fileAttachment.size;
     }
 
-    console.log("[Broadcast] Payload a ser enviado:", payload); // DEBUG
 
     sendMessage.mutate(payload);
 
