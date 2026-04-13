@@ -4,8 +4,10 @@
  * Cache inteligente para configurações da Evolution API
  * reduzindo queries ao banco e melhorando performance.
  *
+ * Funciona COM ou SEM Redis. Se Redis estiver indisponível,
+ * usa cache em memória (fallback do redis-namespaces).
+ *
  * TTL padrão: 5 minutos (300s)
- * Namespace: evolution:
  */
 
 import { getEvolutionRedis } from "../_core/redis-namespaces.js";
@@ -15,60 +17,70 @@ import {
 } from "../../drizzle/schema.js";
 import { eq, sql } from "drizzle-orm";
 
-// Cache keys (sem prefixo, o namespace adiciona automaticamente)
 const EVOLUTION_CONFIG_KEY = 'config:evolution';
 const EVOLUTION_TTL = 300; // 5 minutos
+
+// In-memory fallback for when Redis is completely unavailable
+let memoryConfig: { data: any; expiresAt: number } | null = null;
 
 /**
  * Busca configuração da Evolution API do cache ou banco
  */
 export async function getEvolutionConfigWithCache() {
-  const cache = getEvolutionRedis();
+  // 1. Try memory cache first (fastest)
+  if (memoryConfig && Date.now() < memoryConfig.expiresAt) {
+    return memoryConfig.data;
+  }
 
+  // 2. Try Redis cache
   try {
-    // 1. Tentar cache
+    const cache = getEvolutionRedis();
     const cached = await cache.getJSON(EVOLUTION_CONFIG_KEY);
     if (cached) {
-      console.log('[CacheEvolution] ✅ Cache HIT (namespace:evolution:)');
+      memoryConfig = { data: cached, expiresAt: Date.now() + EVOLUTION_TTL * 1000 };
       return cached;
     }
-
-    console.log('[CacheEvolution] ⏳ Cache MISS — buscando no banco');
-
-    // 2. Buscar do banco
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-
-    const [config] = await db
-      .select()
-      .from(integrationSettings)
-      .where(sql`integration_type = ${"evolution_api"}`)
-      .limit(1);
-
-    if (!config || !config.isActive) {
-      throw new Error("Evolution API not configured");
-    }
-
-    const configData =
-      typeof config.config === "string"
-        ? JSON.parse(config.config)
-        : config.config;
-
-    // 3. Salvar no cache
-    const toCache = {
-      apiUrl: configData.apiUrl,
-      instanceName: configData.instanceName,
-      // não cachear apiKey por segurança (buscar do banco quando necessário)
-    };
-
-    await cache.set(EVOLUTION_CONFIG_KEY, toCache, EVOLUTION_TTL);
-    console.log('[CacheEvolution] 💾 Cache SET (TTL 300s, namespace:evolution:)');
-
-    return configData;
-  } catch (error) {
-    console.error('[CacheEvolution] ❌ Erro:', error.message);
-    throw error;
+  } catch {
+    // Redis unavailable, continue to DB
   }
+
+  // 3. Fetch from database
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const [config] = await db
+    .select()
+    .from(integrationSettings)
+    .where(sql`integration_type = ${"evolution_api"}`)
+    .limit(1);
+
+  if (!config || !config.isActive) {
+    throw new Error("Evolution API not configured");
+  }
+
+  const configData =
+    typeof config.config === "string"
+      ? JSON.parse(config.config)
+      : config.config;
+
+  // 4. Save to caches
+  const toCache = {
+    apiUrl: configData.apiUrl,
+    instanceName: configData.instanceName,
+  };
+
+  // Memory cache
+  memoryConfig = { data: toCache, expiresAt: Date.now() + EVOLUTION_TTL * 1000 };
+
+  // Redis cache (best effort)
+  try {
+    const cache = getEvolutionRedis();
+    await cache.set(EVOLUTION_CONFIG_KEY, toCache, EVOLUTION_TTL);
+  } catch {
+    // Redis unavailable, already in memory cache
+  }
+
+  return toCache;
 }
 
 /**
@@ -97,12 +109,16 @@ export async function getEvolutionApiKey(): Promise<string> {
 }
 
 /**
- * Invalida cache da Evolution (útil quando config é atualizada)
+ * Invalida cache da Evolution
  */
 export async function invalidateEvolutionCache(): Promise<void> {
-  const cache = getEvolutionRedis();
-  await cache.del(EVOLUTION_CONFIG_KEY);
-  console.log('[CacheEvolution] 🗑️ Cache invalidado (namespace:evolution:)');
+  memoryConfig = null;
+  try {
+    const cache = getEvolutionRedis();
+    await cache.del(EVOLUTION_CONFIG_KEY);
+  } catch {
+    // Redis unavailable
+  }
 }
 
 /**

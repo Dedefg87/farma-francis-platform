@@ -65,10 +65,37 @@ export const messagesRouter = router({
       if (!db) throw new Error("Database not available");
 
       // Normalize camelCase/snake_case from frontend
-      const fileUrl = input.fileUrl ?? input.file_url ?? null;
+      let fileUrl = input.fileUrl ?? input.file_url ?? null;
       const fileName = input.fileName ?? input.file_name ?? null;
-      const fileType = input.fileType ?? input.file_type ?? null;
+      let fileType = input.fileType ?? input.file_type ?? null;
       const fileSize = input.fileSize ?? input.file_size ?? null;
+
+      // If fileUrl is a data URL (base64), upload to R2 first
+      // Evolution API requires a public URL or raw base64 for media
+      if (fileUrl && fileUrl.startsWith('data:')) {
+        try {
+          const { uploadToR2 } = await import('./r2-client.js');
+          // Extract base64 data and mime type
+          const mimeMatch = fileUrl.match(/^data:([^;]+);base64,(.*)$/s);
+          if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
+            const mimetype = mimeMatch[1];
+            const base64Data = mimeMatch[2];
+            const buffer = Buffer.from(base64Data, 'base64');
+            const ext = mimetype.includes('png') ? 'png' : mimetype.includes('webp') ? 'webp' : mimetype.includes('pdf') ? 'pdf' : 'jpg';
+            const r2Result = await uploadToR2(buffer, `messages/${input.conversation_id}_${Date.now()}.${ext}`, mimetype);
+            fileUrl = r2Result.url; // Replace data URL with R2 public URL
+            fileType = mimetype;
+            console.log('[messages.send] 📎 Uploaded media to R2:', r2Result.url);
+          }
+        } catch (r2Err: any) {
+          console.error('[messages.send] ⚠️ R2 upload failed, will try sending base64 directly:', r2Err.message);
+          // Fallback: extract raw base64 for Evolution API
+          const base64Match = fileUrl.match(/^data:[^;]+;base64,(.*)$/s);
+          if (base64Match) {
+            fileUrl = base64Match[1]; // Send raw base64 without data: prefix
+          }
+        }
+      }
 
       // Get conversation details to find the customer phone
       const [conv] = await db

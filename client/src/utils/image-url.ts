@@ -1,10 +1,14 @@
 /**
- * Get image source URL with WhatsApp CDN proxy support.
+ * Get image source URL.
  *
- * WhatsApp profile pictures (pps.whatsapp.net, mmg.whatsapp.net) block
- * direct browser access with 403. This function routes them through our
- * backend proxy instead.
+ * WhatsApp CDN URLs (pps.whatsapp.net, mmg.whatsapp.net) block direct
+ * browser access with 403. Profile pictures are now uploaded to R2
+ * automatically by profile-pic.ts, so new customers won't have these URLs.
+ * 
+ * For legacy customers with WhatsApp CDN URLs, we return the URL as-is
+ * (will show a fallback avatar in the UI).
  */
+
 export function getImageSrc(
   url: string | null | undefined,
   _messageId?: number
@@ -16,16 +20,11 @@ export function getImageSrc(
     return url;
   }
 
-  // WhatsApp CDN URLs must be proxied (403 if loaded directly)
-  if (
-    url.startsWith("https://pps.whatsapp.net/") ||
-    url.startsWith("https://mmg.whatsapp.net/")
-  ) {
-    return `/api/proxy-image?url=${encodeURIComponent(url)}`;
-  }
-
-  // Other absolute URLs are fine as-is
+  // R2 and other public URLs are fine
   if (url.startsWith("http")) {
+    // WhatsApp CDN URLs won't load in browser (403)
+    // Profile pics should be on R2 now, but legacy ones may still exist
+    // Return as-is — the Avatar component will show fallback if it fails
     return url;
   }
 

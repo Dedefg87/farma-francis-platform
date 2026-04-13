@@ -163,6 +163,41 @@ export async function processBroadcastMessage(messageId: number) {
       return;
     }
 
+    // If fileUrl is a data URL (base64), upload to R2 first
+    // Evolution API requires a public URL or raw base64 for media
+    let resolvedFileUrl = message.fileUrl;
+    if (resolvedFileUrl && resolvedFileUrl.startsWith('data:')) {
+      try {
+        const { uploadToR2 } = await import('../r2-client.js');
+        const mimeMatch = resolvedFileUrl.match(/^data:([^;]+);base64,(.*)$/s);
+        if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
+          const mimetype = mimeMatch[1];
+          const base64Data = mimeMatch[2];
+          const buffer = Buffer.from(base64Data, 'base64');
+          const ext = mimetype.includes('png') ? 'png' : mimetype.includes('webp') ? 'webp' : mimetype.includes('pdf') ? 'pdf' : 'jpg';
+          const r2Result = await uploadToR2(buffer, `broadcast/${messageId}_${Date.now()}.${ext}`, mimetype);
+          resolvedFileUrl = r2Result.url;
+          console.log('[Broadcast] 📎 Uploaded media to R2:', r2Result.url);
+          // Update DB with R2 URL so we don't re-upload on retry
+          await db.update(broadcastMessages)
+            .set({ fileUrl: resolvedFileUrl })
+            .where(eq(broadcastMessages.id, messageId));
+        }
+      } catch (r2Err: any) {
+        console.error('[Broadcast] ⚠️ R2 upload failed:', r2Err.message);
+        // Fallback: extract raw base64
+        const base64Match = resolvedFileUrl.match(/^data:[^;]+;base64,(.*)$/s);
+        if (base64Match) {
+          resolvedFileUrl = base64Match[1];
+        }
+      }
+    }
+
+    if (!message) {
+      console.error(`[Broadcast] Mensagem ${messageId} não encontrada`);
+      return;
+    }
+
     // 2. Buscar membros pendentes (juntamente com o telefone do cliente)
     const pendingSents = await db
       .select({
@@ -197,9 +232,9 @@ export async function processBroadcastMessage(messageId: number) {
       // Usar o telefone do customer se disponível, senão o phone do broadcastMembersSent
       const targetPhone = sent.customerPhone || sent.phone;
 
-      const fileAttachment = message.fileUrl
+      const fileAttachment = resolvedFileUrl
         ? {
-            url: message.fileUrl,
+            url: resolvedFileUrl,
             name: message.fileName || "arquivo",
             type: message.fileType || "application/octet-stream",
             size: message.fileSize || 0,
