@@ -29,7 +29,7 @@ export const messagesRouter = router({
     }),
 
   list: protectedProcedure
-    .input(z.object({ conversation_id: z.number() }))
+    .input(z.object({ conversation_id: z.coerce.number() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -46,7 +46,7 @@ export const messagesRouter = router({
   send: protectedProcedure
     .input(
       z.object({
-        conversation_id: z.number(),
+        conversation_id: z.coerce.number(),
         content: z.string(),
         file_url: z.string().optional(),
         file_name: z.string().optional(),

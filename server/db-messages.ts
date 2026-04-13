@@ -41,7 +41,9 @@ async function pickLeastLoadedOnlineAgent(params: {
   // when SSE connections drop (Railway kills long connections)
   if (connected.length === 0) {
     console.log("[pickAgent] ⚠️ No agents online via SSE — using offline fallback");
-    const offlineRows = (await db.execute(sql`
+    // NOTE: users table does NOT have is_active column
+    // We check agent_pauses to exclude agents on break
+    const offlineResult = await db.execute(sql`
       SELECT 
         u.id AS userId,
         COUNT(c.id) AS loadCount
@@ -51,13 +53,15 @@ async function pickLeastLoadedOnlineAgent(params: {
       LEFT JOIN conversations c
         ON c.assigned_to = u.id
        AND c.status IN ('open','assigned')
-      WHERE u.role = 'user'
-        AND u.is_active = 1
+      WHERE u.role IN ('user', 'admin')
         AND p.id IS NULL
       GROUP BY u.id
       ORDER BY loadCount ASC, u.last_signed_in DESC
       LIMIT 1
-    `)) as any[];
+    `);
+
+    // drizzle execute returns [rows, fields] for mysql2
+    const offlineRows = Array.isArray(offlineResult) ? offlineResult[0] : offlineResult;
 
     if (Array.isArray(offlineRows) && offlineRows.length > 0) {
       const fallbackId = Number(offlineRows[0]?.userId);
@@ -85,7 +89,7 @@ async function pickLeastLoadedOnlineAgent(params: {
         ON c.assigned_to = u.id
        AND c.status IN ('open','assigned')
        AND c.channel = ${params.provider}
-      WHERE u.role = 'user'
+      WHERE u.role IN ('user', 'admin')
         AND u.id IN (${sql.join(
           connected.map(id => sql`${id}`),
           sql`, `
