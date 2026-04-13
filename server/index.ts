@@ -181,6 +181,74 @@ async function startServer() {
     }
   });
 
+  // Debug: Check users and fix orphaned conversations
+  app.get("/api/debug/users-and-fix", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+
+      // Get all active users
+      const [users] = await db.execute(sql`
+        SELECT id, display_name, role, is_active, last_signed_in
+        FROM users WHERE is_active = 1
+        ORDER BY id
+      `);
+
+      // Count orphaned conversations
+      const [orphanCount] = await db.execute(sql`
+        SELECT COUNT(*) as count FROM conversations 
+        WHERE status = 'open' AND assigned_to IS NULL
+      `);
+
+      res.json({
+        activeUsers: users,
+        orphanedConversations: orphanCount,
+        sseConnectedUsers: sseManager.getConnectedUsers(),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message, stack: err.stack });
+    }
+  });
+
+  // Fix: Assign orphaned conversations to the least loaded agent
+  app.post("/api/debug/fix-orphans", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+
+      // Find the admin/agent with least active conversations
+      const [agents] = await db.execute(sql`
+        SELECT u.id, u.display_name, u.role,
+               (SELECT COUNT(*) FROM conversations c WHERE c.assigned_to = u.id AND c.status IN ('open','assigned')) as load_count
+        FROM users u 
+        WHERE u.is_active = 1 AND u.role IN ('admin', 'user')
+        ORDER BY load_count ASC
+        LIMIT 1
+      `);
+
+      const agent = (agents as any[])[0];
+      if (!agent) {
+        return res.json({ error: "No active agent found" });
+      }
+
+      // Assign all orphaned conversations to this agent
+      const [result] = await db.execute(sql`
+        UPDATE conversations 
+        SET assigned_to = ${agent.id}, status = 'assigned'
+        WHERE status = 'open' AND assigned_to IS NULL
+      `);
+
+      res.json({
+        assignedTo: agent,
+        conversationsFixed: result,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message, stack: err.stack });
+    }
+  });
+
   // Mark conversation as read
   app.post("/api/conversations/:id/mark-read", async (req, res) => {
     try {
