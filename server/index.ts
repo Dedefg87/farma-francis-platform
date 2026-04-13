@@ -5,6 +5,7 @@ import { applySqlMigrations } from "./_core/migrations";
 import path from "path";
 import { eq, and, sql } from "drizzle-orm";
 import { conversations, conversationMessages } from "../drizzle/schema";
+import { users } from "../drizzle/schema";
 // __dirname is natively available in CJS (esbuild --format=cjs)
 import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
