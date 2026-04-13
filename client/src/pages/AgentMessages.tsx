@@ -25,27 +25,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { renderContentWithLinks } from "@/utils/text-format";
 import { hasSession } from "@/lib/auth";
 
-function getImageSrc(
-  url: string | null | undefined,
-  messageId?: number
-): string {
-  if (!url) return "";
+import { getImageSrc } from "@/utils/image-url";
 
-  // Se já for data URL, retornar direto
-  if (url.startsWith?.("data:")) {
-    return url;
-  }
-
-  // Se for URL absoluta (http/https), usar como está
-  if (url.startsWith?.("http")) {
-    return url;
-  }
-
-  // Se for caminho relativo (ex: "whatsapp/imagem123.jpg"), usar PUBLIC_R2_URL
-  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-  const cleanUrl = url.replace(/^\//, "");
-  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
-}
 
 /**
  * Extrai o MIME type real de um arquivo.

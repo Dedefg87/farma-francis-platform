@@ -13,19 +13,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
-function getImageSrc(url: string | null | undefined, filename?: string | null): string {
-  if (!url) return "";
+import { getImageSrc } from "@/utils/image-url";
 
-  // Se já for data URL ou URL absoluta, usar como está
-  if (url.startsWith?.("data:") || url.startsWith?.("http")) {
-    return url;
-  }
-
-  // É um caminho relativo do R2 - prefixar com PUBLIC_R2_URL
-  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-  const cleanUrl = url.replace(/^\//, "");
-  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
-}
 
 /**
  * Extrai o MIME type real de um arquivo.

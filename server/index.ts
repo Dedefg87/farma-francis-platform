@@ -233,6 +233,48 @@ async function startServer() {
     }
   });
 
+  // Image proxy for WhatsApp profile pictures (pps.whatsapp.net blocks direct browser access)
+  app.get("/api/proxy-image", async (req, res) => {
+    try {
+      const imageUrl = req.query.url as string;
+      if (!imageUrl) {
+        res.status(400).json({ error: 'Missing url parameter' });
+        return;
+      }
+
+      // Only allow WhatsApp CDN URLs to prevent abuse
+      if (!imageUrl.startsWith('https://pps.whatsapp.net/') && !imageUrl.startsWith('https://mmg.whatsapp.net/')) {
+        res.status(403).json({ error: 'Only WhatsApp CDN URLs are allowed' });
+        return;
+      }
+
+      const response = await fetch(imageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        },
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        res.status(response.status).json({ error: `Upstream returned ${response.status}` });
+        return;
+      }
+
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      // Cache for 1 hour
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(buffer);
+    } catch (err: any) {
+      console.error('[proxy-image] Error:', err.message);
+      res.status(500).json({ error: 'Failed to fetch image' });
+    }
+  });
+
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       const indexPath = path.join(__dirname, "../dist/public/index.html");

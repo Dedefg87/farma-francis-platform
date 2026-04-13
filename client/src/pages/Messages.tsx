@@ -1,4 +1,5 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
+import { getImageSrc } from "@/utils/image-url";
 import {
   Card,
   CardContent,

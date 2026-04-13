@@ -21,32 +21,8 @@ interface ImageLightboxProps {
   initialIndex?: number;
 }
 
-function getImageSrc(url: string | null | undefined, messageId?: number): string {
-  if (!url) return "";
+import { getImageSrc } from "@/utils/image-url";
 
-  // Se já for data URL, retornar direto
-  if (url.startsWith?.("data:")) {
-    return url;
-  }
-
-  // Se for URL do R2 (Cloudflare) - usar como está (já é pública)
-  if (url.includes(".r2.") || url.includes("r2.dev") || url.includes("r2.cloudflarestorage.com")) {
-    return url;
-  }
-
-  // Se for URL do WhatsApp CDN - usar proxy
-  if (url?.startsWith?.("http") && (url.includes("whatsapp.net") || url.includes("whatsapp.com"))) {
-    if (messageId) {
-      return `/api/media/${messageId}`;
-    }
-    return url;
-  }
-  
-  // Se for caminho relativo (ex: "evolution-api/..."), usar PUBLIC_R2_URL
-  const r2Base = import.meta.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
-  const cleanUrl = url.replace(/^\//, "");
-  return `${r2Base.replace(/\/$/, "")}/${cleanUrl}`;
-}
 
 export function ImageLightbox({
   open,
