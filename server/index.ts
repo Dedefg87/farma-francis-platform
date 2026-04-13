@@ -188,11 +188,11 @@ async function startServer() {
       if (!db) return res.status(500).json({ error: "Database not available" });
       const { sql } = await import("drizzle-orm");
 
-      // Get all active users — use same pattern as db-tables
-      const [users] = await db.execute(sql`SELECT id, display_name, role, is_active FROM users WHERE is_active = 1 ORDER BY id`);
+      // Get all active users
+      const [users] = await db.execute(sql.raw('SELECT id, display_name, role, is_active FROM users WHERE is_active = 1 ORDER BY id'));
 
       // Count orphaned conversations
-      const [orphanRows] = await db.execute(sql`SELECT COUNT(*) as count FROM conversations WHERE status = 'open' AND assigned_to IS NULL`);
+      const [orphanRows] = await db.execute(sql.raw('SELECT COUNT(*) as count FROM conversations WHERE status = \'open\' AND assigned_to IS NULL'));
 
       res.json({
         activeUsers: users,
@@ -212,7 +212,7 @@ async function startServer() {
       const { sql } = await import("drizzle-orm");
 
       // Find admin with least active conversations
-      const [agents] = await db.execute(sql`SELECT u.id, u.display_name, u.role FROM users u WHERE u.is_active = 1 AND u.role IN ('admin', 'user') ORDER BY (SELECT COUNT(*) FROM conversations c WHERE c.assigned_to = u.id AND c.status IN ('open','assigned')) ASC LIMIT 1`);
+      const [agents] = await db.execute(sql.raw('SELECT u.id, u.display_name, u.role FROM users u WHERE u.is_active = 1 AND u.role IN (\'admin\', \'user\') ORDER BY (SELECT COUNT(*) FROM conversations c WHERE c.assigned_to = u.id AND c.status IN (\'open\',\'assigned\')) ASC LIMIT 1'));
 
       const agent = (agents as any[])[0];
       if (!agent) {
@@ -220,7 +220,7 @@ async function startServer() {
       }
 
       // Assign all orphaned conversations to this agent
-      const [result] = await db.execute(sql`UPDATE conversations SET assigned_to = ${agent.id}, status = 'assigned' WHERE status = 'open' AND assigned_to IS NULL`);
+      const [result] = await db.execute(sql.raw(`UPDATE conversations SET assigned_to = ${agent.id}, status = 'assigned' WHERE status = 'open' AND assigned_to IS NULL`));
 
       res.json({
         assignedTo: agent,
