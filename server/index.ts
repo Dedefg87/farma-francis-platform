@@ -186,22 +186,16 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql, eq } = await import("drizzle-orm");
-      const { users: usersTable } = await import("../drizzle/schema.js");
+      const { sql } = await import("drizzle-orm");
 
-      // Get active users using Drizzle query builder
-      const activeUsers = await db.select({
-        id: usersTable.id,
-        displayName: usersTable.displayName,
-        role: usersTable.role,
-        isActive: usersTable.isActive,
-      }).from(usersTable).where(eq(usersTable.isActive, 1));
+      // Get all users using simple select
+      const allUsers = await db.select().from(users);
 
-      // Count orphaned conversations
+      // Count orphaned conversations — use parameterized values
       const [orphanRows] = await db.execute(sql`SELECT COUNT(*) as cnt FROM conversations WHERE status = ${"open"} AND assigned_to IS NULL`);
 
       res.json({
-        activeUsers,
+        activeUsers: allUsers.map((u: any) => ({ id: u.id, name: u.displayName || u.name, role: u.role })),
         orphanedCount: orphanRows,
         sseConnectedUsers: sseManager.getConnectedUsers(),
       });
@@ -215,25 +209,20 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql, eq } = await import("drizzle-orm");
-      const { users: usersTable } = await import("../drizzle/schema.js");
+      const { sql } = await import("drizzle-orm");
 
-      // Get first active admin/user
-      const [agent] = await db.select({
-        id: usersTable.id,
-        displayName: usersTable.displayName,
-        role: usersTable.role,
-      }).from(usersTable).where(eq(usersTable.isActive, 1)).limit(1);
-
-      if (!agent) {
+      // Get first admin user
+      const allUsers = await db.select().from(users);
+      const admin = allUsers.find((u: any) => u.role === 'admin') || allUsers[0];
+      if (!admin) {
         return res.json({ error: "No active agent found" });
       }
 
       // Assign all orphaned conversations to this agent
-      const [result] = await db.execute(sql`UPDATE conversations SET assigned_to = ${agent.id}, status = ${"assigned"} WHERE status = ${"open"} AND assigned_to IS NULL`);
+      const [result] = await db.execute(sql`UPDATE conversations SET assigned_to = ${admin.id}, status = ${"assigned"} WHERE status = ${"open"} AND assigned_to IS NULL`);
 
       res.json({
-        assignedTo: agent,
+        assignedTo: { id: admin.id, name: admin.displayName || admin.name, role: admin.role },
         result: result,
       });
     } catch (err: any) {
