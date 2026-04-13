@@ -11,6 +11,7 @@ import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
 import createSSERouter from "./routers-sse";
+import mediaRouter from "./routers-media";
 import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
 import cookieParser from "cookie-parser";
@@ -105,6 +106,7 @@ async function startServer() {
 
   // Webhooks para WhatsApp, Instagram e Evolution API
   app.use("/api/webhooks", webhooksRouter);
+  app.use("/api/media", mediaRouter);
 
   // Debug: List all database tables
   app.get("/api/debug/db-tables", async (_, res) => {
