@@ -82,12 +82,17 @@ export default function createSSERouter(): Router {
   router.get("/", sseAuth, (req: any, res: any) => {
     const userId = req.userId;
 
-    // Set headers for SSE
+    // Set headers for SSE — CRITICAL for Railway (Fastly HTTP/2 CDN)
+    // X-Accel-Buffering: no prevents proxy buffering (nginx/Fastly)
+    // Connection: keep-alive + Transfer-Encoding ensures streaming works
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Credentials", "true");
+    // Flush headers immediately — don't let the proxy buffer them
+    res.flushHeaders();
 
     console.log(`[SSE] Client connected for userId=${userId}`);
 

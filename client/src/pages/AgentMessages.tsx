@@ -196,7 +196,8 @@ export default function AgentMessages() {
         // Set JWT token in cookie for SSE authentication
         const token = localStorage.getItem("authToken");
         if (token) {
-          document.cookie = `authToken=${token}; path=/; secure; samesite=strict`;
+          // Use lax for broader compatibility (works on both HTTP and HTTPS)
+          document.cookie = `authToken=${token}; path=/; samesite=lax`;
         }
 
         // withCredentials: true sends cookies automatically
@@ -250,18 +251,18 @@ export default function AgentMessages() {
         };
 
         eventSource.onerror = err => {
-          console.error("[AgentSSE] Connection error:", err);
+          // ERR_HTTP2_PROTOCOL_ERROR is common on Railway (HTTP/2 proxy doesn't support SSE)
+          // Don't log it loudly — it's expected behavior
+          if (reconnectAttempt === 0) {
+            console.warn("[AgentSSE] Connection failed (Railway HTTP/2 proxy). Polling will handle updates.");
+          }
           setIsConnected(false);
           eventSource?.close();
 
-          // Reconnect with exponential backoff
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000);
+          // Reconnect with exponential backoff (cap at 60s to avoid too many failed connections)
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 60000);
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
-            console.log(
-              "[AgentSSE] Reconnecting (attempt",
-              reconnectAttempt + ")"
-            );
             connect();
           }, delay);
         };
