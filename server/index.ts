@@ -132,6 +132,54 @@ async function startServer() {
     }
   });
 
+  // Debug: Check recent conversations and messages
+  app.get("/api/debug/conversations-status", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+
+      // Count conversations by status
+      const [statusCounts] = await db.execute(sql`
+        SELECT status, COUNT(*) as count, 
+               SUM(CASE WHEN assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned,
+               SUM(CASE WHEN assigned_to IS NOT NULL THEN 1 ELSE 0 END) as assigned
+        FROM conversations 
+        GROUP BY status
+      `);
+
+      // Last 5 conversations
+      const [recentConvs] = await db.execute(sql`
+        SELECT id, customer_name, customer_phone, status, assigned_to, 
+               last_message_at, unread_count, channel
+        FROM conversations 
+        WHERE status IN ('open', 'assigned')
+        ORDER BY last_message_at DESC LIMIT 5
+      `);
+
+      // Last 5 messages
+      const [recentMsgs] = await db.execute(sql`
+        SELECT cm.id, cm.conversation_id, cm.sender_type, cm.content, cm.created_at,
+               cm.external_id
+        FROM conversation_messages cm
+        ORDER BY cm.created_at DESC LIMIT 5
+      `);
+
+      // SSE connected users
+      const sseUsers = sseManager.getConnectedUsers();
+
+      res.json({
+        statusCounts,
+        recentConversations: recentConvs,
+        recentMessages: recentMsgs,
+        sseConnectedUsers: sseUsers,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message, stack: err.stack });
+    }
+  });
+
   // Mark conversation as read
   app.post("/api/conversations/:id/mark-read", async (req, res) => {
     try {
