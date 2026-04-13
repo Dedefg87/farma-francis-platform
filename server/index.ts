@@ -10,6 +10,7 @@ import { appRouter } from "./routers/index";
 import { createContext } from "./_core/trpc/context";
 import healthRouter from "./_core/routes/health";
 import createSSERouter from "./routers-sse";
+import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
 import cookieParser from "cookie-parser";
 
