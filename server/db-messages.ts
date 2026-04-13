@@ -390,19 +390,12 @@ export async function ingestInboundConversationMessage(message: {
   );
 
   // 2. Fetch profile picture in background (non-blocking)
-  if (message.provider === "whatsapp" && !customer?.photoUrl) {
+  // Download from WhatsApp CDN and upload to R2 (avoids 403 in browser)
+  if (message.provider === "whatsapp" && !customer?.photoUrl && customer?.id) {
     setImmediate(async () => {
       try {
-        const profile = await fetchEvolutionProfile(message.fromNumber);
-        if (profile?.profilePicture) {
-          const db = await getDb();
-          if (db && customer?.id) {
-            await db
-              .update(customers)
-              .set({ photoUrl: profile.profilePicture, updatedAt: new Date() })
-              .where(eq(customers.id, customer.id));
-          }
-        }
+        const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
+        await downloadAndUploadProfilePic(message.fromNumber, customer.id);
       } catch (err) {
         // Silently fail - photo is not critical
       }

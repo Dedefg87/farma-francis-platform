@@ -296,6 +296,13 @@ async function startServer() {
     console.log("[Server] ✅ Successfully listening on port", PORT);
     console.log("[Server] Environment:", process.env.NODE_ENV || "development");
     console.log("[Server] Health check endpoint: /api/health");
+
+    // Start broadcast recovery worker (reprocesses stuck broadcasts)
+    import('./workers/broadcast-recovery.js').then(({ startBroadcastRecoveryWorker }) => {
+      startBroadcastRecoveryWorker();
+    }).catch(err => {
+      console.warn('[Server] ⚠️ Failed to start broadcast recovery worker:', err.message);
+    });
   });
 
   server.on('error', (error) => {
