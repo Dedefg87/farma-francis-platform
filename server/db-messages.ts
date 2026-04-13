@@ -36,7 +36,38 @@ async function pickLeastLoadedOnlineAgent(params: {
     .map(id => Number(id))
     .filter(id => Number.isFinite(id) && id > 0);
 
+  // FALLBACK: If no agents are connected via SSE, find any active agent
+  // This prevents conversations from being created without assignment
+  // when SSE connections drop (Railway kills long connections)
   if (connected.length === 0) {
+    console.log("[pickAgent] ⚠️ No agents online via SSE — using offline fallback");
+    const offlineRows = (await db.execute(sql`
+      SELECT 
+        u.id AS userId,
+        COUNT(c.id) AS loadCount
+      FROM users u
+      LEFT JOIN agent_pauses p
+        ON p.agent_id = u.id AND p.status = 'active'
+      LEFT JOIN conversations c
+        ON c.assigned_to = u.id
+       AND c.status IN ('open','assigned')
+      WHERE u.role = 'user'
+        AND u.is_active = 1
+        AND p.id IS NULL
+      GROUP BY u.id
+      ORDER BY loadCount ASC, u.last_signed_in DESC
+      LIMIT 1
+    `)) as any[];
+
+    if (Array.isArray(offlineRows) && offlineRows.length > 0) {
+      const fallbackId = Number(offlineRows[0]?.userId);
+      if (Number.isFinite(fallbackId) && fallbackId > 0) {
+        console.log("[pickAgent] 🔄 Offline fallback assigned to agent", fallbackId);
+        agentAssignmentCache.set(cacheKey, { agentId: fallbackId, timestamp: Date.now() });
+        return { userId: fallbackId, loadCount: Number(offlineRows[0]?.loadCount ?? 0), lastSignedIn: null };
+      }
+    }
+
     agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
     return null;
   }
