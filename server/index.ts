@@ -212,9 +212,14 @@ async function startServer() {
       if (!db) return res.status(500).json({ error: "Database not available" });
       const { sql } = await import("drizzle-orm");
 
-      // Get first admin user
+      // Get first admin user, OR the SSE-connected user if available
       const allUsers = await db.select().from(users);
-      const admin = allUsers.find((u: any) => u.role === 'admin') || allUsers[0];
+      const sseUsers = sseManager.getConnectedUsers();
+      // Priority: use the SSE-connected user (they're online right now)
+      const connectedAdmin = sseUsers.length > 0
+        ? allUsers.find((u: any) => String(u.id) === sseUsers[0])
+        : null;
+      const admin = connectedAdmin || allUsers.find((u: any) => u.role === 'admin') || allUsers[0];
       if (!admin) {
         return res.json({ error: "No active agent found" });
       }
