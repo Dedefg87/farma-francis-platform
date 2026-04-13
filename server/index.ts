@@ -186,16 +186,22 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql } = await import("drizzle-orm");
+      const { sql, eq } = await import("drizzle-orm");
+      const { users: usersTable } = await import("../drizzle/schema.js");
 
-      // Get all active users
-      const [users] = await db.execute(sql.raw('SELECT id, display_name, role, is_active FROM users WHERE is_active = 1 ORDER BY id'));
+      // Get active users using Drizzle query builder
+      const activeUsers = await db.select({
+        id: usersTable.id,
+        displayName: usersTable.displayName,
+        role: usersTable.role,
+        isActive: usersTable.isActive,
+      }).from(usersTable).where(eq(usersTable.isActive, 1));
 
       // Count orphaned conversations
-      const [orphanRows] = await db.execute(sql.raw('SELECT COUNT(*) as count FROM conversations WHERE status = \'open\' AND assigned_to IS NULL'));
+      const [orphanRows] = await db.execute(sql`SELECT COUNT(*) as cnt FROM conversations WHERE status = ${"open"} AND assigned_to IS NULL`);
 
       res.json({
-        activeUsers: users,
+        activeUsers,
         orphanedCount: orphanRows,
         sseConnectedUsers: sseManager.getConnectedUsers(),
       });
@@ -209,18 +215,22 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql } = await import("drizzle-orm");
+      const { sql, eq } = await import("drizzle-orm");
+      const { users: usersTable } = await import("../drizzle/schema.js");
 
-      // Find admin with least active conversations
-      const [agents] = await db.execute(sql.raw('SELECT u.id, u.display_name, u.role FROM users u WHERE u.is_active = 1 AND u.role IN (\'admin\', \'user\') ORDER BY (SELECT COUNT(*) FROM conversations c WHERE c.assigned_to = u.id AND c.status IN (\'open\',\'assigned\')) ASC LIMIT 1'));
+      // Get first active admin/user
+      const [agent] = await db.select({
+        id: usersTable.id,
+        displayName: usersTable.displayName,
+        role: usersTable.role,
+      }).from(usersTable).where(eq(usersTable.isActive, 1)).limit(1);
 
-      const agent = (agents as any[])[0];
       if (!agent) {
         return res.json({ error: "No active agent found" });
       }
 
       // Assign all orphaned conversations to this agent
-      const [result] = await db.execute(sql.raw(`UPDATE conversations SET assigned_to = ${agent.id}, status = 'assigned' WHERE status = 'open' AND assigned_to IS NULL`));
+      const [result] = await db.execute(sql`UPDATE conversations SET assigned_to = ${agent.id}, status = ${"assigned"} WHERE status = ${"open"} AND assigned_to IS NULL`);
 
       res.json({
         assignedTo: agent,
