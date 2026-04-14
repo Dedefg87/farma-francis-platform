@@ -1,11 +1,10 @@
 import { z } from "zod";
-import { publicProcedure, protectedProcedure } from "../_core/trpc";
-import { db } from "../db";
-import { customers } from "../drizzle/schema";
-import { eq, like, sql } from "drizzle-orm";
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { db } from "./db";
+import { customers } from "./drizzle/schema";
+import { eq, like, or, sql } from "drizzle-orm";
 
-// 🚨 FORCE REBUILD - CUSTOMERS SEARCH FIXED 🚨
-export const customersRouter = {
+export const customersRouter = router({
   // GET /api/trpc/customers.search
   search: publicProcedure
     .input(
@@ -27,11 +26,31 @@ export const customersRouter = {
       const { query } = input;
 
       try {
-        // 🚨 FORCE REBUILD - VERSION 2 🚨
-        console.log('[customers.search] 🚨 FORCE REBUILD VERSION 2 🚨');
-        console.log('[customers.search] Searching for:', query);
+        // Normalizar query: remover caracteres não numéricos para busca de telefone
+        const numericQuery = query.replace(/\D/g, '');
 
-        // Busca mais simples possível - apenas retornar clientes existentes
+        // Construir condições de busca
+        const conditions = [];
+
+        // Busca por nome (parcial, case-insensitive)
+        conditions.push(like(customers.name, `%${query}%`));
+
+        // Busca por email (parcial)
+        if (query.includes('@')) {
+          conditions.push(like(customers.email, `%${query}%`));
+        }
+
+        // Busca por telefone: comparar apenas os dígitos
+        // O número no banco pode ter formatos variados (+553186337081, 553186337081, 31986337081)
+        // Então buscamos pelos últimos N dígitos da query
+        if (numericQuery.length >= 8) {
+          // Busca os últimos 8+ dígitos — cobre variações de formato
+          const lastDigits = numericQuery.slice(-8);
+          conditions.push(like(customers.phone, `%${lastDigits}%`));
+        } else if (numericQuery.length > 0) {
+          conditions.push(like(customers.phone, `%${numericQuery}%`));
+        }
+
         const results = await db
           .select({
             id: customers.id,
@@ -40,9 +59,8 @@ export const customersRouter = {
             email: customers.email,
           })
           .from(customers)
-          .limit(5);
-
-        console.log('[customers.search] Found results:', results.length);
+          .where(or(...conditions))
+          .limit(10);
 
         return results.map((c) => ({
           id: String(c.id),
@@ -55,6 +73,90 @@ export const customersRouter = {
         console.error('[customers.search] Error details:', error.message);
         throw new Error('Erro interno na busca de clientes');
       }
+    }),
+
+  // POST /api/trpc/customers.findOrCreate
+  // Busca cliente por telefone/email; se não existir, cria automaticamente
+  findOrCreate: protectedProcedure
+    .input(
+      z.object({
+        phone: z.string().optional(),
+        email: z.string().optional(),
+        name: z.string().optional(),
+      })
+    )
+    .output(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        phone: z.string(),
+        email: z.string().nullable(),
+        created: z.boolean(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { phone, email, name } = input;
+
+      // Tentar buscar cliente existente pelo telefone (matching flexível)
+      if (phone) {
+        const phoneDigits = phone.replace(/\D/g, '');
+
+        if (phoneDigits.length >= 8) {
+          const lastDigits = phoneDigits.slice(-8);
+          const [existing] = await db
+            .select()
+            .from(customers)
+            .where(like(customers.phone, `%${lastDigits}%`))
+            .limit(1);
+
+          if (existing) {
+            return {
+              id: String(existing.id),
+              name: existing.name || '',
+              phone: existing.phone || '',
+              email: existing.email || null,
+              created: false,
+            };
+          }
+        }
+      }
+
+      // Tentar buscar por email
+      if (email) {
+        const [existing] = await db
+          .select()
+          .from(customers)
+          .where(eq(customers.email, email))
+          .limit(1);
+
+        if (existing) {
+          return {
+            id: String(existing.id),
+            name: existing.name || '',
+            phone: existing.phone || '',
+            email: existing.email || null,
+            created: false,
+          };
+        }
+      }
+
+      // Não encontrado — criar novo cliente
+      const result = await db
+        .insert(customers)
+        .values({
+          name: name || 'Cliente',
+          phone: phone || '',
+          email: email || null,
+        })
+        .$returningId();
+
+      return {
+        id: String(result[0].id),
+        name: name || 'Cliente',
+        phone: phone || '',
+        email: email || null,
+        created: true,
+      };
     }),
 
   // GET /api/trpc/customers.get
@@ -91,4 +193,4 @@ export const customersRouter = {
         tags: customer.tags || [],
       };
     }),
-};
+});

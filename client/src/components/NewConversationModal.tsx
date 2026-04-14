@@ -116,10 +116,9 @@ export default function NewConversationModal({
       channel,
     });
 
-    // Buscar customer primeiro (necessário para customerId)
+    // Buscar ou criar customer automaticamente via tRPC proxy
     try {
-      // Criar cliente tRPC diretamente para evitar hooks fora do contexto React
-      const trpcClient = createTRPCProxyClient({
+      const trpcClient = createTRPCProxyClient<{ customers: { findOrCreate: { mutate: (input: any) => Promise<any> } } }>({
         links: [
           httpBatchLink({
             url: "/api/trpc",
@@ -140,23 +139,17 @@ export default function NewConversationModal({
         ],
       });
 
-      const searchResults = await trpcClient.customers.search.query({ query: finalPhone });
-
-      const customer = searchResults?.find(
-        c => c.phone === finalPhone || c.email === finalPhone || c.name.toLowerCase().includes(finalPhone.toLowerCase())
-      );
-
-      if (!customer) {
-        toast.error("Cliente não encontrado. Cadastre o cliente primeiro.");
-        return;
-      }
+      const customer: any = await (trpcClient as any).customers.findOrCreate.mutate({
+        phone: channel === "whatsapp" ? finalPhone : undefined,
+        email: channel !== "whatsapp" ? finalPhone : undefined,
+        name: autoFetchedName || undefined,
+      });
 
       createConversationMutation.mutate({
-        customerId: customer.id,
+        customerId: String(customer.id),
         channel,
         customerName: customer.name || undefined,
         customerPhone: customer.phone || undefined,
-        // queueId: undefined (não enviar se for undefined)
       });
     } catch (error) {
       toast.error(`Erro ao buscar cliente: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
