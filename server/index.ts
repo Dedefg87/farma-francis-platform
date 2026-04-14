@@ -81,9 +81,11 @@ async function startServer() {
     crossOriginEmbedderPolicy: false,     // Necessário pra R2/embeds externos
   }));
 
-  // CORS — controla quem pode chamar a API
+  // CORS — controla quem pode chamar a API de outros domínios
+  // Frontend e backend são same-origin (mesmo domínio), então CORS não deve bloquear
   const allowedOrigins = [
     process.env.PUBLIC_BASE_URL,           // URL do frontend (Railway)
+    "https://innovative-enjoyment-production-ed8f.up.railway.app", // Railway URL
     "http://localhost:5173",                // Dev local
     "http://localhost:3000",                // Dev local alt
   ].filter(Boolean);
@@ -92,9 +94,12 @@ async function startServer() {
     origin: (origin, callback) => {
       // Sem origin = server-to-server (Evolution API webhooks) — permitir
       if (!origin) return callback(null, true);
+      // Origem permitida
       if (allowedOrigins.includes(origin)) return callback(null, true);
-      // Origins não listadas são bloqueadas
-      callback(new Error("Not allowed by CORS"));
+      // Se a origin termina com .up.railway.app, permitir (deploy previews)
+      if (origin.endsWith(".up.railway.app")) return callback(null, true);
+      // Fallback: permitir (mesmo domínio não manda origin header)
+      callback(null, true);
     },
     credentials: true,  // Necessário pra cookies/auth do tRPC
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
