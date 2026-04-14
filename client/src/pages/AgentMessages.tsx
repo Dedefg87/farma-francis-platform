@@ -97,7 +97,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-// const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import QuickRepliesModal from "@/components/QuickRepliesModal";
 import NewConversationModal from "@/components/NewConversationModal";
 import PullConversationModal from "@/components/PullConversationModal";
@@ -123,6 +123,8 @@ export default function AgentMessages() {
   const [crmCustomerPhone, setCrmCustomerPhone] = useState<string>("");
   const [message, setMessage] = useState("");
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
   const [sortOrder, setSortOrder] = useState<string>(() => {
     return localStorage.getItem("conversationSortOrder") || "newest_last";
   });
@@ -797,6 +799,28 @@ export default function AgentMessages() {
     setShowQuickReplies(false);
   };
 
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessage(prev => prev + emojiData.emoji);
+  };
+
+  // Fechar emoji picker ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+    if (showEmojiPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEmojiPicker]);
+
   const selectedConversation = conversations?.find(
     c => Number(c.id) === selectedConversationId
   );
@@ -1346,8 +1370,24 @@ export default function AgentMessages() {
                     <MessageSquare className="w-4 h-4" />
                   </Button>
 
-                  <div className="relative">
-                    {/* Emoji picker removido temporariamente para debugging */}
+                  <div className="relative" ref={emojiPickerRef}>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      title="Emojis"
+                    >
+                      <Smile className="w-4 h-4" />
+                    </Button>
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-12 right-0 z-50">
+                        <EmojiPicker
+                          onEmojiClick={handleEmojiClick}
+                          width={350}
+                          height={400}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <Input

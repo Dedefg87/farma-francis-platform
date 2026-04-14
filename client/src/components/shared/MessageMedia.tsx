@@ -418,9 +418,27 @@ export function MessageMedia({
   const size = formatFileSize(fileSize);
 
   const isImage = mimeType?.startsWith?.('image/');
+  const isSticker = isImage && (mimeType?.includes('webp') && !fileName?.endsWith('.png') && !fileName?.endsWith('.jpg') && !fileName?.endsWith('.jpeg') || fileUrl?.includes('sticker'));
   const isVideo = mimeType?.startsWith?.('video/');
   const isAudio = mimeType?.startsWith?.('audio/');
   const isPdf = mimeType === 'application/pdf';
+
+  // Sticker — sem fundo, tamanho fixo
+  if (isSticker) {
+    return (
+      <img
+        src={mediaUrl}
+        alt="Sticker"
+        className="max-w-[150px] max-h-[150px] object-contain cursor-pointer drop-shadow-sm"
+        onClick={() => onImageClick?.(fileUrl, messageId)}
+        onError={(e) => {
+          const el = e.currentTarget;
+          el.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==';
+          el.alt = 'Sticker indisponível';
+        }}
+      />
+    );
+  }
 
   // Imagem
   if (isImage) {

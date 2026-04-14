@@ -800,6 +800,7 @@ async function processWhatsAppWebhook(body: any) {
               messageText,
               caption,
               mediaUrl,
+              mediaId,
               mimeType,
               fileName,
               fileSize,
@@ -932,6 +933,7 @@ async function processInstagramWebhook(body: any) {
             messageText: text,
             caption: null,
             mediaUrl,
+            mediaId: null,
             mimeType,
             externalId: messageId, // Add this to trigger S3 download
             createdAt: new Date(),
@@ -1405,6 +1407,7 @@ async function processEvolutionWebhook(body: any) {
             messageText,
             caption,
             mediaUrl: mediaUrl || null,
+            mediaId: parsed.mediaId || null,
             mimeType,
             fileName: parsed.fileName,
             fileSize: parsed.fileSize,

@@ -5,7 +5,7 @@
  */
 import { getDb } from "../db";
 import { conversations, conversationMessages, customers, integrationSettings } from "../../drizzle/schema";
-import { eq, and, or, sql, gte } from "drizzle-orm";
+import { eq, and, or, sql, gte, desc } from "drizzle-orm";
 import { generatePhoneVariants } from "../utils/phone";
 
 import { sseManager, EVENTS } from "../_core/sse";
@@ -128,7 +128,8 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   const customerRecord = customer[0];
 
-  // Buscar conversa aberta/assigned para este cliente
+    // Buscar conversa aberta/assigned/recentemente fechada para este cliente
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const [conv] = await db
     .select()
     .from(conversations)
@@ -138,10 +139,15 @@ async function processMobileSyncJob(job: MobileSyncJob) {
         eq(conversations.channel, "whatsapp"),
         or(
           eq(conversations.status, "open"),
-          eq(conversations.status, "assigned")
+          eq(conversations.status, "assigned"),
+          and(
+            eq(conversations.status, "closed"),
+            gte(conversations.closedAt, thirtyDaysAgo)
+          )
         )
       )
     )
+    .orderBy(desc(conversations.lastMessageAt))
     .limit(1);
 
   let conversationId: number;
@@ -169,12 +175,20 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     console.log("[MobileSync] Created new conversation:", conversationId, "for phone:", customerPhone);
   } else {
     conversationId = conv.id;
-    // Atualizar lastMessageAt e unreadCount
+    const isReopening = conv.status === "closed";
+    // Atualizar lastMessageAt, unreadCount e reabrir se fechada
     await db
       .update(conversations)
       .set({
         lastMessageAt: new Date(),
-        unreadCount: sql<number>`unread_count + 1`,
+        unreadCount: isReopening ? 1 : sql<number>`unread_count + 1`,
+        ...(isReopening ? {
+          status: "open",
+          assignedTo: null,
+          queueId: null,
+          closedAt: null,
+          closeReason: null,
+        } : {}),
       })
       .where(eq(conversations.id, conversationId));
   }

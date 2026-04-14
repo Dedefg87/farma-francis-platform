@@ -1,6 +1,7 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { ImageLightbox } from "@/components/ImageLightbox";
 import { getImageSrc } from "@/utils/image-url";
+import EmojiPicker, { EmojiClickData } from "emoji-picker-react";
 import {
   Card,
   CardContent,
@@ -42,8 +43,9 @@ import {
   Lightbulb,
   ChevronRight,
   Building,
+  Smile,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,6 +73,8 @@ export default function Messages() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<Array<{ id: number; fileUrl: string; fileName?: string | null }>>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   const handleImageClick = (url: string, msgId?: string | number) => {
     setLightboxImages([{ id: Number(msgId) || 0, fileUrl: url }]);
@@ -313,6 +317,28 @@ export default function Messages() {
     toast.success("Nota interna adicionada!");
     setInternalNote("");
   };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageInput(prev => prev + emojiData.emoji);
+  };
+
+  // Fechar emoji picker ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+    if (showEmojiPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEmojiPicker]);
 
   const getChannelIcon = (channel: "whatsapp" | "instagram") => {
     return channel === "whatsapp" ? (
@@ -857,7 +883,25 @@ export default function Messages() {
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    {msg.fileType?.startsWith("image/") ? (
+                                    {msg.fileType?.includes("webp") && !msg.content ? (
+                                      // Sticker — sem fundo, tamanho fixo
+                                      <img
+                                        src={getImageSrc(msg.fileUrl, msg.id)}
+                                        alt="Sticker"
+                                        className="max-w-[150px] max-h-[150px] object-contain cursor-pointer drop-shadow-sm"
+                                        onClick={() =>
+                                          handleImageClick(
+                                            msg.fileUrl!,
+                                            String(msg.id)
+                                          )
+                                        }
+                                        onError={e => {
+                                          const el = e.currentTarget as HTMLImageElement;
+                                          el.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
+                                          el.alt = "Sticker indisponível";
+                                        }}
+                                      />
+                                    ) : msg.fileType?.startsWith("image/") ? (
                                       <div className="relative group">
                                         <img
                                           src={getImageSrc(msg.fileUrl, msg.id)}
@@ -1124,6 +1168,26 @@ export default function Messages() {
                               }
                             }}
                           />
+                          <div className="relative" ref={emojiPickerRef}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="self-end flex-shrink-0"
+                              disabled={sendMessageMutation.isPending}
+                              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                            >
+                              <Smile className="w-4 h-4" />
+                            </Button>
+                            {showEmojiPicker && (
+                              <div className="absolute bottom-12 right-0 z-50">
+                                <EmojiPicker
+                                  onEmojiClick={handleEmojiClick}
+                                  width={350}
+                                  height={400}
+                                />
+                              </div>
+                            )}
+                          </div>
                           <Button
                             onClick={handleSendMessage}
                             className="self-end"

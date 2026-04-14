@@ -363,7 +363,7 @@ function buildInboundContent(message: {
       return "[Localizacao]";
     case "sticker":
     case "stickerMessage":
-      return "[Sticker]";
+      return ""; // Sticker é renderizado como imagem no frontend
     case "extendedTextMessage":
       return "[Resposta a Status]";
     case "reaction":
@@ -386,6 +386,7 @@ export async function ingestInboundConversationMessage(message: {
   messageText?: string | null;
   caption?: string | null;
   mediaUrl?: string | null;
+  mediaId?: string | null;
   mimeType?: string | null;
   fileName?: string | null;
   fileSize?: number | null;
@@ -455,7 +456,9 @@ export async function ingestInboundConversationMessage(message: {
     .orderBy(desc(queues.priority))
     .limit(1);
 
-  // 5. Find existing conversation (open or assigned)
+  // 5. Find existing conversation (open, assigned, or recently closed ≤30 days)
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
   const [existingConversation] = await db
     .select()
     .from(conversations)
@@ -465,7 +468,12 @@ export async function ingestInboundConversationMessage(message: {
         eq(conversations.channel, message.provider),
         or(
           eq(conversations.status, "open"),
-          eq(conversations.status, "assigned")
+          eq(conversations.status, "assigned"),
+          // Reabrir conversa fechada há menos de 30 dias
+          and(
+            eq(conversations.status, "closed"),
+            gte(conversations.closedAt, thirtyDaysAgo)
+          )
         )
       )
     )
@@ -499,14 +507,26 @@ export async function ingestInboundConversationMessage(message: {
 
     conversationId = newConversation?.id;
   } else {
-    // Update existing conversation
+    // Update existing conversation (ou reabrir conversa fechada)
+    const isReopening = existingConversation?.status === "closed";
     const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
     await db
       .update(conversations)
       .set({
         lastMessageAt: now,
-        unreadCount: sql<number>`unread_count + 1`,
-        ...(shouldAssign
+        unreadCount: isReopening ? 1 : sql<number>`unread_count + 1`,
+        // Reabrir conversa fechada
+        ...(isReopening
+          ? {
+              status: assignedUserId ? "assigned" : "open",
+              assignedTo: assignedUserId ?? null,
+              queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
+              closedAt: null,
+              closeReason: null,
+            }
+          : {}),
+        // Atribuir agente se não tinha
+        ...(shouldAssign && !isReopening
           ? {
               assignedTo: assignedUserId,
               status: "assigned",
@@ -569,13 +589,19 @@ export async function ingestInboundConversationMessage(message: {
   const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
   const messageDbId = Number(rawMessageId) || undefined;
 
-  // 9. If it's a WhatsApp media message with a temporary URL, trigger Evolution download to upload to R2
-  if (
+  // 9. If it's a WhatsApp media message, trigger Evolution download to upload to R2
+  // Covers: images with WhatsApp CDN URLs AND stickers/media with only mediaId (no URL)
+  const needsR2Upload =
     message.provider === "whatsapp" &&
     message.externalId &&
-    fileUrlToSave &&
-    fileUrlToSave.includes("mmg.whatsapp.net")
-  ) {
+    (
+      // Case 1: has WhatsApp CDN URL
+      (fileUrlToSave && fileUrlToSave.includes("mmg.whatsapp.net")) ||
+      // Case 2: has media but no URL (stickers, etc.) — mediaId or mimeType indicates media
+      (!fileUrlToSave && (message.mediaId || ["sticker", "stickerMessage", "image", "audio", "video", "document"].includes(message.messageType || "")))
+    );
+
+  if (needsR2Upload) {
     try {
       console.log("[S3] Triggering Evolution download for R2 upload, messageId:", message.externalId);
       
