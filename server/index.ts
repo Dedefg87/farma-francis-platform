@@ -15,6 +15,8 @@ import mediaRouter from "./routers-media";
 import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import cors from "cors";
 
 // In CJS (esbuild --format=cjs), __dirname is provided by the Node.js module wrapper
 // No need to define it via import.meta.url
@@ -70,6 +72,34 @@ async function startServer() {
 
   const app = express();
   // Aumentar limite do body-parser para 50MB (padrão é 100kb)
+  // Helmet — headers de segurança (config customizada pra não quebrar iframes)
+  app.use(helmet({
+    contentSecurityPolicy: false,         // CSP requer config detalhada — adicionar depois
+    frameguard: { action: "sameorigin" }, // Permite iframe da mesma origem (PDF previews)
+    hsts: process.env.NODE_ENV === "production", // HSTS só em produção
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    crossOriginEmbedderPolicy: false,     // Necessário pra R2/embeds externos
+  }));
+
+  // CORS — controla quem pode chamar a API
+  const allowedOrigins = [
+    process.env.PUBLIC_BASE_URL,           // URL do frontend (Railway)
+    "http://localhost:5173",                // Dev local
+    "http://localhost:3000",                // Dev local alt
+  ].filter(Boolean);
+
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Sem origin = server-to-server (Evolution API webhooks) — permitir
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      // Origins não listadas são bloqueadas
+      callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,  // Necessário pra cookies/auth do tRPC
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  }));
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(cookieParser());
