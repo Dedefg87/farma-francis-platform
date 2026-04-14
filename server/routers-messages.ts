@@ -61,6 +61,11 @@ export const messagesRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // Admin NÃO pode enviar mensagens ao cliente — usar sussurros (internalMessages)
+      if (ctx.user?.role === 'admin') {
+        throw new Error('Admin não pode enviar mensagens ao cliente. Use mensagens internas (sussurros) para orientar agentes.');
+      }
+
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
