@@ -1,4 +1,5 @@
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
+import { ImageLightbox } from "@/components/ImageLightbox";
 import { getImageSrc } from "@/utils/image-url";
 import {
   Card,
@@ -46,8 +47,8 @@ import {
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/contexts/AuthContext";
+import { renderContentWithLinks } from "@/utils/text-format";
 import { SoundSelector } from "@/components/SoundSelector";
 
 export default function Messages() {
@@ -68,6 +69,11 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const handleImageClick = (url: string, msgId?: string | number) => {
+    setLightboxUrl(getImageSrc(url, msgId));
+  };
 
   // Buscar conversas reais
   const { data: conversations, isLoading: loadingConversations } =
@@ -562,14 +568,15 @@ export default function Messages() {
                             Ver Perfil
                           </Button>
                         </SheetTrigger>
-                        <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-                          <SheetHeader>
+                        <SheetContent className="w-[400px] sm:w-[540px] p-0 flex flex-col">
+                          <SheetHeader className="px-6 pt-6 pb-2 flex-shrink-0">
                             <SheetTitle>Perfil do Cliente</SheetTitle>
                             <SheetDescription>
                               Informações detalhadas do cliente
                             </SheetDescription>
                           </SheetHeader>
-                          <div className="mt-6 space-y-6">
+                          <ScrollArea className="flex-1 px-6 pb-6">
+                          <div className="mt-4 space-y-6">
                             {/* Customer Header */}
                             <div className="flex items-center gap-4">
                               <Avatar className="w-20 h-20">
@@ -761,6 +768,7 @@ export default function Messages() {
                               </>
                             )}
                           </div>
+                          </ScrollArea>
                         </SheetContent>
                       </Sheet>
                     </div>
@@ -779,6 +787,19 @@ export default function Messages() {
                       <MessageSquare className="w-4 h-4" />
                       Conversa
                     </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setActiveTab("internal")}
+                        className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                          activeTab === "internal"
+                            ? "border-b-2 border-purple-600 text-purple-700 bg-purple-50"
+                            : "text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Send className="w-4 h-4" />
+                        Sussurrar p/ Agente
+                      </button>
+                    )}
                     <button
                       onClick={() => setActiveTab("notes")}
                       className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
@@ -790,25 +811,19 @@ export default function Messages() {
                       <StickyNote className="w-4 h-4" />
                       Notas Internas
                     </button>
-                    {isAdmin && (
-                      <button
-                        onClick={() => setActiveTab("internal")}
-                        className={`flex-1 py-3 px-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
-                          activeTab === "internal"
-                            ? "border-b-2 border-purple-600 text-purple-700 bg-purple-50"
-                            : "text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        <Send className="w-4 h-4" />
-                        Mensagens Internas
-                      </button>
-                    )}
                   </div>
 
                   {/* Messages */}
                   <ScrollArea className="flex-1 p-4">
                     {activeTab === "messages" ? (
                       <div className="space-y-4">
+                        {isAdmin && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                            <p className="text-sm text-blue-800">
+                              <strong>Modo observador</strong> — Você está vendo a conversa como admin. Para se comunicar com o agente, use a aba "Sussurrar p/ Agente".
+                            </p>
+                          </div>
+                        )}
                         {loadingMessages ? (
                           <div className="text-center py-4 text-gray-500">
                             Carregando mensagens...
@@ -936,9 +951,9 @@ export default function Messages() {
                       <div className="space-y-4">
                         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
                           <p className="text-sm text-purple-800">
-                            <strong>Mensagens Internas</strong> - Comunicação
-                            entre Admin e Agentes. Estas mensagens aparecem como
-                            notificações para o agente responsável.
+                            <strong>Sussurro do Admin</strong> - Envie orientações,
+                            sugestões de venda ou alertas para o agente responsável.
+                            O cliente NÃO vê estas mensagens.
                           </p>
                         </div>
                         {loadingInternalMessages ? (
@@ -997,6 +1012,13 @@ export default function Messages() {
                   {/* Message Input */}
                   <div className="p-4 border-t border-gray-200 flex-shrink-0">
                     {activeTab === "messages" ? (
+                      isAdmin ? (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                          <p className="text-sm text-gray-500">
+                            Modo observador — Use "Sussurrar p/ Agente" para orientar o atendente
+                          </p>
+                        </div>
+                      ) : (
                       <>
                         {/* File Preview */}
                         {selectedFile && (
@@ -1115,6 +1137,7 @@ export default function Messages() {
                           </Button>
                         </div>
                       </>
+                      )
                     ) : activeTab === "notes" ? (
                       <div className="flex gap-2">
                         <Textarea
@@ -1258,6 +1281,7 @@ export default function Messages() {
           </CardContent>
         </Card>
       </div>
+      <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
     </FarmaDashboardLayout>
   );
 }
