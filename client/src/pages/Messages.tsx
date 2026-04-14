@@ -15,7 +15,6 @@ import { trpc } from "@/lib/trpc";
 import { hasSession } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   Sheet,
@@ -434,7 +433,7 @@ export default function Messages() {
                   />
                 </div>
               </CardHeader>
-              <ScrollArea className="flex-1">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="space-y-1 p-4 pt-0">
                   {loadingConversations ? (
                     <div className="text-center py-4 text-gray-500">
@@ -508,7 +507,7 @@ export default function Messages() {
                     ))
                   )}
                 </div>
-              </ScrollArea>
+              </div>
             </div>
 
             {/* Chat Area */}
@@ -818,7 +817,7 @@ export default function Messages() {
                   </div>
 
                   {/* Messages */}
-                  <ScrollArea className="flex-1 p-4">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-4">
                     {activeTab === "messages" ? (
                       <div className="space-y-4">
                         {isAdmin && (
@@ -1011,7 +1010,7 @@ export default function Messages() {
                         )}
                       </div>
                     )}
-                  </ScrollArea>
+                  </div>
 
                   {/* Message Input */}
                   <div className="p-4 border-t border-gray-200 flex-shrink-0">
