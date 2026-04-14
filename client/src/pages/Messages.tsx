@@ -572,14 +572,14 @@ export default function Messages() {
                             Ver Perfil
                           </Button>
                         </SheetTrigger>
-                        <SheetContent className="w-[400px] sm:w-[540px] p-0 flex flex-col overflow-hidden h-full">
+                        <SheetContent className="w-[400px] sm:w-[540px] p-0 flex flex-col h-full">
                           <SheetHeader className="px-6 pt-6 pb-2 flex-shrink-0">
                             <SheetTitle>Perfil do Cliente</SheetTitle>
                             <SheetDescription>
                               Informações detalhadas do cliente
                             </SheetDescription>
                           </SheetHeader>
-                          <ScrollArea className="flex-1 min-h-0 overflow-hidden px-6 pb-6">
+                          <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
                           <div className="mt-4 space-y-6 pb-4">
                             {/* Customer Header */}
                             <div className="flex items-center gap-4">
@@ -772,7 +772,7 @@ export default function Messages() {
                               </>
                             )}
                           </div>
-                          </ScrollArea>
+                          </div>
                         </SheetContent>
                       </Sheet>
                     </div>
