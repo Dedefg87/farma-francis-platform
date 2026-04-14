@@ -69,10 +69,14 @@ export default function Messages() {
   const [internalNote, setInternalNote] = useState("");
   const [internalMessageInput, setInternalMessageInput] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<Array<{ id: number; fileUrl: string; fileName?: string | null }>>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   const handleImageClick = (url: string, msgId?: string | number) => {
-    setLightboxUrl(getImageSrc(url, msgId));
+    setLightboxImages([{ id: Number(msgId) || 0, fileUrl: url }]);
+    setLightboxIndex(0);
+    setLightboxOpen(true);
   };
 
   // Buscar conversas reais
@@ -1281,7 +1285,7 @@ export default function Messages() {
           </CardContent>
         </Card>
       </div>
-      <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
+      <ImageLightbox open={lightboxOpen} onOpenChange={setLightboxOpen} images={lightboxImages} initialIndex={lightboxIndex} />
     </FarmaDashboardLayout>
   );
 }
