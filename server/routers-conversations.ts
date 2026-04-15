@@ -285,8 +285,10 @@ export const conversationsRouter = router({
         throw new Error("Não foi possível encontrar ou criar o cliente");
       }
 
-      // Check for existing open/assigned conversation with the same customer
-      const [existing] = await db
+      // Check for existing conversation with the same customer
+      // 1. First: open/assigned conversations (return directly)
+      // 2. Fallback: closed conversations (reopen with history preserved)
+      const [existingActive] = await db
         .select()
         .from(conversations)
         .where(
@@ -298,9 +300,43 @@ export const conversationsRouter = router({
         .orderBy(desc(conversations.lastMessageAt))
         .limit(1);
 
-      if (existing) {
-        // Return existing conversation instead of creating a duplicate
-        return mapConversation(existing);
+      if (existingActive) {
+        return mapConversation(existingActive);
+      }
+
+      // Check for closed conversation — reopen it (preserves message history)
+      const [existingClosed] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.customerId, numericCustomerId),
+            eq(conversations.status, "closed")
+          )
+        )
+        .orderBy(desc(conversations.lastMessageAt))
+        .limit(1);
+
+      if (existingClosed) {
+        // Reopen closed conversation — history is preserved!
+        await db
+          .update(conversations)
+          .set({
+            status: "open",
+            assignedTo: ctx.user.id,
+            unreadCount: 0,
+            lastMessageAt: now,
+            ...(resolvedName ? { customerName: resolvedName } : {}),
+            ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
+          })
+          .where(eq(conversations.id, existingClosed.id));
+
+        const [reopened] = await db
+          .select()
+          .from(conversations)
+          .where(eq(conversations.id, existingClosed.id));
+
+        return mapConversation(reopened);
       }
 
       const insertValues: any = {
