@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { and, eq, or, desc, inArray } from "drizzle-orm";
+import { and, eq, or, desc, inArray, like } from "drizzle-orm";
 import { conversations, customers, conversationMessages } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
+import { generatePhoneVariants, formatPhoneBR } from "./utils/phone";
 import { sql } from "drizzle-orm";
 import {
   Conversation,
@@ -204,10 +205,10 @@ export const conversationsRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        customerId: z.string(),
-        channel: z.enum(["whatsapp", "instagram", "telegram", "webchat", "email", "sms", "facebook"]),
+        customerId: z.string().optional(), // Opcional — se não fornecido, busca/cria pelo telefone
+        customerPhone: z.string(), // Obrigatório — usado pra buscar ou criar cliente
         customerName: z.string().optional(),
-        customerPhone: z.string().optional(),
+        channel: z.enum(["whatsapp", "instagram", "telegram", "webchat", "email", "sms", "facebook"]),
         queueId: z.string().optional(),
       })
     )
@@ -216,9 +217,75 @@ export const conversationsRouter = router({
       if (!db) throw new Error("Database not available");
 
       const now = new Date();
-      const numericCustomerId = parseInt(input.customerId, 10);
+      let numericCustomerId: number;
+      let resolvedName = input.customerName || '';
+      let resolvedPhone = input.customerPhone || '';
 
-      // ✅ Bug 3 fix: Check for existing open/assigned conversation with the same customer
+      // Se customerId foi fornecido, usar diretamente
+      if (input.customerId) {
+        numericCustomerId = parseInt(input.customerId, 10);
+        if (isNaN(numericCustomerId)) {
+          throw new Error("customerId inválido");
+        }
+      } else {
+        // Buscar cliente existente pelo telefone (matching flexível com variantes)
+        const phoneVariants = generatePhoneVariants(resolvedPhone);
+        let foundCustomer: any = null;
+
+        if (phoneVariants.length > 0) {
+          // Buscar por qualquer variação de telefone
+          const phoneConditions = phoneVariants.map(v => like(customers.phone, `%${v.replace(/[^0-9]/g, '')}%`));
+          // Também buscar pelos últimos 8 dígitos (fallback robusto)
+          const phoneDigits = resolvedPhone.replace(/\D/g, '');
+          if (phoneDigits.length >= 8) {
+            phoneConditions.push(like(customers.phone, `%${phoneDigits.slice(-8)}%`));
+          }
+
+          const candidates = await db
+            .select()
+            .from(customers)
+            .where(or(...phoneConditions))
+            .limit(5);
+
+          if (candidates.length > 0) {
+            foundCustomer = candidates[0];
+          }
+        }
+
+        if (foundCustomer) {
+          numericCustomerId = foundCustomer.id;
+          resolvedName = foundCustomer.name || resolvedName;
+          resolvedPhone = foundCustomer.phone || resolvedPhone;
+        } else {
+          // Criar novo cliente
+          const normalizedPhone = formatPhoneBR(resolvedPhone);
+          const insertResult = await db
+            .insert(customers)
+            .values({
+              name: resolvedName || 'Cliente',
+              phone: normalizedPhone || resolvedPhone,
+            });
+
+          const rawId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
+          numericCustomerId = Number(rawId) || 0;
+
+          if (!numericCustomerId) {
+            // Fallback: buscar o cliente recém-criado
+            const [newCustomer] = await db
+              .select()
+              .from(customers)
+              .orderBy(desc(customers.id))
+              .limit(1);
+            numericCustomerId = newCustomer?.id || 0;
+          }
+        }
+      }
+
+      if (!numericCustomerId) {
+        throw new Error("Não foi possível encontrar ou criar o cliente");
+      }
+
+      // Check for existing open/assigned conversation with the same customer
       const [existing] = await db
         .select()
         .from(conversations)
@@ -243,11 +310,11 @@ export const conversationsRouter = router({
         openedAt: now,
         lastMessageAt: now,
         unreadCount: 0,
-        assignedTo: ctx.user.id, // Atribui automaticamente ao criador
+        assignedTo: ctx.user.id,
       };
 
-      if (input.customerName) insertValues.customerName = input.customerName;
-      if (input.customerPhone) insertValues.customerPhone = input.customerPhone;
+      if (resolvedName) insertValues.customerName = resolvedName;
+      if (resolvedPhone) insertValues.customerPhone = resolvedPhone;
       if (input.queueId) insertValues.queueId = parseInt(input.queueId, 10);
 
       const result = await db
