@@ -13,7 +13,7 @@
     formData: typeof FormData === 'function',
     symbol: typeof Symbol === 'function',
     arrowFunctions: (() => { try { eval('(() => 1)'); return true; } catch (e) { return false; } })(),
-    modules: typeof import === 'function' || (function() { try { new Function('import("url")'); return false; } catch (e) { return true; } })(),
+    modules: (function() { try { new Function('import("url")'); return false; } catch (e) { return true; } })(),
     sse: typeof EventSource === 'function',
     cssVariables: (function() {
       try {
