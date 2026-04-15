@@ -18,7 +18,7 @@ import {
   conversationMessages,
 } from "../../drizzle/schema.js";
 import { eq, sql, and, desc, inArray } from "drizzle-orm";
-import { generatePhoneVariants, formatPhoneBR } from "../utils/phone.js";
+import { generatePhoneVariants, formatPhoneBR, findConversationByPhone, phoneLast8 } from "../utils/phone.js";
 import { getEvolutionConfigWithCache, getEvolutionApiKey } from "../services/cache-evolution.js";
 
 // Mapeamento de MIME type para mediatype da Evolution API
@@ -308,7 +308,8 @@ export async function processBroadcastMessage(messageId: number) {
 
 /**
  * Salva a mensagem broadcast na conversa do cliente
- * para que o agente veja o que foi enviado
+ * Usa busca por telefone (últimos 8 dígitos) para encontrar a conversa correta
+ * mesmo se o cliente estiver duplicado com formato diferente de telefone
  */
 async function saveBroadcastToConversation(
   db: any,
@@ -323,51 +324,42 @@ async function saveBroadcastToConversation(
 
   const now = new Date();
 
-  // Buscar conversa aberta/atribuída do cliente
-  let [conversation] = await db
+  // Buscar telefone do cliente
+  const [customer] = await db
     .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.customerId, customerId),
-        inArray(conversations.status, ["open", "assigned"])
-      )
-    )
-    .orderBy(desc(conversations.lastMessageAt))
+    .from(customers)
+    .where(eq(customers.id, customerId))
     .limit(1);
 
-  // Se não tem conversa aberta, buscar fechada e reabrir
-  if (!conversation) {
-    const [closedConv] = await db
-      .select()
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.customerId, customerId),
-          eq(conversations.status, "closed")
-        )
-      )
-      .orderBy(desc(conversations.lastMessageAt))
-      .limit(1);
-
-    if (closedConv) {
-      await db
-        .update(conversations)
-        .set({ status: "open", lastMessageAt: now, unreadCount: 0 })
-        .where(eq(conversations.id, closedConv.id));
-      conversation = closedConv;
-      conversation.status = "open";
-    }
+  if (!customer?.phone) {
+    console.warn(`[Broadcast] Cliente ${customerId} sem telefone, não pode salvar na conversa`);
+    return;
   }
 
-  // Se ainda não tem conversa, criar
-  if (!conversation) {
-    const [customer] = await db
-      .select()
-      .from(customers)
-      .where(eq(customers.id, customerId))
-      .limit(1);
+  // 🔥 Busca por telefone — resolve duplicatas com formatos diferentes
+  const found = await findConversationByPhone(db, customer.phone, conversations, customers);
 
+  let conversationId: number;
+
+  if (found) {
+    conversationId = found.conversationId;
+
+    // Se a conversa está fechada, reabrir
+    if (found.status === 'closed') {
+      await db
+        .update(conversations)
+        .set({ status: 'open', lastMessageAt: now, unreadCount: 0 })
+        .where(eq(conversations.id, conversationId));
+      console.log(`[Broadcast] 🔄 Reabriu conversa ${conversationId}`);
+    } else {
+      // Atualizar lastMessageAt
+      await db
+        .update(conversations)
+        .set({ lastMessageAt: now })
+        .where(eq(conversations.id, conversationId));
+    }
+  } else {
+    // Criar nova conversa
     const insertResult = await db.insert(conversations).values({
       customerId,
       customerName: customer?.name || '',
@@ -380,23 +372,15 @@ async function saveBroadcastToConversation(
     });
 
     const rawId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId;
-    const newId = Number(rawId);
-
-    if (newId) {
-      const [newConv] = await db
-        .select()
-        .from(conversations)
-        .where(eq(conversations.id, newId))
-        .limit(1);
-      conversation = newConv;
-    }
+    conversationId = Number(rawId);
+    console.log(`[Broadcast] 🆕 Criou conversa ${conversationId}`);
   }
 
-  if (!conversation) return;
+  if (!conversationId) return;
 
   // Salvar a mensagem na conversa
   await db.insert(conversationMessages).values({
-    conversationId: conversation.id,
+    conversationId,
     senderId: senderId || null,
     senderType: 'agent',
     content: messageText || '',
@@ -406,11 +390,5 @@ async function saveBroadcastToConversation(
     createdAt: now,
   });
 
-  // Atualizar lastMessageAt da conversa
-  await db
-    .update(conversations)
-    .set({ lastMessageAt: now })
-    .where(eq(conversations.id, conversation.id));
-
-  console.log(`[Broadcast] 💬 Mensagem salva na conversa ${conversation.id} do cliente ${customerId}`);
+  console.log(`[Broadcast] 💬 Mensagem salva na conversa ${conversationId} do cliente ${customerId}`);
 }

@@ -3,7 +3,7 @@ import { and, eq, or, desc, inArray, like } from "drizzle-orm";
 import { conversations, customers, conversationMessages } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
-import { generatePhoneVariants, formatPhoneBR } from "./utils/phone";
+import { generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
 import { sql } from "drizzle-orm";
 import {
   Conversation,
@@ -286,56 +286,62 @@ export const conversationsRouter = router({
         throw new Error("Não foi possível encontrar ou criar o cliente");
       }
 
-      // 🔥 BUSCAR QUALQUER conversa existente desse cliente (open, assigned, OU closed)
-      // Sempre reutilizar a mais recente, preservando o histórico
-      const [existingConversation] = await db
-        .select()
-        .from(conversations)
-        .where(eq(conversations.customerId, numericCustomerId))
-        .orderBy(desc(conversations.lastMessageAt))
-        .limit(1);
+      // 🔥 BUSCAR conversa existente por TELEFONE (últimos 8 dígitos)
+      // Resolve o problema de clientes duplicados com formatos diferentes de telefone
+      const found = await findConversationByPhone(db, resolvedPhone, conversations, customers);
 
-      console.log('[conversations.create] Existing conversation for customer', numericCustomerId, ':', existingConversation ? { id: existingConversation.id, status: existingConversation.status } : 'NONE');
+      console.log('[conversations.create] findConversationByPhone result:', found);
 
-      if (existingConversation) {
-        if (existingConversation.status === 'open' || existingConversation.status === 'assigned') {
-          // Já está aberta — só atribuir ao agente se não estiver
-          if (!existingConversation.assignedTo) {
-            await db
-              .update(conversations)
-              .set({ assignedTo: ctx.user.id })
-              .where(eq(conversations.id, existingConversation.id));
-            const [updated] = await db
-              .select()
-              .from(conversations)
-              .where(eq(conversations.id, existingConversation.id));
-            console.log('[conversations.create] Assigned to agent, returning:', updated.id);
-            return mapConversation(updated);
-          }
-          console.log('[conversations.create] Returning existing active conversation:', existingConversation.id);
-          return mapConversation(existingConversation);
-        }
-
-        // Conversa fechada — reabrir (preserva histórico!)
-        await db
-          .update(conversations)
-          .set({
-            status: "open",
-            assignedTo: ctx.user.id,
-            unreadCount: 0,
-            lastMessageAt: now,
-            ...(resolvedName ? { customerName: resolvedName } : {}),
-            ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
-          })
-          .where(eq(conversations.id, existingConversation.id));
-
-        const [reopened] = await db
+      if (found) {
+        // Buscar a conversa completa
+        const [existingConversation] = await db
           .select()
           .from(conversations)
-          .where(eq(conversations.id, existingConversation.id));
+          .where(eq(conversations.id, found.conversationId))
+          .limit(1);
 
-        console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
-        return mapConversation(reopened);
+        if (existingConversation) {
+          // Usar o customerId correto (pode ser diferente do encontrado inicialmente)
+          numericCustomerId = found.customerId;
+
+          if (existingConversation.status === 'open' || existingConversation.status === 'assigned') {
+            if (!existingConversation.assignedTo) {
+              await db
+                .update(conversations)
+                .set({ assignedTo: ctx.user.id })
+                .where(eq(conversations.id, existingConversation.id));
+              const [updated] = await db
+                .select()
+                .from(conversations)
+                .where(eq(conversations.id, existingConversation.id));
+              console.log('[conversations.create] Assigned to agent, returning:', updated.id);
+              return mapConversation(updated);
+            }
+            console.log('[conversations.create] Returning existing active conversation:', existingConversation.id);
+            return mapConversation(existingConversation);
+          }
+
+          // Conversa fechada — reabrir (preserva histórico!)
+          await db
+            .update(conversations)
+            .set({
+              status: "open",
+              assignedTo: ctx.user.id,
+              unreadCount: 0,
+              lastMessageAt: now,
+              ...(resolvedName ? { customerName: resolvedName } : {}),
+              ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
+            })
+            .where(eq(conversations.id, existingConversation.id));
+
+          const [reopened] = await db
+            .select()
+            .from(conversations)
+            .where(eq(conversations.id, existingConversation.id));
+
+          console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
+          return mapConversation(reopened);
+        }
       }
 
       const insertValues: any = {

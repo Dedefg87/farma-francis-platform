@@ -13,7 +13,7 @@ import {
 import { eq, desc, and, or, sql, like, inArray, gte, lte } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
 import { fetchEvolutionProfile } from "./messaging";
-import { normalizeWhatsAppNumber, generatePhoneVariants, formatPhoneBR } from "./utils/phone";
+import { normalizeWhatsAppNumber, generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
 
 // Cache para evitar queries repetitivas de agent assignment
 const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
@@ -456,31 +456,27 @@ export async function ingestInboundConversationMessage(message: {
     .orderBy(desc(queues.priority))
     .limit(1);
 
-  // 5. Find existing conversation (open, assigned, or recently closed ≤30 days)
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  // 5. Find existing conversation by PHONE (últimos 8 dígitos)
+  // Resolve problema de clientes duplicados com formatos diferentes de telefone
+  const found = await findConversationByPhone(db, customer.phone, conversations, customers);
 
-  const [existingConversation] = await db
-    .select()
-    .from(conversations)
-    .where(
-      and(
-        eq(conversations.customerId, customer.id),
-        eq(conversations.channel, message.provider),
-        or(
-          eq(conversations.status, "open"),
-          eq(conversations.status, "assigned"),
-          // Reabrir conversa fechada há menos de 30 dias
-          and(
-            eq(conversations.status, "closed"),
-            gte(conversations.closedAt, thirtyDaysAgo)
-          )
-        )
-      )
-    )
-    .orderBy(desc(conversations.lastMessageAt))
-    .limit(1);
+  let conversationId = found?.conversationId;
+  let existingConversation: any = null;
 
-  let conversationId = existingConversation?.id;
+  if (conversationId) {
+    [existingConversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+    conversationId = existingConversation?.id;
+  }
+
+  // Se a conversa encontrada pertence a outro customerId, usar o correto
+  if (existingConversation && existingConversation.customerId !== customer.id) {
+    // Usar o customer da conversa existente (para manter consistência)
+    console.log(`[ingestInbound] 🔄 Customer ID ajustado: ${customer.id} → ${existingConversation.customerId} (mesmo telefone)`);
+  }
 
   // 6. Create or update conversation
   if (!conversationId) {

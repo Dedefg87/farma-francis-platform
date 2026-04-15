@@ -68,3 +68,63 @@ export function normalizeWhatsAppNumberWithPlus(raw: string): string {
   const n = normalizePhone(raw);
   return n ? '+' + n : '';
 }
+
+/**
+ * Extrai últimos 8 dígitos de um telefone (chave de busca universal)
+ * Ex: 5531986337081 → 986337081
+ *     553186337081 → 86337081 (mesmos últimos 8)
+ *     +5531986337081 → 986337081
+ */
+export function phoneLast8(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const digits = extractDigits(raw);
+  return digits.length >= 8 ? digits.slice(-8) : digits;
+}
+
+/**
+ * Busca ID de conversa existente por telefone (usando últimos 8 dígitos)
+ * Resolve o problema de clientes duplicados com formatos diferentes de telefone
+ * 
+ * Fluxo:
+ * 1. Busca clientes por últimos 8 dígitos do telefone
+ * 2. Para cada cliente encontrado, busca conversa (open/assigned/closed)
+ * 3. Retorna a conversa mais recente
+ * 
+ * Se não encontrar nenhuma, retorna null
+ */
+export async function findConversationByPhone(
+  db: any,
+  phone: string,
+  conversationsTable: any,
+  customersTable: any
+): Promise<{ conversationId: number; customerId: number; status: string } | null> {
+  const { eq, desc, inArray, like, or } = await import('drizzle-orm');
+  
+  const last8 = phoneLast8(phone);
+  if (last8.length < 8) return null;
+
+  // Buscar TODOS os clientes que compartilham os mesmos últimos 8 dígitos
+  const matchedCustomers = await db
+    .select({ id: customersTable.id, phone: customersTable.phone })
+    .from(customersTable)
+    .where(like(customersTable.phone, `%${last8}%`))
+    .limit(10);
+
+  if (matchedCustomers.length === 0) return null;
+
+  const customerIds = matchedCustomers.map((c: any) => c.id);
+
+  // Buscar conversa mais recente de QUALQUER um desses clientes
+  const [conversation] = await db
+    .select({
+      id: conversationsTable.id,
+      customerId: conversationsTable.customerId,
+      status: conversationsTable.status,
+    })
+    .from(conversationsTable)
+    .where(inArray(conversationsTable.customerId, customerIds))
+    .orderBy(desc(conversationsTable.lastMessageAt))
+    .limit(1);
+
+  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status } : null;
+}
