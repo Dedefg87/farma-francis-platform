@@ -156,5 +156,6 @@
       "sharp",
       "msgpackr-extract"
     ]
-  }
+  },
+  "_rebuild": "v4-history-fix"
 }
