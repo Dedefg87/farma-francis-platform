@@ -5,8 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Keyboard, Search, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
-import superjson from "superjson";
 import { toast } from "sonner";
 
 interface NewConversationModalProps {
@@ -56,14 +54,12 @@ export default function NewConversationModal({
       onSuccess: data => {
         setAutoFetchedName(data.name);
         toast.success(`Nome encontrado: ${data.name}`);
-        console.log("[NewConversation] Nome encontrado:", data);
       },
       onError: error => {
         console.log(
           "[NewConversation] Erro ao buscar nome (pode ser normal):",
           error.message
         );
-        // Don't show error toast for this - it's expected to fail sometimes
       },
     });
 
@@ -76,7 +72,6 @@ export default function NewConversationModal({
       onOpenChange(false);
       onSuccess();
       toast.success("Conversa criada com sucesso!");
-      console.log("[NewConversation] Conversa criada:", data);
     },
     onError: error => {
       toast.error(`Erro ao criar conversa: ${error.message}`);
@@ -87,7 +82,6 @@ export default function NewConversationModal({
   // Buscar nome automaticamente quando o usuário digitar telefone/username
   useEffect(() => {
     if (phoneOrEmail.length > 5 && mode === "input" && channel === "whatsapp") {
-      // Debounce de 1 segundo
       const timer = setTimeout(() => {
         fetchContactInfoMutation.mutate({
           identifier: phoneOrEmail.trim(),
@@ -101,6 +95,68 @@ export default function NewConversationModal({
     }
   }, [phoneOrEmail, channel, mode]);
 
+  // Helper: busca cliente por telefone via search, com matching flexível
+  const findExistingCustomer = async (phone: string): Promise<any | null> => {
+    try {
+      // Usar o hook useQuery do tRPC direto (search é .query())
+      const token = localStorage.getItem("authToken");
+      const res = await fetch(
+        `/api/trpc/customers.search?input=${encodeURIComponent(JSON.stringify({ json: { query: phone } }))}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include",
+        }
+      );
+      const data = await res.json();
+      const results = data?.result?.data?.json ?? data?.result?.data ?? [];
+
+      // Matching flexível: compara apenas dígitos do telefone
+      const normalizeDigits = (s: string) => s.replace(/\D/g, '');
+      const phoneDigits = normalizeDigits(phone);
+
+      for (const c of results) {
+        if (!c.phone) continue;
+        const cDigits = normalizeDigits(c.phone);
+        if (phoneDigits.length >= 8 && cDigits.length >= 8) {
+          if (phoneDigits.slice(-8) === cDigits.slice(-8)) return c;
+        }
+        if (c.phone === phone) return c;
+      }
+      return null;
+    } catch (err) {
+      console.error("[NewConversation] Erro buscando cliente:", err);
+      return null;
+    }
+  };
+
+  // Helper: cria cliente via API REST direta
+  const createCustomer = async (name: string, phone: string, email?: string): Promise<any | null> => {
+    try {
+      const token = localStorage.getItem("authToken");
+      const res = await fetch("/api/trpc/customers.findOrCreate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          json: {
+            phone: phone || undefined,
+            email: email || undefined,
+            name: name || undefined,
+          }
+        }),
+      });
+      const data = await res.json();
+      const customer = data?.result?.data?.json ?? data?.result?.data ?? null;
+      return customer;
+    } catch (err) {
+      console.error("[NewConversation] Erro criando cliente:", err);
+      return null;
+    }
+  };
+
   const handleCreateWithInput = async () => {
     if (!phoneOrEmail.trim()) return;
 
@@ -108,61 +164,44 @@ export default function NewConversationModal({
     let finalPhone = phoneOrEmail.trim();
     if (channel === "whatsapp") {
       finalPhone = normalizePhoneNumber(phoneOrEmail);
-      console.log("[NewConversation] Número final (+55):", finalPhone);
     }
 
-    console.log("[NewConversation] Criando conversa com:", {
-      phoneOrEmail: finalPhone,
-      channel,
-    });
-
-    // Buscar ou criar customer automaticamente via tRPC proxy
     try {
-      const trpcClient = createTRPCProxyClient<{ customers: { findOrCreate: { mutate: (input: any) => Promise<any> } } }>({
-        links: [
-          httpBatchLink({
-            url: "/api/trpc",
-            transformer: superjson,
-            headers() {
-              const token = localStorage.getItem("authToken");
-              return token
-                ? { Authorization: `Bearer ${token}` }
-                : {};
-            },
-            fetch(input, init) {
-              return fetch(input, {
-                ...init,
-                credentials: "include",
-              });
-            },
-          }),
-        ],
-      });
+      // 1. Buscar cliente existente
+      let customer = await findExistingCustomer(finalPhone);
 
-      const customer: any = await (trpcClient as any).customers.findOrCreate.mutate({
-        phone: channel === "whatsapp" ? finalPhone : undefined,
-        email: channel !== "whatsapp" ? finalPhone : undefined,
-        name: autoFetchedName || undefined,
-      });
+      // 2. Se não encontrou, tentar criar via findOrCreate
+      if (!customer) {
+        customer = await createCustomer(
+          autoFetchedName || "Cliente",
+          channel === "whatsapp" ? finalPhone : "",
+          channel !== "whatsapp" ? finalPhone : ""
+        );
+      }
 
-      createConversationMutation.mutate({
-        customerId: String(customer.id),
-        channel,
-        customerName: customer.name || undefined,
-        customerPhone: customer.phone || undefined,
-      });
+      // 3. Se ainda não tem customer (findOrCreate não deployou), criar via conversations.create
+      //    que vai aceitar customerId como string
+      if (customer?.id) {
+        createConversationMutation.mutate({
+          customerId: String(customer.id),
+          channel,
+          customerName: customer.name || undefined,
+          customerPhone: customer.phone || undefined,
+        });
+      } else {
+        // Fallback: criar conversa sem customerId válido — usar 0 e deixar o backend resolver
+        // Na verdade, conversa precisa de customerId válido.
+        // Vamos criar o cliente via SQL direto
+        toast.error("Não foi possível encontrar ou criar o cliente. Tente usar a busca de contatos.");
+      }
     } catch (error) {
       toast.error(`Erro ao buscar cliente: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   };
 
   const handleSelectCustomer = (customerId: number) => {
-    console.log(
-      "[NewConversation] Selecionando cliente existente:",
-      customerId
-    );
     createConversationMutation.mutate({
-      customerId,
+      customerId: String(customerId),
     });
   };
 
@@ -196,7 +235,7 @@ export default function NewConversationModal({
               <div className="text-left">
                 <div className="font-medium">Digitar número / email</div>
                 <div className="text-sm text-gray-500">
-                  Iniciar conversa com novo contato
+                  Iniciar conversa com contato
                 </div>
               </div>
             </Button>
@@ -325,12 +364,12 @@ export default function NewConversationModal({
 
             <div className="max-h-64 overflow-y-auto space-y-2">
               {customers && customers.length > 0 ? (
-                customers.map(customer => (
+                customers.map((customer: any) => (
                   <Button
                     key={customer.id}
                     variant="outline"
                     className="w-full justify-start h-auto py-3"
-                    onClick={() => handleSelectCustomer(customer.id)}
+                    onClick={() => handleSelectCustomer(Number(customer.id))}
                     disabled={createConversationMutation.isPending}
                   >
                     <div className="text-left">

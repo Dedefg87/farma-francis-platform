@@ -22,7 +22,7 @@ export const customersRouter = router({
         })
       )
     )
-    .mutation(async ({ input }) => {
+    .query(async ({ input }) => {
       const { query } = input;
 
       try {
