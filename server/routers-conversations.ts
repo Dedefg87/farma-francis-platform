@@ -221,21 +221,20 @@ export const conversationsRouter = router({
       let resolvedName = input.customerName || '';
       let resolvedPhone = input.customerPhone || '';
 
+      console.log('[conversations.create] Input:', JSON.stringify({ customerId: input.customerId, customerPhone: input.customerPhone, customerName: input.customerName, channel: input.channel }));
+
       // Se customerId foi fornecido, usar diretamente
       if (input.customerId) {
         numericCustomerId = parseInt(input.customerId, 10);
-        if (isNaN(numericCustomerId)) {
-          throw new Error("customerId inválido");
-        }
+        console.log('[conversations.create] Using provided customerId:', numericCustomerId);
       } else {
         // Buscar cliente existente pelo telefone (matching flexível com variantes)
         const phoneVariants = generatePhoneVariants(resolvedPhone);
+        console.log('[conversations.create] Phone variants:', phoneVariants);
         let foundCustomer: any = null;
 
         if (phoneVariants.length > 0) {
-          // Buscar por qualquer variação de telefone
           const phoneConditions = phoneVariants.map(v => like(customers.phone, `%${v.replace(/[^0-9]/g, '')}%`));
-          // Também buscar pelos últimos 8 dígitos (fallback robusto)
           const phoneDigits = resolvedPhone.replace(/\D/g, '');
           if (phoneDigits.length >= 8) {
             phoneConditions.push(like(customers.phone, `%${phoneDigits.slice(-8)}%`));
@@ -247,6 +246,8 @@ export const conversationsRouter = router({
             .where(or(...phoneConditions))
             .limit(5);
 
+          console.log('[conversations.create] Found candidates:', candidates.length, candidates.map((c: any) => ({ id: c.id, name: c.name, phone: c.phone })));
+
           if (candidates.length > 0) {
             foundCustomer = candidates[0];
           }
@@ -256,8 +257,8 @@ export const conversationsRouter = router({
           numericCustomerId = foundCustomer.id;
           resolvedName = foundCustomer.name || resolvedName;
           resolvedPhone = foundCustomer.phone || resolvedPhone;
+          console.log('[conversations.create] Matched existing customer:', { id: numericCustomerId, name: resolvedName, phone: resolvedPhone });
         } else {
-          // Criar novo cliente
           const normalizedPhone = formatPhoneBR(resolvedPhone);
           const insertResult = await db
             .insert(customers)
@@ -270,7 +271,6 @@ export const conversationsRouter = router({
           numericCustomerId = Number(rawId) || 0;
 
           if (!numericCustomerId) {
-            // Fallback: buscar o cliente recém-criado
             const [newCustomer] = await db
               .select()
               .from(customers)
@@ -278,6 +278,7 @@ export const conversationsRouter = router({
               .limit(1);
             numericCustomerId = newCustomer?.id || 0;
           }
+          console.log('[conversations.create] Created new customer:', numericCustomerId);
         }
       }
 
@@ -285,40 +286,37 @@ export const conversationsRouter = router({
         throw new Error("Não foi possível encontrar ou criar o cliente");
       }
 
-      // Check for existing conversation with the same customer
-      // 1. First: open/assigned conversations (return directly)
-      // 2. Fallback: closed conversations (reopen with history preserved)
-      const [existingActive] = await db
+      // 🔥 BUSCAR QUALQUER conversa existente desse cliente (open, assigned, OU closed)
+      // Sempre reutilizar a mais recente, preservando o histórico
+      const [existingConversation] = await db
         .select()
         .from(conversations)
-        .where(
-          and(
-            eq(conversations.customerId, numericCustomerId),
-            inArray(conversations.status, ["open", "assigned"])
-          )
-        )
+        .where(eq(conversations.customerId, numericCustomerId))
         .orderBy(desc(conversations.lastMessageAt))
         .limit(1);
 
-      if (existingActive) {
-        return mapConversation(existingActive);
-      }
+      console.log('[conversations.create] Existing conversation for customer', numericCustomerId, ':', existingConversation ? { id: existingConversation.id, status: existingConversation.status } : 'NONE');
 
-      // Check for closed conversation — reopen it (preserves message history)
-      const [existingClosed] = await db
-        .select()
-        .from(conversations)
-        .where(
-          and(
-            eq(conversations.customerId, numericCustomerId),
-            eq(conversations.status, "closed")
-          )
-        )
-        .orderBy(desc(conversations.lastMessageAt))
-        .limit(1);
+      if (existingConversation) {
+        if (existingConversation.status === 'open' || existingConversation.status === 'assigned') {
+          // Já está aberta — só atribuir ao agente se não estiver
+          if (!existingConversation.assignedTo) {
+            await db
+              .update(conversations)
+              .set({ assignedTo: ctx.user.id })
+              .where(eq(conversations.id, existingConversation.id));
+            const [updated] = await db
+              .select()
+              .from(conversations)
+              .where(eq(conversations.id, existingConversation.id));
+            console.log('[conversations.create] Assigned to agent, returning:', updated.id);
+            return mapConversation(updated);
+          }
+          console.log('[conversations.create] Returning existing active conversation:', existingConversation.id);
+          return mapConversation(existingConversation);
+        }
 
-      if (existingClosed) {
-        // Reopen closed conversation — history is preserved!
+        // Conversa fechada — reabrir (preserva histórico!)
         await db
           .update(conversations)
           .set({
@@ -329,13 +327,14 @@ export const conversationsRouter = router({
             ...(resolvedName ? { customerName: resolvedName } : {}),
             ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
           })
-          .where(eq(conversations.id, existingClosed.id));
+          .where(eq(conversations.id, existingConversation.id));
 
         const [reopened] = await db
           .select()
           .from(conversations)
-          .where(eq(conversations.id, existingClosed.id));
+          .where(eq(conversations.id, existingConversation.id));
 
+        console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
         return mapConversation(reopened);
       }
 
