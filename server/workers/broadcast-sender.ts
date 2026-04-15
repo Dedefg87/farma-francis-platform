@@ -14,9 +14,11 @@ import {
   broadcastMembersSent,
   customers,
   integrationSettings,
+  conversations,
+  conversationMessages,
 } from "../../drizzle/schema.js";
-import { eq, sql, and } from "drizzle-orm";
-import { generatePhoneVariants } from "../utils/phone.js";
+import { eq, sql, and, desc, inArray } from "drizzle-orm";
+import { generatePhoneVariants, formatPhoneBR } from "../utils/phone.js";
 import { getEvolutionConfigWithCache, getEvolutionApiKey } from "../services/cache-evolution.js";
 
 // Mapeamento de MIME type para mediatype da Evolution API
@@ -256,6 +258,14 @@ export async function processBroadcastMessage(messageId: number) {
             errorMessage: null,
           })
           .where(eq(broadcastMembersSent.id, sent.id));
+
+        // 🔥 Salvar mensagem na conversa do cliente (para o agente ver)
+        try {
+          await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId);
+        } catch (saveErr: any) {
+          console.warn(`[Broadcast] ⚠️ Erro ao salvar na conversa do cliente ${sent.customerId}:`, saveErr.message);
+        }
+
         successCount++;
       } else {
         await db
@@ -295,3 +305,112 @@ export async function processBroadcastMessage(messageId: number) {
 }
 
 // export { processBroadcastMessage }; // removido — já exportado acima
+
+/**
+ * Salva a mensagem broadcast na conversa do cliente
+ * para que o agente veja o que foi enviado
+ */
+async function saveBroadcastToConversation(
+  db: any,
+  customerId: number | null,
+  messageText: string | null,
+  fileUrl: string | null,
+  fileName: string | null,
+  fileType: string | null,
+  senderId: number | null
+) {
+  if (!customerId) return;
+
+  const now = new Date();
+
+  // Buscar conversa aberta/atribuída do cliente
+  let [conversation] = await db
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.customerId, customerId),
+        inArray(conversations.status, ["open", "assigned"])
+      )
+    )
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(1);
+
+  // Se não tem conversa aberta, buscar fechada e reabrir
+  if (!conversation) {
+    const [closedConv] = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.customerId, customerId),
+          eq(conversations.status, "closed")
+        )
+      )
+      .orderBy(desc(conversations.lastMessageAt))
+      .limit(1);
+
+    if (closedConv) {
+      await db
+        .update(conversations)
+        .set({ status: "open", lastMessageAt: now, unreadCount: 0 })
+        .where(eq(conversations.id, closedConv.id));
+      conversation = closedConv;
+      conversation.status = "open";
+    }
+  }
+
+  // Se ainda não tem conversa, criar
+  if (!conversation) {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, customerId))
+      .limit(1);
+
+    const insertResult = await db.insert(conversations).values({
+      customerId,
+      customerName: customer?.name || '',
+      customerPhone: customer?.phone || '',
+      channel: 'whatsapp',
+      status: 'open',
+      openedAt: now,
+      lastMessageAt: now,
+      unreadCount: 0,
+    });
+
+    const rawId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId;
+    const newId = Number(rawId);
+
+    if (newId) {
+      const [newConv] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, newId))
+        .limit(1);
+      conversation = newConv;
+    }
+  }
+
+  if (!conversation) return;
+
+  // Salvar a mensagem na conversa
+  await db.insert(conversationMessages).values({
+    conversationId: conversation.id,
+    senderId: senderId || null,
+    senderType: 'agent',
+    content: messageText || '',
+    fileUrl: fileUrl || null,
+    fileName: fileName || null,
+    fileType: fileType || null,
+    createdAt: now,
+  });
+
+  // Atualizar lastMessageAt da conversa
+  await db
+    .update(conversations)
+    .set({ lastMessageAt: now })
+    .where(eq(conversations.id, conversation.id));
+
+  console.log(`[Broadcast] 💬 Mensagem salva na conversa ${conversation.id} do cliente ${customerId}`);
+}
