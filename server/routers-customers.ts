@@ -75,7 +75,7 @@ export const customersRouter = router({
       }
     }),
 
-  // POST /api/trpc/customers.findOrCreate
+  // customers.findOrCreate — force rebuild v2
   // Busca cliente por telefone/email; se não existir, cria automaticamente
   findOrCreate: protectedProcedure
     .input(
