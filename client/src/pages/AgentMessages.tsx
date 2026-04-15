@@ -1641,7 +1641,14 @@ export default function AgentMessages() {
       <NewConversationModal
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
-        onSuccess={refetchConversations}
+        onSuccess={(conversationId) => {
+          refetchConversations();
+          // Selecionar automaticamente a conversa criada/reaberta
+          if (conversationId) {
+            setSelectedConversationId(conversationId);
+            sessionStorage.setItem('selectedConversationId', String(conversationId));
+          }
+        }}
       />
 
       <PullConversationModal

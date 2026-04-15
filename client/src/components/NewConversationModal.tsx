@@ -9,7 +9,7 @@ import { toast } from "sonner";
 interface NewConversationModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
+  onSuccess: (conversationId?: number) => void;
 }
 
 export default function NewConversationModal({
@@ -53,14 +53,16 @@ export default function NewConversationModal({
     });
 
   const createConversationMutation = trpc.conversations.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       setPhoneOrEmail("");
       setSearchQuery("");
       setMode(null);
       setAutoFetchedName(null);
       onOpenChange(false);
-      onSuccess();
-      toast.success("Conversa criada com sucesso!");
+      // Passar o ID da conversa criada/reaberta para o pai selecionar automaticamente
+      const convId = data?.id ? Number(data.id) : undefined;
+      onSuccess(convId);
+      toast.success(convId ? "Conversa aberta com histórico!" : "Conversa criada!");
     },
     onError: error => {
       toast.error(`Erro ao criar conversa: ${error.message}`);
