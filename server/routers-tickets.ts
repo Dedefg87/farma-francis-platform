@@ -307,11 +307,11 @@ export const ticketsRouter = router({
         .limit(1);
       const total = Number(totalResult[0].count) || 0;
 
-      // Open tickets
+      // Open tickets (open + in_progress)
       const openResult = await db
         .select({ count: sql<number>`COUNT(*)` })
         .from(tickets)
-        .where(eq(tickets.status, 'open'))
+        .where(sql`status IN ('open', 'in_progress')`)
         .limit(1);
       const open = Number(openResult[0].count) || 0;
 
@@ -323,10 +323,28 @@ export const ticketsRouter = router({
         .limit(1);
       const inProgress = Number(inProgressResult[0].count) || 0;
 
+      // Pending tickets
+      const pendingResult = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(tickets)
+        .where(eq(tickets.status, 'pending'))
+        .limit(1);
+      const pending = Number(pendingResult[0].count) || 0;
+
+      // Resolved tickets (resolved + closed)
+      const resolvedResult = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(tickets)
+        .where(sql`status IN ('resolved', 'closed')`)
+        .limit(1);
+      const resolved = Number(resolvedResult[0].count) || 0;
+
       return {
         total,
         open,
         inProgress,
+        pending,
+        resolved,
         byStatus: statusCounts,
         byPriority: priorityCounts,
       };

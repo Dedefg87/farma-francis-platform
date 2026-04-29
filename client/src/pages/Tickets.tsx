@@ -42,6 +42,7 @@ import { toast } from "sonner";
 
 export default function Tickets() {
   const utils = trpc.useUtils();
+  const { data: stats, isLoading: statsLoading } = trpc.tickets.stats.useQuery();
   const { data: response, isLoading } = trpc.tickets.list.useQuery();
   const tickets = response?.data || [];
   const [searchTerm, setSearchTerm] = useState("");
@@ -298,7 +299,7 @@ export default function Tickets() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{tickets.length}</div>
+              <div className="text-2xl font-bold">{stats?.total || 0}</div>
             </CardContent>
           </Card>
           <Card>
@@ -309,11 +310,7 @@ export default function Tickets() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-600">
-                {
-                  tickets.filter(
-                    t => t.status === "open" || t.status === "in_progress"
-                  ).length
-                }
+                {stats?.open || 0}
               </div>
             </CardContent>
           </Card>
@@ -325,7 +322,7 @@ export default function Tickets() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {tickets.filter(t => t.status === "pending").length}
+                {stats?.pending || 0}
               </div>
             </CardContent>
           </Card>
@@ -337,11 +334,7 @@ export default function Tickets() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600">
-                {
-                  tickets.filter(
-                    t => t.status === "resolved" || t.status === "closed"
-                  ).length
-                }
+                {stats?.resolved || 0}
               </div>
             </CardContent>
           </Card>
