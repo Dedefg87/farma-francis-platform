@@ -447,7 +447,7 @@ export const ticketsRouter = router({
       }
 
       return {
-        message: "Sample tickets created successfully",
+        message: "Seed executado com sucesso (v2)",
         count: sampleTickets.length,
       };
     }),
