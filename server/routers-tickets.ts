@@ -447,7 +447,10 @@ export const ticketsRouter = router({
         },
       ];
 
-      await db.insert(tickets).values(sampleTickets);
+      // Insert sample tickets one by one
+      for (const ticket of sampleTickets) {
+        await db.insert(tickets).values(ticket);
+      }
 
       return {
         message: "Sample tickets created successfully",
