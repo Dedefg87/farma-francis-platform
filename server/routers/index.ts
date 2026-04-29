@@ -29,6 +29,7 @@ import { tagsRouter } from "../routers-tags";
 import { telemetryRouter } from "../routers-telemetry";
 import { testRouter } from "../routers-test";
 import { internalMessagesRouter } from "../routers-internal-messages";
+import { ticketsRouter } from "../routers-tickets";
 
 export const appRouter = router({
   auth: authRouter,
@@ -61,6 +62,7 @@ export const appRouter = router({
   telemetry: telemetryRouter,
   test: testRouter,
   internalMessages: internalMessagesRouter,
+  tickets: ticketsRouter,
 });
 
 export type AppRouter = typeof appRouter;
