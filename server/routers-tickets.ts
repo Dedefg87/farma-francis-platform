@@ -451,3 +451,4 @@ export const ticketsRouter = router({
         count: sampleTickets.length,
       };
     }),
+});
