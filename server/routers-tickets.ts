@@ -350,9 +350,10 @@ export const ticketsRouter = router({
       };
     }),
 
-    // Seed sample tickets (protected)
-    seed: protectedProcedure.mutation(async ({ ctx }) => {
-      const { db } = ctx;
+    // Seed sample tickets (public for initial setup)
+  seed: publicProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error('Database not available');
 
       // Check if tickets already exist
       const existing = await db.$count(tickets);
