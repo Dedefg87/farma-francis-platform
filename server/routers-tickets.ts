@@ -355,15 +355,9 @@ export const ticketsRouter = router({
     const db = await getDb();
     if (!db) throw new Error('Database not available');
 
-      // Check if tickets already exist
-      const existing = await db.$count(tickets);
-      if (existing > 0) {
-        return {
-          message: "Tickets already exist",
-          count: existing,
-        };
-      }
-
+      // Clear existing tickets first
+      await db.delete(tickets);
+      
       const sampleTickets = [
         {
           ticketNumber: "TKT-000001",
@@ -457,4 +451,3 @@ export const ticketsRouter = router({
         count: sampleTickets.length,
       };
     }),
-});
