@@ -42,7 +42,8 @@ import { toast } from "sonner";
 
 export default function Tickets() {
   const utils = trpc.useUtils();
-  const { data: tickets = [], isLoading } = trpc.tickets.list.useQuery();
+  const { data: response, isLoading } = trpc.tickets.list.useQuery();
+  const tickets = response?.data || [];
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
