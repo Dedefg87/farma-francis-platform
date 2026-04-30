@@ -8,6 +8,16 @@ export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
   // Alinhado com o formato do 'search' que funciona
   list: protectedProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          phone: z.string(),
+          email: z.string().nullable(),
+        })
+      )
+    )
     .query(async () => {
       try {
         const allCustomers = await db
