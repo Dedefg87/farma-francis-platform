@@ -6,19 +6,9 @@ import { eq, like, or } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // Alinhado EXATAMENTE com o 'search' que funciona
+  // SEM .output() TEMPORÁRIO (erro de validação)
   list: protectedProcedure
-    .input(z.null().optional()) // ← ACEITA null/undefined (frontend não passa parâmetro)
-    .output(
-      z.array(
-        z.object({
-          id: z.string(),
-          name: z.string(),
-          phone: z.string(), // search usa string() obrigatório (phone é notNull no schema)
-          email: z.string().nullable(),
-        })
-      )
-    )
+    .input(z.null().optional())
     .query(async () => {
       try {
         const allCustomers = await db
@@ -30,12 +20,12 @@ export const customersRouter = router({
           })
           .from(customers);
 
-        // Formato idêntico ao search (que funciona)
+        // Garantir tipos corretos (frontend espera strings)
         return allCustomers.map(c => ({
           id: String(c.id),
           name: c.name || 'Cliente',
-          phone: c.phone || '', // never null (notNull no schema)
-          email: c.email || null,
+          phone: c.phone || '', // string nunca null
+          email: c.email || null, // pode ser null
         }));
       } catch (error) {
         console.error('[customers.list] Error:', error);
