@@ -22,24 +22,12 @@ export const customersRouter = router({
         .from(customers)
         .orderBy(desc(customers.createdAt));
 
-      // Para cada cliente, contar interações (conversas)
-      const customersWithStats = await Promise.all(
-        allCustomers.map(async (customer) => {
-          const conversationsCount = await db
-            .select({ count: sql<number>`COUNT(*)` })
-            .from(conversations)
-            .where(eq(conversations.customerId, customer.id))
-            .limit(1);
-          
-          return {
-            ...customer,
-            id: String(customer.id),
-            interactionsCount: Number(conversationsCount[0]?.count) || 0,
-          };
-        })
-      );
-
-      return customersWithStats;
+      // Converter id para string (compatível com frontend)
+      return allCustomers.map(c => ({
+        ...c,
+        id: String(c.id),
+        interactionsCount: 0, // Temporário - remover query que causa erro
+      }));
     }),
 
   // GET detalhes completos do cliente (com histórico)
