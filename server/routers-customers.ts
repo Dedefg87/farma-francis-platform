@@ -32,8 +32,8 @@ export const customersRouter = router({
               customerPhone: conversations.customerPhone,
             })
             .from(conversations)
-            .groupBy(conversations.customerPhone)
-            .having(sql`${conversations.customerPhone} IS NOT NULL`);
+            .where(sql`customerPhone IS NOT NULL`)
+            .groupBy(conversations.customerPhone);
 
           // Mapear para formato de customer
           allCustomers = uniqueFromConv.map((c, idx) => ({
