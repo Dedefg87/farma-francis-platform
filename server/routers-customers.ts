@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router } from "./_core/trpc";
 import { db } from "./db";
 import { customers, conversations } from "./drizzle/schema";
-import { eq, like, or, sql, desc } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // Versão com auto-sincronização de conversations
+  // Busca diretamente de conversations (agrupando por telefone)
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async () => {
@@ -14,66 +14,21 @@ export const customersRouter = router({
         const db = await getDb();
         if (!db) throw new Error("Database unavailable");
 
-        // 1. Buscar clientes da tabela customers
-        let allCustomers = await db
+        // Buscar clientes únicos da tabela conversations
+        const uniqueCustomers = await db
           .select({
-            id: customers.id,
-            name: customers.name,
-            phone: customers.phone,
-            email: customers.email,
-            status: customers.status,
-            createdAt: customers.createdAt,
+            customerName: conversations.customerName,
+            customerPhone: conversations.customerPhone,
           })
-          .from(customers)
-          .orderBy(desc(customers.id));
+          .from(conversations)
+          .where(sql`customerPhone IS NOT NULL`)
+          .groupBy(conversations.customerPhone);
 
-        console.log(`[customers.list] Encontrados ${allCustomers.length} clientes na tabela customers`);
+        console.log(`[customers.list] Encontrados ${uniqueCustomers.length} clientes únicos em conversations`);
 
-        // 2. AUTO-SYNC: Se customers vazio, sincronizar de conversations
-        if (allCustomers.length === 0) {
-          console.log('[customers.list] Tabela customers vazia, sincronizando de conversations...');
-          
-          const uniqueFromConv = await db
-            .select({
-              customerName: conversations.customerName,
-              customerPhone: conversations.customerPhone,
-            })
-            .from(conversations)
-            .where(sql`customerPhone IS NOT NULL`)
-            .groupBy(conversations.customerPhone);
-
-          console.log(`[customers.list] Encontrados ${uniqueFromConv.length} clientes únicos em conversations`);
-
-          // Inserir na tabela customers
-          if (uniqueFromConv.length > 0) {
-            await db.insert(customers).values(
-              uniqueFromConv.map(c => ({
-                name: c.customerName || `Cliente ${c.customerPhone?.slice(-4) || '0000'}`,
-                phone: c.customerPhone || '',
-                status: 'active' as const,
-              }))
-            );
-
-            // Buscar novamente
-            allCustomers = await db
-              .select({
-                id: customers.id,
-                name: customers.name,
-                phone: customers.phone,
-                email: customers.email,
-                status: customers.status,
-                createdAt: customers.createdAt,
-              })
-              .from(customers)
-              .orderBy(desc(customers.id));
-            
-            console.log(`[customers.list] Após sync: ${allCustomers.length} clientes`);
-          }
-        }
-
-        // 3. Buscar histórico de conversas para cada cliente
+        // Para cada cliente, buscar histórico de conversas
         const customersWithHistory = await Promise.all(
-          allCustomers.map(async (c) => {
+          uniqueCustomers.map(async (c, idx) => {
             const history = await db
               .select({
                 id: conversations.id,
@@ -81,17 +36,17 @@ export const customersRouter = router({
                 createdAt: conversations.createdAt,
               })
               .from(conversations)
-              .where(eq(conversations.customerPhone, c.phone))
+              .where(eq(conversations.customerPhone, c.customerPhone!))
               .orderBy(desc(conversations.createdAt))
               .limit(10);
 
             return {
-              id: String(c.id),
-              name: c.name || 'Cliente',
-              phone: c.phone || '',
-              email: c.email || null,
-              status: c.status || 'active',
-              createdAt: c.createdAt?.toISOString(),
+              id: String(idx + 1), // ID temporário baseado na ordem
+              name: c.customerName || `Cliente ${c.customerPhone?.slice(-4) || '0000'}`,
+              phone: c.customerPhone || '',
+              email: null, // conversations não tem email
+              status: 'active',
+              createdAt: history[0]?.createdAt?.toISOString() || new Date().toISOString(),
               interactionsCount: history.length,
               lastInteraction: history[0]?.createdAt?.toISOString() || null,
               history: history.map(h => ({
@@ -129,54 +84,46 @@ export const customersRouter = router({
     )
     .query(async ({ input }) => {
       const { query } = input;
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
 
-      try {
-        // Normalizar query: remover caracteres não numéricos para busca de telefone
-        const numericQuery = query.replace(/\D/g, '');
+      // Normalizar query: remover caracteres não numéricos para busca de telefone
+      const numericQuery = query.replace(/\D/g, '');
 
-        // Construir condições de busca
-        const conditions = [];
+      // Construir condições de busca
+      const conditions = [];
 
-        // Busca por nome (parcial, case-insensitive)
-        conditions.push(like(customers.name, `%${query}%`));
+      // Busca por nome (parcial, case-insensitive)
+      conditions.push(sql`${customers.name} LIKE ${`%${query}%`}`);
 
-        // Busca por email (parcial)
-        if (query.includes('@')) {
-          conditions.push(like(customers.email, `%${query}%`));
-        }
-
-        // Busca por telefone: comparar apenas os dígitos
-        if (numericQuery.length >= 8) {
-          const lastDigits = numericQuery.slice(-8);
-          conditions.push(like(customers.phone, `%${lastDigits}%`));
-        } else if (numericQuery.length > 0) {
-          conditions.push(like(customers.phone, `%${numericQuery}%`));
-        }
-
-        const results = await db
-          .select({
-            id: customers.id,
-            name: customers.name,
-            phone: customers.phone,
-            email: customers.email,
-          })
-          .from(customers)
-          .where(or(...conditions))
-          .limit(10);
-
-        return results.map((c) => ({
-          id: String(c.id),
-          name: c.name || 'Cliente',
-          phone: c.phone || '',
-          email: c.email || null,
-        }));
-      } catch (error) {
-        console.error('[customers.search] Database error:', error);
-        throw new Error('Erro interno na busca de clientes');
+      // Busca por telefone: comparar apenas os dígitos
+      if (numericQuery.length >= 8) {
+        const lastDigits = numericQuery.slice(-8);
+        conditions.push(sql`${customers.phone} LIKE ${`%${lastDigits}%`}`);
+      } else if (numericQuery.length > 0) {
+        conditions.push(sql`${customers.phone} LIKE ${`%${numericQuery}%`}`);
       }
+
+      const results = await db
+        .select({
+          id: customers.id,
+          name: customers.name,
+          phone: customers.phone,
+          email: customers.email,
+        })
+        .from(customers)
+        .where(sql`${or(...conditions)}`)
+        .limit(10);
+
+      return results.map((c) => ({
+        id: String(c.id),
+        name: c.name || 'Cliente',
+        phone: c.phone || '',
+        email: c.email || null,
+      }));
     }),
 
-  // customers.findOrCreate — force rebuild v2
+  // customers.findOrCreate — mantido para compatibilidade
   findOrCreate: protectedProcedure
     .input(
       z.object({
@@ -196,17 +143,18 @@ export const customersRouter = router({
     )
     .mutation(async ({ input }) => {
       const { phone, email, name } = input;
+      const db = await getDb();
+      if (!db) throw new Error("Database unavailable");
 
       // Tentar buscar cliente existente pelo telefone
       if (phone) {
         const phoneDigits = phone.replace(/\D/g, '');
-
         if (phoneDigits.length >= 8) {
           const lastDigits = phoneDigits.slice(-8);
           const [existing] = await db
             .select()
             .from(customers)
-            .where(like(customers.phone, `%${lastDigits}%`))
+            .where(sql`${customers.phone} LIKE ${`%${lastDigits}%`}`)
             .limit(1);
 
           if (existing) {
@@ -218,25 +166,6 @@ export const customersRouter = router({
               created: false,
             };
           }
-        }
-      }
-
-      // Tentar buscar por email
-      if (email) {
-        const [existing] = await db
-          .select()
-          .from(customers)
-          .where(eq(customers.email, email))
-          .limit(1);
-
-        if (existing) {
-          return {
-            id: String(existing.id),
-            name: existing.name || '',
-            phone: existing.phone || '',
-            email: existing.email || null,
-            created: false,
-          };
         }
       }
 
@@ -258,40 +187,5 @@ export const customersRouter = router({
         created: true,
       };
     }),
-
-  // GET /api/trpc/customers.get
-  get: publicProcedure
-    .input(
-      z.object({
-        id: z.string(),
-      })
-    )
-    .output(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        phone: z.string(),
-        email: z.string().nullable(),
-        tags: z.array(z.string()).nullable(),
-      })
-    )
-    .query(async ({ input }) => {
-      const [customer] = await db
-        .select()
-        .from(customers)
-        .where(eq(customers.id, input.id));
-
-      if (!customer) {
-        throw new Error("Customer not found");
-      }
-
-      return {
-        id: String(customer.id),
-        name: customer.name,
-        phone: customer.phone,
-        email: customer.email,
-        tags: customer.tags || [],
-      };
-    }),
 });
-// Build: Thu Apr 30 11:50:00 -03 2026 - Versão simplificada
+// Build: Thu Apr 30 16:05:00 -03 2026 - Versão final buscando de conversations
