@@ -10,7 +10,6 @@ import { contactFetchRouter } from "../routers-contact-fetch";
 import { conversationsRouter } from "../routers-conversations";
 import { crmRouter } from "../routers-crm";
 import { clientsRouter } from "../routers-clients";
-import { customersV2Router } from "../routers-customers-v2";
 import { dashboardDrilldownRouter } from "../routers-dashboard-drilldown";
 import { dashboardStatsRouter } from "../routers-dashboard-stats";
 import { dashboardRouter } from "../routers-dashboard";

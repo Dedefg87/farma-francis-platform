@@ -413,3 +413,5 @@ startServer().catch((err) => {
   console.error("[Server] Failed to start:", err);
   process.exit(1);
 });
+-e 
+console.log('[SERVER] Deploy timestamp: 1777576641');

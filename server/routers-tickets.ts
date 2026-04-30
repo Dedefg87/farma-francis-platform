@@ -46,8 +46,11 @@ export const ticketsRouter = router({
       const { page, pageSize, search, status, priority, assignedTo, customerId } = input || {};
       const offset = ((page || 1) - 1) * (pageSize || 20);
 
-      // Build where clause para conversations
+      // Build where clause para conversations (APENAS ATIVAS POR PADRÃO)
       const conditions: any[] = [];
+      
+      // SEMPRE filtrar apenas conversas ativas (open/assigned) - tickets não mostram fechados
+      const activeStatuses = ['open', 'assigned'];
       
       if (search) {
         conditions.push(
@@ -58,12 +61,19 @@ export const ticketsRouter = router({
         );
       }
       
-      // Mapear status do ticket para status da conversa
+      // Mapear status do ticket para status da conversa (apenas se for ativo)
       if (status) {
         const conversationStatus = status === 'in_progress' ? 'assigned' :
-                                 status === 'resolved' ? 'closed' :
-                                 status === 'open' ? 'open' : status;
-        conditions.push(eq(conversations.status, conversationStatus));
+                                 status === 'open' ? 'open' : null;
+        if (conversationStatus && activeStatuses.includes(conversationStatus)) {
+          conditions.push(eq(conversations.status, conversationStatus));
+        } else {
+          // Se pediu status fechado, retorna vazio (não mostramos fechados)
+          conditions.push(eq(conversations.status, 'closed'));
+        }
+      } else {
+        // Padrão: apenas ativas
+        conditions.push(inArray(conversations.status, activeStatuses));
       }
       
       if (assignedTo !== undefined) {
