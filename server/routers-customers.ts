@@ -7,10 +7,12 @@ import { eq, sql, desc } from "drizzle-orm";
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
   // Busca diretamente de conversations (agrupando por telefone)
+  // DEPLOY-TEST-54321
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async () => {
       try {
+        console.log('[customers.list] DEPLOY-TEST-54321 - Nova versão executando!');
         const db = await getDb();
         if (!db) throw new Error("Database unavailable");
 
