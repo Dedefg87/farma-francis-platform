@@ -1,10 +1,112 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { db } from "./db";
-import { customers } from "./drizzle/schema";
-import { eq, like, or, sql } from "drizzle-orm";
+import { customers, conversations, conversationMessages } from "./drizzle/schema";
+import { eq, like, or, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
+  // LISTAR TODOS OS CLIENTES (para CRM)
+  list: protectedProcedure
+    .query(async () => {
+      const allCustomers = await db
+        .select({
+          id: customers.id,
+          name: customers.name,
+          phone: customers.phone,
+          email: customers.email,
+          photoUrl: customers.photoUrl,
+          status: customers.status,
+          createdAt: customers.createdAt,
+          updatedAt: customers.updatedAt,
+        })
+        .from(customers)
+        .orderBy(desc(customers.createdAt));
+
+      // Para cada cliente, contar interações (conversas)
+      const customersWithStats = await Promise.all(
+        allCustomers.map(async (customer) => {
+          const conversationsCount = await db
+            .select({ count: sql<number>`COUNT(*)` })
+            .from(conversations)
+            .where(eq(conversations.customerId, customer.id))
+            .limit(1);
+          
+          return {
+            ...customer,
+            id: String(customer.id),
+            interactionsCount: Number(conversationsCount[0]?.count) || 0,
+          };
+        })
+      );
+
+      return customersWithStats;
+    }),
+
+  // GET detalhes completos do cliente (com histórico)
+  getDetails: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const customerId = Number(input.id);
+      
+      // Dados básicos do cliente
+      const [customer] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.id, customerId))
+        .limit(1);
+
+      if (!customer) {
+        throw new Error("Customer not found");
+      }
+
+      // Histórico de interações (conversas)
+      const interactions = await db
+        .select({
+          id: conversations.id,
+          status: conversations.status,
+          channel: conversations.channel,
+          openedAt: conversations.openedAt,
+          lastMessageAt: conversations.lastMessageAt,
+          closedAt: conversations.closedAt,
+          lastMessage: sql<string>`(
+            SELECT cm.content 
+            FROM conversation_messages cm 
+            WHERE cm.conversation_id = ${conversations.id} 
+            ORDER BY cm.created_at DESC 
+            LIMIT 1
+          )`.as('lastMessage'),
+        })
+        .from(conversations)
+        .where(eq(conversations.customerId, customerId))
+        .orderBy(desc(conversations.lastMessageAt));
+
+      return {
+        id: String(customer.id),
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        photoUrl: customer.photoUrl,
+        status: customer.status,
+        notes: customer.notes || '',
+        source: customer.source || '',
+        createdAt: customer.createdAt,
+        updatedAt: customer.updatedAt,
+        interactions: interactions.map(i => ({
+          id: String(i.id),
+          status: i.status,
+          channel: i.channel,
+          openedAt: i.openedAt,
+          lastMessageAt: i.lastMessageAt,
+          closedAt: i.closedAt,
+          lastMessage: i.lastMessage || '',
+        })),
+      };
+    }),
+
   // GET /api/trpc/customers.search
   search: publicProcedure
     .input(

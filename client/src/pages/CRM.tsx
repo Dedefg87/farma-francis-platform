@@ -17,12 +17,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
-import { Plus, Search, Mail, Phone, MapPin, Pill, Copy } from "lucide-react";
+import { Search, Mail, Phone, MapPin, Copy, History, Tag, Paperclip } from "lucide-react";
 import { useState } from "react";
-import CrmScriptsTab from "@/components/CrmScriptsTab";
-import CRMPanel from "@/components/CRMPanel";
 import {
   Dialog,
   DialogContent,
@@ -30,39 +27,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 export default function CRM() {
-  // NOTE: AppRouter typing is currently broken in this repo (router name collisions).
-  // Keep CRM functional at runtime while not blocking TS.
-  const utils = (trpc as any).useUtils?.() as any;
-  const { data: customers = [], isLoading: customersLoading } = (
-    trpc as any
-  ).customers.list.useQuery();
-  const { data: leads = [], isLoading: leadsLoading } = (
-    trpc as any
-  ).leads.list.useQuery();
-  const { data: upcomingTreatments = [], isLoading: upcomingLoading } = (
-    trpc as any
-  ).crm.getUpcomingTreatments.useQuery({ daysAhead: 7 });
-  const { data: scripts = [] } = (trpc as any).crm.getScripts.useQuery();
+  const utils = trpc.useUtils();
+  
+  // Buscar TODOS os clientes (não só ativos)
+  const { data: customers = [], isLoading: customersLoading } = trpc.customers.list.useQuery();
+  
   const [searchTerm, setSearchTerm] = useState("");
-  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
-  const [isLeadDialogOpen, setIsLeadDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<any | null>(null);
-  const [showLeadDetails, setShowLeadDetails] = useState(false);
+  
+  // Formulário novo cliente
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     email: "",
@@ -72,25 +53,13 @@ export default function CRM() {
     state: "",
     zipCode: "",
     status: "active" as "active" | "inactive" | "blocked",
-  });
-  const [newLead, setNewLead] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    source: "",
-    stage: "prospect" as
-      | "prospect"
-      | "qualified"
-      | "proposal"
-      | "negotiation"
-      | "closed_won"
-      | "closed_lost",
-    value: 0,
+    notes: "",
+    instagram: "",
   });
 
-  const createCustomer = (trpc as any).customers.create.useMutation({
+  const createCustomer = trpc.customers.create.useMutation({
     onSuccess: () => {
-      utils?.customers?.list?.invalidate?.().catch(() => {});
+      utils.customers.list.invalidate().catch(() => {});
       toast.success("Cliente criado com sucesso!");
       setIsCustomerDialogOpen(false);
       setNewCustomer({
@@ -101,36 +70,13 @@ export default function CRM() {
         city: "",
         state: "",
         zipCode: "",
-        status: "active" as "active" | "inactive" | "blocked",
+        status: "active",
+        notes: "",
+        instagram: "",
       });
     },
-    onError: error => {
+    onError: (error) => {
       toast.error(`Erro ao criar cliente: ${error.message}`);
-    },
-  });
-
-  const createLead = (trpc as any).leads.create.useMutation({
-    onSuccess: () => {
-      utils?.leads?.list?.invalidate?.().catch(() => {});
-      toast.success("Lead criado com sucesso!");
-      setIsLeadDialogOpen(false);
-      setNewLead({
-        name: "",
-        email: "",
-        phone: "",
-        source: "",
-        stage: "prospect" as
-          | "prospect"
-          | "qualified"
-          | "proposal"
-          | "negotiation"
-          | "closed_won"
-          | "closed_lost",
-        value: 0,
-      });
-    },
-    onError: error => {
-      toast.error(`Erro ao criar lead: ${error.message}`);
     },
   });
 
@@ -142,77 +88,24 @@ export default function CRM() {
     createCustomer.mutate(newCustomer);
   };
 
-  const handleCreateLead = () => {
-    if (!newLead.name || !newLead.email) {
-      toast.error("Nome e email são obrigatórios");
-      return;
-    }
-    createLead.mutate(newLead);
-  };
+  // Filtrar clientes (busca por nome, email, telefone)
+  const filteredCustomers = customers.filter((c: any) =>
+    c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.phone?.includes(searchTerm)
+  );
 
-  const copyRefillMessage = (
-    customerName: string,
-    med: string,
-    endDate?: any
-  ) => {
-    const template =
-      (scripts as any[])?.find((s: any) => s.id === "alerta_fim")?.template ||
-      "Olá {nome}! Notamos que seu {remedio} deve acabar dia {data}. Quer que eu separe a reposição?";
-    const dataFmt = endDate
-      ? new Date(endDate).toLocaleDateString("pt-BR")
-      : "em breve";
-    const filled = String(template)
-      .replace("{nome}", customerName || "Cliente")
-      .replace("{remedio}", med || "seu medicamento")
-      .replace("{data}", dataFmt);
-    navigator.clipboard.writeText(filled).catch(() => {});
-    toast.success("Mensagem copiada");
-  };
-
+  // Abrir detalhes do cliente
   const openCustomerDetails = (customer: any) => {
     setSelectedCustomer(customer);
     setShowCustomerDetails(true);
   };
 
-  const openLeadDetails = (lead: any) => {
-    setSelectedLead(lead);
-    setShowLeadDetails(true);
+  // Copiar telefone
+  const copyPhone = (phone: string) => {
+    navigator.clipboard.writeText(phone).catch(() => {});
+    toast.success("Telefone copiado!");
   };
-
-  const filteredCustomers = customers.filter(
-    c =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const filteredLeads = leads.filter(
-    l =>
-      l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getStageColor = (stage: string) => {
-    const colors: Record<string, string> = {
-      prospect: "bg-gray-100 text-gray-800",
-      qualified: "bg-blue-100 text-blue-800",
-      proposal: "bg-purple-100 text-purple-800",
-      negotiation: "bg-orange-100 text-orange-800",
-      closed_won: "bg-green-100 text-green-800",
-      closed_lost: "bg-red-100 text-red-800",
-    };
-    return colors[stage] || "bg-gray-100 text-gray-800";
-  };
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      active: "bg-green-100 text-green-800",
-      inactive: "bg-gray-100 text-gray-800",
-      blocked: "bg-red-100 text-red-800",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const isLoading = customersLoading || leadsLoading;
 
   return (
     <FarmaDashboardLayout>
@@ -220,15 +113,12 @@ export default function CRM() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">CRM</h1>
+            <h1 className="text-3xl font-bold text-gray-900">CRM - Gestão de Clientes</h1>
             <p className="text-gray-500 mt-1">
-              Gerenciamento de clientes e leads
+              Base completa de clientes (todos os contatos)
             </p>
           </div>
-          <Dialog
-            open={isCustomerDialogOpen}
-            onOpenChange={setIsCustomerDialogOpen}
-          >
+          <Dialog open={isCustomerDialogOpen} onOpenChange={setIsCustomerDialogOpen}>
             <DialogTrigger asChild>
               <Button className="bg-indigo-600 hover:bg-indigo-700">
                 <Plus className="w-4 h-4 mr-2" />
@@ -248,9 +138,7 @@ export default function CRM() {
                   <Input
                     placeholder="Ex: Maria Silva"
                     value={newCustomer.name}
-                    onChange={e =>
-                      setNewCustomer({ ...newCustomer, name: e.target.value })
-                    }
+                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -259,9 +147,7 @@ export default function CRM() {
                     type="email"
                     placeholder="maria@exemplo.com"
                     value={newCustomer.email}
-                    onChange={e =>
-                      setNewCustomer({ ...newCustomer, email: e.target.value })
-                    }
+                    onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -269,43 +155,23 @@ export default function CRM() {
                   <Input
                     placeholder="(00) 00000-0000"
                     value={newCustomer.phone}
-                    onChange={e =>
-                      setNewCustomer({ ...newCustomer, phone: e.target.value })
-                    }
+                    onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={newCustomer.status}
-                    onValueChange={value =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        status: value as "active" | "inactive" | "blocked",
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Ativo</SelectItem>
-                      <SelectItem value="inactive">Inativo</SelectItem>
-                      <SelectItem value="blocked">Bloqueado</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Instagram</Label>
+                  <Input
+                    placeholder="@usuario"
+                    value={newCustomer.instagram}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, instagram: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2 col-span-2">
                   <Label>Endereço</Label>
                   <Input
                     placeholder="Rua, número, complemento"
                     value={newCustomer.address}
-                    onChange={e =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        address: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -313,9 +179,7 @@ export default function CRM() {
                   <Input
                     placeholder="Ex: São Paulo"
                     value={newCustomer.city}
-                    onChange={e =>
-                      setNewCustomer({ ...newCustomer, city: e.target.value })
-                    }
+                    onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -324,39 +188,24 @@ export default function CRM() {
                     placeholder="Ex: SP"
                     maxLength={2}
                     value={newCustomer.state}
-                    onChange={e =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        state: e.target.value.toUpperCase(),
-                      })
-                    }
+                    onChange={(e) => setNewCustomer({ ...newCustomer, state: e.target.value.toUpperCase() })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>CEP</Label>
-                  <Input
-                    placeholder="00000-000"
-                    value={newCustomer.zipCode}
-                    onChange={e =>
-                      setNewCustomer({
-                        ...newCustomer,
-                        zipCode: e.target.value,
-                      })
-                    }
+                <div className="space-y-2 col-span-2">
+                  <Label>Observações</Label>
+                  <Textarea
+                    placeholder="Notas sobre o cliente..."
+                    value={newCustomer.notes}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, notes: e.target.value })}
+                    rows={3}
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsCustomerDialogOpen(false)}
-                >
+                <Button variant="outline" onClick={() => setIsCustomerDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button
-                  onClick={handleCreateCustomer}
-                  disabled={createCustomer.isPending}
-                >
+                <Button onClick={handleCreateCustomer} disabled={createCustomer.isPending}>
                   {createCustomer.isPending ? "Criando..." : "Criar Cliente"}
                 </Button>
               </DialogFooter>
@@ -368,525 +217,220 @@ export default function CRM() {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
-            placeholder="Buscar por nome ou email..."
+            placeholder="Buscar por nome, email ou telefone..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
           />
         </div>
 
-        {/* Tabs */}
-        <Tabs defaultValue="customers" className="space-y-6">
-          <TabsList>
-            <TabsTrigger value="customers">
-              Clientes ({customers.length})
-            </TabsTrigger>
-            <TabsTrigger value="leads">Leads ({leads.length})</TabsTrigger>
-            <TabsTrigger value="treatments">Adesao (Refill)</TabsTrigger>
-            <TabsTrigger value="scripts">Scripts</TabsTrigger>
-          </TabsList>
-
-          {/* Customers Tab */}
-          <TabsContent value="customers" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Lista de Clientes</CardTitle>
-                <CardDescription>
-                  Todos os clientes cadastrados na plataforma
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                  </div>
-                ) : filteredCustomers.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">Nenhum cliente encontrado</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Contato</TableHead>
-                        <TableHead>Localização</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Cadastro</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredCustomers.map(customer => (
-                        <TableRow key={customer.id}>
-                          <TableCell className="font-medium">
-                            {customer.name}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              {customer.email && (
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Mail className="w-3 h-3 mr-1" />
-                                  {customer.email}
-                                </div>
-                              )}
-                              {customer.phone && (
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Phone className="w-3 h-3 mr-1" />
-                                  {customer.phone}
-                                </div>
-                              )}
+        {/* Customers Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Base de Clientes ({filteredCustomers.length})</CardTitle>
+            <CardDescription>
+              Todos os clientes cadastrados (não só em atendimento)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {customersLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+              </div>
+            ) : filteredCustomers.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500">Nenhum cliente encontrado</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead>Instagram</TableHead>
+                    <TableHead>Interações</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead> Cadastro</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCustomers.map((customer: any) => (
+                    <TableRow key={customer.id}>
+                      <TableCell className="font-medium">
+                        <div>
+                          <div>{customer.name}</div>
+                          {customer.notes && (
+                            <div className="text-xs text-gray-500 truncate max-w-xs">
+                              {customer.notes}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            {customer.city && customer.state && (
-                              <div className="flex items-center text-sm text-gray-600">
-                                <MapPin className="w-3 h-3 mr-1" />
-                                {customer.city}, {customer.state}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={getStatusColor(customer.status)}>
-                              {customer.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {new Date(customer.createdAt).toLocaleDateString(
-                              "pt-BR"
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openCustomerDetails(customer)}
-                            >
-                              Ver Detalhes
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="scripts" className="space-y-4">
-            <CrmScriptsTab />
-          </TabsContent>
-
-          {/* Leads Tab */}
-          <TabsContent value="leads" className="space-y-4">
-            <div className="flex justify-end mb-4">
-              <Dialog
-                open={isLeadDialogOpen}
-                onOpenChange={setIsLeadDialogOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button className="bg-purple-600 hover:bg-purple-700">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Novo Lead
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Adicionar Lead</DialogTitle>
-                    <DialogDescription>
-                      Preencha os dados do novo lead
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Nome Completo *</Label>
-                      <Input
-                        placeholder="Ex: Carlos Oliveira"
-                        value={newLead.name}
-                        onChange={e =>
-                          setNewLead({ ...newLead, name: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Email *</Label>
-                      <Input
-                        type="email"
-                        placeholder="carlos@exemplo.com"
-                        value={newLead.email}
-                        onChange={e =>
-                          setNewLead({ ...newLead, email: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Telefone</Label>
-                      <Input
-                        placeholder="(00) 00000-0000"
-                        value={newLead.phone}
-                        onChange={e =>
-                          setNewLead({ ...newLead, phone: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Origem</Label>
-                      <Select
-                        value={newLead.source}
-                        onValueChange={value =>
-                          setNewLead({ ...newLead, source: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                          <SelectItem value="instagram">Instagram</SelectItem>
-                          <SelectItem value="website">Website</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                          <SelectItem value="phone">Telefone</SelectItem>
-                          <SelectItem value="referral">Indicação</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Estágio</Label>
-                      <Select
-                        value={newLead.stage}
-                        onValueChange={value =>
-                          setNewLead({
-                            ...newLead,
-                            stage: value as
-                              | "prospect"
-                              | "qualified"
-                              | "proposal"
-                              | "negotiation"
-                              | "closed_won"
-                              | "closed_lost",
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="prospect">Prospect</SelectItem>
-                          <SelectItem value="qualified">Qualificado</SelectItem>
-                          <SelectItem value="proposal">Proposta</SelectItem>
-                          <SelectItem value="negotiation">
-                            Negociação
-                          </SelectItem>
-                          <SelectItem value="closed_won">Ganho</SelectItem>
-                          <SelectItem value="closed_lost">Perdido</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Valor Estimado (R$)</Label>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newLead.value}
-                        onChange={e =>
-                          setNewLead({
-                            ...newLead,
-                            value: parseFloat(e.target.value) || 0,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsLeadDialogOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleCreateLead}
-                      disabled={createLead.isPending}
-                    >
-                      {createLead.isPending ? "Criando..." : "Criar Lead"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <Card>
-              <CardHeader>
-                <CardTitle>Funil de Vendas</CardTitle>
-                <CardDescription>
-                  Leads em diferentes estágios do processo de vendas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-                  </div>
-                ) : filteredLeads.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">Nenhum lead encontrado</p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Contato</TableHead>
-                        <TableHead>Origem</TableHead>
-                        <TableHead>Estágio</TableHead>
-                        <TableHead>Valor</TableHead>
-                        <TableHead>Follow-up</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredLeads.map(lead => (
-                        <TableRow key={lead.id}>
-                          <TableCell className="font-medium">
-                            {lead.name}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              {lead.email && (
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Mail className="w-3 h-3 mr-1" />
-                                  {lead.email}
-                                </div>
-                              )}
-                              {lead.phone && (
-                                <div className="flex items-center text-sm text-gray-600">
-                                  <Phone className="w-3 h-3 mr-1" />
-                                  {lead.phone}
-                                </div>
-                              )}
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          {customer.email && (
+                            <div className="flex items-center text-sm text-gray-600">
+                              <Mail className="w-3 h-3 mr-1" />
+                              {customer.email}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {lead.source || "N/A"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={getStageColor(lead.stage)}>
-                              {lead.stage}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {lead.value
-                              ? `R$ ${lead.value.toLocaleString("pt-BR")}`
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {lead.followUpDate
-                              ? new Date(lead.followUpDate).toLocaleDateString(
-                                  "pt-BR"
-                                )
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openLeadDetails(lead)}
+                          )}
+                          {customer.phone && (
+                            <div 
+                              className="flex items-center text-sm text-gray-600 cursor-pointer hover:text-indigo-600"
+                              onClick={() => copyPhone(customer.phone)}
                             >
-                              Ver Detalhes
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Treatments / Refill Tab */}
-          <TabsContent value="treatments" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Pill className="w-5 h-5" /> Alertas de Reposicao (7 dias)
-                </CardTitle>
-                <CardDescription>
-                  Tratamentos com fim previsto no periodo. Uma tarefa de
-                  reposicao e criada automaticamente com 3 dias de antecedencia.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Medicamento</TableHead>
-                      <TableHead>Fim Previsto</TableHead>
-                      <TableHead>Dias</TableHead>
-                      <TableHead className="text-right">Acao</TableHead>
+                              <Phone className="w-3 h-3 mr-1" />
+                              {customer.phone}
+                              <Copy className="w-3 h-3 ml-1 opacity-50" />
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {customer.instagram ? (
+                          <Badge variant="outline" className="text-pink-600">
+                            {customer.instagram}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <History className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{customer.interactionsCount || 0}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={
+                          customer.status === 'active' ? "bg-green-100 text-green-800" :
+                          customer.status === 'inactive' ? "bg-gray-100 text-gray-800" :
+                          "bg-red-100 text-red-800"
+                        }>
+                          {customer.status === 'active' ? 'Ativo' :
+                           customer.status === 'inactive' ? 'Inativo' : 'Bloqueado'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString("pt-BR") : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openCustomerDetails(customer)}
+                        >
+                          Ver Detalhes
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {upcomingLoading ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center py-8 text-gray-500"
-                        >
-                          Carregando...
-                        </TableCell>
-                      </TableRow>
-                    ) : (upcomingTreatments as any[]).length > 0 ? (
-                      (upcomingTreatments as any[]).map((row: any) => {
-                        const end = row?.treatment?.dataFimPrevisto;
-                        const daysLeft = end
-                          ? Math.ceil(
-                              (new Date(end).getTime() - Date.now()) /
-                                (1000 * 60 * 60 * 24)
-                            )
-                          : null;
-                        return (
-                          <TableRow key={row.treatment.id}>
-                            <TableCell className="font-medium">
-                              {row.customer?.name || "Cliente"}
-                            </TableCell>
-                            <TableCell>
-                              {row.treatment?.nomeMedicamento || "-"}
-                            </TableCell>
-                            <TableCell>
-                              {end
-                                ? new Date(end).toLocaleDateString("pt-BR")
-                                : "-"}
-                            </TableCell>
-                            <TableCell>
-                              {daysLeft === null
-                                ? "-"
-                                : daysLeft <= 0
-                                  ? "Acabando"
-                                  : `${daysLeft}d`}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="gap-2"
-                                onClick={() =>
-                                  copyRefillMessage(
-                                    row.customer?.name,
-                                    row.treatment?.nomeMedicamento,
-                                    end
-                                  )
-                                }
-                              >
-                                <Copy className="w-4 h-4" /> Copiar Msg
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    ) : (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center py-8 text-gray-500"
-                        >
-                          Nenhum alerta no periodo
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Customer Details (reuse CRM panel) */}
-        {selectedCustomer ? (
-          <CRMPanel
-            open={showCustomerDetails}
-            onOpenChange={setShowCustomerDetails}
-            customerId={selectedCustomer.id}
-            customerName={selectedCustomer.name || ""}
-            customerPhone={selectedCustomer.phone || ""}
-          />
-        ) : null}
-
-        {/* Lead Details */}
-        <Dialog open={showLeadDetails} onOpenChange={setShowLeadDetails}>
-          <DialogContent className="max-w-2xl">
+        {/* Customer Details Modal */}
+        <Dialog open={showCustomerDetails} onOpenChange={setShowCustomerDetails}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Detalhes do Lead</DialogTitle>
+              <DialogTitle>Detalhes do Cliente</DialogTitle>
               <DialogDescription>
-                Informacoes completas do lead selecionado
+                {selectedCustomer?.name} - Histórico completo e dados cadastrais
               </DialogDescription>
             </DialogHeader>
+            
+            {selectedCustomer && (
+              <div className="space-y-6">
+                {/* Dados Cadastrais */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Nome</Label>
+                    <div className="mt-1 text-sm font-medium">{selectedCustomer.name}</div>
+                  </div>
+                  <div>
+                    <Label>Telefone</Label>
+                    <div className="mt-1 text-sm flex items-center gap-2">
+                      {selectedCustomer.phone || '-'}
+                      {selectedCustomer.phone && (
+                        <Copy className="w-4 h-4 cursor-pointer text-gray-400 hover:text-indigo-600" 
+                             onClick={() => copyPhone(selectedCustomer.phone)} />
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <div className="mt-1 text-sm">{selectedCustomer.email || '-'}</div>
+                  </div>
+                  <div>
+                    <Label>Instagram</Label>
+                    <div className="mt-1 text-sm">{selectedCustomer.instagram || '-'}</div>
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <div className="mt-1">
+                      <Badge className={
+                        selectedCustomer.status === 'active' ? "bg-green-100 text-green-800" :
+                        selectedCustomer.status === 'inactive' ? "bg-gray-100 text-gray-800" :
+                        "bg-red-100 text-red-800"
+                      }>
+                        {selectedCustomer.status === 'active' ? 'Ativo' :
+                         selectedCustomer.status === 'inactive' ? 'Inativo' : 'Bloqueado'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <Label> Cadastro</Label>
+                    <div className="mt-1 text-sm">
+                      {selectedCustomer.createdAt ? new Date(selectedCustomer.createdAt).toLocaleDateString("pt-BR") : '-'}
+                    </div>
+                  </div>
+                </div>
 
-            {selectedLead ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Histórico de Interações (TODO: buscar via trpc.customers.getDetails) */}
                 <div>
-                  <Label>Nome</Label>
-                  <div className="mt-1 text-sm">{selectedLead.name}</div>
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <div className="mt-1 text-sm">
-                    {selectedLead.email || "-"}
+                  <Label className="flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    Histórico de Interações
+                  </Label>
+                  <div className="mt-2 text-sm text-gray-500">
+                    {selectedCustomer.interactionsCount > 0 ? (
+                      <span>{selectedCustomer.interactionsCount} interação(ões) registrada(s)</span>
+                    ) : (
+                      <span>Nenhuma interação registrada</span>
+                    )}
+                    {/* TODO: Expandir para mostrar conversas detalhadas */}
                   </div>
                 </div>
+
+                {/* Documentos Anexados (TODO) */}
                 <div>
-                  <Label>Telefone</Label>
-                  <div className="mt-1 text-sm">
-                    {selectedLead.phone || "-"}
+                  <Label className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4" />
+                    Documentos Anexados
+                  </Label>
+                  <div className="mt-2 text-sm text-gray-500">
+                    Funcionalidade em desenvolvimento
                   </div>
                 </div>
+
+                {/* Segmentação / Etiquetas (TODO) */}
                 <div>
-                  <Label>Origem</Label>
-                  <div className="mt-1 text-sm">
-                    {selectedLead.source || "-"}
-                  </div>
-                </div>
-                <div>
-                  <Label>Estagio</Label>
-                  <div className="mt-1 text-sm">{selectedLead.stage}</div>
-                </div>
-                <div>
-                  <Label>Valor</Label>
-                  <div className="mt-1 text-sm">
-                    {selectedLead.value
-                      ? `R$ ${Number(selectedLead.value).toLocaleString("pt-BR")}`
-                      : "-"}
-                  </div>
-                </div>
-                <div>
-                  <Label>Follow-up</Label>
-                  <div className="mt-1 text-sm">
-                    {selectedLead.followUpDate
-                      ? new Date(selectedLead.followUpDate).toLocaleDateString(
-                          "pt-BR"
-                        )
-                      : "-"}
-                  </div>
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Observacoes</Label>
-                  <div className="mt-1 text-sm whitespace-pre-wrap">
-                    {selectedLead.notes || "-"}
+                  <Label className="flex items-center gap-2">
+                    <Tag className="w-4 h-4" />
+                    Segmentação / Etiquetas
+                  </Label>
+                  <div className="mt-2 text-sm text-gray-500">
+                    Funcionalidade em desenvolvimento
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">Nenhum lead</div>
             )}
 
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowLeadDetails(false)}
-              >
+              <Button variant="outline" onClick={() => setShowCustomerDetails(false)}>
                 Fechar
               </Button>
             </DialogFooter>
