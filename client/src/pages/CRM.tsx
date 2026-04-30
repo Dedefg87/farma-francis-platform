@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Search, Mail, Phone, MapPin, Copy, History, Tag, Paperclip, Plus } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,11 +36,34 @@ import { toast } from "sonner";
 export default function CRM() {
   const utils = trpc.useUtils();
   
-  // Buscar TODOS os clientes (não só ativos)
-  const { data: clients = [], isLoading: customersLoading } = trpc.clients.list.useQuery({});
+  // Buscar TODOS os clientes únicos via conversas
+  const { data: conversations = [], isLoading: customersLoading } = trpc.conversations.list.useQuery({ limit: 1000 } as any);
   
-  // MAPEAR: API retorna { customer: {...}, contacts: [...] } → formato esperado pelo CRM
-  const customers = clients;
+  // Extrair clientes únicos das conversas
+  const customers = React.useMemo(() => {
+    if (!conversations) return [];
+    const map = new Map<string, any>();
+    conversations.forEach((conv: any) => {
+      const phone = conv.customerPhone;
+      if (phone && !map.has(phone)) {
+        map.set(phone, {
+          id: phone,
+          name: conv.customerName || `Cliente ${phone.slice(-4)}`,
+          phone: phone,
+          email: null,
+          status: 'active',
+          createdAt: conv.openedAt || conv.createdAt || new Date().toISOString(),
+          lastInteraction: conv.lastMessageAt || null,
+          interactionsCount: 0,
+        });
+      }
+    });
+    const custArray = Array.from(map.values());
+    custArray.forEach(c => {
+      c.interactionsCount = conversations.filter((conv: any) => conv.customerPhone === c.phone).length;
+    });
+    return custArray;
+  }, [conversations]);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
