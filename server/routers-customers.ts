@@ -8,6 +8,7 @@ export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
   // Alinhado EXATAMENTE com o 'search' que funciona
   list: protectedProcedure
+    .input(z.null().optional()) // ← ACEITA null/undefined (frontend não passa parâmetro)
     .output(
       z.array(
         z.object({
