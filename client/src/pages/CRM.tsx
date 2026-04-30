@@ -251,6 +251,7 @@ export default function CRM() {
                     <TableHead>Contato</TableHead>
                     <TableHead>Instagram</TableHead>
                     <TableHead>Interações</TableHead>
+                    <TableHead>Última Interação</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead> Cadastro</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -302,6 +303,16 @@ export default function CRM() {
                         <div className="flex items-center gap-1">
                           <History className="w-4 h-4 text-gray-400" />
                           <span className="text-sm">{customer.interactionsCount || 0}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <History className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">
+                            {customer.lastInteraction 
+                              ? new Date(customer.lastInteraction).toLocaleDateString("pt-BR")
+                              : 'Sem interações'}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -391,19 +402,41 @@ export default function CRM() {
                   </div>
                 </div>
 
-                {/* Histórico de Interações (TODO: buscar via trpc.customers.getDetails) */}
+                {/* Histórico de Interações */}
                 <div>
                   <Label className="flex items-center gap-2">
                     <History className="w-4 h-4" />
-                    Histórico de Interações
+                    Histórico de Interações ({selectedCustomer.interactionsCount || 0})
                   </Label>
-                  <div className="mt-2 text-sm text-gray-500">
-                    {selectedCustomer.interactionsCount > 0 ? (
-                      <span>{selectedCustomer.interactionsCount} interação(ões) registrada(s)</span>
+                  <div className="mt-2 space-y-2">
+                    {selectedCustomer.history && selectedCustomer.history.length > 0 ? (
+                      selectedCustomer.history.map((interaction: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge className={
+                                interaction.status === 'open' ? "bg-blue-100 text-blue-800" :
+                                interaction.status === 'assigned' ? "bg-yellow-100 text-yellow-800" :
+                                interaction.status === 'closed' ? "bg-green-100 text-green-800" :
+                                "bg-gray-100 text-gray-800"
+                              }>
+                                {interaction.status === 'open' ? 'Aberto' :
+                                 interaction.status === 'assigned' ? 'Em Atendimento' :
+                                 interaction.status === 'closed' ? 'Finalizado' : interaction.status}
+                              </Badge>
+                              <span className="text-xs text-gray-500">
+                                {interaction.date ? new Date(interaction.date).toLocaleDateString("pt-BR") : '-'}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {interaction.messagesCount || 0} mensagens
+                            </span>
+                          </div>
+                        </div>
+                      ))
                     ) : (
-                      <span>Nenhuma interação registrada</span>
+                      <div className="text-sm text-gray-500">Nenhuma interação registrada</div>
                     )}
-                    {/* TODO: Expandir para mostrar conversas detalhadas */}
                   </div>
                 </div>
 
