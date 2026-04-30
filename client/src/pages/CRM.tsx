@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { Search, Mail, Phone, MapPin, Copy, History, Tag, Paperclip } from "lucide-react";
+import { Search, Mail, Phone, MapPin, Copy, History, Tag, Paperclip, Plus } from "lucide-react";
 import { useState } from "react";
 import {
   Dialog,
