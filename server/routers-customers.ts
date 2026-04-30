@@ -14,19 +14,19 @@ export const customersRouter = router({
           name: customers.name,
           phone: customers.phone,
           email: customers.email,
-          photoUrl: customers.photoUrl,
           status: customers.status,
-          createdAt: customers.createdAt,
-          updatedAt: customers.updatedAt,
         })
         .from(customers)
         .orderBy(desc(customers.createdAt));
 
-      // Converter id para string (compatível com frontend)
+      // Converter id para string e garantir campos obrigatórios
       return allCustomers.map(c => ({
-        ...c,
         id: String(c.id),
-        interactionsCount: 0, // Temporário - remover query que causa erro
+        name: c.name || '',
+        phone: c.phone || '',
+        email: c.email || null,
+        status: c.status || 'active',
+        interactionsCount: 0, // Temporário
       }));
     }),
 
