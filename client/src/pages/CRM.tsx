@@ -37,7 +37,7 @@ export default function CRM() {
   const utils = trpc.useUtils();
   
   // Buscar TODOS os clientes (não só ativos)
-  const { data: customers = [], isLoading: customersLoading } = trpc.customers.list.useQuery(null as any);
+  const { data: customers = [], isLoading: customersLoading } = trpc.customers.list.useQuery({});
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);

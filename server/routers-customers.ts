@@ -8,7 +8,7 @@ export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
   // SEM .output() TEMPORÁRIO (erro de validação)
   list: protectedProcedure
-    .input(z.null().optional())
+    .input(z.object({}).optional()) // ← ACEITA OBJETO VAZIO OU UNDEFINED
     .query(async () => {
       try {
         const allCustomers = await db
