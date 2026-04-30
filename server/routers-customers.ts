@@ -13,7 +13,7 @@ export const customersRouter = router({
         z.object({
           id: z.string(),
           name: z.string(),
-          phone: z.string(),
+          phone: z.string().nullish(),
           email: z.string().nullable(),
         })
       )
@@ -29,7 +29,7 @@ export const customersRouter = router({
           })
           .from(customers);
 
-        // Formato idêntico ao search.tsx (que funciona)
+        // Formato idêntico ao search (que funciona)
         return allCustomers.map(c => ({
           id: String(c.id),
           name: c.name || 'Cliente',
