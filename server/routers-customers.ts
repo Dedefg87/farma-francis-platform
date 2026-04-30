@@ -1,19 +1,19 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { db } from "./db";
-import { customers, conversations, conversationMessages } from "./drizzle/schema";
-import { eq, like, or, sql, desc } from "drizzle-orm";
+import { customers } from "./drizzle/schema";
+import { eq, like, or } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // Alinhado com o formato do 'search' que funciona
+  // Alinhado EXATAMENTE com o 'search' que funciona
   list: protectedProcedure
     .output(
       z.array(
         z.object({
           id: z.string(),
           name: z.string(),
-          phone: z.string().nullish(),
+          phone: z.string(), // search usa string() obrigatório (phone é notNull no schema)
           email: z.string().nullable(),
         })
       )
@@ -33,7 +33,7 @@ export const customersRouter = router({
         return allCustomers.map(c => ({
           id: String(c.id),
           name: c.name || 'Cliente',
-          phone: c.phone || '',
+          phone: c.phone || '', // never null (notNull no schema)
           email: c.email || null,
         }));
       } catch (error) {
@@ -107,7 +107,7 @@ export const customersRouter = router({
         }));
       } catch (error) {
         console.error('[customers.search] Database error:', error);
-        console.error('[customers.search] Error details:', error.message);
+        console.error('[customers.search] Error details:', (error as Error).message);
         throw new Error('Erro interno na busca de clientes');
       }
     }),
@@ -231,4 +231,4 @@ export const customersRouter = router({
       };
     }),
 });
-// Build: Wed Apr 15 10:28:08 -03 2026
+// Build: Thu Apr 30 10:38:00 -03 2026
