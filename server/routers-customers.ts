@@ -6,13 +6,16 @@ import { eq, like, or, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // Versão simplificada - apenas busca na tabela customers
+  // Versão com auto-sincronização de conversations
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async () => {
       try {
-        // Buscar TODOS os clientes da tabela customers
-        const allCustomers = await db
+        const db = await getDb();
+        if (!db) throw new Error("Database unavailable");
+
+        // 1. Buscar clientes da tabela customers
+        let allCustomers = await db
           .select({
             id: customers.id,
             name: customers.name,
@@ -26,16 +29,51 @@ export const customersRouter = router({
 
         console.log(`[customers.list] Encontrados ${allCustomers.length} clientes na tabela customers`);
 
-        // Se não encontrou nada, retornar array vazio (não usar fallback)
+        // 2. AUTO-SYNC: Se customers vazio, sincronizar de conversations
         if (allCustomers.length === 0) {
-          console.log('[customers.list] Tabela customers vazia - verifique se o webhook está criando clientes');
-          return [];
+          console.log('[customers.list] Tabela customers vazia, sincronizando de conversations...');
+          
+          const uniqueFromConv = await db
+            .select({
+              customerName: conversations.customerName,
+              customerPhone: conversations.customerPhone,
+            })
+            .from(conversations)
+            .where(sql`customerPhone IS NOT NULL`)
+            .groupBy(conversations.customerPhone);
+
+          console.log(`[customers.list] Encontrados ${uniqueFromConv.length} clientes únicos em conversations`);
+
+          // Inserir na tabela customers
+          if (uniqueFromConv.length > 0) {
+            await db.insert(customers).values(
+              uniqueFromConv.map(c => ({
+                name: c.customerName || `Cliente ${c.customerPhone?.slice(-4) || '0000'}`,
+                phone: c.customerPhone || '',
+                status: 'active' as const,
+              }))
+            );
+
+            // Buscar novamente
+            allCustomers = await db
+              .select({
+                id: customers.id,
+                name: customers.name,
+                phone: customers.phone,
+                email: customers.email,
+                status: customers.status,
+                createdAt: customers.createdAt,
+              })
+              .from(customers)
+              .orderBy(desc(customers.id));
+            
+            console.log(`[customers.list] Após sync: ${allCustomers.length} clientes`);
+          }
         }
 
-        // Buscar histórico de conversas para cada cliente
+        // 3. Buscar histórico de conversas para cada cliente
         const customersWithHistory = await Promise.all(
           allCustomers.map(async (c) => {
-            // Buscar conversas por telefone (customerId pode não estar preenchido)
             const history = await db
               .select({
                 id: conversations.id,
@@ -45,7 +83,7 @@ export const customersRouter = router({
               .from(conversations)
               .where(eq(conversations.customerPhone, c.phone))
               .orderBy(desc(conversations.createdAt))
-              .limit(10); // Últimas 10 interações
+              .limit(10);
 
             return {
               id: String(c.id),
