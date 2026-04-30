@@ -8,91 +8,30 @@ export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
   list: protectedProcedure
     .query(async () => {
-      const allCustomers = await db
-        .select({
-          id: customers.id,
-          name: customers.name,
-          phone: customers.phone,
-          email: customers.email,
-          status: customers.status,
-        })
-        .from(customers)
-        .orderBy(desc(customers.createdAt));
+      try {
+        const allCustomers = await db
+          .select({
+            id: customers.id,
+            name: customers.name,
+            phone: customers.phone,
+            email: customers.email,
+            status: customers.status,
+          })
+          .from(customers);
 
-      // Converter id para string e garantir campos obrigatórios
-      return allCustomers.map(c => ({
-        id: String(c.id),
-        name: c.name || '',
-        phone: c.phone || '',
-        email: c.email || null,
-        status: c.status || 'active',
-        interactionsCount: 0, // Temporário
-      }));
-    }),
-
-  // GET detalhes completos do cliente (com histórico)
-  getDetails: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      const customerId = Number(input.id);
-      
-      // Dados básicos do cliente
-      const [customer] = await db
-        .select()
-        .from(customers)
-        .where(eq(customers.id, customerId))
-        .limit(1);
-
-      if (!customer) {
-        throw new Error("Customer not found");
+        // Retornar no formato esperado pelo frontend
+        return allCustomers.map(c => ({
+          id: String(c.id),
+          name: c.name || '',
+          phone: c.phone || '',
+          email: c.email || null,
+          status: c.status || 'active',
+          interactionsCount: 0,
+        }));
+      } catch (error) {
+        console.error('[customers.list] Error:', error);
+        throw new Error('Erro ao listar clientes');
       }
-
-      // Histórico de interações (conversas)
-      const interactions = await db
-        .select({
-          id: conversations.id,
-          status: conversations.status,
-          channel: conversations.channel,
-          openedAt: conversations.openedAt,
-          lastMessageAt: conversations.lastMessageAt,
-          closedAt: conversations.closedAt,
-          lastMessage: sql<string>`(
-            SELECT cm.content 
-            FROM conversation_messages cm 
-            WHERE cm.conversation_id = ${conversations.id} 
-            ORDER BY cm.created_at DESC 
-            LIMIT 1
-          )`.as('lastMessage'),
-        })
-        .from(conversations)
-        .where(eq(conversations.customerId, customerId))
-        .orderBy(desc(conversations.lastMessageAt));
-
-      return {
-        id: String(customer.id),
-        name: customer.name,
-        phone: customer.phone,
-        email: customer.email,
-        photoUrl: customer.photoUrl,
-        status: customer.status,
-        notes: customer.notes || '',
-        source: customer.source || '',
-        createdAt: customer.createdAt,
-        updatedAt: customer.updatedAt,
-        interactions: interactions.map(i => ({
-          id: String(i.id),
-          status: i.status,
-          channel: i.channel,
-          openedAt: i.openedAt,
-          lastMessageAt: i.lastMessageAt,
-          closedAt: i.closedAt,
-          lastMessage: i.lastMessage || '',
-        })),
-      };
     }),
 
   // GET /api/trpc/customers.search
