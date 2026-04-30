@@ -6,13 +6,13 @@ import { eq, like, or, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // Busca todos os clientes + histórico de conversas
+  // Busca clientes da tabela 'customers' ou 'conversations' (fallback)
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async () => {
       try {
-        // Buscar todos os clientes
-        const allCustomers = await db
+        // 1. Tentar buscar da tabela customers
+        let allCustomers = await db
           .select({
             id: customers.id,
             name: customers.name,
@@ -23,7 +23,30 @@ export const customersRouter = router({
           })
           .from(customers);
 
-        // Para cada cliente, buscar histórico de conversas (interações)
+        // 2. Se customers vazia, buscar de conversations (fallback)
+        if (allCustomers.length === 0) {
+          console.log('[customers.list] Tabela customers vazia, buscando de conversations...');
+          const uniqueFromConv = await db
+            .select({
+              customerName: conversations.customerName,
+              customerPhone: conversations.customerPhone,
+            })
+            .from(conversations)
+            .groupBy(conversations.customerPhone)
+            .having(sql`${conversations.customerPhone} IS NOT NULL`);
+
+          // Mapear para formato de customer
+          allCustomers = uniqueFromConv.map((c, idx) => ({
+            id: c.customerPhone || `temp-${idx}`, // ID temporário baseado no telefone
+            name: c.customerName || 'Cliente',
+            phone: c.customerPhone || '',
+            email: null,
+            status: 'active',
+            createdAt: new Date(),
+          }));
+        }
+
+        // 3. Para cada cliente, buscar histórico de conversas
         const customersWithHistory = await Promise.all(
           allCustomers.map(async (c) => {
             const history = await db
@@ -34,7 +57,7 @@ export const customersRouter = router({
                 messagesCount: sql`(SELECT COUNT(*) FROM conversation_messages WHERE conversation_id = ${conversations.id})`,
               })
               .from(conversations)
-              .where(eq(conversations.customerId, c.id))
+              .where(eq(conversations.customerPhone, c.phone))
               .orderBy(desc(conversations.createdAt));
 
             return {
@@ -44,7 +67,6 @@ export const customersRouter = router({
               email: c.email || null,
               status: c.status || 'active',
               createdAt: c.createdAt?.toISOString(),
-              // Histórico de interações
               interactionsCount: history.length,
               lastInteraction: history[0]?.createdAt?.toISOString() || null,
               history: history.map(h => ({
