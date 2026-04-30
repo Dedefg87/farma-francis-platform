@@ -7,8 +7,7 @@ import { eq, like, or, sql, desc } from "drizzle-orm";
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
   // Versão simplificada - apenas busca na tabela customers
-  // Temporariamente publicProcedure para testar se dados carregam
-  list: publicProcedure
+  list: protectedProcedure
     .input(z.object({}).optional())
     .query(async () => {
       try {
