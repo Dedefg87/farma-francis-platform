@@ -38,7 +38,21 @@ export default function CRM() {
   
   // Buscar TODOS os clientes (não só ativos)
   const { data: rawData = {}, isLoading: customersLoading } = trpc.customers.list.useQuery({});
-  const customers = Array.isArray(rawData.customers) ? rawData.customers : [];
+  
+  // MAPEAR: API retorna { customer: {...}, contacts: [...] } → formato esperado pelo CRM
+  const customers = Array.isArray(rawData.customers) 
+    ? rawData.customers.map((item: any) => ({
+        id: item.customer?.id || item.customer?.externalId || '0',
+        name: item.customer?.fullName || item.customer?.firstName || 'Cliente',
+        phone: item.customer?.phone || '',
+        email: item.customer?.email || null,
+        status: 'active', // padrão
+        createdAt: item.customer?.createdAt,
+        interactionsCount: item.customer?.totalConversations || 0,
+        lastInteraction: item.customer?.lastContactAt || null,
+        history: [], // TODO: buscar histórico separadamente se necessário
+      }))
+    : [];
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
