@@ -1,18 +1,18 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { db } from "./db";
-import { customers, conversations, conversationMessages } from "./drizzle/schema";
+import { customers, conversations } from "./drizzle/schema";
 import { eq, like, or, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // Busca clientes da tabela 'customers' ou 'conversations' (fallback)
+  // Versão simplificada - apenas busca na tabela customers
   list: protectedProcedure
     .input(z.object({}).optional())
     .query(async () => {
       try {
-        // 1. Tentar buscar da tabela customers
-        let allCustomers = await db
+        // Buscar TODOS os clientes da tabela customers
+        const allCustomers = await db
           .select({
             id: customers.id,
             name: customers.name,
@@ -21,44 +21,31 @@ export const customersRouter = router({
             status: customers.status,
             createdAt: customers.createdAt,
           })
-          .from(customers);
+          .from(customers)
+          .orderBy(desc(customers.id));
 
-        // 2. Se customers vazia, buscar de conversations (fallback)
+        console.log(`[customers.list] Encontrados ${allCustomers.length} clientes na tabela customers`);
+
+        // Se não encontrou nada, retornar array vazio (não usar fallback)
         if (allCustomers.length === 0) {
-          console.log('[customers.list] Tabela customers vazia, buscando de conversations...');
-          const uniqueFromConv = await db
-            .select({
-              customerName: conversations.customerName,
-              customerPhone: conversations.customerPhone,
-            })
-            .from(conversations)
-            .where(sql`customerPhone IS NOT NULL`)
-            .groupBy(conversations.customerPhone);
-
-          // Mapear para formato de customer
-          allCustomers = uniqueFromConv.map((c, idx) => ({
-            id: c.customerPhone || `temp-${idx}`, // ID temporário baseado no telefone
-            name: c.customerName || 'Cliente',
-            phone: c.customerPhone || '',
-            email: null,
-            status: 'active',
-            createdAt: new Date(),
-          }));
+          console.log('[customers.list] Tabela customers vazia - verifique se o webhook está criando clientes');
+          return [];
         }
 
-        // 3. Para cada cliente, buscar histórico de conversas
+        // Buscar histórico de conversas para cada cliente
         const customersWithHistory = await Promise.all(
           allCustomers.map(async (c) => {
+            // Buscar conversas por telefone (customerId pode não estar preenchido)
             const history = await db
               .select({
                 id: conversations.id,
                 status: conversations.status,
                 createdAt: conversations.createdAt,
-                messagesCount: sql`(SELECT COUNT(*) FROM conversation_messages WHERE conversation_id = ${conversations.id})`,
               })
               .from(conversations)
               .where(eq(conversations.customerPhone, c.phone))
-              .orderBy(desc(conversations.createdAt));
+              .orderBy(desc(conversations.createdAt))
+              .limit(10); // Últimas 10 interações
 
             return {
               id: String(c.id),
@@ -73,7 +60,6 @@ export const customersRouter = router({
                 id: String(h.id),
                 status: h.status,
                 date: h.createdAt?.toISOString(),
-                messagesCount: h.messagesCount,
               })),
             };
           })
@@ -122,10 +108,7 @@ export const customersRouter = router({
         }
 
         // Busca por telefone: comparar apenas os dígitos
-        // O número no banco pode ter formatos variados (+553186337081, 553186337081, 31986337081)
-        // Então buscamos pelos últimos N dígitos da query
         if (numericQuery.length >= 8) {
-          // Busca os últimos 8+ dígitos — cobre variações de formato
           const lastDigits = numericQuery.slice(-8);
           conditions.push(like(customers.phone, `%${lastDigits}%`));
         } else if (numericQuery.length > 0) {
@@ -151,13 +134,11 @@ export const customersRouter = router({
         }));
       } catch (error) {
         console.error('[customers.search] Database error:', error);
-        console.error('[customers.search] Error details:', (error as Error).message);
         throw new Error('Erro interno na busca de clientes');
       }
     }),
 
   // customers.findOrCreate — force rebuild v2
-  // Busca cliente por telefone/email; se não existir, cria automaticamente
   findOrCreate: protectedProcedure
     .input(
       z.object({
@@ -178,7 +159,7 @@ export const customersRouter = router({
     .mutation(async ({ input }) => {
       const { phone, email, name } = input;
 
-      // Tentar buscar cliente existente pelo telefone (matching flexível)
+      // Tentar buscar cliente existente pelo telefone
       if (phone) {
         const phoneDigits = phone.replace(/\D/g, '');
 
@@ -275,4 +256,4 @@ export const customersRouter = router({
       };
     }),
 });
-// Build: Thu Apr 30 10:38:00 -03 2026
+// Build: Thu Apr 30 11:50:00 -03 2026 - Versão simplificada
