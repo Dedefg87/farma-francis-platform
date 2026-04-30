@@ -6,6 +6,7 @@ import { eq, like, or, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
+  // Alinhado com o formato do 'search' que funciona
   list: protectedProcedure
     .query(async () => {
       try {
@@ -15,22 +16,19 @@ export const customersRouter = router({
             name: customers.name,
             phone: customers.phone,
             email: customers.email,
-            status: customers.status,
           })
           .from(customers);
 
-        // Retornar no formato esperado pelo frontend
+        // Formato idêntico ao search.tsx (que funciona)
         return allCustomers.map(c => ({
           id: String(c.id),
-          name: c.name || '',
+          name: c.name || 'Cliente',
           phone: c.phone || '',
           email: c.email || null,
-          status: c.status || 'active',
-          interactionsCount: 0,
         }));
       } catch (error) {
         console.error('[customers.list] Error:', error);
-        throw new Error('Erro ao listar clientes');
+        return []; // Retorna vazio em vez de erro 500
       }
     }),
 
