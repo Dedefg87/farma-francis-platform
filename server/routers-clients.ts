@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
-import { conversations } from "./drizzle/schema";
+import { conversations } from "../drizzle/schema";
 import { sql, desc } from "drizzle-orm";
 
 export const clientsRouter = router({
