@@ -37,22 +37,10 @@ export default function CRM() {
   const utils = trpc.useUtils();
   
   // Buscar TODOS os clientes (não só ativos)
-  const { data: rawData = {}, isLoading: customersLoading } = trpc.customers.list.useQuery({});
+  const { data: clients = [], isLoading: customersLoading } = trpc.clients.list.useQuery({});
   
   // MAPEAR: API retorna { customer: {...}, contacts: [...] } → formato esperado pelo CRM
-  const customers = Array.isArray(rawData.customers) 
-    ? rawData.customers.map((item: any) => ({
-        id: item.customer?.id || item.customer?.externalId || '0',
-        name: item.customer?.fullName || item.customer?.firstName || 'Cliente',
-        phone: item.customer?.phone || '',
-        email: item.customer?.email || null,
-        status: 'active', // padrão
-        createdAt: item.customer?.createdAt,
-        interactionsCount: item.customer?.totalConversations || 0,
-        lastInteraction: item.customer?.lastContactAt || null,
-        history: [], // TODO: buscar histórico separadamente se necessário
-      }))
-    : [];
+  const customers = clients;
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
@@ -75,7 +63,7 @@ export default function CRM() {
 
   const createCustomer = trpc.customers.create.useMutation({
     onSuccess: () => {
-      utils.customers.list.invalidate().catch(() => {});
+      utils.clients.list.invalidate().catch(() => {});
       toast.success("Cliente criado com sucesso!");
       setIsCustomerDialogOpen(false);
       setNewCustomer({
