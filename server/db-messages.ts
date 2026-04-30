@@ -56,7 +56,7 @@ async function pickLeastLoadedOnlineAgent(params: {
       WHERE u.role IN ('user', 'admin')
         AND p.id IS NULL
       GROUP BY u.id
-      ORDER BY loadCount ASC, u.last_signed_in DESC
+      ORDER BY loadCount ASC, u.id DESC
       LIMIT 1
     `);
 
@@ -96,7 +96,7 @@ async function pickLeastLoadedOnlineAgent(params: {
         )})
         AND p.id IS NULL
       GROUP BY u.id
-      ORDER BY loadCount ASC, lastSignedIn DESC
+      ORDER BY loadCount ASC, u.id DESC
     `)) as any[];
 
     if (Array.isArray(rows) && rows.length > 0) {
