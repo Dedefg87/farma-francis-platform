@@ -1,35 +1,66 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { db } from "./db";
-import { customers } from "./drizzle/schema";
-import { eq, like, or } from "drizzle-orm";
+import { customers, conversations, conversationMessages } from "./drizzle/schema";
+import { eq, like, or, sql, desc } from "drizzle-orm";
 
 export const customersRouter = router({
   // LISTAR TODOS OS CLIENTES (para CRM)
-  // SEM .output() TEMPORÁRIO (erro de validação)
+  // Busca todos os clientes + histórico de conversas
   list: protectedProcedure
-    .input(z.object({}).optional()) // ← ACEITA OBJETO VAZIO OU UNDEFINED
+    .input(z.object({}).optional())
     .query(async () => {
       try {
+        // Buscar todos os clientes
         const allCustomers = await db
           .select({
             id: customers.id,
             name: customers.name,
             phone: customers.phone,
             email: customers.email,
+            status: customers.status,
+            createdAt: customers.createdAt,
           })
           .from(customers);
 
-        // Garantir tipos corretos (frontend espera strings)
-        return allCustomers.map(c => ({
-          id: String(c.id),
-          name: c.name || 'Cliente',
-          phone: c.phone || '', // string nunca null
-          email: c.email || null, // pode ser null
-        }));
+        // Para cada cliente, buscar histórico de conversas (interações)
+        const customersWithHistory = await Promise.all(
+          allCustomers.map(async (c) => {
+            const history = await db
+              .select({
+                id: conversations.id,
+                status: conversations.status,
+                createdAt: conversations.createdAt,
+                messagesCount: sql`(SELECT COUNT(*) FROM conversation_messages WHERE conversation_id = ${conversations.id})`,
+              })
+              .from(conversations)
+              .where(eq(conversations.customerId, c.id))
+              .orderBy(desc(conversations.createdAt));
+
+            return {
+              id: String(c.id),
+              name: c.name || 'Cliente',
+              phone: c.phone || '',
+              email: c.email || null,
+              status: c.status || 'active',
+              createdAt: c.createdAt?.toISOString(),
+              // Histórico de interações
+              interactionsCount: history.length,
+              lastInteraction: history[0]?.createdAt?.toISOString() || null,
+              history: history.map(h => ({
+                id: String(h.id),
+                status: h.status,
+                date: h.createdAt?.toISOString(),
+                messagesCount: h.messagesCount,
+              })),
+            };
+          })
+        );
+
+        return customersWithHistory;
       } catch (error) {
         console.error('[customers.list] Error:', error);
-        return []; // Retorna vazio em vez de erro 500
+        return [];
       }
     }),
 
