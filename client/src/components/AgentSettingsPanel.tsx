@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { AI_AGENTS, getAgentById } from "@/data/aiAgents";
+import { AI_AGENTS, getAgentById } from "@/data/agents";
 import { IAgentDefinition, IAgentParameter, INodeData } from "@/types/aiAgent";
 import { trpc } from "@/lib/trpc";
 import {
@@ -65,7 +65,7 @@ export function AgentSettingsPanel({
     message: string;
   } | null>(null);
 
-  const validateTokenMutation = trpc.aiAgents.validateToken.useMutation();
+  const validateTokenMutation = trpc.agents.validateToken.useMutation();
 
   const selectedAgent = selectedAgentId ? getAgentById(selectedAgentId) : null;
 
@@ -161,7 +161,7 @@ export function AgentSettingsPanel({
     }
   };
 
-  const testAgentMutation = trpc.aiAgents.testAgent.useMutation();
+  const testAgentMutation = trpc.agents.testAgent.useMutation();
 
   const handleTestAgent = async () => {
     if (!selectedAgent || !testMessage.trim()) return;
