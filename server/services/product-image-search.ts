@@ -30,7 +30,7 @@ interface VideoResult {
  */
 export async function searchPexelsImages(query: string, perPage: number = 10): Promise<ImageResult[]> {
   if (!PEXELS_API_KEY) {
-    console.log("[Pexels] API key not configured");
+
     return [];
   }
 
@@ -69,7 +69,7 @@ export async function searchPexelsImages(query: string, perPage: number = 10): P
  */
 export async function searchPexelsVideos(query: string, perPage: number = 10): Promise<VideoResult[]> {
   if (!PEXELS_API_KEY) {
-    console.log("[Pexels] API key not configured");
+
     return [];
   }
 
@@ -167,23 +167,23 @@ export async function findBestProductImage(productName: string): Promise<string 
       const sourceLower = img.source.toLowerCase();
       for (const trusted of trustedSources) {
         if (sourceLower.includes(trusted)) {
-          console.log(`[ImageSearch] Found trusted image for "${productName}" from ${img.source}`);
+
           return img.url;
         }
       }
     }
 
     // Se não encontrou de fonte confiável, retornar a primeira
-    console.log(`[ImageSearch] Using first image for "${productName}" from ${serperImages[0].source}`);
+
     return serperImages[0].url;
   }
 
   // Fallback: tentar Pexels
-  console.log(`[ImageSearch] Serper empty, trying Pexels for "${productName}"`);
+
   const pexelsImages = await searchPexelsImages(productName, 5);
 
   if (pexelsImages.length > 0) {
-    console.log(`[ImageSearch] Using Pexels image for "${productName}" by ${pexelsImages[0].photographer}`);
+
     return pexelsImages[0].url;
   }
 
@@ -219,7 +219,6 @@ export async function fetchAndUpdateProductImage(
       WHERE id = ${packageId}
     `);
 
-    console.log(`[ImageSearch] Updated image for package ${packageId}`);
     return { success: true, imageUrl };
   } catch (error) {
     console.error("[ImageSearch] Error updating database:", error);

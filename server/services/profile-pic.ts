@@ -49,9 +49,7 @@ export async function downloadAndUploadProfilePic(
     });
 
     if (!imageResponse.ok) {
-      console.warn(
-        `[ProfilePic] Failed to download for customer ${customerId}: ${imageResponse.status}`
-      );
+
       return null;
     }
 
@@ -80,15 +78,9 @@ export async function downloadAndUploadProfilePic(
         .where(eq(customers.id, customerId));
     }
 
-    console.log(
-      `[ProfilePic] ✅ Customer ${customerId} photo saved to R2: ${result.url}`
-    );
     return result.url;
   } catch (err: unknown) {
-    console.warn(
-      `[ProfilePic] Error for customer ${customerId}:`,
-      err.message
-    );
+
     return null;
   }
 }

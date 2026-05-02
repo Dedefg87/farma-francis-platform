@@ -8,22 +8,20 @@ export async function applySqlMigrations() {
     const db = await getDb();
 
     if (!db) {
-      console.log("[Migrations] DB not ready, skipping");
+
       return;
     }
 
     const migrationsDir = path.join(process.cwd(), 'server', 'database', 'migrations');
     
     if (!fs.existsSync(migrationsDir)) {
-      console.log("[Migrations] Diretório de migrations não encontrado, pulando.");
+
       return;
     }
 
     const files = fs.readdirSync(migrationsDir)
       .filter(f => f.endsWith('.sql'))
       .sort();
-
-    console.log(`[Migrations] Encontradas ${files.length} migrations`);
 
     try {
       await db.execute(sql`
@@ -33,7 +31,7 @@ export async function applySqlMigrations() {
           PRIMARY KEY (migration_name)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
-      console.log("[Migrations] ✅ Tabela de controle _migrations_applied verificada/criada");
+
     } catch (err: unknown) {
       console.error("[Migrations] ❌ Erro ao criar tabela de controle:", err.message);
     }
@@ -47,7 +45,6 @@ export async function applySqlMigrations() {
     for (const file of files) {
       if (!file || appliedSet.has(file)) continue;
 
-      console.log(`[Migrations] ▶ Aplicando: ${file}`);
       const fullPath = path.join(migrationsDir, file);
       const sqlContent = fs.readFileSync(fullPath, 'utf8');
 
@@ -86,9 +83,9 @@ export async function applySqlMigrations() {
         if (!failed) {
           try {
             await db.execute(sql`INSERT IGNORE INTO _migrations_applied (migration_name) VALUES (${file})`);
-            console.log(`[Migrations] ✅ Aplicada e registrada: ${file}`);
+
           } catch (err: unknown) {
-            console.warn(`[Migrations] ⚠️ Aplicada mas não foi possível registrar: ${file}`, err.message);
+
           }
         }
 
@@ -97,7 +94,6 @@ export async function applySqlMigrations() {
       }
     }
 
-    console.log('[Migrations] ✅ Processamento de migrations concluído');
   } catch (err) {
     console.error('[Migrations] ❌ Falha crítica:', err);
   }

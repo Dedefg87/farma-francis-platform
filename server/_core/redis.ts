@@ -23,7 +23,7 @@ const metrics = {
  */
 function createRedisClient() {
   if (!process.env.REDIS_URL) {
-    console.warn("[Redis] ❌ REDIS_URL não definida — Redis desativado");
+
     return null;
   }
 
@@ -48,7 +48,7 @@ function createRedisClient() {
       redisDown = false;
       reconnectAttempts = 0;
       metrics.reconnects++;
-      console.log("[Redis] ✅ Conectado com sucesso");
+
     });
 
     client.on("error", (err) => {
@@ -68,7 +68,7 @@ function createRedisClient() {
 
     client.on("end", () => {
       redisDown = true;
-      console.warn("[Redis] ⚠️ Conexão encerrada — fallback ativado");
+
     });
 
     return client;
@@ -188,7 +188,7 @@ export async function closeRedis() {
   if (redisClient) {
     try {
       await redisClient.quit();
-      console.log("[Redis] ✅ Desconectado com segurança");
+
     } catch (err) {
       console.error("[Redis] ❌ Erro ao desconectar:", err);
       redisClient.disconnect();
@@ -200,13 +200,13 @@ export async function closeRedis() {
  * Graceful shutdown
  */
 process.on("SIGTERM", async () => {
-  console.log("[Server] SIGTERM recebido — encerrando...");
+
   await closeRedis();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
-  console.log("[Server] SIGINT recebido — encerrando...");
+
   await closeRedis();
   process.exit(0);
 });

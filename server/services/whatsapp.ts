@@ -16,7 +16,7 @@ export async function sendWhatsAppNotification(params: {
   try {
     const db = await getDb();
     if (!db) {
-      console.log("[WhatsApp] Database not available");
+
       return false;
     }
 
@@ -27,7 +27,7 @@ export async function sendWhatsAppNotification(params: {
       .limit(1);
 
     if (!config || !config.isActive) {
-      console.log("[WhatsApp] Evolution API not configured");
+
       return false;
     }
 
@@ -42,7 +42,7 @@ export async function sendWhatsAppNotification(params: {
     const instanceName = configData.instanceName as string;
 
     if (!apiUrl || !apiKey || !instanceName) {
-      console.log("[WhatsApp] Evolution config incomplete");
+
       return false;
     }
 
@@ -72,7 +72,7 @@ export async function sendWhatsAppNotification(params: {
       const errorText = await response.text();
       console.error(`[WhatsApp] Falha ao enviar para ${normalizedPhone}: ${response.status} - ${errorText}`);
     } else {
-      console.log(`[WhatsApp] ✅ Mensagem enviada para ${normalizedPhone}`);
+
     }
 
     return response.ok;

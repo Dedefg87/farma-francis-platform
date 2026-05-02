@@ -19,14 +19,12 @@ export async function createContext({ req, res }: { req: Request; res: Response 
     }
 
     const authHeader = req.headers.authorization || "";
-    console.log("[Context] Auth header presente?", !!authHeader);
 
     let user: { id: number; role: string; email: string } | undefined;
 
     if (authHeader.startsWith("Bearer ")) {
       try {
         const token = authHeader.substring(7).trim();
-        console.log("[Context] Token extraído, tamanho:", token.length);
 
         const secret = process.env.JWT_SECRET;
         if (!secret) {
@@ -41,21 +39,19 @@ export async function createContext({ req, res }: { req: Request; res: Response 
             role: string;
           };
 
-          console.log("[Context] ✅ Token validado para user ID:", decoded.sub);
-
           user = {
             id: decoded.sub,
             role: decoded.role || "user",
             email: decoded.email,
           };
         } else {
-          console.log("[Context] ❌ Token vazio ou inválido:", token);
+
         }
       } catch (error: unknown) {
         console.error("[Context] ❌ Token validation error:", error.message);
       }
     } else {
-      console.log("[Context] No bearer token provided");
+
     }
 
     return { req, res, db, user };

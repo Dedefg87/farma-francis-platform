@@ -21,16 +21,14 @@ import {
  * Simple Chatbot Automation - Fixed Version
  */
 export async function processIncomingMessage(message: unknown) {
-  console.log("==========================================");
-  console.log("[CHATBOT] Processing message:", message.id);
-  console.log("[CHATBOT] From:", message.fromNumber);
-  console.log("[CHATBOT] Type:", message.messageType);
+
+
+
+
   console.log("[CHATBOT] Text:", message.messageText?.substring(0, 50));
-  console.log("==========================================");
 
   // Handle non-text messages
   if (message.messageType && message.messageType !== "text") {
-    console.log("[CHATBOT] Non-text message, skipping auto-response");
 
     const db = await getDb();
     if (db) {
@@ -42,7 +40,7 @@ export async function processIncomingMessage(message: unknown) {
   try {
     const db = await getDb();
     if (!db) {
-      console.log("[CHATBOT] No database connection!");
+
       return;
     }
 
@@ -52,32 +50,23 @@ export async function processIncomingMessage(message: unknown) {
     );
 
     if (!customer) {
-      console.log("[CHATBOT] Could not find/create customer");
+
       return;
     }
-
-    console.log("[CHATBOT] Customer:", customer.name, "ID:", customer.id);
 
     // Survey response detection (1-5)
     const ratingText = message.messageText?.trim();
     const rating = parseInt(ratingText?.replace(/[^0-9]/g, "") || "0");
     const isSurveyResponse = rating >= 1 && rating <= 5;
 
-    console.log(
-      "[CHATBOT] Is survey response:",
-      isSurveyResponse,
-      "Rating:",
-      rating
-    );
-
     if (isSurveyResponse) {
-      console.log("[CHATBOT] Handling survey response...");
+
       await handleSurveyResponse(message, customer);
       return;
     }
 
     // Non-survey messages are handled by Flow Engine (selected automation flow)
-    console.log("[CHATBOT] Non-survey message - leaving for Flow Engine");
+
   } catch (error) {
     console.error("[CHATBOT] Error:", error);
   }
@@ -90,10 +79,9 @@ export async function closeConversation(
   conversationId: number,
   closeReason: string
 ) {
-  console.log("==========================================");
-  console.log("[CHATBOT] Closing conversation:", conversationId);
-  console.log("[CHATBOT] Reason:", closeReason);
-  console.log("==========================================");
+
+
+
 
   try {
     const db = await getDb();
@@ -106,7 +94,7 @@ export async function closeConversation(
       .limit(1);
 
     if (!conv) {
-      console.log("[CHATBOT] Conversation not found");
+
       return;
     }
 
@@ -121,7 +109,7 @@ export async function closeConversation(
 
     const customerId = conv.customerId;
     if (!customerId) {
-      console.log("[CHATBOT] Customer ID not found");
+
       return;
     }
 
@@ -132,7 +120,7 @@ export async function closeConversation(
       .limit(1);
 
     if (!customer || !customer.phone) {
-      console.log("[CHATBOT] Customer or phone not found");
+
       return;
     }
 
@@ -156,8 +144,6 @@ export async function closeConversation(
       closingMessage = `Obrigado pelo contato! 😊`;
     }
 
-    console.log("[CHATBOT] Sending closing message...");
-
     if (conv.channel === "whatsapp") {
       await sendWhatsAppMessage({
         to: customer.phone,
@@ -170,7 +156,6 @@ export async function closeConversation(
       });
     }
 
-    console.log("[CHATBOT] Closing message sent!");
   } catch (error) {
     console.error("[CHATBOT] Error closing conversation:", error);
   }
@@ -180,11 +165,10 @@ export async function closeConversation(
  * Handle survey response from customer (1-5 rating)
  */
 export async function handleSurveyResponse(message: unknown, customer: unknown) {
-  console.log("==========================================");
-  console.log("[CHATBOT] Processing survey response");
-  console.log("[CHATBOT] From:", message.fromNumber);
-  console.log("[CHATBOT] Rating:", message.messageText);
-  console.log("==========================================");
+
+
+
+
 
   try {
     const db = await getDb();
@@ -195,11 +179,9 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
     const rating = parseInt(ratingText?.replace(/[^0-9]/g, "") || "0");
 
     if (rating < 1 || rating > 5) {
-      console.log("[CHATBOT] Invalid rating, ignoring");
+
       return;
     }
-
-    console.log("[CHATBOT] Valid rating:", rating);
 
     // Find the most recent closed conversation with this customer
     const [recentConv] = await db
@@ -223,14 +205,12 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
         closeReason: recentConv?.closeReason || "venda",
         agentId: recentConv?.assignedTo || null,
       });
-      console.log("[CHATBOT] Survey response saved to database!");
+
     } catch (e: unknown) {
       const code = e?.cause?.code || e?.code;
       const msg = String(e?.cause?.sqlMessage || e?.message || "");
       if (code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist")) {
-        console.log(
-          "[CHATBOT] survey_responses table missing; skipping DB insert"
-        );
+
       } else {
         console.error("[CHATBOT] Error saving survey response:", e);
       }
@@ -262,8 +242,6 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
       });
     }
 
-    console.log("[CHATBOT] Thank you message sent!");
-
     // Mark as processed - survey response is handled, no need to show in UI
     await markMessageAsProcessed(message.id, {
       customerId: customer.id,
@@ -275,9 +253,6 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
       .delete(receivedMessages)
       .where(eq(receivedMessages.id, message.id));
 
-    console.log(
-      "[CHATBOT] Survey response processed, original message deleted from UI"
-    );
   } catch (error) {
     // IMPORTANT: if we fail here, message may be re-processed forever.
     // Best-effort: mark processed to prevent loops.
@@ -310,8 +285,6 @@ export async function processPendingMessages() {
       )
       .limit(5);
 
-    console.log("[CHATBOT] Found", pending.length, "pending messages");
-
     for (const msg of pending) {
       await processIncomingMessage(msg);
     }
@@ -324,13 +297,12 @@ export async function processPendingMessages() {
  * Start the chatbot processor
  */
 export function startChatbot() {
-  console.log("==========================================");
-  console.log("[CHATBOT] Starting Simple Chatbot Automation - FIXED");
-  console.log("[CHATBOT] Version: 2.0 - With Closing Messages");
-  console.log("==========================================");
+
+
+
 
   setTimeout(async () => {
-    console.log("[CHATBOT] Running initial check...");
+
     await processPendingMessages();
   }, 3000);
 
@@ -338,5 +310,4 @@ export function startChatbot() {
     await processPendingMessages();
   }, 10000);
 
-  console.log("[CHATBOT] Running - checking messages every 10 seconds");
 }

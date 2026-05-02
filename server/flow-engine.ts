@@ -48,8 +48,6 @@ export async function processPendingMessages() {
     )
     .limit(10);
 
-  console.log(`[Flow Engine] Found ${pending.length} pending messages`);
-
   for (const message of pending) {
     try {
       await processMessage(message);
@@ -68,10 +66,6 @@ export async function processPendingMessages() {
 async function processMessage(message: unknown) {
   const db = await getDb();
   if (!db) return;
-
-  console.log(
-    `[Flow Engine] Processing message ${message.id} from ${message.fromNumber}`
-  );
 
   // Find or create customer
   const customer = await findOrCreateCustomerByPhone(
@@ -93,7 +87,7 @@ async function processMessage(message: unknown) {
       mimeType: message.mimeType,
       createdAt: message.timestamp ? new Date(message.timestamp * 1000) : new Date(),
     });
-    console.log(`[Flow Engine] Ingested message ${message.id} into conversation_messages`);
+
   } catch (ingestErr) {
     console.error(`[Flow Engine] Failed to ingest message:`, ingestErr);
     // Continue anyway - will still mark as processed
@@ -131,9 +125,6 @@ async function processMessage(message: unknown) {
   }
 
   if (matchedVisualFlow) {
-    console.log(
-      `[Flow Engine] Message matched visual flow: ${matchedVisualFlow.name}`
-    );
 
     try {
       await executeVisualFlow(message, matchedVisualFlow.id, customer);
@@ -181,7 +172,7 @@ async function processMessage(message: unknown) {
       automationFlowId: matchedFlow.id,
     });
   } else {
-    console.log(`[Flow Engine] No flow matched for message ${message.id}`);
+
     await markMessageAsProcessed(message.id, {
       customerId: customer.id,
     });
@@ -196,23 +187,17 @@ function matchesVisualFlowTrigger(message: unknown, triggerNode: unknown): boole
   const triggerType = config.event || "message_received";
   const messageText = message.messageText?.toLowerCase() || "";
 
-  console.log(`[Flow Engine] Trigger type: ${triggerType}`);
   console.log(`[Flow Engine] Message text: ${messageText?.substring(0, 50)}`);
-  console.log(`[Flow Engine] Trigger config:`, config);
 
   // Check if this is a message_received trigger (all messages)
   if (triggerType === "message_received") {
-    console.log(
-      `[Flow Engine] Message trigger matched - processing ALL messages`
-    );
+
     return true;
   }
 
   // If no trigger type, match all messages by default
   if (!triggerType) {
-    console.log(
-      `[Flow Engine] No trigger type - matching ALL messages by default`
-    );
+
     return true;
   }
 
@@ -223,7 +208,7 @@ function matchesVisualFlowTrigger(message: unknown, triggerNode: unknown): boole
         config.condition,
         message
       );
-      console.log(`[Flow Engine] Condition result: ${conditionResult}`);
+
       return conditionResult;
     } catch (error) {
       console.error(`[Flow Engine] Condition evaluation error:`, error);
@@ -311,7 +296,6 @@ async function executeSimpleFlow(message: unknown, flow: unknown, customer: unkn
     });
   }
 
-  console.log(`[Flow Engine] Sent automated response to ${message.fromNumber}`);
 }
 
 /**
@@ -340,10 +324,6 @@ export async function executeVisualFlow(
   const parsedFlowData = JSON.parse(flow.flowData || "{}");
   const nodes = parsedFlowData.nodes || [];
   const edges = parsedFlowData.edges || [];
-
-  console.log(
-    `[Chatbot Flow] Executing flow "${flow.name}" for ${customer.phone}`
-  );
 
   let agentName = null;
 
@@ -405,10 +385,6 @@ async function executeFlowFromTrigger(
     return;
   }
 
-  console.log(
-    `[Chatbot Flow] Starting from trigger: ${triggerNode.data?.label || triggerNode.id}`
-  );
-
   await executeNodeWithEdges(triggerNode, nodes, edges, context, message);
 }
 
@@ -435,9 +411,7 @@ async function executeNodeWithEdges(
 
     case "condition":
       conditionResult = evaluateConditionNode(config, context);
-      console.log(
-        `[Chatbot Flow] Condition "${node.data?.label}": ${conditionResult ? "TRUE" : "FALSE"}`
-      );
+
       break;
 
     case "message":
@@ -459,7 +433,7 @@ async function executeNodeWithEdges(
       }
 
       if (config.terminal || isTerminalMessage(node)) {
-        console.log(`[Chatbot Flow] Terminal message sent, stopping flow`);
+
         return;
       }
       break;
@@ -473,7 +447,7 @@ async function executeNodeWithEdges(
 
         context.greeting = greeting;
         context.agent_name = context.agent_name || "Atendente";
-        console.log(`[Chatbot Flow] Generated greeting: ${greeting}`);
+
       }
       break;
 
@@ -483,7 +457,7 @@ async function executeNodeWithEdges(
 
     case "transfer":
     case "transferHuman":
-      console.log(`[Chatbot Flow] Transfer to human`);
+
       await executeTransferHumanNode(config, context, message);
       return;
 
@@ -510,13 +484,13 @@ async function executeNodeWithEdges(
       return;
 
     default:
-      console.log(`[Chatbot Flow] Unknown node type: ${node.type}`);
+
   }
 
   const outgoingEdges = edges.filter((e: unknown) => e.source === node.id);
 
   if (outgoingEdges.length === 0) {
-    console.log(`[Chatbot Flow] No outgoing edges, flow complete`);
+
     return;
   }
 
@@ -765,7 +739,6 @@ async function executeTransferHumanNode(
     });
   }
 
-  console.log(`[Flow Engine] Transferred to human agent: ${department}`);
 }
 
 /**
@@ -826,7 +799,6 @@ async function executeCreateTicketNode(
     // ignore
   }
 
-  console.log(`[Flow Engine] Created ticket: ${subject}`);
 }
 
 /**
@@ -836,7 +808,7 @@ function executeSetVariableNode(config: unknown, context: unknown) {
   const variableName = config.variableName || "";
   const variableValue = replaceVariables(config.variableValue || "", context);
   context.variables[variableName] = variableValue;
-  console.log(`[Flow Engine] Set variable ${variableName} = ${variableValue}`);
+
 }
 
 /**
@@ -857,9 +829,7 @@ async function executeHttpRequestNode(config: unknown, context: unknown) {
 
     const data = await response.json();
     context.variables.httpResponse = data;
-    console.log(
-      `[Flow Engine] HTTP ${method} ${url} - Status: ${response.status}`
-    );
+
   } catch (error) {
     console.error(`[Flow Engine] HTTP Request error:`, error);
   }
@@ -894,7 +864,6 @@ async function executeURAMenuNode(config: unknown, context: unknown, message: un
  * Start the flow engine processor
  */
 export function startFlowEngine() {
-  console.log("[Flow Engine] Starting...");
 
   setInterval(() => {
     processPendingMessages().catch(error => {
@@ -902,7 +871,4 @@ export function startFlowEngine() {
     });
   }, 5000);
 
-  console.log(
-    "[Flow Engine] Running - checking for new messages every 5 seconds"
-  );
 }

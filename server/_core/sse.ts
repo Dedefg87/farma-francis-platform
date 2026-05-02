@@ -10,8 +10,7 @@ class SseManager extends EventEmitter {
   private clients: Map<string, Set<any>> = new Map();
 
   addClient(userId: string, res: unknown): void {
-    console.log(`[SSE] Adding client for userId=${userId}`);
-    
+
     if (!this.clients.has(userId)) {
       this.clients.set(userId, new Set());
     }
@@ -21,7 +20,7 @@ class SseManager extends EventEmitter {
     console.log(`[SSE] All connected users: ${this.getConnectedUsers().join(", ")}`);
 
     res.on("close", () => {
-      console.log(`[SSE] Client disconnected for userId=${userId}`);
+
       this.clients.get(userId)?.delete(res);
       if (this.clients.get(userId)?.size === 0) {
         this.clients.delete(userId);
@@ -31,7 +30,6 @@ class SseManager extends EventEmitter {
 
   emitToUser(userId: string, event: SseEvent): void {
     const clientSet = this.clients.get(userId);
-    console.log(`[SSE] emitToUser called for userId=${userId}, connected=${!!clientSet}, clients=${clientSet?.size || 0}`);
 
     if (!clientSet) {
       console.log(`[SSE] No clients connected for userId=${userId}. Connected users: ${this.getConnectedUsers().join(", ")}`);
@@ -44,7 +42,7 @@ class SseManager extends EventEmitter {
     for (const res of clientSet) {
       try {
         res.write(data);
-        console.log(`[SSE] ✅ Event sent successfully to client for userId=${userId}`);
+
       } catch (e) {
         console.error(`[SSE] ❌ Error sending to client for userId=${userId}:`, e);
         clientSet.delete(res);

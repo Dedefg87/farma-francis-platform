@@ -274,9 +274,7 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
           }
         } else {
           // Download image and convert to base64
-          console.log(
-            "[extractRecipeData] Downloading image from:",
-            input.imageUrl.substring(0, 80)
+
           );
           const response = await fetch(input.imageUrl, {
             signal: AbortSignal.timeout(15000),
@@ -304,12 +302,6 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
               mimeType = "image/gif";
           }
 
-          console.log(
-            "[extractRecipeData] Image downloaded, size:",
-            buffer.length,
-            "type:",
-            mimeType
-          );
         }
 
         const dataUrl = `data:${mimeType};base64,${base64Image}`;

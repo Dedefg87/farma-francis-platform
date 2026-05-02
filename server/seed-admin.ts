@@ -10,8 +10,6 @@ async function seed() {
   const hash = await bcrypt.hash(password, 10);
   const now = new Date();
 
-  console.log("Criando usuário admin...");
-  
   await db.insert(users).values({
     openId: `admin-${Date.now()}`,
     email: email,
@@ -24,9 +22,8 @@ async function seed() {
     updatedAt: now,
   });
 
-  console.log("✅ Admin criado com sucesso!");
-  console.log(`Email: ${email}`);
-  console.log(`Senha: ${password}`);
+
+
   process.exit(0);
 }
 

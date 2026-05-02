@@ -40,7 +40,6 @@ function getRedisUrl(): string {
       : 'redis://localhost:6379');
 
   const masked = url.replace(/:([^@]+)@/, '://***:***@');
-  console.log(`[BroadcastQueue] 🔌 Redis URL: ${masked}`);
 
   return url;
 }
@@ -194,6 +193,6 @@ export async function getBroadcastQueueStats() {
 export async function cleanFailedJobs(): Promise<number> {
   const queue = await getBroadcastQueue();
   const count = await queue.clean(1, 1000, 'failed');
-  console.log(`[BroadcastQueue] 🧹 Limpos ${count} jobs falhados`);
+
   return count;
 }
