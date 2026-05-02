@@ -18,12 +18,15 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': ['recharts', 'emoji-picker-react'],
-          'utils-vendor': ['date-fns', 'clsx', 'sonner'],
+          'ui-vendor': ['recharts', 'emoji-picker-react', 'lucide-react'],
+          'utils-vendor': ['date-fns', 'clsx', 'sonner', 'zod'],
+          'trpc-vendor': ['@trpc/client', '@trpc/server', 'superjson'],
+          'tanstack-vendor': ['@tanstack/react-query'],
+          'form-vendor': ['react-hook-form', '@hookform/resolvers']
         },
       },
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 300,
   },
   server: {
     port: 5173,
