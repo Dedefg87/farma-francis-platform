@@ -372,7 +372,7 @@ Retorne em formato JSON.`;
             error: "Não foi possível extrair dados da receita",
           };
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[extractRecipeData] Error:", error.message);
         if (
           error.message === "IMAGE_NOT_SUPPORTED" ||

@@ -71,7 +71,7 @@ export const broadcastRouter = router({
             totalPages: Math.ceil(Number(total) / input.limit),
           },
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('[BroadcastList] Query failed:', err.message, 'stack:', err.stack);
         throw err;
       }
@@ -180,7 +180,7 @@ export const broadcastRouter = router({
         await db.delete(broadcastLists).where(eq(broadcastLists.id, listId));
 
         return { success: true };
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[BroadcastDelete] Failed to delete list ${input.listId}:`, err.message);
         throw err;
       }
@@ -279,7 +279,7 @@ export const broadcastRouter = router({
         }
 
         return { success: true, deletedCount: input.listIds.length };
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[BroadcastDeleteMany] Failed:`, err.message);
         throw err;
       }
@@ -446,7 +446,7 @@ export const broadcastRouter = router({
         const { processBroadcastMessage } = await import('./workers/broadcast-sender.js');
         // Processar em background para não bloquear a resposta HTTP
         setImmediate(() => {
-          processBroadcastMessage(messageId).catch((e: any) =>
+          processBroadcastMessage(messageId).catch((e: unknown) =>
             console.error('[Broadcast] processBroadcastMessage error:', e.message)
           );
         });
@@ -484,7 +484,7 @@ export const broadcastRouter = router({
         .where(eq(broadcastMembersSent.broadcastMessageId, input.messageId))
         .groupBy(broadcastMembersSent.status);
 
-      const result: any = { total, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0 };
+      const result: unknown = { total, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0 };
       stats.forEach(s => { result[s.status] = Number(s.count); });
 
       return result;

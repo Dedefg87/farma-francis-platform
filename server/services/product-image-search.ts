@@ -52,7 +52,7 @@ export async function searchPexelsImages(query: string, perPage: number = 10): P
     const data = await response.json();
     const photos = data.photos || [];
 
-    return photos.map((photo: any) => ({
+    return photos.map((photo: unknown) => ({
       url: photo.src.large || photo.src.original,
       title: photo.alt || query,
       source: "pexels",
@@ -91,7 +91,7 @@ export async function searchPexelsVideos(query: string, perPage: number = 10): P
     const data = await response.json();
     const videos = data.videos || [];
 
-    return videos.map((video: any) => ({
+    return videos.map((video: unknown) => ({
       url: video.video_files?.[0]?.link ,
       title: video.alt || query,
       source: "pexels",
@@ -130,7 +130,7 @@ export async function searchProductImages(query: string): Promise<ImageResult[]>
     const data = await response.json();
     const images = data.images || [];
 
-    return images.slice(0, 5).map((img: any) => ({
+    return images.slice(0, 5).map((img: unknown) => ({
       url: img.imageUrl || img.link,
       title: img.title,
       source: img.source,

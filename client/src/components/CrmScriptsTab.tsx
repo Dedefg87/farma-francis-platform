@@ -120,7 +120,7 @@ export default function CrmScriptsTab() {
       toast.success("Script salvo");
       await refresh();
       closeDialog();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(e?.message || "Nao foi possivel salvar");
     }
   };
@@ -131,7 +131,7 @@ export default function CrmScriptsTab() {
       await deleteMutation.mutateAsync({ code: row.code });
       toast.success("Script deletado");
       await refresh();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(e?.message || "Nao foi possivel deletar");
     }
   };

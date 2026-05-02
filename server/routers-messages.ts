@@ -92,7 +92,7 @@ export const messagesRouter = router({
             fileType = mimetype;
             console.log('[messages.send] 📎 Uploaded media to R2:', r2Result.url);
           }
-        } catch (r2Err: any) {
+        } catch (r2Err: unknown) {
           console.error('[messages.send] ⚠️ R2 upload failed, will try sending base64 directly:', r2Err.message);
           // Fallback: extract raw base64 for Evolution API
           const base64Match = fileUrl.match(/^data:[^;]+;base64,(.*)$/s);
@@ -124,7 +124,7 @@ export const messagesRouter = router({
           });
           externalId = result?.messageId || null;
           console.log("[messages.send] ✅ Sent via Evolution API, externalId:", externalId);
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("[messages.send] ❌ Failed to send via Evolution API:", err.message);
           // Continue to save message locally even if send fails
         }

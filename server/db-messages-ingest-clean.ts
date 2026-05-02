@@ -171,7 +171,7 @@ export async function ingestInboundConversationMessage(message: {
       
       if (configRecord?.settings) {
         const settings = JSON.parse(configRecord.settings as string);
-        const instance = settings.instances?.find((i: any) => i.name === "Meu") || settings.instances?.[0];
+        const instance = settings.instances?.find((i: unknown) => i.name === "Meu") || settings.instances?.[0];
 
         if (instance?.url && instance?.apiKey) {
           const downloadUrl = `${instance.url}/message/download/${message.externalId}`;

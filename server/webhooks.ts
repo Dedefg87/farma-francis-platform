@@ -21,7 +21,7 @@ import { sseManager, EVENTS } from "./_core/sse";
 import { formatPhoneBR } from "./utils/phone";
 
 // Import debug module
-let debugModule: any = null;
+let debugModule: unknown = null;
 try {
   debugModule = require("./debug");
 } catch (e) {
@@ -33,13 +33,13 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const addDebugLog =
   debugModule?.addLog ||
-  ((level: string, category: string, message: string, data?: any) => {
+  ((level: string, category: string, message: string, data?: unknown) => {
     console.log(`[${level.toUpperCase()}] [${category}]`, message, data);
   });
 
 const addDebugLogWebhook =
   debugModule?.webhookLogger ||
-  ((req: any, res: any, next: any) => {
+  ((req: unknown, res: unknown, next: unknown) => {
     console.log(`[WEBHOOK] ${req.method} ${req.url}`);
     next();
   });
@@ -150,7 +150,7 @@ async function getEvolutionConfig() {
  * Evolution API payloads vary a lot. Try to extract the contact JID/phone
  * from multiple possible shapes.
  */
-function extractEvolutionRemoteJid(body: any): string | null {
+function extractEvolutionRemoteJid(body: unknown): string | null {
   if (!body) return null;
 
   const data = body?.data || body?.payload || body;
@@ -624,7 +624,7 @@ async function processEvolutionWebhookAsync(req: Request) {
  * Process WhatsApp webhook payload
  * Extracts message data and saves to database
  */
-async function processWhatsAppWebhook(body: any) {
+async function processWhatsAppWebhook(body: unknown) {
   try {
     const db = await getDb();
     if (!db) {
@@ -656,7 +656,7 @@ async function processWhatsAppWebhook(body: any) {
           const type = message.type;
 
           // Get sender name from contacts array
-          const contact = contacts.find((c: any) => c.wa_id === from);
+          const contact = contacts.find((c: unknown) => c.wa_id === from);
           const fromName = contact?.profile?.name || null;
 
           // Extract message content based on type
@@ -763,7 +763,7 @@ async function processWhatsAppWebhook(body: any) {
             }).onConflict({
               target: [receivedMessages.provider, receivedMessages.externalId],
             }).doNothing();
-          } catch (e: any) {
+          } catch (e: unknown) {
             if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
               throw e;
             }
@@ -828,7 +828,7 @@ async function processWhatsAppWebhook(body: any) {
  * Process Instagram webhook payload
  * Extracts message data and saves to database
  */
-async function processInstagramWebhook(body: any) {
+async function processInstagramWebhook(body: unknown) {
   try {
     const db = await getDb();
     if (!db) {
@@ -861,7 +861,7 @@ async function processInstagramWebhook(body: any) {
         let mediaUrl = null;
         let mediaId = null;
         let mimeType = null;
-        let messageType: any = "text";
+        let messageType: unknown = "text";
 
         if (message.attachments && Array.isArray(message.attachments)) {
           const attachment = message.attachments[0];
@@ -912,7 +912,7 @@ async function processInstagramWebhook(body: any) {
           }).onConflict({
             target: [receivedMessages.provider, receivedMessages.externalId],
           }).doNothing();
-        } catch (e: any) {
+        } catch (e: unknown) {
           // Se erro de duplicidade e onConflict não suportado ou falhou, ignorar silenciosamente
           if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
             throw e;
@@ -954,7 +954,7 @@ async function processInstagramWebhook(body: any) {
   }
 }
 
-function extractEvolutionMessage(body: any) {
+function extractEvolutionMessage(body: unknown) {
   const payload = body?.data || body?.payload || body;
   const messageEntry =
     payload?.message ||
@@ -994,7 +994,7 @@ function extractEvolutionMessage(body: any) {
   };
 }
 
-function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
+function parseEvolutionMessageContent(message: unknown, rawMessageType?: string) {
   if (!message)
     return {
       type: "unknown",
@@ -1229,7 +1229,7 @@ function parseEvolutionMessageContent(message: any, rawMessageType?: string) {
   };
 }
 
-async function processEvolutionWebhook(body: any) {
+async function processEvolutionWebhook(body: unknown) {
   try {
     console.log("4. [Evolution] 🚀 Iniciando processEvolutionWebhook");
     const db = await getDb();

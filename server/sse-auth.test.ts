@@ -17,9 +17,9 @@ vi.mock("./_core/logger", () => ({
 }));
 
 describe("SSE Authentication Middleware", () => {
-  let req: any;
-  let res: any;
-  let next: any;
+  let req: unknown;
+  let res: unknown;
+  let next: unknown;
 
   beforeEach(() => {
     vi.clearAllMocks();

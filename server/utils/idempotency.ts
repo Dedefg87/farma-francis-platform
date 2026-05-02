@@ -47,7 +47,7 @@ export async function createUniqueIndexIfNotExists(
           ON ${sql.raw(tableName)} (${sql.raw(cols)})`
     );
     console.log(`[Idempotency] Created unique index ${indexName} on ${tableName} (${cols})`);
-  } catch (e: any) {
+  } catch (e: unknown) {
     // MySQL error 1061 = Duplicate key name (already exists)
     if (e?.cause?.errno !== 1061) {
       console.error(`[Idempotency] Failed to create index ${indexName}:`, e);

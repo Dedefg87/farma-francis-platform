@@ -10,7 +10,7 @@ export type User = {
 };
 
 export type Context = {
-  req?: any;
+  req?: unknown;
   user?: User;
 };
 

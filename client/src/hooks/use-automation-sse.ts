@@ -15,7 +15,7 @@ export function useAutomationSSE(customerId?: number) {
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const queryClient = useQueryClient();
 
-  const handleNewMessage = useCallback((message: any) => {
+  const handleNewMessage = useCallback((message: unknown) => {
     setMessages(prev => {
       const messageExists = prev.some(msg => msg.id === message.id);
       if (!messageExists) {

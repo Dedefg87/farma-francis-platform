@@ -4,7 +4,7 @@ import { conversationMessages } from "../drizzle/schema";
 import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
 import { sseManager, EVENTS } from "./_core/sse";
 
-let idleTimer: any = null;
+let idleTimer: unknown = null;
 
 export function startConversationIdleWorker(
   intervalMinutes = 2,

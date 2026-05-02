@@ -31,7 +31,7 @@ export function startBroadcastRecoveryWorker() {
   recoveryTimer = setInterval(async () => {
     try {
       await recoverStuckBroadcasts();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[BroadcastRecovery] Error in recovery loop:', err.message);
     }
   }, RECOVERY_INTERVAL_MS);
@@ -74,7 +74,7 @@ async function recoverStuckBroadcasts() {
     try {
       await processBroadcastMessage(msg.id);
       console.log(`[BroadcastRecovery] ✅ Reprocessed broadcast ${msg.id}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(
         `[BroadcastRecovery] ❌ Failed to reprocess broadcast ${msg.id}:`,
         err.message

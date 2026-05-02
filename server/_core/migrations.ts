@@ -34,15 +34,15 @@ export async function applySqlMigrations() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
       console.log("[Migrations] ✅ Tabela de controle _migrations_applied verificada/criada");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[Migrations] ❌ Erro ao criar tabela de controle:", err.message);
     }
 
     let appliedSet = new Set<string>();
     try {
       const [rows] = await db.execute(sql`SELECT migration_name FROM _migrations_applied`);
-      (rows as any[]).forEach((row: any) => appliedSet.add(row.migration_name));
-    } catch (err: any) {}
+      (rows as any[]).forEach((row: unknown) => appliedSet.add(row.migration_name));
+    } catch (err: unknown) {}
 
     for (const file of files) {
       if (!file || appliedSet.has(file)) continue;
@@ -62,7 +62,7 @@ export async function applySqlMigrations() {
           if (!stmt) continue;
           try {
             await (db as any).execute(stmt + ';');
-          } catch (stmtErr: any) {
+          } catch (stmtErr: unknown) {
             const errorString = (stmtErr.message + ' ' + (stmtErr.code || '') + ' ' + (stmtErr.stack || '')).toLowerCase();
             
             // BYPASS INTELIGENTE: Ignora erros de itens que já existem
@@ -87,12 +87,12 @@ export async function applySqlMigrations() {
           try {
             await db.execute(sql`INSERT IGNORE INTO _migrations_applied (migration_name) VALUES (${file})`);
             console.log(`[Migrations] ✅ Aplicada e registrada: ${file}`);
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.warn(`[Migrations] ⚠️ Aplicada mas não foi possível registrar: ${file}`, err.message);
           }
         }
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[Migrations] ❌ Erro em ${file}:`, err.message);
       }
     }

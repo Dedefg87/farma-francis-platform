@@ -124,7 +124,7 @@ export const crmRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const update: any = {
+      const update: unknown = {
         updatedAt: new Date(),
       };
 
@@ -261,7 +261,7 @@ export const crmRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const updateData: any = { updatedAt: new Date() };
+      const updateData: unknown = { updatedAt: new Date() };
 
       if (input.posologiaDiaria)
         updateData.posologiaDiaria = input.posologiaDiaria;
@@ -669,7 +669,7 @@ export const crmRouter = router({
         .innerJoin(tags, eq(customerTags.tagId, tags.id))
         .where(eq(customerTags.customerId, input.customerId));
 
-      const baseCustomer: any = { ...customer[0] };
+      const baseCustomer: unknown = { ...customer[0] };
       if (ctx.user.role !== "admin") {
         baseCustomer.healthTagsJson = null;
       }

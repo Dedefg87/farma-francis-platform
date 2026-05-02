@@ -45,7 +45,7 @@ const categoryColors: Record<string, string> = {
 export function convertToReactFlow(content: string): { nodes: Node[]; edges: Edge[] } {
   try {
     // Tentar decodificar Base64 primeiro (formato .ivr)
-    let data: any;
+    let data: unknown;
     try {
       const decoded = atob(content);
       data = JSON.parse(decoded);
@@ -77,14 +77,14 @@ export function convertToReactFlow(content: string): { nodes: Node[]; edges: Edg
 /**
  * Converte formato Drawflow para React Flow
  */
-function convertDrawflowToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
+function convertDrawflowToReactFlow(data: unknown): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
   const drawflowData = data.drawflow?.Home?.data || {};
 
   // Converter nós
-  Object.values(drawflowData).forEach((node: any) => {
+  Object.values(drawflowData).forEach((node: unknown) => {
     const nodeType = nodeTypeMap[node.name] || 'action';
     
     nodes.push({
@@ -103,7 +103,7 @@ function convertDrawflowToReactFlow(data: any): { nodes: Node[]; edges: Edge[] }
     if (node.outputs) {
       Object.entries(node.outputs).forEach(([outputKey, output]: [string, any]) => {
         if (output.connections && Array.isArray(output.connections)) {
-          output.connections.forEach((conn: any) => {
+          output.connections.forEach((conn: unknown) => {
             edges.push({
               id: `e${node.id}-${conn.node}`,
               source: String(node.id),
@@ -123,7 +123,7 @@ function convertDrawflowToReactFlow(data: any): { nodes: Node[]; edges: Edge[] }
 /**
  * Converte formato IVR para React Flow
  */
-function convertIVRToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
+function convertIVRToReactFlow(data: unknown): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
 
@@ -132,7 +132,7 @@ function convertIVRToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
   }
 
   // Converter vértices (nós)
-  data.vertices.forEach((vertex: any, index: number) => {
+  data.vertices.forEach((vertex: unknown, index: number) => {
     const nodeType = nodeTypeMap[vertex.type] || 'action';
     
     nodes.push({
@@ -153,7 +153,7 @@ function convertIVRToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
 
   // Converter arestas (conexões)
   if (data.edges && Array.isArray(data.edges)) {
-    data.edges.forEach((edge: any, index: number) => {
+    data.edges.forEach((edge: unknown, index: number) => {
       edges.push({
         id: edge.id || `e${index}`,
         source: String(edge.source || edge.from),
@@ -176,10 +176,10 @@ export function convertFromReactFlow(nodes: Node[], edges: Edge[]): string {
 /**
  * Detecta se o formato é N8N
  */
-function isN8NFormat(data: any): boolean {
+function isN8NFormat(data: unknown): boolean {
   // N8N tem nodes com propriedade type começando com 'n8n-nodes-' ou '@n8n/'
   if (data.nodes && Array.isArray(data.nodes)) {
-    return data.nodes.some((node: any) =>
+    return data.nodes.some((node: unknown) =>
       node.type && (
         node.type?.startsWith?.('n8n-nodes-') ||
         node.type?.startsWith?.('@n8n/')
@@ -192,7 +192,7 @@ function isN8NFormat(data: any): boolean {
 /**
  * Converte formato N8N para React Flow
  */
-export function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[] } {
+export function convertN8NToReactFlow(data: unknown): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
   const nodeMap = new Map<string, any>(); // Mapear nome do nó para ID
@@ -202,14 +202,14 @@ export function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[]
   }
 
   // PRIMEIRO: Criar mapeamento de nome para ID
-  data.nodes.forEach((n8nNode: any) => {
+  data.nodes.forEach((n8nNode: unknown) => {
     if (n8nNode.name) {
       nodeMap.set(n8nNode.name, n8nNode);
     }
   });
 
   // SEGUNDO: Converter nós N8N para React Flow
-  data.nodes.forEach((n8nNode: any) => {
+  data.nodes.forEach((n8nNode: unknown) => {
     // Ignorar sticky notes
     if (n8nNode.type === 'n8n-nodes-base.stickyNote') {
       return;
@@ -225,7 +225,7 @@ export function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[]
       : { x: 0, y: 0 };
 
     // Extrair configurações relevantes
-    const config: any = {
+    const config: unknown = {
       ...n8nNode.parameters,
       n8nType: n8nNode.type,
       typeVersion: n8nNode.typeVersion,
@@ -284,12 +284,12 @@ export function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[]
           return;
         }
 
-        outputConnections.forEach((branchArray: any[], branchIndex: number) => {
+        outputConnections.forEach((branchArray: unknown[], branchIndex: number) => {
           if (!Array.isArray(branchArray)) {
             return;
           }
 
-          branchArray.forEach((conn: any, connIndex: number) => {
+          branchArray.forEach((conn: unknown, connIndex: number) => {
             if (!conn || !conn.node) {
               return;
             }
@@ -332,7 +332,7 @@ export function convertN8NToReactFlow(data: any): { nodes: Node[]; edges: Edge[]
 /**
  * Obtém label para a conexão baseado no tipo
  */
-function getConnectionLabel(outputType: string, branchIndex: number, connection: any): string | undefined {
+function getConnectionLabel(outputType: string, branchIndex: number, connection: unknown): string | undefined {
   // Para condições IF/Switch, identificar true/false
   if (outputType === 'main' && connection.main && connection.main.length > 1) {
     if (branchIndex === 0) return 'true';
@@ -435,7 +435,7 @@ export function validateAndFixFlowConnections(nodes: Node[], edges: Edge[]): { n
 /**
  * Gera um fluxo completo e interligado a partir de dados N8N
  */
-export function generateCompleteFlow(n8nData: any): { 
+export function generateCompleteFlow(n8nData: unknown): { 
   nodes: Node[]; 
   edges: Edge[]; 
   metadata: { 

@@ -65,12 +65,12 @@ export function TimeSeriesChart({
   const hasAreaSeries = series.some(s => s.type === 'area');
 
   // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: unknown) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
           <p className="font-semibold text-sm mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry: unknown, index: number) => (
             <div key={index} className="flex items-center gap-2 text-sm">
               <div 
                 className="w-3 h-3 rounded-full" 

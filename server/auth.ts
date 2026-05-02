@@ -8,7 +8,7 @@ import { JWT_SECRET } from "./_core/env";
  */
 export function verifyToken(token: string): Promise<any> {
   return new Promise(resolve => {
-    jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
+    jwt.verify(token, JWT_SECRET, (err: unknown, decoded: unknown) => {
       if (err) {
         resolve(null);
       } else {

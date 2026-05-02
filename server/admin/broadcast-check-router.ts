@@ -9,9 +9,9 @@ router.get("/broadcast-tables-exist", async (req, res) => {
 
   try {
     const [rows] = await db.raw("SHOW TABLES LIKE 'broadcast_%'");
-    const tables = rows.map((r: any) => Object.values(r)[0]);
+    const tables = rows.map((r: unknown) => Object.values(r)[0]);
     res.json({ success: true, broadcastTables: tables, count: tables.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: err.message });
   }
 });

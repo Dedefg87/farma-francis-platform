@@ -10,7 +10,7 @@ interface FlowEditorProps {
   onBack: () => void;
   onToggle: (isActive: boolean) => void;
   onDelete: () => void;
-  onSave: (nodes: Node[], edges: any[]) => void;
+  onSave: (nodes: Node[], edges: unknown[]) => void;
   onNodeDoubleClick: (node: Node) => void;
   isSaving?: boolean;
 }

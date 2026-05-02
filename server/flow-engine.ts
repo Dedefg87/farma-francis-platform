@@ -65,7 +65,7 @@ export async function processPendingMessages() {
 /**
  * Process a single message through automation flows
  */
-async function processMessage(message: any) {
+async function processMessage(message: unknown) {
   const db = await getDb();
   if (!db) return;
 
@@ -112,7 +112,7 @@ async function processMessage(message: any) {
     try {
       const flowData = JSON.parse(flow.flowData || "{}");
       const triggerNodes = flowData.nodes?.filter(
-        (n: any) => n.type === "trigger"
+        (n: unknown) => n.type === "trigger"
       );
 
       if (triggerNodes && triggerNodes.length > 0) {
@@ -191,7 +191,7 @@ async function processMessage(message: any) {
 /**
  * Check if message matches visual flow trigger node
  */
-function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
+function matchesVisualFlowTrigger(message: unknown, triggerNode: unknown): boolean {
   const config = triggerNode.data?.config || {};
   const triggerType = config.event || "message_received";
   const messageText = message.messageText?.toLowerCase() || "";
@@ -237,7 +237,7 @@ function matchesVisualFlowTrigger(message: any, triggerNode: any): boolean {
 /**
  * Evaluate trigger condition expression
  */
-function evaluateTriggerCondition(condition: string, message: any): boolean {
+function evaluateTriggerCondition(condition: string, message: unknown): boolean {
   const messageText = message.messageText?.toLowerCase() || "";
   const messageType = message.messageType || "text";
 
@@ -272,7 +272,7 @@ function evaluateTriggerCondition(condition: string, message: any): boolean {
 /**
  * Check if message matches flow trigger
  */
-function matchesTrigger(message: any, flow: any): boolean {
+function matchesTrigger(message: unknown, flow: unknown): boolean {
   const trigger = flow.trigger?.toLowerCase() || "";
   const messageText = message.messageText?.toLowerCase() || "";
 
@@ -290,7 +290,7 @@ function matchesTrigger(message: any, flow: any): boolean {
 /**
  * Execute a simple automation flow (from automation_flows table)
  */
-async function executeSimpleFlow(message: any, flow: any, customer: any) {
+async function executeSimpleFlow(message: unknown, flow: unknown, customer: unknown) {
   const response = flow.response || "Obrigado pela sua mensagem!";
 
   const processedResponse = replaceVariables(response, {
@@ -318,9 +318,9 @@ async function executeSimpleFlow(message: any, flow: any, customer: any) {
  * Execute a visual flow (N8N-style flow) with proper conditional logic
  */
 export async function executeVisualFlow(
-  message: any,
+  message: unknown,
   flowId: number,
-  customer: any
+  customer: unknown
 ) {
   const db = await getDb();
   if (!db) return;
@@ -394,12 +394,12 @@ export async function executeVisualFlow(
  * Execute flow starting from trigger node following edges
  */
 async function executeFlowFromTrigger(
-  nodes: any[],
-  edges: any[],
-  context: any,
-  message: any
+  nodes: unknown[],
+  edges: unknown[],
+  context: unknown,
+  message: unknown
 ): Promise<void> {
-  const triggerNode = nodes.find((n: any) => n.type === "trigger");
+  const triggerNode = nodes.find((n: unknown) => n.type === "trigger");
   if (!triggerNode) {
     console.error(`[Chatbot Flow] No trigger node found`);
     return;
@@ -416,11 +416,11 @@ async function executeFlowFromTrigger(
  * Execute a single node and follow its outgoing edges
  */
 async function executeNodeWithEdges(
-  node: any,
-  nodes: any[],
-  edges: any[],
-  context: any,
-  message: any
+  node: unknown,
+  nodes: unknown[],
+  edges: unknown[],
+  context: unknown,
+  message: unknown
 ): Promise<void> {
   console.log(
     `[Chatbot Flow] Executing node: ${node.data?.label || node.id} (${node.type})`
@@ -513,7 +513,7 @@ async function executeNodeWithEdges(
       console.log(`[Chatbot Flow] Unknown node type: ${node.type}`);
   }
 
-  const outgoingEdges = edges.filter((e: any) => e.source === node.id);
+  const outgoingEdges = edges.filter((e: unknown) => e.source === node.id);
 
   if (outgoingEdges.length === 0) {
     console.log(`[Chatbot Flow] No outgoing edges, flow complete`);
@@ -522,13 +522,13 @@ async function executeNodeWithEdges(
 
   if (node.type === "condition" && conditionResult !== null) {
     const trueEdge = outgoingEdges.find(
-      (e: any) =>
+      (e: unknown) =>
         e.label?.toLowerCase() === "sim" ||
         e.sourceHandle === "true" ||
         e.sourceHandle === "0"
     );
     const falseEdge = outgoingEdges.find(
-      (e: any) =>
+      (e: unknown) =>
         e.label?.toLowerCase() === "não" ||
         e.label?.toLowerCase() === "nao" ||
         e.sourceHandle === "false" ||
@@ -538,14 +538,14 @@ async function executeNodeWithEdges(
     const nextEdge = conditionResult ? trueEdge : falseEdge;
 
     if (nextEdge) {
-      const nextNode = nodes.find((n: any) => n.id === nextEdge.target);
+      const nextNode = nodes.find((n: unknown) => n.id === nextEdge.target);
       if (nextNode) {
         await executeNodeWithEdges(nextNode, nodes, edges, context, message);
       }
     }
   } else {
     for (const edge of outgoingEdges) {
-      const nextNode = nodes.find((n: any) => n.id === edge.target);
+      const nextNode = nodes.find((n: unknown) => n.id === edge.target);
       if (nextNode) {
         await executeNodeWithEdges(nextNode, nodes, edges, context, message);
       }
@@ -556,7 +556,7 @@ async function executeNodeWithEdges(
 /**
  * Evaluate a condition node
  */
-function evaluateConditionNode(config: any, context: any): boolean {
+function evaluateConditionNode(config: unknown, context: unknown): boolean {
   const condition = config.condition;
 
   if (!condition) return true;
@@ -588,7 +588,7 @@ function evaluateConditionNode(config: any, context: any): boolean {
 /**
  * Check if current time is within working hours
  */
-function checkWorkingHours(schedule?: any): boolean {
+function checkWorkingHours(schedule?: unknown): boolean {
   const now = new Date();
   const day = now.getDay();
   const hour = now.getHours();
@@ -621,7 +621,7 @@ function checkWorkingHours(schedule?: any): boolean {
 /**
  * Check if a message node is terminal (should stop the flow)
  */
-function isTerminalMessage(node: any): boolean {
+function isTerminalMessage(node: unknown): boolean {
   const label = (node.data?.label || "").toLowerCase();
   const terminalLabels = [
     "fora de horário",
@@ -638,10 +638,10 @@ function isTerminalMessage(node: any): boolean {
 /**
  * Replace variables in text with context values
  */
-function replaceVariables(text: string, context: any): string {
+function replaceVariables(text: string, context: unknown): string {
   return text.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
     const parts = path.trim().split(".");
-    let value: any = context;
+    let value: unknown = context;
 
     for (const part of parts) {
       value = value?.[part];
@@ -655,7 +655,7 @@ function replaceVariables(text: string, context: any): string {
 /**
  * Execute AI Assistant node
  */
-async function executeAIAssistantNode(config: any, context: any, message: any) {
+async function executeAIAssistantNode(config: unknown, context: unknown, message: unknown) {
   const systemPrompt = replaceVariables(
     config.systemPrompt || "Você é um assistente prestativo.",
     context
@@ -695,9 +695,9 @@ async function executeAIAssistantNode(config: any, context: any, message: any) {
  * Execute Transfer Human node
  */
 async function executeTransferHumanNode(
-  config: any,
-  context: any,
-  message: any
+  config: unknown,
+  context: unknown,
+  message: unknown
 ) {
   const db = await getDb();
   if (!db) return;
@@ -772,9 +772,9 @@ async function executeTransferHumanNode(
  * Execute Create Ticket node
  */
 async function executeCreateTicketNode(
-  config: any,
-  context: any,
-  message: any
+  config: unknown,
+  context: unknown,
+  message: unknown
 ) {
   const db = await getDb();
   if (!db) return;
@@ -832,7 +832,7 @@ async function executeCreateTicketNode(
 /**
  * Execute Set Variable node
  */
-function executeSetVariableNode(config: any, context: any) {
+function executeSetVariableNode(config: unknown, context: unknown) {
   const variableName = config.variableName || "";
   const variableValue = replaceVariables(config.variableValue || "", context);
   context.variables[variableName] = variableValue;
@@ -842,7 +842,7 @@ function executeSetVariableNode(config: any, context: any) {
 /**
  * Execute HTTP Request node
  */
-async function executeHttpRequestNode(config: any, context: any) {
+async function executeHttpRequestNode(config: unknown, context: unknown) {
   const url = replaceVariables(config.url || "", context);
   const method = config.method || "GET";
   const headers = config.headers || {};
@@ -868,12 +868,12 @@ async function executeHttpRequestNode(config: any, context: any) {
 /**
  * Execute URA Menu node
  */
-async function executeURAMenuNode(config: any, context: any, message: any) {
+async function executeURAMenuNode(config: unknown, context: unknown, message: unknown) {
   const menuText = replaceVariables(config.menuText || "", context);
   const options = config.options || [];
 
   let menuMessage = menuText + "\n\n";
-  options.forEach((opt: any, index: number) => {
+  options.forEach((opt: unknown, index: number) => {
     menuMessage += `${index + 1}. ${opt.label}\n`;
   });
 

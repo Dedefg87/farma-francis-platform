@@ -48,7 +48,7 @@ router.post("/run-migrations", async (req, res) => {
         if (!stmt) continue;
         try {
           await dbRaw.execute(stmt);
-        } catch (err: any) {
+        } catch (err: unknown) {
           // Se for erro de tabela já existe, ignorar (idempotente)
           if (err.message.includes("already exists") || err.message.includes("Duplicate")) {
             console.log(`[Migration] Tabela/coluna já existe: ${item.file}`);
@@ -75,7 +75,7 @@ router.post("/run-migrations", async (req, res) => {
       totalFiles: sqlFiles.length,
       results,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Migration] Erro crítico:", err);
     res.status(500).json({ success: false, error: err.message });
   }

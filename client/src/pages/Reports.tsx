@@ -33,7 +33,7 @@ export default function Reports() {
   const { data: employeesResult } = (trpc as any).employees.list.useQuery();
 
   // Safe extraction — employees.list returns { employees: [...], pagination }
-  const employees: any[] = Array.isArray(employeesResult?.employees)
+  const employees: unknown[] = Array.isArray(employeesResult?.employees)
     ? employeesResult.employees : [];
 
   // ── Computed stats ──
@@ -42,7 +42,7 @@ export default function Reports() {
   const messagesSent = stats?.messagesSent ?? 0;
   const messagesReceived = stats?.messagesReceived ?? 0;
   const avgHandlingTime = stats?.avgHandlingTime ?? "00:00:00";
-  const activeEmployees = employees.filter((e: any) => e.status === "active").length;
+  const activeEmployees = employees.filter((e: unknown) => e.status === "active").length;
 
   // ── CSV generation ──
   const generateCSV = () => {
@@ -60,29 +60,29 @@ export default function Reports() {
       csvContent += `"Mensagens Recebidas","${messagesReceived}"\n`;
       csvContent += `"Tempo Médio Atendimento","${avgHandlingTime}"\n`;
       csvContent += "\nPor Canal\nCanal,Quantidade\n";
-      channelData.forEach((ch: any) => {
+      channelData.forEach((ch: unknown) => {
         csvContent += `"${ch.name || ch.channel || "N/A"}","${ch.value ?? ch.count ?? 0}"\n`;
       });
       csvContent += "\nPor Status\nStatus,Quantidade\n";
-      statusData.forEach((st: any) => {
+      statusData.forEach((st: unknown) => {
         csvContent += `"${st.name || st.status || "N/A"}","${st.value ?? st.count ?? 0}"\n`;
       });
     } else if (reportType === "agents") {
       filename = `relatorio_agentes_${suffix}_${today}.csv`;
       csvContent = "Agente,Conversas,Msgs Enviadas,Msgs Recebidas,Dias Ativos,Tempo Médio\n";
-      agentStats.forEach((agent: any) => {
+      agentStats.forEach((agent: unknown) => {
         csvContent += `"${agent.agentName || agent.name || "N/A"}","${agent.totalConversations || 0}","${agent.messagesSent || 0}","${agent.messagesReceived || 0}","${agent.daysActive || 0}","${agent.avgHandlingTime || "N/A"}"\n`;
       });
     } else if (reportType === "hourly") {
       filename = `relatorio_horario_${suffix}_${today}.csv`;
       csvContent = "Hora,Contatos\n";
-      hourlyData.forEach((h: any) => {
+      hourlyData.forEach((h: unknown) => {
         csvContent += `"${h.hour ?? h.time ?? "N/A"}h","${h.count ?? h.value ?? 0}"\n`;
       });
     } else if (reportType === "employees") {
       filename = `relatorio_funcionarios_${suffix}_${today}.csv`;
       csvContent = "Nome,Email,Role,Status,Departamento,Cargo\n";
-      employees.forEach((emp: any) => {
+      employees.forEach((emp: unknown) => {
         csvContent += `"${emp.displayName || emp.username || ""}","${emp.email || ""}","${emp.role || ""}","${emp.status || ""}","${emp.department || ""}","${emp.position || ""}"\n`;
       });
     }
@@ -114,8 +114,8 @@ export default function Reports() {
         { label: "Tempo Médio", value: avgHandlingTime, icon: Clock, color: "bg-orange-100 text-orange-600" },
       ];
     } else if (reportType === "agents") {
-      const tc = agentStats.reduce((a: number, x: any) => a + (x.totalConversations || 0), 0);
-      const tm = agentStats.reduce((a: number, x: any) => a + (x.messagesSent || 0), 0);
+      const tc = agentStats.reduce((a: number, x: unknown) => a + (x.totalConversations || 0), 0);
+      const tm = agentStats.reduce((a: number, x: unknown) => a + (x.messagesSent || 0), 0);
       return [
         { label: "Agentes Ativos", value: agentStats.length, icon: Users, color: "bg-blue-100 text-blue-600" },
         { label: "Total Conversas", value: tc, icon: MessageSquare, color: "bg-green-100 text-green-600" },
@@ -124,16 +124,16 @@ export default function Reports() {
       ];
     } else if (reportType === "hourly") {
       const peak = hourlyData.length > 0
-        ? hourlyData.reduce((m: any, h: any) => (h.count ?? h.value ?? 0) > (m.count ?? m.value ?? 0) ? h : m)
+        ? hourlyData.reduce((m: unknown, h: unknown) => (h.count ?? h.value ?? 0) > (m.count ?? m.value ?? 0) ? h : m)
         : null;
       return [
         { label: "Horário de Pico", value: peak ? `${peak.hour ?? peak.time ?? "?"}h` : "—", icon: Clock, color: "bg-blue-100 text-blue-600" },
-        { label: "Total Contatos", value: hourlyData.reduce((a: number, h: any) => a + (h.count ?? h.value ?? 0), 0), icon: MessageSquare, color: "bg-green-100 text-green-600" },
+        { label: "Total Contatos", value: hourlyData.reduce((a: number, h: unknown) => a + (h.count ?? h.value ?? 0), 0), icon: MessageSquare, color: "bg-green-100 text-green-600" },
         { label: "Horas Mapeadas", value: hourlyData.length, icon: BarChart3, color: "bg-purple-100 text-purple-600" },
         { label: "Agentes Ativos", value: activeEmployees, icon: Users, color: "bg-orange-100 text-orange-600" },
       ];
     } else if (reportType === "employees") {
-      const admins = employees.filter((e: any) => e.role === "admin").length;
+      const admins = employees.filter((e: unknown) => e.role === "admin").length;
       return [
         { label: "Total Funcionários", value: employees.length, icon: Users, color: "bg-blue-100 text-blue-600" },
         { label: "Ativos", value: activeEmployees, icon: CheckCircle, color: "bg-green-100 text-green-600" },
@@ -232,7 +232,7 @@ export default function Reports() {
                   <p className="text-sm text-gray-500">Nenhum dado no período</p>
                 ) : (
                   <div className="space-y-3">
-                    {channelData.map((ch: any, i: number) => (
+                    {channelData.map((ch: unknown, i: number) => (
                       <div key={i} className="flex items-center justify-between">
                         <span className="text-sm">{ch.name || ch.channel || "N/A"}</span>
                         <span className="text-sm font-semibold">{ch.value ?? ch.count ?? 0}</span>
@@ -249,7 +249,7 @@ export default function Reports() {
                   <p className="text-sm text-gray-500">Nenhum dado no período</p>
                 ) : (
                   <div className="space-y-3">
-                    {statusData.map((st: any, i: number) => (
+                    {statusData.map((st: unknown, i: number) => (
                       <div key={i} className="flex items-center justify-between">
                         <span className="text-sm">{st.name || st.status || "N/A"}</span>
                         <span className="text-sm font-semibold">{st.value ?? st.count ?? 0}</span>
@@ -286,7 +286,7 @@ export default function Reports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {agentStats.map((agent: any, i: number) => (
+                      {agentStats.map((agent: unknown, i: number) => (
                         <tr key={i} className="border-b last:border-0">
                           <td className="py-2 pr-4 font-medium">{agent.agentName || agent.name || "N/A"}</td>
                           <td className="py-2 pr-4">{agent.totalConversations ?? 0}</td>
@@ -316,9 +316,9 @@ export default function Reports() {
                 <p className="text-sm text-gray-500">Nenhum dado no período</p>
               ) : (
                 <div className="space-y-2">
-                  {hourlyData.map((h: any, i: number) => {
+                  {hourlyData.map((h: unknown, i: number) => {
                     const count = h.count ?? h.value ?? 0;
-                    const maxCount = Math.max(...hourlyData.map((x: any) => x.count ?? x.value ?? 0), 1);
+                    const maxCount = Math.max(...hourlyData.map((x: unknown) => x.count ?? x.value ?? 0), 1);
                     const pct = Math.round((count / maxCount) * 100);
                     return (
                       <div key={i} className="flex items-center gap-3">
@@ -360,7 +360,7 @@ export default function Reports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {employees.map((emp: any) => (
+                      {employees.map((emp: unknown) => (
                         <tr key={emp.userId} className="border-b last:border-0">
                           <td className="py-2 pr-4 font-medium">{emp.displayName || emp.username || "—"}</td>
                           <td className="py-2 pr-4">{emp.email || "—"}</td>

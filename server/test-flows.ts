@@ -507,7 +507,7 @@ export async function clearTestMessages(req: Request, res: Response) {
  */
 export async function getDebugLogs(req: Request, res: Response) {
   try {
-    let debugModule: any = null;
+    let debugModule: unknown = null;
     try {
       debugModule = require("./debug");
     } catch (e) {

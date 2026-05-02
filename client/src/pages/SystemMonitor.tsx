@@ -77,7 +77,7 @@ export default function SystemMonitor() {
       if (tablesRes.ok) {
         const tablesData = await tablesRes.json();
         // Garantir que cada tabela tenha valores numéricos
-        const normalized = (tablesData.tables || []).map((t: any) => ({
+        const normalized = (tablesData.tables || []).map((t: unknown) => ({
           table_name: t.table_name || "unknown",
           size_mb: Number(t.size_mb) || 0,
           table_rows: Number(t.table_rows) || 0,
@@ -130,7 +130,7 @@ export default function SystemMonitor() {
       const data = await response.json();
       if (data.success) {
         toast.success("Banco de dados limpo com sucesso!");
-        setCleanResults(prev => [...prev, ...data.results.map((r: any) => ({
+        setCleanResults(prev => [...prev, ...data.results.map((r: unknown) => ({
           type: "database." + r.table,
           deleted: r.rows,
           message: `Tabela ${r.table}: ${r.success ? 'limpa' : r.error}`

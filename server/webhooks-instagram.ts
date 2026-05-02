@@ -120,7 +120,7 @@ export async function receiveInstagramMessage(req: Request, res: Response) {
 }
 
 // Helper function to process individual Instagram messages
-async function processInstagramMessage(event: any) {
+async function processInstagramMessage(event: unknown) {
   try {
     const messageId = event.message.mid;
     const fromNumber = event.sender.id; // Instagram User ID (IGSID)

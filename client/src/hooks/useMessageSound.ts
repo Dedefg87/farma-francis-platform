@@ -82,7 +82,7 @@ export function useMessageSound(options: UseMessageSoundOptions = {}) {
 }
 
 // Utility to dispatch new message event
-export function dispatchNewMessageEvent(message: any, isFromClient: boolean) {
+export function dispatchNewMessageEvent(message: unknown, isFromClient: boolean) {
   const event = new CustomEvent("newMessage", {
     detail: { message, isFromClient },
   });

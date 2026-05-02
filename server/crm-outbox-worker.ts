@@ -5,7 +5,7 @@ import { appendCrmActivity } from "./crm-core";
 
 const DEFAULT_INTERVAL_MS = 3000;
 
-function isMissingTable(e: any) {
+function isMissingTable(e: unknown) {
   const code = e?.cause?.code || e?.code;
   const msg = String(e?.cause?.sqlMessage || e?.message || "");
   return code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist");
@@ -47,7 +47,7 @@ async function processBatch() {
           error: null,
         })
         .where(eq(crmOutboxEvents.id, ev.id));
-    } catch (e: any) {
+    } catch (e: unknown) {
       if (isMissingTable(e)) {
         // If tables not migrated yet, just stop.
         return;

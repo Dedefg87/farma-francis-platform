@@ -69,7 +69,7 @@ systemRouter.get("/database/tables", async (req, res) => {
     `);
 
     const rows = (result as any).rows || result || [];
-    const tables = rows.map((row: any) => ({
+    const tables = rows.map((row: unknown) => ({
       table_name: row.table_name,
       size_mb: Number(row.size_mb || 0),
       table_rows: Number(row.table_rows || 0),
@@ -83,7 +83,7 @@ systemRouter.get("/database/tables", async (req, res) => {
 });
 
 // Helper: check if table exists
-async function tableExists(db: any, tableName: string): Promise<boolean> {
+async function tableExists(db: unknown, tableName: string): Promise<boolean> {
   try {
     const r = await db.execute(sql`
       SELECT table_name
@@ -98,7 +98,7 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 }
 
 // Helper: count rows in table
-async function countRows(db: any, tableName: string): Promise<number> {
+async function countRows(db: unknown, tableName: string): Promise<number> {
   try {
     const r = await db.execute(sql`SELECT COUNT(*) as cnt FROM ${tableName}`);
     const rows = (r as any).rows || r || [];
@@ -109,11 +109,11 @@ async function countRows(db: any, tableName: string): Promise<number> {
 }
 
 // Helper: delete old rows from table
-async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<number> {
+async function deleteOld(db: unknown, tableName: string, cutoff: Date): Promise<number> {
   try {
     const r = await db.execute(sql`DELETE FROM ${tableName} WHERE created_at < ${cutoff}`);
     return (r as any).affectedRows || 0;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Se tabela não tem created_at, ignorar
     if (error.message?.includes('Unknown column')) {
       return 0;
@@ -126,7 +126,7 @@ async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<numb
 systemRouter.post("/clean", async (req, res) => {
   try {
     const { types } = req.body;
-    const results: any[] = [];
+    const results: unknown[] = [];
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
@@ -145,7 +145,7 @@ systemRouter.post("/clean", async (req, res) => {
             tablesFound++;
             totalDeleted += deleted;
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           if (!e.message?.includes('does not exist')) {
             console.log(`[System/Clean] Erro ${tableName}: ${e.message}`);
           }
@@ -167,7 +167,7 @@ systemRouter.post("/clean", async (req, res) => {
         try {
           const deleted = await deleteOld(db, 'sessions', cutoffDate);
           results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
-        } catch (e: any) {
+        } catch (e: unknown) {
           // sessions pode ter expires_at em vez de created_at
           try {
             const r = await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${cutoffDate}`);
@@ -275,7 +275,7 @@ systemRouter.post("/clean-database", async (req, res) => {
       'webhook_logs',
     ];
 
-    const results: any[] = [];
+    const results: unknown[] = [];
 
     for (const tableName of tables) {
       try {
@@ -305,7 +305,7 @@ systemRouter.post("/clean-database", async (req, res) => {
         } else {
           results.push({ table: tableName, success: false, error: 'Tabela não encontrada' });
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         results.push({ table: tableName, success: false, error: e.message });
       }
     }

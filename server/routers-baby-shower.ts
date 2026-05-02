@@ -216,7 +216,7 @@ export const babyShowerRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
     if (!db) { throw new Error("Database not available"); }
-      const updates: any = {};
+      const updates: unknown = {};
       if (input.eventName) updates.eventName = input.eventName;
       if (input.babyName !== undefined) updates.babyName = input.babyName || null;
       // Tratar strings vazias como null para campos DATE

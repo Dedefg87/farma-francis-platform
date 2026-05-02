@@ -17,7 +17,7 @@ router.get("/check-db", async (req, res) => {
     const total = countResult?.[0]?.total || 0;
 
     const [tablesResult] = await dbRaw.execute("SHOW TABLES");
-    const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
+    const tables = tablesResult?.map((row: unknown) => Object.values(row)[0]) || [];
 
     const broadcastTables = tables.filter((t: string) => t.includes("broadcast"));
 
@@ -32,7 +32,7 @@ router.get("/check-db", async (req, res) => {
       dbUrl: maskedUrl,
       dbType: "mysql2-raw",
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[check-db] Erro:", err);
     res.status(500).json({ error: err.message, dbUrl: maskedUrl });
   }

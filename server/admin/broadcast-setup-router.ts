@@ -52,7 +52,7 @@ router.post("/", async (req, res) => {
       broadcast_lists_columns: cols,
       broadcast_list_members_columns: cols2
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[broadcast-setup] Error:", {
       message: error.message,
       sqlMessage: error.sqlMessage,

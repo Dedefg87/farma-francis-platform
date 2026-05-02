@@ -4,11 +4,11 @@ import { getDb } from "./db";
 import { tags, conversationTags, ticketTags } from "../drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 
-function dbErrCode(e: any) {
+function dbErrCode(e: unknown) {
   return e?.cause?.code || e?.code;
 }
 
-function isMissingTable(e: any) {
+function isMissingTable(e: unknown) {
   const code = dbErrCode(e);
   const msg = String(e?.cause?.sqlMessage || e?.message || "");
   return code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist");
@@ -17,7 +17,7 @@ function isMissingTable(e: any) {
 async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (isMissingTable(e)) return fallback;
     throw e;
   }

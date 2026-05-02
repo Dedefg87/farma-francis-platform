@@ -104,7 +104,7 @@ export default function NewConversationModal({
 
   // Criar conversa selecionando cliente existente
   const handleSelectCustomer = (customerId: string) => {
-    const customer = customers?.find((c: any) => String(c.id) === String(customerId));
+    const customer = customers?.find((c: unknown) => String(c.id) === String(customerId));
     createConversationMutation.mutate({
       customerId: String(customerId),
       customerPhone: customer?.phone || undefined,
@@ -263,7 +263,7 @@ export default function NewConversationModal({
 
             <div className="max-h-64 overflow-y-auto space-y-2">
               {customers && customers.length > 0 ? (
-                customers.map((customer: any) => (
+                customers.map((customer: unknown) => (
                   <Button
                     key={customer.id}
                     variant="outline"

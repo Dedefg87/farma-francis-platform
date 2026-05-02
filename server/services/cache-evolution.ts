@@ -21,7 +21,7 @@ const EVOLUTION_CONFIG_KEY = 'config:evolution';
 const EVOLUTION_TTL = 300; // 5 minutos
 
 // In-memory fallback for when Redis is completely unavailable
-let memoryConfig: { data: any; expiresAt: number } | null = null;
+let memoryConfig: { data: unknown; expiresAt: number } | null = null;
 
 /**
  * Busca configuração da Evolution API do cache ou banco

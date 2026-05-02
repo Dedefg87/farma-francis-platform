@@ -39,7 +39,7 @@ export default function Employees() {
   const { user } = useAuth();
   const { data, isLoading } = trpc.employees.list.useQuery();
   // Adaptar estrutura plana do backend para o formato esperado pelo frontend
-  const employees = (data?.employees ?? []).map((emp: any) => ({
+  const employees = (data?.employees ?? []).map((emp: unknown) => ({
     ...emp,
     user: { id: emp.userId, name: emp.displayName, role: emp.role },
     employee: { status: emp.status, department: emp.department, position: emp.position, cpf: emp.cpf, phone: emp.phone },
@@ -136,7 +136,7 @@ export default function Employees() {
     }
   };
 
-  const handleEditEmployee = (emp: any) => {
+  const handleEditEmployee = (emp: unknown) => {
     setEditingEmployee({
       userId: emp.user.id,
       username: emp.username || "",

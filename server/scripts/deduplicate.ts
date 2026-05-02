@@ -82,7 +82,7 @@ async function deduplicate() {
           await db.update(t.table as any)
             .set({ [t.col]: master.id })
             .where(eq((t.table as any)[t.col], dup.id));
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.warn(`    ! Failed to update table ${t.table}: ${e.message}`);
         }
       }

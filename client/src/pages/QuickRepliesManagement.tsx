@@ -108,7 +108,7 @@ export default function QuickRepliesManagement() {
       }
       refetch();
       handleCloseDialog();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Erro',
         description: error.message || 'Não foi possível salvar a resposta',
@@ -129,7 +129,7 @@ export default function QuickRepliesManagement() {
         description: 'Resposta rápida deletada com sucesso',
       });
       refetch();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Erro',
         description: error.message || 'Não foi possível deletar a resposta',

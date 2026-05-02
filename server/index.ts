@@ -51,7 +51,7 @@ async function startServer() {
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_internal_messages_conversation ON internal_messages(conversation_id)`);
       await db.execute(sql`CREATE INDEX IF NOT EXISTS idx_internal_messages_recipient ON internal_messages(recipient_id, read_at)`);
       console.log("[DB] ✅ internal_messages table ensured");
-    } catch (tableErr: any) {
+    } catch (tableErr: unknown) {
       console.warn("[DB] ⚠️ Could not create internal_messages:", tableErr.message);
     }
 
@@ -62,7 +62,7 @@ async function startServer() {
         await db.execute(sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
         console.log("[DB] ✅ customers.source column added");
       }
-    } catch (colErr: any) {
+    } catch (colErr: unknown) {
       console.warn("[DB] ⚠️ Could not add customers.source:", colErr.message);
     }
   } catch (error) {
@@ -158,9 +158,9 @@ async function startServer() {
       if (!db) return res.status(500).json({ error: "Database not available" });
       const { sql } = await import("drizzle-orm");
       const [result] = await db.execute(sql`SHOW TABLES`);
-      const tables = (result as any[]).map((row: any) => Object.values(row)[0]);
+      const tables = (result as any[]).map((row: unknown) => Object.values(row)[0]);
       res.json({ tables: tables.sort(), count: tables.length });
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -174,7 +174,7 @@ async function startServer() {
       const tableName = req.params.table.replace(/[^a-z_]/gi, "");
       const [result] = await db.execute(sql.raw(`DESCRIBE ${tableName}`));
       res.json({ table: tableName, columns: result });
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.status(500).json({ error: err.message });
     }
   });
@@ -222,7 +222,7 @@ async function startServer() {
         sseConnectedUsers: sseUsers,
         timestamp: new Date().toISOString(),
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.status(500).json({ error: err.message, stack: err.stack });
     }
   });
@@ -241,11 +241,11 @@ async function startServer() {
       const [orphanRows] = await db.execute(sql`SELECT COUNT(*) as cnt FROM conversations WHERE status = ${"open"} AND assigned_to IS NULL`);
 
       res.json({
-        activeUsers: allUsers.map((u: any) => ({ id: u.id, name: u.displayName || u.name, role: u.role })),
+        activeUsers: allUsers.map((u: unknown) => ({ id: u.id, name: u.displayName || u.name, role: u.role })),
         orphanedCount: orphanRows,
         sseConnectedUsers: sseManager.getConnectedUsers(),
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.status(500).json({ error: err.message, stack: err.stack });
     }
   });
@@ -262,9 +262,9 @@ async function startServer() {
       const sseUsers = sseManager.getConnectedUsers();
       // Priority: use the SSE-connected user (they're online right now)
       const connectedAdmin = sseUsers.length > 0
-        ? allUsers.find((u: any) => String(u.id) === sseUsers[0])
+        ? allUsers.find((u: unknown) => String(u.id) === sseUsers[0])
         : null;
-      const admin = connectedAdmin || allUsers.find((u: any) => u.role === 'admin') || allUsers[0];
+      const admin = connectedAdmin || allUsers.find((u: unknown) => u.role === 'admin') || allUsers[0];
       if (!admin) {
         return res.json({ error: "No active agent found" });
       }
@@ -276,7 +276,7 @@ async function startServer() {
         assignedTo: { id: admin.id, name: admin.displayName || admin.name, role: admin.role },
         result: result,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       res.status(500).json({ error: err.message, stack: err.stack });
     }
   });
@@ -301,7 +301,7 @@ async function startServer() {
         .set({ unreadCount: 0 })
         .where(eq(conversations.id, conversationId));
       res.json({ success: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("[mark-read] Error:", err.message);
       res.status(500).json({ error: err.message });
     }
@@ -376,7 +376,7 @@ async function startServer() {
           fileSize: fileBuffer.length,
         });
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[broadcast/upload] Error:', err.message);
       res.status(500).json({ error: err.message });
     }

@@ -20,7 +20,7 @@ import {
 /**
  * Simple Chatbot Automation - Fixed Version
  */
-export async function processIncomingMessage(message: any) {
+export async function processIncomingMessage(message: unknown) {
   console.log("==========================================");
   console.log("[CHATBOT] Processing message:", message.id);
   console.log("[CHATBOT] From:", message.fromNumber);
@@ -179,7 +179,7 @@ export async function closeConversation(
 /**
  * Handle survey response from customer (1-5 rating)
  */
-export async function handleSurveyResponse(message: any, customer: any) {
+export async function handleSurveyResponse(message: unknown, customer: unknown) {
   console.log("==========================================");
   console.log("[CHATBOT] Processing survey response");
   console.log("[CHATBOT] From:", message.fromNumber);
@@ -224,7 +224,7 @@ export async function handleSurveyResponse(message: any, customer: any) {
         agentId: recentConv?.assignedTo || null,
       });
       console.log("[CHATBOT] Survey response saved to database!");
-    } catch (e: any) {
+    } catch (e: unknown) {
       const code = e?.cause?.code || e?.code;
       const msg = String(e?.cause?.sqlMessage || e?.message || "");
       if (code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist")) {

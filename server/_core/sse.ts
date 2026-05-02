@@ -9,7 +9,7 @@ export interface SseEvent {
 class SseManager extends EventEmitter {
   private clients: Map<string, Set<any>> = new Map();
 
-  addClient(userId: string, res: any): void {
+  addClient(userId: string, res: unknown): void {
     console.log(`[SSE] Adding client for userId=${userId}`);
     
     if (!this.clients.has(userId)) {

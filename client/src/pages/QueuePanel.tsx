@@ -73,7 +73,7 @@ export default function QueuePanel() {
         description: 'Você está ativo novamente e pode receber atendimentos.',
       });
       refetchPause();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Erro ao finalizar pausa',
         description: error.message || 'Não foi possível finalizar a pausa.',

@@ -47,7 +47,7 @@ export const ticketsRouter = router({
       const offset = ((page || 1) - 1) * (pageSize || 20);
 
       // Build where clause para conversations (APENAS ATIVAS POR PADRÃO)
-      const conditions: any[] = [];
+      const conditions: unknown[] = [];
       
       // SEMPRE filtrar apenas conversas ativas (open/assigned) - tickets não mostram fechados
       const activeStatuses = ['open', 'assigned'];

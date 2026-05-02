@@ -62,7 +62,7 @@ async function sendWhatsAppMessageWithRetry(
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i];
     try {
-      const payload: any = {
+      const payload: unknown = {
         number: variant,
       };
 
@@ -121,7 +121,7 @@ async function sendWhatsAppMessageWithRetry(
           );
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn(
         `[Broadcast] ⚠️ Erro na tentativa ${i + 1}/${variants.length} para ${variant}:`,
         err.message
@@ -185,7 +185,7 @@ export async function processBroadcastMessage(messageId: number) {
             .set({ fileUrl: resolvedFileUrl })
             .where(eq(broadcastMessages.id, messageId));
         }
-      } catch (r2Err: any) {
+      } catch (r2Err: unknown) {
         console.error('[Broadcast] ⚠️ R2 upload failed:', r2Err.message);
         // Fallback: extract raw base64
         const base64Match = resolvedFileUrl.match(/^data:[^;]+;base64,(.*)$/s);
@@ -262,7 +262,7 @@ export async function processBroadcastMessage(messageId: number) {
         // 🔥 Salvar mensagem na conversa do cliente (para o agente ver)
         try {
           await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId);
-        } catch (saveErr: any) {
+        } catch (saveErr: unknown) {
           console.warn(`[Broadcast] ⚠️ Erro ao salvar na conversa do cliente ${sent.customerId}:`, saveErr.message);
         }
 
@@ -312,7 +312,7 @@ export async function processBroadcastMessage(messageId: number) {
  * mesmo se o cliente estiver duplicado com formato diferente de telefone
  */
 async function saveBroadcastToConversation(
-  db: any,
+  db: unknown,
   customerId: number | null,
   messageText: string | null,
   fileUrl: string | null,

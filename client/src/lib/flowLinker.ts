@@ -397,7 +397,7 @@ function buildResult(nodes: Node[], edges: Edge[], changes: string[]): FlowLinka
  * Interliga completamente um fluxo N8N importado
  * Executa todas as operações de linkage em sequência
  */
-export function fullyInterlinkFlow(n8nData: any): {
+export function fullyInterlinkFlow(n8nData: unknown): {
   nodes: Node[];
   edges: Edge[];
   report: {

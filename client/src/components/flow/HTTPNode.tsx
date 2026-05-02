@@ -97,7 +97,7 @@ export function HTTPNodeEditor({ config, onChange }: HTTPNodeEditorProps) {
         <div className="col-span-3">
           <Select
             value={config.method}
-            onValueChange={(value: any) => onChange({ ...config, method: value })}
+            onValueChange={(value: unknown) => onChange({ ...config, method: value })}
           >
             <SelectTrigger>
               <SelectValue />
@@ -216,7 +216,7 @@ export function HTTPNodeEditor({ config, onChange }: HTTPNodeEditorProps) {
             <Label>Tipo de Autenticação</Label>
             <Select
               value={config.authType}
-              onValueChange={(value: any) => onChange({ ...config, authType: value })}
+              onValueChange={(value: unknown) => onChange({ ...config, authType: value })}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -309,7 +309,7 @@ export function HTTPNodeEditor({ config, onChange }: HTTPNodeEditorProps) {
             <Label>Tipo de Conteúdo</Label>
             <Select
               value={config.bodyType}
-              onValueChange={(value: any) => onChange({ ...config, bodyType: value })}
+              onValueChange={(value: unknown) => onChange({ ...config, bodyType: value })}
             >
               <SelectTrigger>
                 <SelectValue />

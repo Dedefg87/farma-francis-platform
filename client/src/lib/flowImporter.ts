@@ -176,7 +176,7 @@ export class FlowImporter {
           1: 'trigger',
         };
 
-        ivr.options.forEach((opt: any) => {
+        ivr.options.forEach((opt: unknown) => {
           const nodeType = typeMap[opt.type] || 'message';
           
           nodes.push({
@@ -200,7 +200,7 @@ export class FlowImporter {
 
           // Para condições de horário, criar edges para cada opção
           if (opt.config?.options) {
-            opt.config.options.forEach((condOption: any) => {
+            opt.config.options.forEach((condOption: unknown) => {
               if (condOption.nextElementId) {
                 edges.push({
                   id: `edge-${edgeIdCounter++}`,
@@ -235,7 +235,7 @@ export class FlowImporter {
       const edges: FlowEdge[] = [];
 
       // Mapear nós do N8N para nosso formato
-      n8nFlow.nodes?.forEach((n8nNode: any, idx: number) => {
+      n8nFlow.nodes?.forEach((n8nNode: unknown, idx: number) => {
         const nodeId = `node-${idx + 1}`;
         let nodeType = 'message';
         let label = n8nNode.name || n8nNode.type;
@@ -268,12 +268,12 @@ export class FlowImporter {
       // Mapear conexões
       if (n8nFlow.connections) {
         Object.entries(n8nFlow.connections).forEach(([sourceNode, targets]: [string, any]) => {
-          const sourceIdx = n8nFlow.nodes.findIndex((n: any) => n.name === sourceNode);
+          const sourceIdx = n8nFlow.nodes.findIndex((n: unknown) => n.name === sourceNode);
           if (sourceIdx === -1) return;
 
-          Object.values(targets).forEach((targetList: any) => {
-            targetList.forEach((target: any) => {
-              const targetIdx = n8nFlow.nodes.findIndex((n: any) => n.name === target.node);
+          Object.values(targets).forEach((targetList: unknown) => {
+            targetList.forEach((target: unknown) => {
+              const targetIdx = n8nFlow.nodes.findIndex((n: unknown) => n.name === target.node);
               if (targetIdx === -1) return;
 
               edges.push({
@@ -325,7 +325,7 @@ export class FlowImporter {
       }
 
       // Criar steps (ações)
-      zapierZap.steps?.forEach((step: any, idx: number) => {
+      zapierZap.steps?.forEach((step: unknown, idx: number) => {
         const nodeId = `node-${nodeIdCounter++}`;
         const prevNodeId = `node-${nodeIdCounter - 2}`;
 
@@ -367,7 +367,7 @@ export class FlowImporter {
       const nodes: FlowNode[] = [];
       const edges: FlowEdge[] = [];
 
-      makeScenario.modules?.forEach((module: any, idx: number) => {
+      makeScenario.modules?.forEach((module: unknown, idx: number) => {
         const nodeId = `node-${idx + 1}`;
         
         nodes.push({

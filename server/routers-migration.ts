@@ -103,7 +103,7 @@ export const migrationRouter = router({
       }
 
       return { success: true, message: "Tabelas do Chá de Bebê criadas com sucesso!" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Migration error:", error);
       return { success: false, error: error.message };
     }
@@ -120,9 +120,9 @@ export const migrationRouter = router({
       
       return { 
         success: true, 
-        tables: (tables as any[]).map((t: any) => t.table_name || t.TABLE_NAME)
+        tables: (tables as any[]).map((t: unknown) => t.table_name || t.TABLE_NAME)
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }),

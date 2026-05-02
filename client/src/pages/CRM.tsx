@@ -44,7 +44,7 @@ export default function CRM() {
   const customers = useMemo(() => {
     if (!conversations) return [];
     const map = new Map<string, any>();
-    conversations.forEach((conv: any) => {
+    conversations.forEach((conv: unknown) => {
       const phone = conv.customerPhone;
       if (phone && !map.has(phone)) {
         map.set(phone, {
@@ -61,7 +61,7 @@ export default function CRM() {
     });
     const custArray = Array.from(map.values());
     custArray.forEach(c => {
-      c.interactionsCount = conversations.filter((conv: any) => conv.customerPhone === c.phone).length;
+      c.interactionsCount = conversations.filter((conv: unknown) => conv.customerPhone === c.phone).length;
     });
     return custArray;
   }, [conversations]);
@@ -117,14 +117,14 @@ export default function CRM() {
   };
 
   // Filtrar clientes (busca por nome, email, telefone)
-  const filteredCustomers = customers?.filter((c: any) =>
+  const filteredCustomers = customers?.filter((c: unknown) =>
     c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone?.includes(searchTerm)
   );
 
   // Abrir detalhes do cliente
-  const openCustomerDetails = (customer: any) => {
+  const openCustomerDetails = (customer: unknown) => {
     setSelectedCustomer(customer);
     setShowCustomerDetails(true);
   };
@@ -284,7 +284,7 @@ export default function CRM() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCustomers.map((customer: any) => (
+                  {filteredCustomers.map((customer: unknown) => (
                     <TableRow key={customer.id}>
                       <TableCell className="font-medium">
                         <div>
@@ -436,7 +436,7 @@ export default function CRM() {
                   </Label>
                   <div className="mt-2 space-y-2">
                     {selectedCustomer.history && selectedCustomer.history.length > 0 ? (
-                      selectedCustomer.history.map((interaction: any, idx: number) => (
+                      selectedCustomer.history.map((interaction: unknown, idx: number) => (
                         <div key={idx} className="p-3 bg-gray-50 rounded-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">

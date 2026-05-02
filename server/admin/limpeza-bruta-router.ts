@@ -15,12 +15,12 @@ router.get("/check-db", async (req, res) => {
     }
 
     // Contar clientes
-    const result: any = await (db as any).execute("SELECT COUNT(*) as total FROM customers");
+    const result: unknown = await (db as any).execute("SELECT COUNT(*) as total FROM customers");
     const total = result.rows?.[0]?.total || 0;
 
     // Listar algumas tabelas para verificar conexão
-    const tablesResult: any = await (db as any).execute("SHOW TABLES");
-    const tables = tablesResult.rows?.map((row: any) => Object.values(row)[0]) || [];
+    const tablesResult: unknown = await (db as any).execute("SHOW TABLES");
+    const tables = tablesResult.rows?.map((row: unknown) => Object.values(row)[0]) || [];
 
     res.json({
       success: true,
@@ -29,7 +29,7 @@ router.get("/check-db", async (req, res) => {
       tables: tables.slice(0, 10), // primeiras 10 tabelas
       timestamp: new Date().toISOString(),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[CheckDB] Erro:", err);
     res.status(500).json({ success: false, error: err.message });
   }
@@ -64,7 +64,7 @@ router.post("/limpeza-bruta", async (req, res) => {
 
   try {
     // Buscar todos os clientes
-    const allCustomers: any[] = await (db as any).execute("SELECT * FROM customers ORDER BY id ASC");
+    const allCustomers: unknown[] = await (db as any).execute("SELECT * FROM customers ORDER BY id ASC");
 
     // Agrupar por número base
     const groups = new Map<string, any[]>();
@@ -121,7 +121,7 @@ router.post("/limpeza-bruta", async (req, res) => {
 
           totalDeleted++;
           logs.push(`   ✅ Processado ID ${dup.id} → Main ID ${mainCustomer.id}`);
-        } catch (err: any) {
+        } catch (err: unknown) {
           logs.push(`   ❌ Erro ID ${dup.id}: ${err.message}`);
         }
       }
@@ -142,7 +142,7 @@ router.post("/limpeza-bruta", async (req, res) => {
       totalDeleted,
       logs,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[LimpezaBruta] Erro:", err);
     res.status(500).json({ success: false, error: err.message });
   }

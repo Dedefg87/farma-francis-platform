@@ -81,7 +81,7 @@ export default function Inbox() {
     },
   });
 
-  const handleSelectConversation = (conv: any) => {
+  const handleSelectConversation = (conv: unknown) => {
     setSelectedConversation(conv);
     if (conv.unreadCount > 0) {
       markAsRead.mutate({

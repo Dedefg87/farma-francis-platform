@@ -31,7 +31,7 @@ export function exportToExcel(data: ExportData): void {
   XLSX.writeFile(workbook, `${fileName}.xlsx`);
 }
 
-export function exportFlowsToExcel(flows: any[]): void {
+export function exportFlowsToExcel(flows: unknown[]): void {
   const headers = [
     "ID",
     "Nome",
@@ -62,7 +62,7 @@ export function exportFlowsToExcel(flows: any[]): void {
   });
 }
 
-export function exportExecutionsToExcel(executions: any[]): void {
+export function exportExecutionsToExcel(executions: unknown[]): void {
   const headers = [
     "ID",
     "Fluxo",

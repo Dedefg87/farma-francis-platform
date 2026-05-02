@@ -461,7 +461,7 @@ export async function ingestInboundConversationMessage(message: {
   const found = await findConversationByPhone(db, customer.phone, conversations, customers);
 
   let conversationId = found?.conversationId;
-  let existingConversation: any = null;
+  let existingConversation: unknown = null;
 
   if (conversationId) {
     [existingConversation] = await db

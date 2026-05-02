@@ -51,9 +51,9 @@ export const internalMessagesRouter = router({
         // Agente só vê mensagens endereçadas a ele; Admin vê todas
         const filtered = isAdmin
           ? rows
-          : rows.filter((r: any) => String(r.recipient_id) === String(userId));
+          : rows.filter((r: unknown) => String(r.recipient_id) === String(userId));
 
-        return filtered.map((r: any) => ({
+        return filtered.map((r: unknown) => ({
           id: String(r.id),
           conversationId: String(r.conversation_id),
           senderId: String(r.sender_id),
@@ -63,7 +63,7 @@ export const internalMessagesRouter = router({
           readAt: r.read_at ? new Date(r.read_at).toISOString() : null,
           createdAt: new Date(r.created_at).toISOString(),
         }));
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[internalMessages.list] Error:", err.message);
         return [];
       }
@@ -110,7 +110,7 @@ export const internalMessagesRouter = router({
           content,
           createdAt: new Date().toISOString(),
         };
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[internalMessages.send] Error:", err.message);
         throw new Error("Erro ao enviar mensagem interna");
       }
@@ -143,7 +143,7 @@ export const internalMessagesRouter = router({
         );
 
         return { success: true };
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[internalMessages.markRead] Error:", err.message);
         throw new Error("Erro ao marcar como lido");
       }

@@ -123,7 +123,7 @@ export async function receiveWhatsAppMessage(req: Request, res: Response) {
 }
 
 // Helper function to process individual WhatsApp messages
-async function processWhatsAppMessage(message: any, value: any) {
+async function processWhatsAppMessage(message: unknown, value: unknown) {
   try {
     const messageId = message.id;
     const fromNumber = message.from;
@@ -165,7 +165,7 @@ async function processWhatsAppMessage(message: any, value: any) {
         break;
       case "contact":
         const contacts = message.contacts || [];
-        messageText = contacts.map((c: any) => c.name?.formatted_name).join(", ");
+        messageText = contacts.map((c: unknown) => c.name?.formatted_name).join(", ");
         break;
       case "sticker":
         mediaId = message.sticker?.id;
@@ -178,7 +178,7 @@ async function processWhatsAppMessage(message: any, value: any) {
 
     // Get sender name from contacts
     const contacts = value.contacts || [];
-    const contact = contacts.find((c: any) => c.wa_id === fromNumber);
+    const contact = contacts.find((c: unknown) => c.wa_id === fromNumber);
     const fromName = contact?.profile?.name || null;
 
     // Save to database

@@ -18,7 +18,7 @@ import {
  * - Converte tipos numéricos para string onde necessário.
  * - Preenche campos ausentes com valores default.
  */
-function mapConversation(row: any): Conversation {
+function mapConversation(row: unknown): Conversation {
   // Mapeia status do banco para o enum compartilhado
   const statusMap: Record<string, ConversationStatus> = {
     open: ConversationStatus.OPEN,
@@ -270,7 +270,7 @@ export const conversationsRouter = router({
         // Buscar cliente existente pelo telefone (matching flexível com variantes)
         const phoneVariants = generatePhoneVariants(resolvedPhone);
         console.log('[conversations.create] Phone variants:', phoneVariants);
-        let foundCustomer: any = null;
+        let foundCustomer: unknown = null;
 
         if (phoneVariants.length > 0) {
           const phoneConditions = phoneVariants.map(v => like(customers.phone, `%${v.replace(/[^0-9]/g, '')}%`));
@@ -285,7 +285,7 @@ export const conversationsRouter = router({
             .where(or(...phoneConditions))
             .limit(5);
 
-          console.log('[conversations.create] Found candidates:', candidates.length, candidates.map((c: any) => ({ id: c.id, name: c.name, phone: c.phone })));
+          console.log('[conversations.create] Found candidates:', candidates.length, candidates.map((c: unknown) => ({ id: c.id, name: c.name, phone: c.phone })));
 
           if (candidates.length > 0) {
             foundCustomer = candidates[0];
@@ -383,7 +383,7 @@ export const conversationsRouter = router({
         }
       }
 
-      const insertValues: any = {
+      const insertValues: unknown = {
         customerId: numericCustomerId,
         channel: input.channel,
         status: "open",
@@ -434,7 +434,7 @@ export const conversationsRouter = router({
         throw new Error("ID inválido");
       }
 
-      const updates: any = {
+      const updates: unknown = {
         updatedAt: new Date(),
       };
 

@@ -67,7 +67,7 @@ export default function CustomersPage() {
       toast.success("Cliente criado com sucesso!");
       setIsCustomerDialogOpen(false);
       setNewCustomer({ name: "", email: "", phone: "" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error(`Erro: ${error.message}`);
     }
   };

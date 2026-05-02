@@ -11,7 +11,7 @@ export default function createSSERouter(): Router {
   const router = Router();
 
   // Middleware de autenticação SSE (suporta tanto JWT quanto cookies)
-  const sseAuth = async (req: any, res: any, next: () => void) => {
+  const sseAuth = async (req: unknown, res: unknown, next: () => void) => {
     try {
       let userId: number | null = null;
 
@@ -79,7 +79,7 @@ export default function createSSERouter(): Router {
     }
   };
 
-  router.get("/", sseAuth, (req: any, res: any) => {
+  router.get("/", sseAuth, (req: unknown, res: unknown) => {
     const userId = req.userId;
 
     // Set headers for SSE — CRITICAL for Railway (Fastly HTTP/2 CDN)
@@ -114,7 +114,7 @@ export default function createSSERouter(): Router {
       // sseManager.removeClient é feito pelo event listener no addClient
     });
 
-    req.on("error", (err: any) => {
+    req.on("error", (err: unknown) => {
       console.error(`[SSE] Error for userId=${userId}:`, err);
       clearInterval(heartbeat);
     });

@@ -46,7 +46,7 @@ describe("Flow Engine Variables", () => {
     // Simple replacement function for testing
     const result = template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
       const parts = path.trim().split(".");
-      let value: any = context;
+      let value: unknown = context;
       for (const part of parts) {
         value = value?.[part];
         if (value === undefined) break;
@@ -65,7 +65,7 @@ describe("Flow Engine Variables", () => {
     const template = "Olá {{customer.name}}, ticket: {{ticket.id}}";
     const result = template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
       const parts = path.trim().split(".");
-      let value: any = context;
+      let value: unknown = context;
       for (const part of parts) {
         value = value?.[part];
         if (value === undefined) break;

@@ -56,7 +56,7 @@ export default function DebugData() {
                 {JSON.stringify(rawData.pagination)}
               </p>
               <ul className="mt-4 space-y-2">
-                {rawData.agents.map((agent: any) => (
+                {rawData.agents.map((agent: unknown) => (
                   <li key={agent.id} className="border p-2 rounded">
                     <strong>{agent.name}</strong> (ID: {agent.id})<br />
                     Tickets: {agent.totalTickets} | Resolvidos:{" "}

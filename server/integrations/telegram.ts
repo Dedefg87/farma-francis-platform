@@ -51,7 +51,7 @@ interface TelegramUpdate {
       first_name: string;
       username?: string;
     };
-    message?: any;
+    message?: unknown;
     data?: string;
   };
 }
@@ -154,7 +154,7 @@ export async function fetchTelegramProfile(
  */
 export async function validateTelegramCredentials(
   config: TelegramConfig
-): Promise<{ valid: boolean; botInfo?: any; error?: string }> {
+): Promise<{ valid: boolean; botInfo?: unknown; error?: string }> {
   try {
     const me = await telegramApi(config.botToken, 'getMe', {});
     

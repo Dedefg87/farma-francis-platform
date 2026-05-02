@@ -34,7 +34,7 @@ router.get("/check-db", async (req, res) => {
     const total = countResult?.[0]?.total || 0;
     
     const tablesResult = await dbRaw.raw("SHOW TABLES");
-    const tables = tablesResult?.map((row: any) => Object.values(row)[0]) || [];
+    const tables = tablesResult?.map((row: unknown) => Object.values(row)[0]) || [];
     
     const sampleCustomers = await dbRaw.raw("SELECT id, name, phone FROM customers LIMIT 5");
     
@@ -81,7 +81,7 @@ router.get("/check-db", async (req, res) => {
       envVars,
       dbType: "mysql2-raw"
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[check-db] Erro:", err);
     res.status(500).json({ error: err.message, envVars });
   }
@@ -111,7 +111,7 @@ router.post("/limpeza-bruta", async (req, res) => {
   }
 
   try {
-    const allCustomers: any[] = await dbRaw.raw("SELECT * FROM customers ORDER BY id ASC");
+    const allCustomers: unknown[] = await dbRaw.raw("SELECT * FROM customers ORDER BY id ASC");
     const groups = new Map<string, any[]>();
     for (const cust of allCustomers) {
       const baseNum = normalizeToBaseNumber(cust.phone);
@@ -161,7 +161,7 @@ router.post("/limpeza-bruta", async (req, res) => {
 
           totalDeleted++;
           logs.push(`   ✅ Processado ID ${dup.id} → Main ID ${mainCustomer.id}`);
-        } catch (err: any) {
+        } catch (err: unknown) {
           logs.push(`   ❌ Erro ID ${dup.id}: ${err.message}`);
         }
       }
@@ -182,7 +182,7 @@ router.post("/limpeza-bruta", async (req, res) => {
       totalDeleted,
       logs,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[LimpezaBruta] Erro:", err);
     res.status(500).json({ success: false, error: err.message });
   }

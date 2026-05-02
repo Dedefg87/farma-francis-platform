@@ -332,6 +332,6 @@ function evaluateCondition(condition: Condition, context: Record<string, any>): 
 /**
  * Obtém valor aninhado de um objeto
  */
-function getNestedValue(obj: any, path: string): any {
+function getNestedValue(obj: unknown, path: string): unknown {
   return path.split('.').reduce((current, key) => current?.[key], obj);
 }

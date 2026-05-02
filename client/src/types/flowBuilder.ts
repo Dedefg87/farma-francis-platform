@@ -180,13 +180,13 @@ export interface ExecutionContext {
     name: string;
     email?: string;
     phone?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   ticket?: {
     id: number;
     subject: string;
     status: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   message?: {
     content: string;
@@ -197,7 +197,7 @@ export interface ExecutionContext {
   history: Array<{
     nodeId: string;
     timestamp: Date;
-    output?: any;
+    output?: unknown;
   }>;
 }
 
@@ -210,7 +210,7 @@ export interface ExecutionResult {
   nodesExecuted: number;
   finalState: 'completed' | 'error' | 'waiting' | 'transferred';
   error?: string;
-  output?: any;
+  output?: unknown;
 }
 
 // Node validation result

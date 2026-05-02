@@ -66,7 +66,7 @@ export default function PauseModal({ open, onClose, onPauseStarted }: PauseModal
 
       onPauseStarted();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Erro ao iniciar pausa',
         description: error.message || 'Não foi possível iniciar a pausa.',

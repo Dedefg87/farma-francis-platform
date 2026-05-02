@@ -29,7 +29,7 @@ router.post("/", async (req, res) => {
       fieldsCount: fields?.length || 0,
       affectedRows: fields?.affectedRows || rows?.affectedRows || 0
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[ExecuteSQL] Erro:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }

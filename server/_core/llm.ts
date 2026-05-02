@@ -295,7 +295,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
     const hasImage = messages.some(msg => {
       if (Array.isArray(msg.content)) {
-        return msg.content.some((part: any) => part?.type === "image_url");
+        return msg.content.some((part: unknown) => part?.type === "image_url");
       }
       return false;
     });
@@ -368,7 +368,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     }
 
     return (await response.json()) as InvokeResult;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[invokeLLM] Caught error:", error.message || error);
     console.error("[invokeLLM] Stack trace:", error.stack);
     throw error;

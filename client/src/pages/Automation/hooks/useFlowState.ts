@@ -9,7 +9,7 @@ import { ValidationResult } from "./useFlowValidation";
 interface ExtendedFlowState extends FlowState {
   validationResult: ValidationResult | null;
   showValidationDialog: boolean;
-  pendingSaveData: { nodes: Node[]; edges: any[] } | null;
+  pendingSaveData: { nodes: Node[]; edges: unknown[] } | null;
   isSaving: boolean;
   duplicatingFlowId: number | null;
 }
@@ -18,7 +18,7 @@ type ExtendedFlowAction =
   | FlowAction
   | { type: "SET_VALIDATION_RESULT"; payload: ValidationResult | null }
   | { type: "SET_SHOW_VALIDATION"; payload: boolean }
-  | { type: "SET_PENDING_SAVE"; payload: { nodes: Node[]; edges: any[] } | null }
+  | { type: "SET_PENDING_SAVE"; payload: { nodes: Node[]; edges: unknown[] } | null }
   | { type: "SET_SAVING"; payload: boolean }
   | { type: "SET_DUPLICATING"; payload: number | null };
 
@@ -151,11 +151,11 @@ export function useFlowState() {
     dispatch({ type: "SET_SHOW_VALIDATION", payload: show });
   }, []);
 
-  const setPendingSaveData = useCallback((data: { nodes: Node[]; edges: any[] } | null) => {
+  const setPendingSaveData = useCallback((data: { nodes: Node[]; edges: unknown[] } | null) => {
     dispatch({ type: "SET_PENDING_SAVE", payload: data });
   }, []);
 
-  const showValidation = useCallback((result: ValidationResult, data: { nodes: Node[]; edges: any[] }) => {
+  const showValidation = useCallback((result: ValidationResult, data: { nodes: Node[]; edges: unknown[] }) => {
     setValidationResult(result);
     setPendingSaveData(data);
     setShowValidationDialog(true);

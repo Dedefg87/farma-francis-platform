@@ -34,13 +34,13 @@ vi.mock("../drizzle/schema", () => ({
 }));
 
 describe("Automation SSE Integration", () => {
-  let mockDb: any;
-  let currentCapturedValues: any[] = [];
+  let mockDb: unknown;
+  let currentCapturedValues: unknown[] = [];
 
   const createMockDb = () => {
-    const capturedValues: any[] = [];
+    const capturedValues: unknown[] = [];
     currentCapturedValues = capturedValues;
-    const db: any = {};
+    const db: unknown = {};
     Object.assign(db, {
       select: vi.fn().mockReturnThis(),
       from: vi.fn().mockReturnThis(),
@@ -48,7 +48,7 @@ describe("Automation SSE Integration", () => {
       orderBy: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([{ id: 456 }]), // Return a conversation
       insert: vi.fn().mockReturnValue(db),
-      values: vi.fn((...args: any[]) => {
+      values: vi.fn((...args: unknown[]) => {
         capturedValues.push(args);
         return db;
       }),

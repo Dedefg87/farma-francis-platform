@@ -31,11 +31,11 @@ function startDateFromRange(range: TimeRange) {
   return d;
 }
 
-function dbErrCode(e: any) {
+function dbErrCode(e: unknown) {
   return e?.cause?.code || e?.code;
 }
 
-function isMissingTable(e: any) {
+function isMissingTable(e: unknown) {
   const code = dbErrCode(e);
   const msg = String(e?.cause?.sqlMessage || e?.message || "");
   return code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist");
@@ -48,7 +48,7 @@ async function safe<T>(
 ): Promise<T> {
   try {
     return await fn();
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (isMissingTable(e)) {
       console.log(`[agents] Ignorando ${label}: tabela ausente`);
       return fallback;
@@ -72,7 +72,7 @@ function pickPrimaryAgentId(params: {
 }
 
 async function computeAgentsWithMetrics(
-  db: any,
+  db: unknown,
   input: { timeRange: TimeRange }
 ) {
   const startDate = startDateFromRange(input.timeRange);
@@ -81,7 +81,7 @@ async function computeAgentsWithMetrics(
     .select()
     .from(users)
     .orderBy(desc(users.createdAt));
-  const agentIds = allAgents.map((a: any) => a.id).filter(Boolean);
+  const agentIds = allAgents.map((a: unknown) => a.id).filter(Boolean);
 
   // Pull conversations with activity in range
   const convs = await db
@@ -93,7 +93,7 @@ async function computeAgentsWithMetrics(
         : undefined
     );
 
-  const conversationIds = convs.map((c: any) => c.id);
+  const conversationIds = convs.map((c: unknown) => c.id);
 
   // Aggregate customer first message per conversation
   const firstCustomerRows = await safe<any[]>(
@@ -244,14 +244,14 @@ async function computeAgentsWithMetrics(
     convsByPrimaryAgentId.set(primaryId, list);
   }
 
-  const agentsWithMetrics = allAgents.map((a: any) => {
+  const agentsWithMetrics = allAgents.map((a: unknown) => {
     const agentConvs = convsByPrimaryAgentId.get(a.id) || [];
     const totalTickets = agentConvs.length;
     const resolvedTickets = agentConvs.filter(
-      (c: any) => c.status === "closed"
+      (c: unknown) => c.status === "closed"
     ).length;
     const activeTickets = agentConvs.filter(
-      (c: any) => c.status === "open" || c.status === "assigned"
+      (c: unknown) => c.status === "open" || c.status === "assigned"
     ).length;
 
     // Avg response time (min)
@@ -277,11 +277,11 @@ async function computeAgentsWithMetrics(
 
     // Avg resolution time (h)
     const resolvedConvs = agentConvs.filter(
-      (c: any) => c.status === "closed" && c.openedAt && c.closedAt
+      (c: unknown) => c.status === "closed" && c.openedAt && c.closedAt
     );
     let avgResolutionTime = 0;
     if (resolvedConvs.length > 0) {
-      const totalMs = resolvedConvs.reduce((sum: number, c: any) => {
+      const totalMs = resolvedConvs.reduce((sum: number, c: unknown) => {
         return (
           sum +
           (new Date(c.closedAt).getTime() - new Date(c.openedAt).getTime())
@@ -356,7 +356,7 @@ export const agentsRouter = router({
         timeRange,
       });
 
-      const sorted = agentsWithMetrics.sort((a: any, b: any) => {
+      const sorted = agentsWithMetrics.sort((a: unknown, b: unknown) => {
         switch (sortBy) {
           case "satisfaction":
             return b.satisfactionRate - a.satisfactionRate;
@@ -481,13 +481,13 @@ export const agentsRouter = router({
 
       const insights: string[] = [];
       const byResolved = [...agentsWithMetrics].sort(
-        (a: any, b: any) => b.resolvedTickets - a.resolvedTickets
+        (a: unknown, b: unknown) => b.resolvedTickets - a.resolvedTickets
       );
       const byResponse = [...agentsWithMetrics]
-        .filter((a: any) => a.avgResponseTime > 0)
-        .sort((a: any, b: any) => a.avgResponseTime - b.avgResponseTime);
+        .filter((a: unknown) => a.avgResponseTime > 0)
+        .sort((a: unknown, b: unknown) => a.avgResponseTime - b.avgResponseTime);
       const bySatisfaction = [...agentsWithMetrics].sort(
-        (a: any, b: any) => b.satisfactionRate - a.satisfactionRate
+        (a: unknown, b: unknown) => b.satisfactionRate - a.satisfactionRate
       );
 
       if (byResolved[0]?.resolvedTickets > 0) {
@@ -507,11 +507,11 @@ export const agentsRouter = router({
       }
 
       const totalTickets = agentsWithMetrics.reduce(
-        (sum: number, a: any) => sum + (a.totalTickets || 0),
+        (sum: number, a: unknown) => sum + (a.totalTickets || 0),
         0
       );
       const totalResolved = agentsWithMetrics.reduce(
-        (sum: number, a: any) => sum + (a.resolvedTickets || 0),
+        (sum: number, a: unknown) => sum + (a.resolvedTickets || 0),
         0
       );
       const resolutionRate =
@@ -521,7 +521,7 @@ export const agentsRouter = router({
       );
 
       const activeCount = agentsWithMetrics.filter(
-        (a: any) => (a.activeTickets || 0) > 0
+        (a: unknown) => (a.activeTickets || 0) > 0
       ).length;
       insights.push(
         `• ${activeCount} agente(s) com tickets ativos no momento.`
@@ -570,7 +570,7 @@ export const agentsRouter = router({
         []
       );
 
-      const idSet = new Set<number>(assigned.map((c: any) => c.id));
+      const idSet = new Set<number>(assigned.map((c: unknown) => c.id));
       for (const r of byMsgs as any[])
         idSet.add(Number((r as any).conversationId));
       const ids = Array.from(idSet);
@@ -582,7 +582,7 @@ export const agentsRouter = router({
         .where(sql`${conversations.id} IN (${sqlJoinNumbers(ids)})`)
         .orderBy(desc(conversations.lastMessageAt));
 
-      return convs.slice(0, input.limit).map((c: any) => ({
+      return convs.slice(0, input.limit).map((c: unknown) => ({
         id: c.id,
         customerName: c.customerName,
         customerPhone: c.customerPhone,

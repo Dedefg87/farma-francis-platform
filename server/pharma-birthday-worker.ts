@@ -3,7 +3,7 @@ import { getDb } from "./db";
 import { crmTasks, customers } from "../drizzle/schema";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
 
-let birthdayTimer: any = null;
+let birthdayTimer: unknown = null;
 
 function startOfDay(d: Date) {
   const x = new Date(d);

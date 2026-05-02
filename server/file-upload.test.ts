@@ -46,7 +46,7 @@ describe('File Upload', () => {
       try {
         await messagesRouter.createCaller(mockContext as any).uploadFile(input);
         expect.fail('Deveria ter lançado erro');
-      } catch (error: any) {
+      } catch (error: unknown) {
         expect(error.message).toContain('Arquivo muito grande');
       }
     });
@@ -122,7 +122,7 @@ describe('File Upload', () => {
       try {
         await messagesRouter.createCaller(mockContext as any).uploadFile(input);
         expect.fail('Deveria ter lançado erro');
-      } catch (error: any) {
+      } catch (error: unknown) {
         expect(error.message).toContain('Conversa não encontrada ou sem permissão');
       }
     });

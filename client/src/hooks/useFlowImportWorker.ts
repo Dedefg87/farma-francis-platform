@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 
 interface UseFlowImportWorkerOptions {
   onProgress?: (progress: number) => void;
-  onSuccess?: (data: any) => void;
+  onSuccess?: (data: unknown) => void;
   onError?: (error: string) => void;
 }
 
@@ -252,7 +252,7 @@ export function useFlowImportWorker(options: UseFlowImportWorkerOptions = {}) {
     };
   }, []);
 
-  const sendMessage = useCallback(<T>(type: string, payload: any): Promise<T> => {
+  const sendMessage = useCallback(<T>(type: string, payload: unknown): Promise<T> => {
     return new Promise((resolve, reject) => {
       if (!workerRef.current) {
         reject(new Error('Worker não inicializado'));
@@ -273,11 +273,11 @@ export function useFlowImportWorker(options: UseFlowImportWorkerOptions = {}) {
     return sendMessage('parse', content);
   }, [sendMessage]);
 
-  const convertN8N = useCallback((n8nData: any) => {
+  const convertN8N = useCallback((n8nData: unknown) => {
     return sendMessage('convert', n8nData);
   }, [sendMessage]);
 
-  const validateFlow = useCallback((data: { nodes: any[]; edges: any[] }) => {
+  const validateFlow = useCallback((data: { nodes: unknown[]; edges: unknown[] }) => {
     return sendMessage('validate', data);
   }, [sendMessage]);
 

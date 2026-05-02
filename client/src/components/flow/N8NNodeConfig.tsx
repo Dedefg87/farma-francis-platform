@@ -24,7 +24,7 @@ interface N8NNodeConfigProps {
   node: Node | null;
   open: boolean;
   onClose: () => void;
-  onSave: (nodeId: string, data: any) => void;
+  onSave: (nodeId: string, data: unknown) => void;
 }
 
 export default function N8NNodeConfig({

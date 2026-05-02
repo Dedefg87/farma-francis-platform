@@ -61,7 +61,7 @@ export const authRouter = router({
 
         // Retornar dados para token (excluir campos sensíveis)
         // Nota: raw mode retorna snake_case (ex: password_hash), então usamos fallback
-        const safeUser: any = user;
+        const safeUser: unknown = user;
         const userForToken = {
           id: safeUser.id,
           name: safeUser.display_name ?? safeUser.name,  // display_name é o nome real (atendimento)
@@ -77,7 +77,7 @@ export const authRouter = router({
           user: userForToken,
           token,
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
         throw new Error(error.message || "Falha no login");
       }
     }),

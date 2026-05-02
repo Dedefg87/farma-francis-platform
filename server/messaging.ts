@@ -176,7 +176,7 @@ export async function sendWhatsAppMessage(params: {
   }
 
   // Prepare request body
-  const body: any = {
+  const body: unknown = {
     messaging_product: "whatsapp",
     to: normalizeWhatsAppNumber(params.to),
     type: "text",
@@ -872,7 +872,7 @@ export async function sendWhatsAppMedia(params: {
       endpoint = `message/sendWhatsAppAudio/${evolutionConfig.instanceName}`;
     }
 
-    const body: any = {
+    const body: unknown = {
       number: normalizeWhatsAppNumber(params.to),
       mediatype: params.mediaType === "audio" ? "audio" : params.mediaType,
       media: params.mediaUrl,
@@ -931,7 +931,7 @@ export async function sendWhatsAppMedia(params: {
     );
   }
 
-  const body: any = {
+  const body: unknown = {
     messaging_product: "whatsapp",
     to: normalizeWhatsAppNumber(params.to),
     type: params.mediaType,

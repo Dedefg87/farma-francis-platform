@@ -6,7 +6,7 @@ import { like, or, eq, and, desc, sql } from 'drizzle-orm';
 import type { Customer, CustomerContact } from '@shared/types/customers';
 
 // Helper: Converte row do banco para Customer type
-function mapDbCustomerToCustomer(row: any): Customer {
+function mapDbCustomerToCustomer(row: unknown): Customer {
   // Split name em firstName/lastName (assumindo formato "Primeiro Ultimo")
   const nameParts = row.name?.trim().split(' ') || [];
   const firstName = nameParts[0] || '';
@@ -32,7 +32,7 @@ function mapDbCustomerToCustomer(row: any): Customer {
 }
 
 // Helper: Converte row do banco para CustomerContact type
-function mapDbCustomerToContact(row: any, type: CustomerContact['type'] = 'phone'): CustomerContact {
+function mapDbCustomerToContact(row: unknown, type: CustomerContact['type'] = 'phone'): CustomerContact {
   return {
     id: `contact_${row.id}_${type}`,
     customerId: String(row.id),
@@ -105,7 +105,7 @@ export const customersRouter = router({
       const offset = (page - 1) * pageSize;
 
       // Build where clause
-      const conditions: any[] = [];
+      const conditions: unknown[] = [];
       if (search) {
         conditions.push(
           or(
@@ -435,7 +435,7 @@ export const customersRouter = router({
       const now = new Date();
 
       // Construir updates
-      const updates: any = {
+      const updates: unknown = {
         updatedAt: now,
       };
 

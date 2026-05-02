@@ -14,16 +14,16 @@ interface IVRNode {
     options?: Array<{
       id: string;
       nextElementId?: string;
-      [key: string]: any;
+      [key: string]: unknown;
     }>;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
 interface IVRData {
   name: string;
   options: string; // JSON stringificado
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const typeMapping: Record<number, string> = {

@@ -167,7 +167,7 @@ export const automationRouter = router({
         let query = db.select().from(visualFlows);
 
         // Apply filters
-        const conditions: any[] = [];
+        const conditions: unknown[] = [];
         if (input.isActive !== undefined) {
           conditions.push(eq(visualFlows.isActive, input.isActive));
         }
@@ -321,7 +321,7 @@ export const automationRouter = router({
         }
 
         // Build update object
-        const updateData: any = { updatedAt: new Date() };
+        const updateData: unknown = { updatedAt: new Date() };
 
         if (input.name !== undefined) updateData.name = input.name;
         if (input.description !== undefined) updateData.description = input.description;
@@ -936,7 +936,7 @@ export const automationRouter = router({
  * ```typescript
  * {
  *   success: boolean,      // true if operation succeeded
- *   data?: any,           // result data on success
+ *   data?: unknown,           // result data on success
  *   message?: string,     // human-readable success message
  *   error?: string        // error type code (e.g., "NOT_FOUND", "VALIDATION_ERROR")
  * }

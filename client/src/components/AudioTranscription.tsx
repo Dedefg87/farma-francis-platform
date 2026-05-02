@@ -29,7 +29,7 @@ export function AudioTranscription({
       setIsTranscribing(false);
       onTranscriptionComplete?.(data.transcription);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setError(err.message);
       setIsTranscribing(false);
     },

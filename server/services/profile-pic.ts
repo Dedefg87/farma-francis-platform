@@ -84,7 +84,7 @@ export async function downloadAndUploadProfilePic(
       `[ProfilePic] ✅ Customer ${customerId} photo saved to R2: ${result.url}`
     );
     return result.url;
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.warn(
       `[ProfilePic] Error for customer ${customerId}:`,
       err.message

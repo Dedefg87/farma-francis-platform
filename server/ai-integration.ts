@@ -131,7 +131,7 @@ export async function getAITemplates(req: Request, res: Response) {
 function initializeContext(
   customerId: number,
   channelId: string,
-  existingContext?: any
+  existingContext?: unknown
 ) {
   const context = existingContext || {};
 
@@ -154,7 +154,7 @@ function initializeContext(
 /**
  * Process flow execution
  */
-async function processFlow(template: any, message: string, context: any) {
+async function processFlow(template: unknown, message: string, context: unknown) {
   const result = {
     conversationId: context.conversationId,
     customerId: context.customerId,
@@ -201,10 +201,10 @@ async function processFlow(template: any, message: string, context: any) {
  * Process individual node
  */
 async function processNode(
-  node: any,
+  node: unknown,
   message: string,
-  context: any,
-  result: any
+  context: unknown,
+  result: unknown
 ) {
   switch (node.type) {
     case "trigger":
@@ -263,7 +263,7 @@ async function processNode(
 /**
  * Process trigger node
  */
-async function processTriggerNode(node: any, message: string, context: any) {
+async function processTriggerNode(node: unknown, message: string, context: unknown) {
   const keywords = node.config.keywords;
   const channels = node.config.channels;
 
@@ -288,7 +288,7 @@ async function processTriggerNode(node: any, message: string, context: any) {
 /**
  * Process message node
  */
-async function processMessageNode(node: any, context: any) {
+async function processMessageNode(node: unknown, context: unknown) {
   return {
     message: {
       type: "bot",
@@ -302,7 +302,7 @@ async function processMessageNode(node: any, context: any) {
 /**
  * Process AI classify node
  */
-async function processAICLassifyNode(node: any, message: string, context: any) {
+async function processAICLassifyNode(node: unknown, message: string, context: unknown) {
   try {
     const response = await callAIProvider({
       model: node.config.model,
@@ -326,7 +326,7 @@ async function processAICLassifyNode(node: any, message: string, context: any) {
         value: classification,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -350,7 +350,7 @@ async function processAICLassifyNode(node: any, message: string, context: any) {
 /**
  * Process condition node
  */
-async function processConditionNode(node: any, result: any, context: any) {
+async function processConditionNode(node: unknown, result: unknown, context: unknown) {
   const conditions = node.config.conditions;
   let shouldFollowTruePath = true;
 
@@ -397,7 +397,7 @@ async function processConditionNode(node: any, result: any, context: any) {
 /**
  * Process AI response node
  */
-async function processAIResponseNode(node: any, message: string, context: any) {
+async function processAIResponseNode(node: unknown, message: string, context: unknown) {
   try {
     const prompt = `
 ${AI_DEFAULT_PROMPT}
@@ -435,7 +435,7 @@ ${node.config.prompt}
         model: node.config.model,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -460,9 +460,9 @@ ${node.config.prompt}
  * Process AI recommendation node
  */
 async function processAIRecommendationNode(
-  node: any,
+  node: unknown,
   message: string,
-  context: any
+  context: unknown
 ) {
   try {
     const prompt = `
@@ -516,7 +516,7 @@ ${node.config.prompt}
 /**
  * Process AI extract node
  */
-async function processAIExtractNode(node: any, message: string, context: any) {
+async function processAIExtractNode(node: unknown, message: string, context: unknown) {
   try {
     const response = await callAIProvider({
       model: node.config.model,
@@ -539,7 +539,7 @@ async function processAIExtractNode(node: any, message: string, context: any) {
         value: extractedData,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -563,7 +563,7 @@ async function processAIExtractNode(node: any, message: string, context: any) {
 /**
  * Process AI select node
  */
-async function processAISelectNode(node: any, result: any, context: any) {
+async function processAISelectNode(node: unknown, result: unknown, context: unknown) {
   try {
     const options =
       result[Object.keys(result).find(key => key.includes("options"))] || [];
@@ -584,7 +584,7 @@ async function processAISelectNode(node: any, result: any, context: any) {
 ${node.config.prompt}
 
 ## Opções disponíveis:
-${options.map((opt: any, i: number) => `${i + 1}. ${JSON.stringify(opt)}`).join("\n")}
+${options.map((opt: unknown, i: number) => `${i + 1}. ${JSON.stringify(opt)}`).join("\n")}
 `,
       maxTokens: node.config.maxTokens,
     });
@@ -601,7 +601,7 @@ ${options.map((opt: any, i: number) => `${i + 1}. ${JSON.stringify(opt)}`).join(
         index: selectedIndex,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -625,7 +625,7 @@ ${options.map((opt: any, i: number) => `${i + 1}. ${JSON.stringify(opt)}`).join(
 /**
  * Process AI format node
  */
-async function processAIFormatNode(node: any, result: any, context: any) {
+async function processAIFormatNode(node: unknown, result: unknown, context: unknown) {
   try {
     const dataToFormat =
       result[Object.keys(result).find(key => key.includes("data"))] || {};
@@ -650,7 +650,7 @@ ${JSON.stringify(dataToFormat, null, 2)}
         formatted: formattedData,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -674,7 +674,7 @@ ${JSON.stringify(dataToFormat, null, 2)}
 /**
  * Process AI confirm node
  */
-async function processAIConfirmNode(node: any, message: string, context: any) {
+async function processAIConfirmNode(node: unknown, message: string, context: unknown) {
   try {
     const prompt = `
 ${node.config.prompt}
@@ -708,7 +708,7 @@ ${node.config.prompt}
         response: confirmation,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -732,7 +732,7 @@ ${node.config.prompt}
 /**
  * Process AI checkout node
  */
-async function processAICheckoutNode(node: any, message: string, context: any) {
+async function processAICheckoutNode(node: unknown, message: string, context: unknown) {
   try {
     const prompt = `
 ${node.config.prompt}
@@ -767,7 +767,7 @@ ${node.config.prompt}
         model: node.config.model,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       return {
         message:
@@ -792,9 +792,9 @@ ${node.config.prompt}
  * Process knowledge search node
  */
 async function processKnowledgeSearchNode(
-  node: any,
+  node: unknown,
   message: string,
-  context: any
+  context: unknown
 ) {
   try {
     const knowledgeBase = AI_KNOWLEDGE_BASES[node.config.knowledgeBase];
@@ -829,7 +829,7 @@ async function processKnowledgeSearchNode(
 /**
  * Process API call node
  */
-async function processAPICallNode(node: any, context: any) {
+async function processAPICallNode(node: unknown, context: unknown) {
   try {
     const response = await fetch(node.config.endpoint, {
       method: node.config.method,
@@ -871,7 +871,7 @@ async function processAPICallNode(node: any, context: any) {
 /**
  * Process schedule node
  */
-async function processScheduleNode(node: any, context: any) {
+async function processScheduleNode(node: unknown, context: unknown) {
   // Schedule the task (implementation depends on scheduler)
   return {
     message: `Tarefa agendada: ${node.config.scheduleType}`,
@@ -887,7 +887,7 @@ async function processScheduleNode(node: any, context: any) {
 /**
  * Process transfer node
  */
-async function processTransferNode(node: any, context: any) {
+async function processTransferNode(node: unknown, context: unknown) {
   return {
     message: {
       type: "bot",
@@ -917,7 +917,7 @@ async function processTransferNode(node: any, context: any) {
 /**
  * Process end node
  */
-async function processEndNode(node: any, context: any) {
+async function processEndNode(node: unknown, context: unknown) {
   return {
     message: {
       type: "bot",
@@ -937,7 +937,7 @@ async function processEndNode(node: any, context: any) {
 /**
  * Generate final response
  */
-function generateFinalResponse(result: any, context: any) {
+function generateFinalResponse(result: unknown, context: unknown) {
   if (result.finalResponse) {
     return result.finalResponse;
   }
@@ -958,7 +958,7 @@ function generateFinalResponse(result: any, context: any) {
 async function callAIProvider(options: {
   model: string;
   prompt: string;
-  messages?: Array<{ role: string; content: any }>;
+  messages?: Array<{ role: string; content: unknown }>;
   maxTokens?: number;
   temperature?: number;
 }) {
@@ -970,7 +970,7 @@ async function callAIProvider(options: {
   // Check if there are images in messages
   const hasImages = messages.some(msg => {
     if (Array.isArray(msg.content)) {
-      return msg.content.some((part: any) => part?.type === "image_url");
+      return msg.content.some((part: unknown) => part?.type === "image_url");
     }
     return false;
   });
@@ -1028,7 +1028,7 @@ async function callAIProvider(options: {
     }
 
     return await response.json();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "IMAGE_NOT_SUPPORTED") {
       throw error;
     }
@@ -1065,12 +1065,12 @@ function parseRecommendations(text: string) {
 /**
  * Generate recommendations message
  */
-function generateRecommendationsMessage(products: any[]) {
+function generateRecommendationsMessage(products: unknown[]) {
   return (
     `Encontrei estes produtos para você:\n\n` +
     products
       .map(
-        (p: any, i: number) =>
+        (p: unknown, i: number) =>
           `${i + 1}. ${p.name}\n   ${p.description}\n   Preço: ${p.price}\n\n`
       )
       .join("") +
@@ -1101,7 +1101,7 @@ function parseCheckoutData(text: string) {
 /**
  * Generate checkout message
  */
-function generateCheckoutMessage(data: any) {
+function generateCheckoutMessage(data: unknown) {
   return (
     `Ótimo! Vou processar seu pedido:\n\n` +
     `Pagamento: ${data.paymentMethod}\n` +
@@ -1115,7 +1115,7 @@ function generateCheckoutMessage(data: any) {
  * Search knowledge base
  */
 async function searchKnowledgeBase(
-  knowledgeBase: any,
+  knowledgeBase: unknown,
   query: string,
   searchType: string
 ) {
@@ -1157,7 +1157,7 @@ function keywordSearch(content: string, query: string) {
 async function saveConversationHistory(
   customerId: number,
   channelId: string,
-  result: any
+  result: unknown
 ) {
   // Save to database
   // Implementation depends on your database schema
@@ -1171,11 +1171,11 @@ async function saveConversationHistory(
 /**
  * Emit SSE events
  */
-function emitSSEEvents(customerId: number, result: any) {
+function emitSSEEvents(customerId: number, result: unknown) {
   const events = [];
 
   // Emit message events
-  result.messages.forEach((message: any) => {
+  result.messages.forEach((message: unknown) => {
     events.push({
       type: EVENTS.MESSAGE_NEW,
       data: {
@@ -1224,9 +1224,9 @@ async function getVisualFlow(flowId: string) {
  * Execute visual flow
  */
 async function executeFlow(
-  flow: any,
+  flow: unknown,
   triggerType: string,
-  triggerData: any,
+  triggerData: unknown,
   customerId: number
 ) {
   // Implementation to execute visual flow

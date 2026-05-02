@@ -571,9 +571,9 @@ export default function AgentMessages() {
     // Atualização otimista - zerar contador imediatamente na UI
     queryClient.setQueryData(
       ["trpc", "conversations", "listActive", { input: undefined }],
-      (old: any) => {
+      (old: unknown) => {
         if (!old) return old;
-        return old.map((c: any) =>
+        return old.map((c: unknown) =>
           Number(c.id) === conversationId ? { ...c, unreadCount: 0 } : c
         );
       }
@@ -685,9 +685,9 @@ export default function AgentMessages() {
       // Atualização otimista
       queryClient.setQueryData(
         ["trpc", "conversations", "listActive", { input: undefined }],
-        (old: any) => {
+        (old: unknown) => {
           if (!old) return old;
-          return old.map((c: any) =>
+          return old.map((c: unknown) =>
             Number(c.id) === selectedConversationId ? { ...c, unreadCount: 0 } : c
           );
         }
@@ -761,7 +761,7 @@ export default function AgentMessages() {
       setSelectedConversationId(null);
       refetchConversations();
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       toast.error("Erro ao excluir conversa: " + err.message);
     },
   });
@@ -886,7 +886,7 @@ export default function AgentMessages() {
       }
 
       setShowCRMPanel(true);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(e?.message || "Nao foi possivel abrir o CRM");
     }
   };

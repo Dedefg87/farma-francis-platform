@@ -93,10 +93,10 @@ export function phoneLast8(raw: string | null | undefined): string {
  * Se não encontrar nenhuma, retorna null
  */
 export async function findConversationByPhone(
-  db: any,
+  db: unknown,
   phone: string,
-  conversationsTable: any,
-  customersTable: any
+  conversationsTable: unknown,
+  customersTable: unknown
 ): Promise<{ conversationId: number; customerId: number; status: string } | null> {
   const { eq, desc, inArray, like, or } = await import('drizzle-orm');
   
@@ -112,7 +112,7 @@ export async function findConversationByPhone(
 
   if (matchedCustomers.length === 0) return null;
 
-  const customerIds = matchedCustomers.map((c: any) => c.id);
+  const customerIds = matchedCustomers.map((c: unknown) => c.id);
 
   // Buscar conversa mais recente de QUALQUER um desses clientes
   const [conversation] = await db

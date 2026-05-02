@@ -105,7 +105,7 @@ function AgentPerformanceContent() {
     );
 
   // Handle both array and object data formats
-  let agentsList: any[] = [];
+  let agentsList: unknown[] = [];
   if (Array.isArray(data)) {
     agentsList = data;
   } else if (data && Array.isArray(data?.agents)) {
@@ -436,7 +436,7 @@ function AgentPerformanceContent() {
       {/* Ranking de Agentes */}
       {!isLoading && agents.length > 0 && (
         <div className="space-y-3">
-          {agents.map((agent: any, index: number) => (
+          {agents.map((agent: unknown, index: number) => (
             <Card
               key={agent.id}
               className="p-6 hover:shadow-md transition-shadow"
@@ -713,7 +713,7 @@ function AgentPerformanceContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {recentConversations.map((c: any) => (
+                    {recentConversations.map((c: unknown) => (
                       <tr key={c.id} className="border-t">
                         <td className="p-2">
                           <div className="font-medium">

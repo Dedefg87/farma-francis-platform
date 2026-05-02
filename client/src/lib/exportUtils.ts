@@ -6,13 +6,13 @@
 interface ExportColumn {
   key: string;
   label: string;
-  format?: (value: any) => string;
+  format?: (value: unknown) => string;
 }
 
 interface ExportOptions {
   filename: string;
   columns: ExportColumn[];
-  data: any[];
+  data: unknown[];
   title?: string;
   subtitle?: string;
 }

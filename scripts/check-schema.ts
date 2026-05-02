@@ -20,7 +20,7 @@ async function inspectSchema() {
     console.log(`\n=== DESCRIBE ${table} ===`);
     try {
       const [rows] = await client.execute(`DESCRIBE ${table}`);
-      rows.forEach((row: any) => {
+      rows.forEach((row: unknown) => {
         console.log(`${row.Field}: ${row.Type} ${row.Null ? 'NULL' : 'NOT NULL'} ${row.Key || ''} ${row.Default !== null ? 'DEFAULT ' + row.Default : ''}`);
       });
     } catch (err) {

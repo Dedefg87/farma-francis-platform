@@ -217,7 +217,7 @@ export function replaceVariables(template: string, context: Record<string, any>)
   return template.replace(regex, (match, varPath, helperName) => {
     // Navegar pelo caminho da variável (ex: cliente.endereco.cidade)
     const parts = varPath.trim().split('.');
-    let value: any = context;
+    let value: unknown = context;
     
     for (const part of parts) {
       if (value && typeof value === 'object' && part in value) {

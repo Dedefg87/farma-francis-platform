@@ -47,7 +47,7 @@ export interface ExecutionContext {
 
 export interface NodeExecutionResult {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
 }
 
@@ -61,7 +61,7 @@ export class WorkflowExecutor {
     workflowId: number,
     nodes: WorkflowNode[],
     edges: WorkflowEdge[],
-    triggerData?: any
+    triggerData?: unknown
   ) {
     this.context = {
       workflow: { id: workflowId, name: "" },
@@ -128,7 +128,7 @@ export class WorkflowExecutor {
         .where(eq(workflowExecutions.id, this.context.execution.id));
 
       return { success: true, executionId: this.context.execution.id };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Update execution as error
       const executionTime = Date.now() - startTime;
       const dbError = await getDb();
@@ -202,7 +202,7 @@ export class WorkflowExecutor {
 
       // Execute next nodes
       await this.executeNextNodes(nodeId, result.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Retry logic
       if (retryCount < maxRetries) {
         console.log(
@@ -249,7 +249,7 @@ export class WorkflowExecutor {
    */
   private async executeNodeByType(
     node: WorkflowNode,
-    inputData: any
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     const config = node.data.config;
 
@@ -344,8 +344,8 @@ export class WorkflowExecutor {
    * Execute AI Assistant node
    */
   private async executeAINode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const prompt = this.resolveExpression(
@@ -366,7 +366,7 @@ export class WorkflowExecutor {
 
       const aiResponse = response.choices[0]?.message?.content || "";
       return { success: true, data: { response: aiResponse, raw: response } };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }
@@ -375,8 +375,8 @@ export class WorkflowExecutor {
    * Execute HTTP Request node
    */
   private async executeHTTPNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const url = this.resolveExpression(config.url, inputData);
@@ -409,7 +409,7 @@ export class WorkflowExecutor {
           ? undefined
           : `HTTP ${response.status}: ${response.statusText}`,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }
@@ -418,8 +418,8 @@ export class WorkflowExecutor {
    * Execute Database Query node
    */
   private async executeDatabaseNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const query = this.resolveExpression(config.query, inputData);
@@ -431,7 +431,7 @@ export class WorkflowExecutor {
       const result = await dbQuery.execute(query as any);
 
       return { success: true, data: { rows: result, count: result.length } };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }
@@ -440,8 +440,8 @@ export class WorkflowExecutor {
    * Execute greeting function - returns appropriate greeting based on time
    */
   private executeGreetingFunction(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): NodeExecutionResult {
     try {
       const hour = new Date().getHours();
@@ -464,7 +464,7 @@ export class WorkflowExecutor {
           hour,
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }
@@ -473,8 +473,8 @@ export class WorkflowExecutor {
    * Execute Function/Code node - runs JavaScript
    */
   private async executeFunctionNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const code = config.code || config.functionCode || "";
@@ -492,7 +492,7 @@ export class WorkflowExecutor {
       const result = await fn($input, $json, $vars);
 
       return { success: true, data: result };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }
@@ -501,8 +501,8 @@ export class WorkflowExecutor {
    * Execute Set node - manipulate data
    */
   private executeSetNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const output = { ...inputData };
@@ -524,7 +524,7 @@ export class WorkflowExecutor {
       }
 
       return Promise.resolve({ success: true, data: output });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return Promise.resolve({ success: false, error: error.message });
     }
   }
@@ -533,8 +533,8 @@ export class WorkflowExecutor {
    * Execute Split node - split array into batches
    */
   private executeSplitNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const array = Array.isArray(inputData)
@@ -551,7 +551,7 @@ export class WorkflowExecutor {
         success: true,
         data: { batches, count: batches.length },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return Promise.resolve({ success: false, error: error.message });
     }
   }
@@ -560,15 +560,15 @@ export class WorkflowExecutor {
    * Execute Merge node - combine multiple inputs
    */
   private executeMergeNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       // Get outputs from all previous nodes
       const inputs = Array.from(this.context.nodeOutputs.values());
 
       const mode = config.mode || "append";
-      let result: any;
+      let result: unknown;
 
       if (mode === "append") {
         result = inputs.flat();
@@ -579,7 +579,7 @@ export class WorkflowExecutor {
       }
 
       return Promise.resolve({ success: true, data: result });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return Promise.resolve({ success: false, error: error.message });
     }
   }
@@ -589,8 +589,8 @@ export class WorkflowExecutor {
    */
   private async executeLoopNode(
     node: WorkflowNode,
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const items = Array.isArray(inputData)
@@ -614,7 +614,7 @@ export class WorkflowExecutor {
       }
 
       return { success: true, data: results };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return { success: false, error: error.message };
     }
   }
@@ -623,8 +623,8 @@ export class WorkflowExecutor {
    * Execute Switch node - multiple conditional paths
    */
   private executeSwitchNode(
-    config: any,
-    inputData: any
+    config: unknown,
+    inputData: unknown
   ): Promise<NodeExecutionResult> {
     try {
       const value = this.resolveExpression(config.value, inputData);
@@ -644,7 +644,7 @@ export class WorkflowExecutor {
         success: true,
         data: { matched: "default", path: "default" },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       return Promise.resolve({ success: false, error: error.message });
     }
   }
@@ -652,7 +652,7 @@ export class WorkflowExecutor {
   /**
    * Execute Wait/Delay node
    */
-  private async executeWaitNode(config: any): Promise<NodeExecutionResult> {
+  private async executeWaitNode(config: unknown): Promise<NodeExecutionResult> {
     const delay = config.delay || config.amount || 1000;
     await new Promise(resolve => setTimeout(resolve, delay));
     return { success: true, data: { waited: delay } };
@@ -661,7 +661,7 @@ export class WorkflowExecutor {
   /**
    * Get input data for a node from previous nodes
    */
-  private getNodeInputData(nodeId: string): any {
+  private getNodeInputData(nodeId: string): unknown {
     const incomingEdges = this.context.edges.filter(e => e.target === nodeId);
 
     if (incomingEdges.length === 0) {
@@ -685,7 +685,7 @@ export class WorkflowExecutor {
    */
   private async executeNextNodes(
     currentNodeId: string,
-    outputData: any
+    outputData: unknown
   ): Promise<void> {
     const outgoingEdges = this.context.edges.filter(
       e => e.source === currentNodeId
@@ -709,7 +709,7 @@ export class WorkflowExecutor {
    */
   private async processLoopIteration(
     loopNodeId: string,
-    item: any
+    item: unknown
   ): Promise<any> {
     // Find nodes inside loop (connected to loop node)
     const loopEdges = this.context.edges.filter(e => e.source === loopNodeId);
@@ -728,7 +728,7 @@ export class WorkflowExecutor {
   /**
    * Evaluate condition
    */
-  private evaluateCondition(config: any, inputData: any): boolean {
+  private evaluateCondition(config: unknown, inputData: unknown): boolean {
     try {
       // Check for special condition types used by chatbot
       if (config.condition === "working_hours") {
@@ -809,7 +809,7 @@ export class WorkflowExecutor {
    * Mon-Sat: 08:00-19:40
    * Sun/Holidays: 08:00-11:40
    */
-  private checkWorkingHours(schedule?: any): boolean {
+  private checkWorkingHours(schedule?: unknown): boolean {
     const now = new Date();
     const day = now.getDay(); // 0 = Sunday, 6 = Saturday
     const hour = now.getHours();
@@ -845,7 +845,7 @@ export class WorkflowExecutor {
   /**
    * Check if agent is logged in
    */
-  private checkAgentLoggedIn(inputData: any): boolean {
+  private checkAgentLoggedIn(inputData: unknown): boolean {
     // Check if assignedTo or agent_id exists in input data
     return !!(
       inputData.assignedTo ||
@@ -857,7 +857,7 @@ export class WorkflowExecutor {
   /**
    * Resolve expression with variables ({{$json.field}}, {{$node["Name"].json}})
    */
-  private resolveExpression(expression: any, inputData: any): any {
+  private resolveExpression(expression: unknown, inputData: unknown): unknown {
     if (typeof expression !== "string") return expression;
 
     // Replace {{$json.field}} with actual values
@@ -911,7 +911,7 @@ export class WorkflowExecutor {
    */
   private resolveObject(
     obj: Record<string, any>,
-    inputData: any
+    inputData: unknown
   ): Record<string, any> {
     const resolved: Record<string, any> = {};
 
@@ -925,7 +925,7 @@ export class WorkflowExecutor {
   /**
    * Get nested value from object (e.g., "user.name")
    */
-  private getNestedValue(obj: any, path: string): any {
+  private getNestedValue(obj: unknown, path: string): unknown {
     if (!path || path === ".") return obj;
 
     const keys = path.split(".").filter(k => k);
@@ -948,7 +948,7 @@ export class WorkflowExecutor {
  */
 export async function executeWorkflow(
   workflowId: number,
-  triggerData?: any,
+  triggerData?: unknown,
   triggeredBy?: number
 ) {
   // Load workflow from database

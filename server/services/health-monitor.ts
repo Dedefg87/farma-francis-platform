@@ -94,7 +94,7 @@ async function checkAPI(): Promise<HealthCheckResult> {
         responseTime,
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       timestamp: new Date().toISOString(),
       service: "API",
@@ -128,7 +128,7 @@ async function checkDatabase(): Promise<HealthCheckResult> {
         message: `Database query failed: ${response.status}`,
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       timestamp: new Date().toISOString(),
       service: "Database",
@@ -163,7 +163,7 @@ async function checkWebhooks(): Promise<HealthCheckResult> {
         message: "Could not verify webhook status",
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       timestamp: new Date().toISOString(),
       service: "Webhooks",

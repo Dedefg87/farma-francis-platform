@@ -3,7 +3,7 @@ import { getDb } from "./db";
 import { customerTreatments, customers, crmTasks } from "../drizzle/schema";
 import { fireAndForget, enqueueCrmOutboxEvent } from "./crm-core";
 
-let refillTimer: any = null;
+let refillTimer: unknown = null;
 
 function addDays(d: Date, days: number) {
   const x = new Date(d);

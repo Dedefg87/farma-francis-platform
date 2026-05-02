@@ -154,7 +154,7 @@ export default function N8NFlowEditor({
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json,.ivr";
-    input.onchange = (e: any) => {
+    input.onchange = (e: unknown) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();

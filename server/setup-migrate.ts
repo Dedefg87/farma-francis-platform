@@ -3,7 +3,7 @@ import { getDb } from "./db.js";
 
 const router = Router();
 
-router.get("/criar-tabelas-eventos", async (req: any, res: any) => {
+router.get("/criar-tabelas-eventos", async (req: unknown, res: unknown) => {
   const db = await getDb();
   try {
     // Tabela eventos
@@ -86,7 +86,7 @@ router.get("/criar-tabelas-eventos", async (req: any, res: any) => {
       </html>
     `);
 
-  } catch (e: any) {
+  } catch (e: unknown) {
     res.status(500).send(`
       <!DOCTYPE html>
       <html>

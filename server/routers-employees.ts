@@ -224,7 +224,7 @@ export const employeesRouter = router({
       const existing = await db.select().from(dbUsers).where(eq(dbUsers.id, userId)).limit(1);
       if (existing.length === 0) throw new Error('Funcionário não encontrado');
 
-      const updates: any = {};
+      const updates: unknown = {};
       if (username) updates.name = username;
       if (displayName !== undefined) updates.displayName = displayName;
       if (role) updates.role = role;

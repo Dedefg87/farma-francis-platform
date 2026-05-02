@@ -2,7 +2,7 @@
  * Normalização universal de valores
  * Converte strings vazias, undefined e null para null
  */
-export function normalize(value: any): any {
+export function normalize(value: unknown): unknown {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string' && value.trim() === '') return null;
   return value;
@@ -12,7 +12,7 @@ export function normalize(value: any): any {
  * Normaliza strings vazias para null
  * Converte strings vazias (após trim), undefined e null para null
  */
-export function normalizeEmptyStringToNull(value: any): any {
+export function normalizeEmptyStringToNull(value: unknown): unknown {
   if (value === undefined || value === null) return null;
   if (typeof value === 'string' && value.trim() === '') return null;
   return value;

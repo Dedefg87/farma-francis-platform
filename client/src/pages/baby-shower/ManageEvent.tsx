@@ -153,7 +153,7 @@ export default function ManageEvent() {
     onError: (err) => toast.error(err.message),
   });
 
-  const handleDeletePackage = (pkg: any) => {
+  const handleDeletePackage = (pkg: unknown) => {
     if (confirm(`Tem certeza que deseja excluir "${pkg.packageName}"?`)) {
       deletePackageMutation.mutate({ id: pkg.id });
     }
@@ -499,7 +499,7 @@ export default function ManageEvent() {
                       <GripVertical className="w-3 h-3" />
                       Arraste os produtos para reordenar
                     </p>
-                    {localPackages.map((pkg: any, index: number) => (
+                    {localPackages.map((pkg: unknown, index: number) => (
                       <div 
                         key={pkg.id} 
                         draggable
@@ -572,7 +572,7 @@ export default function ManageEvent() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {data.purchases.map((p: any) => (
+                    {data.purchases.map((p: unknown) => (
                       <div key={p.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-gray-50 rounded-lg gap-2">
                         <div>
                           <p className="font-medium">{p.guestName}</p>

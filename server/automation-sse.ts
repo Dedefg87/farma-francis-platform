@@ -109,7 +109,7 @@ export async function executeAutomationWithSSE(params: {
 }
 
 async function sendWelcomeMessage(
-  db: any,
+  db: unknown,
   customerId: number,
   conversationId: number | undefined,
   context: Record<string, unknown>
@@ -132,7 +132,7 @@ async function sendWelcomeMessage(
 }
 
 async function scheduleFollowUp(
-  db: any,
+  db: unknown,
   customerId: number,
   conversationId: number | undefined,
   delay: string
@@ -148,7 +148,7 @@ async function scheduleFollowUp(
 }
 
 async function sendUrgentNotification(
-  db: any,
+  db: unknown,
   customerId: number,
   conversationId: number | undefined
 ) {
@@ -158,7 +158,7 @@ async function sendUrgentNotification(
 }
 
 async function sendOfferReminder(
-  db: any,
+  db: unknown,
   customerId: number,
   conversationId: number | undefined
 ) {
@@ -168,7 +168,7 @@ async function sendOfferReminder(
 }
 
 async function sendCustomMessage(
-  db: any,
+  db: unknown,
   customerId: number,
   conversationId: number | undefined,
   automationId: string,
@@ -185,7 +185,7 @@ async function sendCustomMessage(
 }
 
 export async function saveMessageAndNotify(
-  db: any,
+  db: unknown,
   conversationId: number | undefined,
   customerId: number,
   content: string,

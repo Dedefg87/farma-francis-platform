@@ -14,7 +14,7 @@ router.get("/check-duplicates", async (req, res) => {
   }
 
   try {
-    const results: any = {
+    const results: unknown = {
       timestamp: new Date().toISOString(),
       summary: {
         duplicateCustomers: 0,
@@ -31,7 +31,7 @@ router.get("/check-duplicates", async (req, res) => {
     };
 
     // 1. Verificar duplicatas em customers (por phone)
-    const customersResult: any = await (db as any).execute(`
+    const customersResult: unknown = await (db as any).execute(`
       SELECT phone, COUNT(*) as count, GROUP_CONCAT(id) as ids, GROUP_CONCAT(name) as names
       FROM customers
       WHERE phone IS NOT NULL
@@ -46,7 +46,7 @@ router.get("/check-duplicates", async (req, res) => {
     results.details.duplicateCustomers = duplicateCustomers;
 
     // 2. Verificar duplicatas em received_messages (provider + externalId)
-    const receivedResult: any = await (db as any).execute(`
+    const receivedResult: unknown = await (db as any).execute(`
       SELECT provider, external_id, COUNT(*) as count, GROUP_CONCAT(id) as ids
       FROM received_messages
       WHERE external_id IS NOT NULL
@@ -61,7 +61,7 @@ router.get("/check-duplicates", async (req, res) => {
     results.details.duplicateReceivedMessages = duplicateReceived;
 
     // 3. Verificar duplicatas em conversation_messages (provider + externalId)
-    const conversationResult: any = await (db as any).execute(`
+    const conversationResult: unknown = await (db as any).execute(`
       SELECT provider, external_id, COUNT(*) as count, GROUP_CONCAT(id) as ids
       FROM conversation_messages
       WHERE provider IS NOT NULL AND external_id IS NOT NULL
@@ -77,7 +77,7 @@ router.get("/check-duplicates", async (req, res) => {
 
     // 4. Verificar variações de telefone (últimos 8 dígitos iguais)
     // Normaliza removendo +, espaços, traços, parênteses antes de extrair
-    const phoneVarResult: any = await (db as any).execute(`
+    const phoneVarResult: unknown = await (db as any).execute(`
       SELECT 
         last8,
         COUNT(*) as count,
@@ -128,7 +128,7 @@ router.get("/check-duplicates", async (req, res) => {
       : `⚠️ Encontrados ${totalProblems} problemas de duplicação/variação`;
 
     res.json(results);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[CheckDuplicates] Erro:", err);
     res.status(500).json({ 
       success: false, 
@@ -161,7 +161,7 @@ router.get("/verify-normalization", async (req, res) => {
     const sample = rows || [];
     
     // Análise manual dos formatos
-    const analysis = sample.map((c: any) => {
+    const analysis = sample.map((c: unknown) => {
       const digitsOnly = c.phone.replace(/\D/g, '');
       const has9 = digitsOnly.length >= 12; // 55 + DDD + 9 + 8 dígitos = 13, ou DDD + 9 + 8 = 11
       return {
@@ -174,8 +174,8 @@ router.get("/verify-normalization", async (req, res) => {
       };
     });
 
-    const with9 = analysis.filter((c: any) => c.format === 'COM_9').length;
-    const without9 = analysis.filter((c: any) => c.format === 'SEM_9').length;
+    const with9 = analysis.filter((c: unknown) => c.format === 'COM_9').length;
+    const without9 = analysis.filter((c: unknown) => c.format === 'SEM_9').length;
 
     res.json({
       success: true,
@@ -187,7 +187,7 @@ router.get("/verify-normalization", async (req, res) => {
       },
       message: `Amostra de ${analysis.length} customers: ${with9} com 9º dígito, ${without9} sem 9º dígito`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[VerifyNormalization] Erro:", err);
     res.status(500).json({ success: false, error: err.message });
   }

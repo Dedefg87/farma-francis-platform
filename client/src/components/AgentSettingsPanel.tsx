@@ -89,7 +89,7 @@ export function AgentSettingsPanel({
     setConfiguration(defaultConfig);
   };
 
-  const handleParameterChange = (key: string, value: any) => {
+  const handleParameterChange = (key: string, value: unknown) => {
     setConfiguration(prev => ({
       ...prev,
       [key]: value,

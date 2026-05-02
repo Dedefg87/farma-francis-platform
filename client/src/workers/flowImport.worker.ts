@@ -7,14 +7,14 @@
 // Tipos de mensagens entre worker e main thread
 type WorkerMessage = {
   type: 'parse' | 'convert' | 'validate';
-  payload: any;
+  payload: unknown;
   id: string;
 };
 
 type WorkerResponse = {
   type: 'success' | 'error' | 'progress';
   id: string;
-  data?: any;
+  data?: unknown;
   error?: string;
   progress?: number;
 };
@@ -47,7 +47,7 @@ function handleParse(content: string, id: string) {
   
   // Parse JSON em chunks
   const chunkSize = 10000;
-  let parsed: any;
+  let parsed: unknown;
   
   if (content.length > chunkSize) {
     // Para arquivos grandes, usar parse simples
@@ -69,11 +69,11 @@ function handleParse(content: string, id: string) {
   });
 }
 
-function handleConvert(n8nData: any, id: string) {
+function handleConvert(n8nData: unknown, id: string) {
   sendProgress(id, 10);
   
-  const nodes: any[] = [];
-  const edges: any[] = [];
+  const nodes: unknown[] = [];
+  const edges: unknown[] = [];
   const nodeMap = new Map<string, any>();
   
   // Mapeamento de tipos N8N
@@ -163,10 +163,10 @@ function handleConvert(n8nData: any, id: string) {
         Object.entries(connection).forEach(([outputType, outputConnections]: [string, any]) => {
           if (!Array.isArray(outputConnections)) return;
           
-          outputConnections.forEach((branchArray: any[]) => {
+          outputConnections.forEach((branchArray: unknown[]) => {
             if (!Array.isArray(branchArray)) return;
             
-            branchArray.forEach((conn: any) => {
+            branchArray.forEach((conn: unknown) => {
               if (!conn || !conn.node) return;
               
               const targetNode = nodeMap.get(conn.node);
@@ -214,7 +214,7 @@ function handleConvert(n8nData: any, id: string) {
   }
 }
 
-function handleValidate(data: { nodes: any[]; edges: any[] }, id: string) {
+function handleValidate(data: { nodes: unknown[]; edges: unknown[] }, id: string) {
   sendProgress(id, 50);
   
   const { nodes, edges } = data;
@@ -242,9 +242,9 @@ function handleValidate(data: { nodes: any[]; edges: any[] }, id: string) {
   sendSuccess(id, { isValid: errors.length === 0, errors, warnings });
 }
 
-function detectN8NFormat(data: any): boolean {
+function detectN8NFormat(data: unknown): boolean {
   if (data.nodes && Array.isArray(data.nodes)) {
-    return data.nodes.some((node: any) =>
+    return data.nodes.some((node: unknown) =>
       node.type && (
         node.type?.startsWith?.('n8n-nodes-') ||
         node.type?.startsWith?.('@n8n/')
@@ -254,7 +254,7 @@ function detectN8NFormat(data: any): boolean {
   return false;
 }
 
-function reorganizePositions(nodes: any[], edges: any[]) {
+function reorganizePositions(nodes: unknown[], edges: unknown[]) {
   if (nodes.length === 0) return { nodes, edges };
   
   // Normalizar posições
@@ -279,7 +279,7 @@ function reorganizePositions(nodes: any[], edges: any[]) {
 }
 
 // Helpers
-function sendSuccess(id: string, data: any) {
+function sendSuccess(id: string, data: unknown) {
   self.postMessage({ type: 'success', id, data } as WorkerResponse);
 }
 

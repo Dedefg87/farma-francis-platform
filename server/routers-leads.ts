@@ -26,7 +26,7 @@ export const leadsRouter = router({
       const offset = (page - 1) * pageSize;
 
       // Build where clause
-      const conditions: any[] = [];
+      const conditions: unknown[] = [];
       if (search) {
         conditions.push(
           or(
@@ -178,7 +178,7 @@ export const leadsRouter = router({
       const now = new Date();
 
       // Build insert values, converting followUpDate if present
-      const insertValues: any = {
+      const insertValues: unknown = {
         name: input.name,
         email: input.email ?? null,
         phone: input.phone ?? null,
@@ -222,7 +222,7 @@ export const leadsRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
-      const update: any = {
+      const update: unknown = {
         updatedAt: new Date(),
       };
       Object.keys(input).forEach(key => {

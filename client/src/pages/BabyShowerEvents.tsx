@@ -17,7 +17,7 @@ export default function BabyShowerEvents() {
       toast.success("Evento apagado com sucesso!");
       refetch();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(`Erro ao apagar evento: ${error.message || "Erro desconhecido"}`);
     },
   });
@@ -55,7 +55,7 @@ export default function BabyShowerEvents() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Eventos Ativos</p>
-                  <p className="text-2xl font-bold">{events.filter((e: any) => e.event.status === 'active').length}</p>
+                  <p className="text-2xl font-bold">{events.filter((e: unknown) => e.event.status === 'active').length}</p>
                 </div>
               </div>
             </CardContent>
@@ -68,7 +68,7 @@ export default function BabyShowerEvents() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total Arrecadado</p>
-                  <p className="text-2xl font-bold">R$ {events.reduce((sum: number, e: any) => sum + parseFloat(e.event.walletBalance || 0), 0).toFixed(2)}</p>
+                  <p className="text-2xl font-bold">R$ {events.reduce((sum: number, e: unknown) => sum + parseFloat(e.event.walletBalance || 0), 0).toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
@@ -81,7 +81,7 @@ export default function BabyShowerEvents() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total Convidados</p>
-                  <p className="text-2xl font-bold">{events.reduce((sum: number, e: any) => sum + (e.event.totalGuests || 0), 0)}</p>
+                  <p className="text-2xl font-bold">{events.reduce((sum: number, e: unknown) => sum + (e.event.totalGuests || 0), 0)}</p>
                 </div>
               </div>
             </CardContent>
@@ -119,7 +119,7 @@ export default function BabyShowerEvents() {
               </div>
             ) : (
               <div className="divide-y">
-                {events.map((e: any) => (
+                {events.map((e: unknown) => (
                   <div key={e.event.id} className="p-4 flex justify-between items-center">
                     <div>
                       <h3 className="font-semibold">{e.event.eventName}</h3>

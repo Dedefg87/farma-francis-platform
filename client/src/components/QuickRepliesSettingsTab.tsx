@@ -105,7 +105,7 @@ export default function QuickRepliesSettingsTab() {
       }
       await refresh();
       closeDialog();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(e?.message || "Nao foi possivel salvar");
     }
   };
@@ -116,7 +116,7 @@ export default function QuickRepliesSettingsTab() {
       await deleteMutation.mutateAsync({ id: row.id });
       toast.success("Mensagem rapida deletada");
       await refresh();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast.error(e?.message || "Nao foi possivel deletar");
     }
   };

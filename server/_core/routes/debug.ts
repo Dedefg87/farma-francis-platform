@@ -47,7 +47,7 @@ router.get("/broadcast-list", async (req, res) => {
       .offset(offset);
 
     res.json({ success: true, lists, count: lists.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/broadcast-list] Error:", err);
     res.status(500).json({
       error: err.message,
@@ -62,7 +62,7 @@ router.get("/broadcast-list", async (req, res) => {
 router.get("/auth-test", async (req, res) => {
   try {
     console.log("[AuthTest] Endpoint called");
-    const results: any = {};
+    const results: unknown = {};
     const cookieHeader = req.headers.cookie || "";
     const cookies: Record<string, string> = {};
     if (cookieHeader) {
@@ -128,7 +128,7 @@ router.get("/auth-test", async (req, res) => {
         message: user ? "Autenticação OK" : "Usuário não encontrado no banco",
         results,
       });
-    } catch (jwtError: any) {
+    } catch (jwtError: unknown) {
       results.jwtVerify = "FAILED";
       results.jwtError = jwtError.message || String(jwtError);
       res.json({
@@ -137,7 +137,7 @@ router.get("/auth-test", async (req, res) => {
         results,
       });
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[AuthTest] Error:", err);
     res.status(500).json({
       error: err.message,
@@ -160,7 +160,7 @@ router.get("/media-messages", async (req, res) => {
       uri: process.env.DATABASE_URL,
     });
 
-    const [rows]: any = await pool.execute(
+    const [rows]: unknown = await pool.execute(
       `SELECT id, conversation_id, sender_type,
        LEFT(content, 100) as content_preview,
        file_url IS NOT NULL as has_file_url,
@@ -189,7 +189,7 @@ router.get("/last-media-payload", async (req, res) => {
       uri: process.env.DATABASE_URL,
     });
 
-    const [rows]: any = await pool.execute(
+    const [rows]: unknown = await pool.execute(
       `SELECT id, created_at FROM conversation_messages
        WHERE file_type IS NOT NULL
        ORDER BY id DESC LIMIT 1`
@@ -225,7 +225,7 @@ router.get("/conversation-messages-with-media", async (req, res) => {
       uri: process.env.DATABASE_URL,
     });
 
-    const [rows]: any = await pool.execute(
+    const [rows]: unknown = await pool.execute(
       `SELECT cm.id, cm.conversation_id, cm.content, cm.file_url, cm.file_type, cm.file_name, cm.created_at,
               c.remote_jid as customer_jid
        FROM conversation_messages cm
@@ -266,7 +266,7 @@ router.get("/conversations", async (req, res) => {
       .limit(limit);
 
     res.json({ success: true, conversations: convs, count: convs.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/conversations] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -293,7 +293,7 @@ router.get("/received-messages", async (req, res) => {
       .limit(limit);
 
     res.json({ success: true, messages: msgs, count: msgs.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/received-messages] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -317,7 +317,7 @@ router.get("/conversation/:id", async (req, res) => {
     }
 
     res.json({ success: true, conversation: conv });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/conversation/:id] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -333,7 +333,7 @@ router.get("/recent-messages", async (req, res) => {
       uri: process.env.DATABASE_URL,
     });
 
-    const [rows]: any = await pool.execute(
+    const [rows]: unknown = await pool.execute(
       `SELECT cm.id, cm.conversation_id, cm.sender_type, cm.content, cm.file_type, cm.file_name, cm.created_at,
               c.remote_jid as customer_jid, c.customer_name
        FROM conversation_messages cm
@@ -377,7 +377,7 @@ router.get("/messages/:phone", async (req, res) => {
       .limit(100);
 
     res.json({ success: true, messages: msgs, count: msgs.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/messages/:phone] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -397,7 +397,7 @@ router.get("/webhooks", async (req, res) => {
       .limit(limit);
 
     res.json({ success: true, webhooks: hooks, count: hooks.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/webhooks] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -419,7 +419,7 @@ router.get("/contacts-by-hour", async (req, res) => {
       .orderBy(sql`hour ASC`);
 
     res.json({ success: true, stats });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/contacts-by-hour] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -447,7 +447,7 @@ router.get("/dashboard", async (req, res) => {
         queues: queueCount.count,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/dashboard] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -474,7 +474,7 @@ router.get("/users", async (req, res) => {
       .limit(limit);
 
     res.json({ success: true, users: usrs, count: usrs.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/users] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -487,7 +487,7 @@ router.get("/check-broadcast-tables", async (req, res) => {
     if (!db) return res.status(500).json({ error: "Database not available" });
 
     const tables = ["broadcast_lists", "broadcast_list_members", "broadcast_messages", "broadcast_members_sent"];
-    const results: any = {};
+    const results: unknown = {};
 
     for (const table of tables) {
       const [countResult] = await db.execute(sql`SELECT COUNT(*) as cnt FROM ${sql.raw(table)}`);
@@ -496,7 +496,7 @@ router.get("/check-broadcast-tables", async (req, res) => {
     }
 
     res.json({ success: true, counts: results });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/check-broadcast-tables] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -515,7 +515,7 @@ router.get("/evolution-config", async (req, res) => {
       .limit(1);
 
     res.json({ success: true, config: settings ? settings.config : null });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/evolution-config] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -527,7 +527,7 @@ router.get("/create-broadcast-tables", async (req, res) => {
     const { runBroadcastMigrations } = await import("../services/broadcast-queue");
     await runBroadcastMigrations();
     res.json({ success: true, message: "Broadcast tables created/verified" });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/create-broadcast-tables] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -539,7 +539,7 @@ router.get("/list-active-raw", async (req, res) => {
     const { getActiveAgentsRaw } = await import("../helpers/agent-availability");
     const agents = await getActiveAgentsRaw();
     res.json({ success: true, agents });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/list-active-raw] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -562,7 +562,7 @@ router.get("/agent-names", async (req, res) => {
       .where(eq(users.role, "admin"));
 
     res.json({ success: true, agents });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/agent-names] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -574,7 +574,7 @@ router.get("/test-messages-sender", async (req, res) => {
     const { sendTestMessage } = await import("../services/whatsapp");
     const result = await sendTestMessage();
     res.json(result);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/test-messages-sender] Error:", err);
     res.status(500).json({ error: String(err) });
   }
@@ -613,7 +613,7 @@ router.get("/conversations-messages-count", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(500).json({ error: "Database not available" });
 
-    const result: any = [];
+    const result: unknown = [];
     const conversationsList = await db.select({ id: conversations.id }).from(conversations);
 
     for (const conv of conversationsList) {
@@ -628,7 +628,7 @@ router.get("/conversations-messages-count", async (req, res) => {
     }
 
     res.json({ success: true, counts: result });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[debug/conversations-messages-count] Error:", err);
     res.status(500).json({ error: err.message });
   }
@@ -641,9 +641,9 @@ router.get("/db-tables", async (req, res) => {
     if (!db) return res.status(500).json({ error: "Database not available" });
 
     const [result] = await db.execute(sql`SHOW TABLES`);
-    const tables = (result as any[]).map((row: any) => Object.values(row)[0]);
+    const tables = (result as any[]).map((row: unknown) => Object.values(row)[0]);
     res.json({ tables: tables.sort(), count: tables.length });
-  } catch (err: any) {
+  } catch (err: unknown) {
     res.status(500).json({ error: err.message });
   }
 });

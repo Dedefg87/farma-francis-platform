@@ -55,7 +55,7 @@ export default function Automation() {
   });
 
   const createFlow = trpc.visualFlows.create.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: (data: unknown) => {
       toast.success("Fluxo criado com sucesso!");
       actions.setSelectedFlowId(data.insertId as number);
       actions.setIsCreating(false);
@@ -114,7 +114,7 @@ export default function Automation() {
         }
         
         actions.setImportProgress(10);
-        let parseResult: any;
+        let parseResult: unknown;
         try {
           parseResult = await parseJSON(content);
         } catch {
@@ -129,7 +129,7 @@ export default function Automation() {
         if (isN8N) {
           toast.info(`Processando fluxo N8N (${parseResult.nodeCount} nós)...`);
           try {
-            const result: any = await convertN8N(flowData);
+            const result: unknown = await convertN8N(flowData);
             nodes = result.nodes;
             edges = result.edges;
             toast.success(`Convertido: ${result.stats.totalNodes} nós, ${result.stats.totalEdges} conexões`);
@@ -171,7 +171,7 @@ export default function Automation() {
     reader.readAsText(state.importFile);
   }, [state.importFile, actions, parseJSON, convertN8N, createFlow]);
 
-  const handleSaveFlow = useCallback((nodes: Node[], edges: any[]) => {
+  const handleSaveFlow = useCallback((nodes: Node[], edges: unknown[]) => {
     if (!state.selectedFlowId) return;
     const result = validateFlow(nodes, edges);
     actions.showValidation(result, { nodes, edges });
@@ -201,7 +201,7 @@ export default function Automation() {
     actions.setPendingSaveData(null);
   }, [state.selectedFlowId, state.pendingSaveData, updateFlow, actions]);
 
-  const handleNodeSave = useCallback((nodeId: string, data: any) => {
+  const handleNodeSave = useCallback((nodeId: string, data: unknown) => {
     if (!state.selectedFlowId) return;
     const selectedFlow = visualFlows?.find(f => f.id === state.selectedFlowId);
     if (!selectedFlow?.flowData) return;
@@ -223,7 +223,7 @@ export default function Automation() {
     );
   }, [state.selectedFlowId, visualFlows, updateFlow]);
 
-  const handleDuplicateFlow = useCallback((flow: any) => {
+  const handleDuplicateFlow = useCallback((flow: unknown) => {
     actions.setDuplicatingFlowId(flow.id);
     createFlow.mutate(
       {
@@ -245,7 +245,7 @@ export default function Automation() {
     );
   }, [createFlow, actions, refetchFlows]);
 
-  const handleExportFlow = useCallback((flow: any) => {
+  const handleExportFlow = useCallback((flow: unknown) => {
     const flowData = flow.flowData ? JSON.parse(flow.flowData) : { nodes: [], edges: [] };
     const exportData = {
       name: flow.name,

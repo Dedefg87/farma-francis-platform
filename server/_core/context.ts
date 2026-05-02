@@ -51,7 +51,7 @@ export async function createContext({ req, res }: { req: Request; res: Response 
         } else {
           console.log("[Context] ❌ Token vazio ou inválido:", token);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("[Context] ❌ Token validation error:", error.message);
       }
     } else {

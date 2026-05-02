@@ -71,7 +71,7 @@ export default function CRMPanel({
     { customerId: customerId! },
     {
       enabled: !!customerId && open,
-      onError: (error: any) => {
+      onError: (error: unknown) => {
         toast.error(`Erro ao carregar CRM: ${error.message}`);
       },
     }
@@ -83,7 +83,7 @@ export default function CRMPanel({
 
   const { data: allTags = [] } = (trpc as any).crm.getTags.useQuery(undefined, {
     enabled: open,
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(`Erro ao carregar tags: ${error.message}`);
     },
   });
@@ -93,7 +93,7 @@ export default function CRMPanel({
       toast.success("Dados do cliente atualizados");
       refetchCustomer();
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error(`Erro ao atualizar cliente: ${error.message}`);
     },
   });
@@ -131,7 +131,7 @@ export default function CRMPanel({
 
   const createTreatmentMutation = (trpc as any).crm.createTreatment.useMutation(
     {
-      onSuccess: (data: any) => {
+      onSuccess: (data: unknown) => {
         toast.success("Tratamento adicionado com sucesso");
         setShowAddTreatment(false);
         setNewTreatment({
@@ -154,7 +154,7 @@ export default function CRMPanel({
         }
         refetchCustomer().catch?.(() => {});
       },
-      onError: (error: any) => {
+      onError: (error: unknown) => {
         toast.error(`Erro ao adicionar tratamento: ${error.message}`);
       },
     }
@@ -180,7 +180,7 @@ export default function CRMPanel({
     const q = tagSearch.trim().toLowerCase();
     const list = ((allTags as any[]) ?? []) as any[];
     const base = q
-      ? list.filter((t: any) =>
+      ? list.filter((t: unknown) =>
           `${t.name || ""} ${t.description || ""}`.toLowerCase().includes(q)
         )
       : list;
@@ -194,7 +194,7 @@ export default function CRMPanel({
       if (!key) continue;
       if (!m.has(key)) m.set(key, t);
     }
-    return Array.from(m.values()).sort((a: any, b: any) =>
+    return Array.from(m.values()).sort((a: unknown, b: unknown) =>
       String(a?.name || "").localeCompare(String(b?.name || ""), "pt-BR")
     );
   }, [allTags, tagSearch]);
@@ -218,7 +218,7 @@ export default function CRMPanel({
         }
         refetchCustomer();
       },
-      onError: (error: any) => {
+      onError: (error: unknown) => {
         toast.error(`Erro ao atualizar: ${error.message}`);
       },
     }
@@ -231,7 +231,7 @@ export default function CRMPanel({
         .catch?.(() => {});
       refetchCustomer();
     },
-    onError: (error: any) => toast.error(error.message),
+    onError: (error: unknown) => toast.error(error.message),
   });
 
   const removeTagMutation = (trpc as any).crm.removeTagFromCustomer.useMutation(
@@ -242,7 +242,7 @@ export default function CRMPanel({
           .catch?.(() => {});
         refetchCustomer();
       },
-      onError: (error: any) => toast.error(error.message),
+      onError: (error: unknown) => toast.error(error.message),
     }
   );
 
@@ -255,7 +255,7 @@ export default function CRMPanel({
           .catch?.(() => {});
         refetchCustomer();
       },
-      onError: (error: any) => toast.error(error.message),
+      onError: (error: unknown) => toast.error(error.message),
     }
   );
 
@@ -369,7 +369,7 @@ export default function CRMPanel({
               <div className="flex flex-wrap gap-2">
                 {selectedTags.length > 0 ? (
                   <>
-                    {selectedTags.slice(0, 6).map((tag: any) => (
+                    {selectedTags.slice(0, 6).map((tag: unknown) => (
                       <Badge
                         key={tag.id}
                         className="gap-2"
@@ -419,7 +419,7 @@ export default function CRMPanel({
             </div>
 
             <div className="space-y-2">
-              {treatments.map((treatment: any) => {
+              {treatments.map((treatment: unknown) => {
                 const daysLeft = treatment.dataFimPrevisto
                   ? Math.ceil(
                       (new Date(treatment.dataFimPrevisto).getTime() -
@@ -476,7 +476,7 @@ export default function CRMPanel({
                               setTreatmentsShadow(prev => {
                                 const base = prev ?? treatments;
                                 return (base as any[]).filter(
-                                  (t: any) => t.id !== treatment.id
+                                  (t: unknown) => t.id !== treatment.id
                                 );
                               });
                               deleteTreatmentMutation.mutate({
@@ -510,7 +510,7 @@ export default function CRMPanel({
             </div>
 
             <div className="space-y-2">
-              {(purchases as any[])?.slice(0, 5).map((p: any) => (
+              {(purchases as any[])?.slice(0, 5).map((p: unknown) => (
                 <Card key={p.id} className="p-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -555,7 +555,7 @@ export default function CRMPanel({
             <div>
               <h4 className="font-medium mb-2">Scripts Rápidos</h4>
               <div className="grid grid-cols-1 gap-2">
-                {scripts.map((script: any) => (
+                {scripts.map((script: unknown) => (
                   <Button
                     key={script.id}
                     variant="outline"
@@ -706,7 +706,7 @@ export default function CRMPanel({
 
           <div className="space-y-2">
             {(purchaseItems as any[])?.length > 0 ? (
-              (purchaseItems as any[]).map((it: any) => (
+              (purchaseItems as any[]).map((it: unknown) => (
                 <Card key={it.id} className="p-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -762,7 +762,7 @@ export default function CRMPanel({
 
             {selectedTags.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {selectedTags.map((t: any) => (
+                {selectedTags.map((t: unknown) => (
                   <button
                     key={t.id}
                     type="button"
@@ -791,9 +791,9 @@ export default function CRMPanel({
 
             <div className="max-h-[50vh] overflow-y-auto border rounded-md">
               {filteredTags.length > 0 ? (
-                filteredTags.map((tag: any, idx: number) => {
+                filteredTags.map((tag: unknown, idx: number) => {
                   const selected = selectedTags.some(
-                    (t: any) => t.id === tag.id
+                    (t: unknown) => t.id === tag.id
                   );
                   const bg = idx % 2 === 0 ? "bg-white" : "bg-gray-50/60";
                   return (

@@ -44,7 +44,7 @@ export class AutomationEngine {
 
   async executeAutomation(automationId: string): Promise<AutomationResult> {
     const automation = this.template.automations?.find(
-      (a: any) => a.id === automationId
+      (a: unknown) => a.id === automationId
     );
     if (!automation || !automation.enabled) {
       return {
@@ -140,7 +140,7 @@ export class AutomationEngine {
   }
 
   private async executeStep(
-    step: any,
+    step: unknown,
     flow: FlowConfig,
     result: FlowExecutionResult
   ): Promise<void> {
@@ -284,7 +284,7 @@ export class AutomationEngine {
   }
 
   private async executeCondition(
-    step: any,
+    step: unknown,
     flow: FlowConfig,
     result: FlowExecutionResult
   ): Promise<void> {
@@ -395,7 +395,7 @@ export class AutomationEngine {
     this.executionLog.push(`Action: ${action}`);
   }
 
-  private async checkConditions(conditions: any[]): Promise<boolean> {
+  private async checkConditions(conditions: unknown[]): Promise<boolean> {
     if (conditions.length === 0) return true;
 
     for (const condition of conditions) {
@@ -423,7 +423,7 @@ export class AutomationEngine {
     return true;
   }
 
-  private async executeActions(actions: any[]): Promise<string[]> {
+  private async executeActions(actions: unknown[]): Promise<string[]> {
     const executed: string[] = [];
 
     for (const action of actions) {
@@ -500,7 +500,7 @@ export class AutomationEngine {
     return text;
   }
 
-  private getNestedValue(obj: any, path: string): unknown {
+  private getNestedValue(obj: unknown, path: string): unknown {
     return path.split(".").reduce((acc, part) => acc && acc[part], obj);
   }
 

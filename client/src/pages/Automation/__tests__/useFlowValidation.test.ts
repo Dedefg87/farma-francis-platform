@@ -115,7 +115,7 @@ describe("useFlowValidation", () => {
       const nodes = [
         { id: "node-1", type: "default", position: { x: 0, y: 0 }, data: { label: "Mensagem" } },
       ];
-      const edges: any[] = [];
+      const edges: unknown[] = [];
 
       const result = validateFlow(nodes as any, edges);
 
@@ -140,7 +140,7 @@ describe("useFlowValidation", () => {
       const nodes = [
         { id: "node-1", type: "default", position: { x: 0, y: 0 }, data: { label: "Mensagem", config: {} } },
       ];
-      const edges: any[] = [];
+      const edges: unknown[] = [];
 
       const result = validateFlow(nodes as any, edges);
 
@@ -154,7 +154,7 @@ describe("useFlowValidation", () => {
       const nodes = [
         { id: "node-1", type: "default", position: { x: 0, y: 0 }, data: { label: "Mensagem", config: {} } },
       ];
-      const edges: any[] = [];
+      const edges: unknown[] = [];
 
       const result = validateBeforeSave(nodes as any, edges);
 
@@ -166,7 +166,7 @@ describe("useFlowValidation", () => {
       const nodes = [
         { id: "trigger-1", type: "default", position: { x: 0, y: 0 }, data: { label: "Aguardar", config: {} } },
       ];
-      const edges: any[] = [];
+      const edges: unknown[] = [];
 
       const result = validateBeforeSave(nodes as any, edges);
 

@@ -16,7 +16,7 @@ import {
 interface DiagnosticData {
   evolutionApi: {
     configured: boolean;
-    settings: any;
+    settings: unknown;
     hasApiKey: boolean;
     hasApiUrl: boolean;
     hasInstanceName: boolean;
@@ -30,14 +30,14 @@ interface DiagnosticData {
     visual: {
       active: number;
       total: number;
-      details: any[];
+      details: unknown[];
     };
   };
   messages: {
     totalRecent: number;
     last24h: number;
     pending: number;
-    lastMessage: any;
+    lastMessage: unknown;
     timeSinceLastMessage: number | null;
   };
   status: {
@@ -315,7 +315,7 @@ export default function DiagnosticPanel() {
 
             <h3 className="font-semibold mb-3">Fluxos Visuais Importados</h3>
             <div className="space-y-3">
-              {diagnosticData.flows.visual.details.map((flow: any) => (
+              {diagnosticData.flows.visual.details.map((flow: unknown) => (
                 <Card
                   key={flow.id}
                   className="p-4 border-l-4"
@@ -393,7 +393,7 @@ export default function DiagnosticPanel() {
             </div>
 
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {messages.map((msg: any) => (
+              {messages.map((msg: unknown) => (
                 <Card key={msg.id} className="p-3">
                   <div className="flex justify-between items-start mb-2">
                     <div>

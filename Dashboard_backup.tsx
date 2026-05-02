@@ -80,7 +80,7 @@ export default function Dashboard() {
   })) ?? [];
 
   // Mapear dados de agentes da API para formato da tabela
-  const agentData = (agentQuery.data ?? []).map((agent: any) => ({
+  const agentData = (agentQuery.data ?? []).map((agent: unknown) => ({
     agentId: agent.agentId,
     name: agent.agentName || agent.name || '—',
     atendimentos: agent.totalConversations || 0,

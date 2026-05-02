@@ -38,7 +38,7 @@ export default function EventPage() {
   const packages = eventData?.packages || [];
   const whatsappNumber = event?.whatsappNumber || "5531995657081";
 
-  const handleWhatsAppRedirect = (pkg: any) => {
+  const handleWhatsAppRedirect = (pkg: unknown) => {
     setSelectedPackage(pkg);
     setShowMessageModal(true);
     // Limpar campos anteriores
@@ -241,7 +241,7 @@ export default function EventPage() {
               <p className="text-[#4A5568] text-sm">Escolha entre nossa seleção de produtos:</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-              {displayProducts.map((pkg: any) => (
+              {displayProducts.map((pkg: unknown) => (
                 <div key={pkg.id} className="product-card bg-white rounded-xl md:rounded-2xl overflow-hidden shadow-md md:shadow-lg">
                   <div
                     className={`bg-gradient-to-br from-[#E8F4F8] to-[#F0E6F6] p-2 md:p-4 flex items-center justify-center aspect-square ${pkg.imageUrl ? 'cursor-pointer' : ''}`}

@@ -40,7 +40,7 @@ async function validateOpenAI(apiKey: string): Promise<ValidationResult> {
     }
 
     const data = await response.json();
-    const gpt4Model = data.data?.find((m: any) => m.id.includes("gpt-4"));
+    const gpt4Model = data.data?.find((m: unknown) => m.id.includes("gpt-4"));
 
     return {
       success: true,
@@ -50,7 +50,7 @@ async function validateOpenAI(apiKey: string): Promise<ValidationResult> {
         version: "GPT-4",
       } : undefined,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: `Erro ao validar OpenAI: ${error.message}`,
@@ -95,7 +95,7 @@ async function validateAnthropic(apiKey: string): Promise<ValidationResult> {
         version: "Claude 3.5 Sonnet",
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: `Erro ao validar Anthropic: ${error.message}`,
@@ -129,7 +129,7 @@ async function validateGoogle(apiKey: string): Promise<ValidationResult> {
     }
 
     const data = await response.json();
-    const geminiModel = data.models?.find((m: any) => m.name.includes("gemini-1.5-pro"));
+    const geminiModel = data.models?.find((m: unknown) => m.name.includes("gemini-1.5-pro"));
 
     return {
       success: true,
@@ -139,7 +139,7 @@ async function validateGoogle(apiKey: string): Promise<ValidationResult> {
         version: "Gemini 1.5 Pro",
       } : undefined,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: `Erro ao validar Google: ${error.message}`,
@@ -242,7 +242,7 @@ export async function testAIAgent(input: TestAgentInput): Promise<TestAgentResul
           error: `Provedor desconhecido: ${provider}`,
         };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       error: `Erro ao testar agente: ${error.message}`,

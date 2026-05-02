@@ -255,7 +255,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
             : configRecord.config;
 
         // Obter a instância "Meu" ou a primeira
-        const instance = (configData.instances as any[])?.find((i: any) => i.name === "Meu") || (configData.instances as any[])?.[0];
+        const instance = (configData.instances as any[])?.find((i: unknown) => i.name === "Meu") || (configData.instances as any[])?.[0];
 
         if (instance?.url && instance?.apiKey) {
           const normalizedUrl = (instance.url as string).replace(/\/$/, "");

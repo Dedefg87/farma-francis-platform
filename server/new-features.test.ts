@@ -173,7 +173,7 @@ describe('Agent Pauses', () => {
           durationMinutes: 15,
         });
         expect.fail('Deveria ter lançado erro');
-      } catch (error: any) {
+      } catch (error: unknown) {
         expect(error.message).toContain('já tem uma pausa ativa');
       }
     });
@@ -233,7 +233,7 @@ describe('Agent Pauses', () => {
       try {
         await pausesRouter.createCaller(mockContext as any).end();
         expect.fail('Deveria ter lançado erro');
-      } catch (error: any) {
+      } catch (error: unknown) {
         expect(error.message).toContain('Nenhuma pausa ativa encontrada');
       }
     });

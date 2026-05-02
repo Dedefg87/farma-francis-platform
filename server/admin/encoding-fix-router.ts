@@ -77,7 +77,7 @@ router.post("/", async (req: Request, res: Response) => {
       alreadyUtf8mb4: skippedCount,
       totalTables: tables.length,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[EncodingFix] Error:", err);
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1,8 +1,8 @@
 // Simple debug logging module
-const logs: any[] = [];
+const logs: unknown[] = [];
 const MAX_LOGS = 100;
 
-export function addLog(level: string, category: string, message: string, data?: any) {
+export function addLog(level: string, category: string, message: string, data?: unknown) {
   const log = {
     timestamp: new Date(),
     level,
@@ -27,7 +27,7 @@ export function clearLogs() {
   logs.length = 0;
 }
 
-export function webhookLogger(req: any, res: any, next: any) {
+export function webhookLogger(req: unknown, res: unknown, next: unknown) {
   console.log(`[WEBHOOK] ${req.method} ${req.url}`);
   next();
 }
