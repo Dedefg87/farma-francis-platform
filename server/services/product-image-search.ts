@@ -3,10 +3,10 @@
  * Usa Serper API (Google Images) + Pexels API como alternativa
  */
 
-const SERPER_API_KEY = process.env.SERPER_API_KEY || "6abb2781d7edf99aa211c064912283e3c804e8c0";
+const SERPER_API_KEY = process.env.SERPER_API_KEY ;
 const SERPER_API_URL = "https://google.serper.dev/images";
 
-const PEXELS_API_KEY = process.env.PEXELS_API_KEY || "JmHy1kYEcjyobiVGbO8I8FIWLXBOiByWYmmFHEAC089aLqE4qEX9utkG";
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY ;
 const PEXELS_API_URL = "https://api.pexels.com/v1/search";
 const PEXELS_VIDEO_URL = "https://api.pexels.com/videos/search";
 
@@ -92,7 +92,7 @@ export async function searchPexelsVideos(query: string, perPage: number = 10): P
     const videos = data.videos || [];
 
     return videos.map((video: any) => ({
-      url: video.video_files?.[0]?.link || "",
+      url: video.video_files?.[0]?.link ,
       title: video.alt || query,
       source: "pexels",
       thumbnail: video.image,

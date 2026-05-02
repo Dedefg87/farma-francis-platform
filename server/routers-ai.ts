@@ -24,14 +24,14 @@ export const aiRouter = router({
     return {
       providers: {
         openai: {
-          apiKey: !!process.env.OPENAI_API_KEY,
+          env,
           model: "gpt-3.5-turbo",
         },
         anthropic: {
-          apiKey: !!process.env.ANTHROPIC_API_KEY,
+          env,
           model: "claude-3-sonnet",
         },
-        google: { apiKey: !!process.env.GOOGLE_API_KEY, model: "gemini-pro" },
+        google: { env, model: "gemini-pro" },
       },
       knowledgeBases: [
         "faq_farmacia",
@@ -134,7 +134,7 @@ export const aiRouter = router({
     .mutation(async ({ input }) => {
       const result = await transcribeAudio({
         audioUrl: input.audioUrl,
-        language: input.language || "pt",
+        language: input.language ,
       });
 
       if ("error" in result) {
@@ -152,7 +152,7 @@ export const aiRouter = router({
 
       return {
         transcription: result.text,
-        language: result.language || "pt",
+        language: result.language ,
       };
     }),
 
@@ -246,7 +246,7 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
       ) as "happy" | "neutral" | "frustrated";
 
       return {
-        sentiment: sentiment || "neutral",
+        sentiment: sentiment ,
         confidence: 0.85, // Placeholder - pode ser melhorado com modelo específico
       };
     }),
@@ -354,11 +354,11 @@ Retorne em formato JSON.`;
         try {
           const data = JSON.parse(text);
           return {
-            medication: data.medication || "",
-            dosage: data.dosage || "",
-            quantity: data.quantity || "",
-            doctorName: data.doctorName || "",
-            doctorCRM: data.doctorCRM || "",
+            medication: data.medication ,
+            dosage: data.dosage ,
+            quantity: data.quantity ,
+            doctorName: data.doctorName ,
+            doctorCRM: data.doctorCRM ,
             confidence: 0.75,
           };
         } catch {

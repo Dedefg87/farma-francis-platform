@@ -74,7 +74,15 @@ async function startServer() {
   // Aumentar limite do body-parser para 50MB (padrão é 100kb)
   // Helmet — headers de segurança (config customizada pra não quebrar iframes)
   app.use(helmet({
-    contentSecurityPolicy: false,         // CSP requer config detalhada — adicionar depois
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"], // TODO: remover unsafe-inline depois
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https://*"], // permite imagens do R2/externas
+        connectSrc: ["'self'", "https://innovative-enjoyment-production-ed8f.up.railway.app"],
+      },
+    },
     frameguard: { action: "sameorigin" }, // Permite iframe da mesma origem (PDF previews)
     hsts: process.env.NODE_ENV === "production", // HSTS só em produção
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
