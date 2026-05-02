@@ -36,8 +36,34 @@ import { toast } from "sonner";
 export default function CRM() {
   const utils = trpc.useUtils();
   
-  // ✅ Buscar TODOS os clientes únicos via clients.list (não filtra por status!)
-  const { data: customers = [], isLoading: customersLoading } = trpc.clients.list.useQuery();
+  // ✅ Buscar TODAS as conversas (sem filtro de status!) via listAll
+  const { data: conversations = [], isLoading: customersLoading } = trpc.conversations.listAll.useQuery();
+  
+  // Extrair clientes únicos das conversas
+  const customers = React.useMemo(() => {
+    if (!conversations) return [];
+    const map = new Map<string, any>();
+    conversations.forEach((conv: any) => {
+      const phone = conv.customerPhone;
+      if (phone && !map.has(phone)) {
+        map.set(phone, {
+          id: phone,
+          name: conv.customerName || `Cliente ${phone.slice(-4)}`,
+          phone: phone,
+          email: null,
+          status: 'active',
+          createdAt: conv.openedAt || conv.createdAt || new Date().toISOString(),
+          lastInteraction: conv.lastMessageAt || null,
+          interactionsCount: 0,
+        });
+      }
+    });
+    const custArray = Array.from(map.values());
+    custArray.forEach(c => {
+      c.interactionsCount = conversations.filter((conv: any) => conv.customerPhone === c.phone).length;
+    });
+    return custArray;
+  }, [conversations]);
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
@@ -90,7 +116,7 @@ export default function CRM() {
   };
 
   // Filtrar clientes (busca por nome, email, telefone)
-  const filteredCustomers = customers.filter((c: any) =>
+  const filteredCustomers = customers?.filter((c: any) =>
     c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.phone?.includes(searchTerm)

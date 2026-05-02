@@ -60,6 +60,45 @@ function mapConversation(row: any): Conversation {
 
 export const conversationsRouter = router({
   /**
+   * Lista TODAS as conversas (sem filtro de status) para o CRM
+   */
+  listAll: protectedProcedure
+    .query(async ({ ctx }): Promise<Conversation[]> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const rows = await db
+        .select({
+          id: conversations.id,
+          customerId: conversations.customerId,
+          customerName: conversations.customerName,
+          customerPhone: conversations.customerPhone,
+          queueId: conversations.queueId,
+          channel: conversations.channel,
+          status: conversations.status,
+          assignedTo: conversations.assignedTo,
+          openedAt: conversations.openedAt,
+          closedAt: conversations.closedAt,
+          closeReason: conversations.closeReason,
+          lastMessageAt: conversations.lastMessageAt,
+          unreadCount: conversations.unreadCount,
+          customerAvatar: customers.photoUrl,
+          lastMessage: sql<string>`(
+            SELECT cm.content 
+            FROM conversation_messages cm 
+            WHERE cm.conversation_id = ${conversations.id} 
+            ORDER BY cm.created_at DESC 
+            LIMIT 1
+          )`.as('lastMessage'),
+        })
+        .from(conversations)
+        .leftJoin(customers, eq(conversations.customerId, customers.id))
+        .orderBy(desc(conversations.lastMessageAt));
+
+      return rows.map(mapConversation);
+    }),
+
+  /**
    * Lista todas as conversas atribuídas ao agente logado.
    */
   list: protectedProcedure
