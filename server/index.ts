@@ -402,6 +402,12 @@ async function startServer() {
     }
   });
 
+  // Logging middleware for debugging
+  app.use((req, res, next) => {
+    console.log('[Request]', req.method, req.originalUrl || req.url);
+    next();
+  });
+
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
       // Try multiple possible paths for index.html
