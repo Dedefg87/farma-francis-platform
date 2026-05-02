@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +11,9 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
+// Lazy load components for better code splitting
+const AppLazy = lazy(() => import("./App"));
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
@@ -21,47 +25,31 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   window.location.href = getLoginUrl();
 };
 
-queryClient.getQueryCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
-  }
-});
-
-queryClient.getMutationCache().subscribe(event => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
-  }
-});
+const extraHeaders: Record<string, string> = {};
+if (typeof window !== "undefined") {
+  const jti = window.localStorage.getItem("jti");
+  if (jti) extraHeaders["x-jti"] = jti;
+}
 
 const trpcClient = trpc.createClient({
+  transformer: superjson,
   links: [
     httpBatchLink({
-      url: "/api/trpc",
-      transformer: superjson,
-      headers() {
-        const token = localStorage.getItem("authToken");
-        return token
-          ? { Authorization: `Bearer ${token}` }
-          : {};
-      },
-      fetch(input, init) {
-        return fetch(input, {
-          ...init,
-          credentials: "include",
-        });
-      },
+      url: "/trpc",
+      headers: () => ({
+        ...extraHeaders,
+      }),
     }),
   ],
+  onError: redirectToLoginIfUnauthorized,
 });
 
 createRoot(document.getElementById("root")!).render(
-  <trpc.Provider client={trpcClient} queryClient={queryClient}>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </trpc.Provider>
+  <Suspense fallback={<div className="flex h-screen items-center justify-center">Carregando...</div>}>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <AppLazy />
+      </QueryClientProvider>
+    </trpc.Provider>
+  </Suspense>
 );
