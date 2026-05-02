@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Search, Mail, Phone, MapPin, Copy, History, Tag, Paperclip, Plus } from "lucide-react";
+import * as React from "react";
 import { useState, useMemo } from "react";
 import {
   Dialog,
@@ -40,7 +41,7 @@ export default function CRM() {
   const { data: conversations = [], isLoading: customersLoading } = trpc.conversations.listAll.useQuery();
   
   // Extrair clientes únicos das conversas
-  const customers = React.useMemo(() => {
+  const customers = useMemo(() => {
     if (!conversations) return [];
     const map = new Map<string, any>();
     conversations.forEach((conv: any) => {
