@@ -404,7 +404,28 @@ async function startServer() {
 
   app.get("*", (req, res) => {
     if (!req.path.startsWith("/api")) {
-      const indexPath = path.join(__dirname, "../dist/public/index.html");
+      // Try multiple possible paths for index.html
+      const possibleIndexPaths = [
+        path.resolve(process.cwd(), 'dist/public/index.html'),
+        path.resolve(process.cwd(), 'client/dist/index.html'),
+        path.resolve(__dirname, '../dist/public/index.html'),
+        path.resolve(__dirname, 'public/index.html'),
+      ];
+      
+      let indexPath = null;
+      for (const p of possibleIndexPaths) {
+        if (fs.existsSync(p)) {
+          indexPath = p;
+          console.log('[SPA] Using index.html:', p);
+          break;
+        }
+      }
+      
+      if (!indexPath) {
+        console.error('[SPA] ERROR: index.html not found in:', possibleIndexPaths);
+        return res.status(404).json({ error: "Frontend not found" });
+      }
+      
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error("[SPA Fallback] File not found:", indexPath);
