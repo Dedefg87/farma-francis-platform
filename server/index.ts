@@ -409,6 +409,7 @@ async function startServer() {
   });
 
   app.get("*", (req, res) => {
+    console.log('[SPA] Hit', req.method, req.originalUrl || req.url, req.path);
     if (!req.path.startsWith("/api")) {
       // Try multiple possible paths for index.html
       const possibleIndexPaths = [
@@ -420,7 +421,7 @@ async function startServer() {
       
       let indexPath = null;
       for (const p of possibleIndexPaths) {
-        if (fs.existsSync(p)) {
+        if (require("fs").existsSync(p)) {
           indexPath = p;
           console.log('[SPA] Using index.html:', p);
           break;
