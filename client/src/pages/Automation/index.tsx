@@ -34,7 +34,8 @@ import { ImportDialog } from "./components/ImportDialog";
 import { CreateDialog } from "./components/CreateDialog";
 import { FlowEditor } from "./components/FlowEditor";
 import { ValidationDialog } from "./components/ValidationDialog";
-import { flowTemplates } from "./templates";
+import { flowTemplates } from "./templates-modern";
+// import { flowTemplates } from "./templates"; // Old templates
 
 export default function Automation() {
   const [searchQuery, setSearchQuery] = useState("");
