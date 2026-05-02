@@ -3,8 +3,9 @@
 .pnpm-store/
 
 # Build outputs
-dist/
-build/
+# Build artifacts - COMENTADO PARA PERMITIR DEPLOY NO RAILWAY
+# dist/
+# build/
 *.dist
 
 # Environment variables

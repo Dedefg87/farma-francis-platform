@@ -117,8 +117,28 @@ async function startServer() {
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(cookieParser());
 
-  const publicPath = path.join(__dirname, "../dist/public");
-  app.use(express.static(publicPath));
+  // Serve static files from multiple possible locations
+  const possiblePublicPaths = [
+    path.resolve(process.cwd(), 'dist/public'),
+    path.resolve(process.cwd(), 'client/dist'),
+    path.resolve(__dirname, '../dist/public'),
+    path.resolve(__dirname, 'public'),
+  ];
+  
+  let publicPath = null;
+  for (const p of possiblePublicPaths) {
+    if (require('fs').existsSync(p)) {
+      publicPath = p;
+      console.log('[Static] Using public path:', p);
+      break;
+    }
+  }
+  
+  if (publicPath) {
+    app.use(express.static(publicPath));
+  } else {
+    console.error('[Static] WARNING: No public directory found! Checked:', possiblePublicPaths);
+  }
   console.log("[Static] Serving from:", publicPath);
 
   app.get("/api/health", (_, res) => {
