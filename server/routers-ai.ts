@@ -274,8 +274,6 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
           }
         } else {
           // Download image and convert to base64
-
-          );
           const response = await fetch(input.imageUrl, {
             signal: AbortSignal.timeout(15000),
           });
