@@ -3,7 +3,7 @@
 # -------------------------
 FROM node:20-alpine AS builder
 
-ARG CACHEBUST=20260504-1815
+ARG CACHEBUST=20260504-1822
 
 WORKDIR /app
 
