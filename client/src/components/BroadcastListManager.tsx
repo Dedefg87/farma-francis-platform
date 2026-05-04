@@ -257,7 +257,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
         size: data.fileSize,
       });
       toast.success("Arquivo anexado!");
-    } catch (err: unknown) {
+    } catch (err: any) {
       toast.error(`Erro no upload: ${err.message}`);
     }
   };

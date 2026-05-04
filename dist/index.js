@@ -353,6 +353,7 @@ __export(schema_exports, {
   agentStatus: () => agentStatus,
   aiChats: () => aiChats,
   apiConfigurations: () => apiConfigurations,
+  approvals: () => approvals,
   attachments: () => attachments,
   auditLogs: () => auditLogs,
   automationFlows: () => automationFlows,
@@ -418,7 +419,7 @@ __export(schema_exports, {
   workflowSchedules: () => workflowSchedules,
   workflowWebhooks: () => workflowWebhooks
 });
-var import_mysql_core2, users, customers, leads, tickets, accounts, accountContacts, dealPipelines, dealStages, deals, crmTasks, customFieldDefinitions, customFieldValues, ticketComments, crmOutboxEvents, crmAuditLogs, crmActivities, frontendTelemetryEvents, interactions, employees, automationFlows, messages, attachments, auditLogs, notifications, aiChats, visualFlows, uraMenus, apiConfigurations, receivedMessages, workflowExecutions, executionData, workflowCredentials, workflowWebhooks, workflowSchedules, conversations, quickReplies, agentStatus, queueSettings, agentPauses, queues, queueAgents, conversationMessages, internalMessages, integrationSettings2, customerTreatments, pharmaProducts, pharmaPurchases, pharmaPurchaseItems, tags, conversationTags, ticketTags, customerTags, surveyResponses, crmScripts, broadcastLists, broadcastListMembers, broadcastMessages, babyShowerEvents, babyShowerGiftPackages, babyShowerPurchases, babyShowerWithdrawals, broadcastMembersSent, processedWebhookMessages;
+var import_mysql_core2, users, customers, leads, tickets, approvals, accounts, accountContacts, dealPipelines, dealStages, deals, crmTasks, customFieldDefinitions, customFieldValues, ticketComments, crmOutboxEvents, crmAuditLogs, crmActivities, frontendTelemetryEvents, interactions, employees, automationFlows, messages, attachments, auditLogs, notifications, aiChats, visualFlows, uraMenus, apiConfigurations, receivedMessages, workflowExecutions, executionData, workflowCredentials, workflowWebhooks, workflowSchedules, conversations, quickReplies, agentStatus, queueSettings, agentPauses, queues, queueAgents, conversationMessages, internalMessages, integrationSettings2, customerTreatments, pharmaProducts, pharmaPurchases, pharmaPurchaseItems, tags, conversationTags, ticketTags, customerTags, surveyResponses, crmScripts, broadcastLists, broadcastListMembers, broadcastMessages, babyShowerEvents, babyShowerGiftPackages, babyShowerPurchases, babyShowerWithdrawals, broadcastMembersSent, processedWebhookMessages;
 var init_schema = __esm({
   "drizzle/schema.ts"() {
     "use strict";
@@ -517,6 +518,17 @@ var init_schema = __esm({
       closedAt: (0, import_mysql_core2.timestamp)("closed_at"),
       timeSpentMinutes: (0, import_mysql_core2.int)("time_spent_minutes").default(0),
       createdBy: (0, import_mysql_core2.int)("created_by").references(() => users.id),
+      createdAt: (0, import_mysql_core2.timestamp)("created_at").defaultNow().notNull(),
+      updatedAt: (0, import_mysql_core2.timestamp)("updated_at").defaultNow().onUpdateNow().notNull()
+    });
+    approvals = (0, import_mysql_core2.mysqlTable)("approvals", {
+      id: (0, import_mysql_core2.int)("id").autoincrement().primaryKey(),
+      entityType: (0, import_mysql_core2.varchar)("entity_type", { length: 64 }).notNull(),
+      entityId: (0, import_mysql_core2.int)("entity_id").notNull(),
+      requestedBy: (0, import_mysql_core2.int)("requested_by").references(() => users.id).notNull(),
+      approvedBy: (0, import_mysql_core2.int)("approved_by").references(() => users.id),
+      status: (0, import_mysql_core2.mysqlEnum)("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+      reason: (0, import_mysql_core2.text)("reason"),
       createdAt: (0, import_mysql_core2.timestamp)("created_at").defaultNow().notNull(),
       updatedAt: (0, import_mysql_core2.timestamp)("updated_at").defaultNow().onUpdateNow().notNull()
     });
@@ -3807,7 +3819,7 @@ function phoneLast8(raw) {
   return digits.length >= 8 ? digits.slice(-8) : digits;
 }
 async function findConversationByPhone(db, phone, conversationsTable, customersTable) {
-  const { eq: eq42, desc: desc22, inArray: inArray9, like: like8, or: or12 } = await import("drizzle-orm");
+  const { eq: eq43, desc: desc22, inArray: inArray9, like: like8, or: or12 } = await import("drizzle-orm");
   const last8 = phoneLast8(phone);
   if (last8.length < 8) return null;
   const matchedCustomers = await db.select({ id: customersTable.id, phone: customersTable.phone }).from(customersTable).where(like8(customersTable.phone, `%${last8}%`)).limit(10);
@@ -6038,20 +6050,20 @@ async function downloadAndUploadProfilePic(customerPhone, customerId) {
     );
     const db = await getDb();
     if (db) {
-      await db.update(customers).set({ photoUrl: result.url, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm41.eq)(customers.id, customerId));
+      await db.update(customers).set({ photoUrl: result.url, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm42.eq)(customers.id, customerId));
     }
     return result.url;
   } catch (err) {
     return null;
   }
 }
-var import_drizzle_orm41;
+var import_drizzle_orm42;
 var init_profile_pic = __esm({
   "server/services/profile-pic.ts"() {
     "use strict";
     init_db();
     init_schema();
-    import_drizzle_orm41 = require("drizzle-orm");
+    import_drizzle_orm42 = require("drizzle-orm");
     init_r2_client();
     init_messaging();
   }
@@ -6131,9 +6143,9 @@ async function recoverStuckBroadcasts() {
     id: broadcastMessages.id,
     status: broadcastMessages.status
   }).from(broadcastMessages).where(
-    (0, import_drizzle_orm45.and)(
-      (0, import_drizzle_orm45.eq)(broadcastMessages.status, "sending"),
-      (0, import_drizzle_orm45.lt)(broadcastMessages.sentAt, cutoff)
+    (0, import_drizzle_orm46.and)(
+      (0, import_drizzle_orm46.eq)(broadcastMessages.status, "sending"),
+      (0, import_drizzle_orm46.lt)(broadcastMessages.sentAt, cutoff)
     )
   ).limit(10);
   if (stuckMessages.length === 0) return;
@@ -6150,7 +6162,7 @@ async function recoverStuckBroadcasts() {
         err.message
       );
       try {
-        await db.update(broadcastMessages).set({ status: "failed", errorMessage: `Recovery failed: ${err.message}` }).where((0, import_drizzle_orm45.eq)(broadcastMessages.id, msg.id));
+        await db.update(broadcastMessages).set({ status: "failed", errorMessage: `Recovery failed: ${err.message}` }).where((0, import_drizzle_orm46.eq)(broadcastMessages.id, msg.id));
       } catch {
       }
     }
@@ -6163,13 +6175,13 @@ function stopBroadcastRecoveryWorker() {
     console.log("[BroadcastRecovery] \u{1F6D1} Stopped");
   }
 }
-var import_drizzle_orm45, RECOVERY_INTERVAL_MS, STUCK_THRESHOLD_MINUTES, recoveryTimer;
+var import_drizzle_orm46, RECOVERY_INTERVAL_MS, STUCK_THRESHOLD_MINUTES, recoveryTimer;
 var init_broadcast_recovery = __esm({
   "server/workers/broadcast-recovery.ts"() {
     "use strict";
     init_db();
     init_schema();
-    import_drizzle_orm45 = require("drizzle-orm");
+    import_drizzle_orm46 = require("drizzle-orm");
     init_broadcast_sender();
     RECOVERY_INTERVAL_MS = 60 * 1e3;
     STUCK_THRESHOLD_MINUTES = 2;
@@ -6254,7 +6266,7 @@ async function applySqlMigrations() {
 
 // server/index.ts
 var import_path = __toESM(require("path"), 1);
-var import_drizzle_orm46 = require("drizzle-orm");
+var import_drizzle_orm47 = require("drizzle-orm");
 init_schema();
 init_schema();
 
@@ -13935,16 +13947,99 @@ var testRouter = router({
   })
 });
 
-// server/routers-internal-messages.ts
+// server/routers-approvals.ts
+init_schema();
+var import_drizzle_orm38 = require("drizzle-orm");
+init_db();
 var import_zod28 = require("zod");
+var approvalsRouter = router({
+  // List approvals (filtered by status)
+  list: protectedProcedure.input(
+    import_zod28.z.object({
+      status: import_zod28.z.enum(["pending", "approved", "rejected"]).optional(),
+      entityType: import_zod28.z.string().optional(),
+      limit: import_zod28.z.number().min(1).max(100).default(20),
+      offset: import_zod28.z.number().min(0).default(0)
+    })
+  ).query(async ({ input }) => {
+    const db = getDb();
+    let query = db.select().from(approvals);
+    if (input.status) {
+      query = query.where((0, import_drizzle_orm38.eq)(approvals.status, input.status));
+    }
+    if (input.entityType) {
+      query = query.where((0, import_drizzle_orm38.eq)(approvals.entityType, input.entityType));
+    }
+    const results = await query.limit(input.limit).offset(input.offset);
+    return results;
+  }),
+  // Request approval (create new approval record)
+  request: protectedProcedure.input(
+    import_zod28.z.object({
+      entityType: import_zod28.z.string().min(1),
+      entityId: import_zod28.z.number().int().positive(),
+      reason: import_zod28.z.string().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = getDb();
+    const [newApproval] = await db.insert(approvals).values({
+      entityType: input.entityType,
+      entityId: input.entityId,
+      requestedBy: ctx.user.id,
+      reason: input.reason
+    }).$returningId();
+    return { id: newApproval.insertId, message: "Approval request created" };
+  }),
+  // Approve (pharmacist or admin)
+  approve: protectedProcedure.input(
+    import_zod28.z.object({
+      id: import_zod28.z.number().int().positive(),
+      reason: import_zod28.z.string().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = getDb();
+    if (ctx.user.role !== "admin") {
+      return { error: "Unauthorized: Only admins can approve" };
+    }
+    await db.update(approvals).set({
+      status: "approved",
+      approvedBy: ctx.user.id,
+      reason: input.reason,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where((0, import_drizzle_orm38.eq)(approvals.id, input.id));
+    return { message: "Approval granted" };
+  }),
+  // Reject
+  reject: protectedProcedure.input(
+    import_zod28.z.object({
+      id: import_zod28.z.number().int().positive(),
+      reason: import_zod28.z.string().min(1)
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = getDb();
+    if (ctx.user.role !== "admin") {
+      return { error: "Unauthorized: Only admins can reject" };
+    }
+    await db.update(approvals).set({
+      status: "rejected",
+      approvedBy: ctx.user.id,
+      reason: input.reason,
+      updatedAt: /* @__PURE__ */ new Date()
+    }).where((0, import_drizzle_orm38.eq)(approvals.id, input.id));
+    return { message: "Approval rejected" };
+  })
+});
+
+// server/routers-internal-messages.ts
+var import_zod29 = require("zod");
 init_db();
 var internalMessagesRouter = router({
   /**
    * Lista mensagens internas de uma conversa.
    * Admin vê todas. Agente vê apenas as dirigidas a ele.
    */
-  list: protectedProcedure.input(import_zod28.z.object({
-    conversation_id: import_zod28.z.number()
+  list: protectedProcedure.input(import_zod29.z.object({
+    conversation_id: import_zod29.z.number()
   })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -13989,10 +14084,10 @@ var internalMessagesRouter = router({
    * Envia uma mensagem interna (sussurro) do Admin para o agente da conversa.
    * Apenas Admin pode enviar. Agente não precisa dessa funcionalidade.
    */
-  send: protectedProcedure.input(import_zod28.z.object({
-    conversation_id: import_zod28.z.number(),
-    recipient_id: import_zod28.z.number(),
-    content: import_zod28.z.string().min(1).max(2e3)
+  send: protectedProcedure.input(import_zod29.z.object({
+    conversation_id: import_zod29.z.number(),
+    recipient_id: import_zod29.z.number(),
+    content: import_zod29.z.string().min(1).max(2e3)
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -14025,8 +14120,8 @@ var internalMessagesRouter = router({
   /**
    * Marca mensagens internas como lidas pelo agente.
    */
-  markRead: protectedProcedure.input(import_zod28.z.object({
-    conversation_id: import_zod28.z.number()
+  markRead: protectedProcedure.input(import_zod29.z.object({
+    conversation_id: import_zod29.z.number()
   })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -14051,10 +14146,10 @@ var internalMessagesRouter = router({
 });
 
 // server/routers-tickets.ts
-var import_zod29 = require("zod");
+var import_zod30 = require("zod");
 init_db();
 init_schema();
-var import_drizzle_orm38 = require("drizzle-orm");
+var import_drizzle_orm39 = require("drizzle-orm");
 function mapStatusToTicket(status) {
   switch (status) {
     case "open":
@@ -14073,16 +14168,16 @@ function generateTicketNumber(conversationId) {
 var ticketsRouter = router({
   // Listar tickets (baseado em conversas reais)
   list: protectedProcedure.input(
-    import_zod29.z.object({
-      page: import_zod29.z.number().min(1).default(1),
-      pageSize: import_zod29.z.number().min(1).max(100).default(20),
-      search: import_zod29.z.string().optional(),
-      status: import_zod29.z.string().optional(),
-      priority: import_zod29.z.string().optional(),
-      assignedTo: import_zod29.z.number().optional(),
-      customerId: import_zod29.z.number().optional(),
-      sortBy: import_zod29.z.enum(["createdAt", "updatedAt", "priority", "status"]).default("createdAt"),
-      sortOrder: import_zod29.z.enum(["asc", "desc"]).default("desc")
+    import_zod30.z.object({
+      page: import_zod30.z.number().min(1).default(1),
+      pageSize: import_zod30.z.number().min(1).max(100).default(20),
+      search: import_zod30.z.string().optional(),
+      status: import_zod30.z.string().optional(),
+      priority: import_zod30.z.string().optional(),
+      assignedTo: import_zod30.z.number().optional(),
+      customerId: import_zod30.z.number().optional(),
+      sortBy: import_zod30.z.enum(["createdAt", "updatedAt", "priority", "status"]).default("createdAt"),
+      sortOrder: import_zod30.z.enum(["asc", "desc"]).default("desc")
     }).optional()
   ).query(async ({ input }) => {
     const db = await getDb();
@@ -14093,30 +14188,30 @@ var ticketsRouter = router({
     const activeStatuses = ["open", "assigned"];
     if (search) {
       conditions.push(
-        (0, import_drizzle_orm38.or)(
-          (0, import_drizzle_orm38.like)(conversations.customerName, `%${search}%`),
-          (0, import_drizzle_orm38.like)(conversations.customerPhone, `%${search}%`)
+        (0, import_drizzle_orm39.or)(
+          (0, import_drizzle_orm39.like)(conversations.customerName, `%${search}%`),
+          (0, import_drizzle_orm39.like)(conversations.customerPhone, `%${search}%`)
         )
       );
     }
     if (status) {
       const conversationStatus = status === "in_progress" ? "assigned" : status === "open" ? "open" : null;
       if (conversationStatus && activeStatuses.includes(conversationStatus)) {
-        conditions.push((0, import_drizzle_orm38.eq)(conversations.status, conversationStatus));
+        conditions.push((0, import_drizzle_orm39.eq)(conversations.status, conversationStatus));
       } else {
-        conditions.push((0, import_drizzle_orm38.eq)(conversations.status, "closed"));
+        conditions.push((0, import_drizzle_orm39.eq)(conversations.status, "closed"));
       }
     } else {
       conditions.push(inArray(conversations.status, activeStatuses));
     }
     if (assignedTo !== void 0) {
-      conditions.push((0, import_drizzle_orm38.eq)(conversations.assignedTo, assignedTo));
+      conditions.push((0, import_drizzle_orm39.eq)(conversations.assignedTo, assignedTo));
     }
     if (customerId !== void 0) {
-      conditions.push((0, import_drizzle_orm38.eq)(conversations.customerId, customerId));
+      conditions.push((0, import_drizzle_orm39.eq)(conversations.customerId, customerId));
     }
-    const whereClause = conditions.length > 0 ? (0, import_drizzle_orm38.and)(...conditions) : void 0;
-    const countResult = await db.select({ count: import_drizzle_orm38.sql`COUNT(*)` }).from(conversations).where(whereClause).limit(1);
+    const whereClause = conditions.length > 0 ? (0, import_drizzle_orm39.and)(...conditions) : void 0;
+    const countResult = await db.select({ count: import_drizzle_orm39.sql`COUNT(*)` }).from(conversations).where(whereClause).limit(1);
     const total = Number(countResult[0].count) || 0;
     const results = await db.select({
       id: conversations.id,
@@ -14141,14 +14236,14 @@ var ticketsRouter = router({
         email: users.email
       },
       // Buscar última mensagem como subject
-      lastMessage: import_drizzle_orm38.sql`(
+      lastMessage: import_drizzle_orm39.sql`(
             SELECT cm.content 
             FROM conversation_messages cm 
             WHERE cm.conversation_id = ${conversations.id} 
             ORDER BY cm.created_at DESC 
             LIMIT 1
           )`.as("lastMessage")
-    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm38.eq)(conversations.customerId, customers.id)).leftJoin(users, (0, import_drizzle_orm38.eq)(conversations.assignedTo, users.id)).where(whereClause).orderBy((0, import_drizzle_orm38.desc)(conversations.lastMessageAt)).limit(pageSize || 20).offset(offset);
+    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm39.eq)(conversations.customerId, customers.id)).leftJoin(users, (0, import_drizzle_orm39.eq)(conversations.assignedTo, users.id)).where(whereClause).orderBy((0, import_drizzle_orm39.desc)(conversations.lastMessageAt)).limit(pageSize || 20).offset(offset);
     const tickets3 = results.map((row) => ({
       id: row.id,
       ticketNumber: generateTicketNumber(row.id),
@@ -14184,7 +14279,7 @@ var ticketsRouter = router({
     };
   }),
   // Buscar ticket por ID (conversa real)
-  getById: protectedProcedure.input(import_zod29.z.object({ id: import_zod29.z.number() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(import_zod30.z.object({ id: import_zod30.z.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const result = await db.select({
@@ -14210,12 +14305,12 @@ var ticketsRouter = router({
         name: users.name,
         email: users.email
       }
-    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm38.eq)(conversations.customerId, customers.id)).leftJoin(users, (0, import_drizzle_orm38.eq)(conversations.assignedTo, users.id)).where((0, import_drizzle_orm38.eq)(conversations.id, input.id)).limit(1);
+    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm39.eq)(conversations.customerId, customers.id)).leftJoin(users, (0, import_drizzle_orm39.eq)(conversations.assignedTo, users.id)).where((0, import_drizzle_orm39.eq)(conversations.id, input.id)).limit(1);
     if (!result || result.length === 0) {
       throw new Error("Ticket not found");
     }
     const row = result[0];
-    const lastMessage = await db.select({ content: conversationMessages.content }).from(conversationMessages).where((0, import_drizzle_orm38.eq)(conversationMessages.conversationId, input.id)).orderBy((0, import_drizzle_orm38.desc)(conversationMessages.createdAt)).limit(1);
+    const lastMessage = await db.select({ content: conversationMessages.content }).from(conversationMessages).where((0, import_drizzle_orm39.eq)(conversationMessages.conversationId, input.id)).orderBy((0, import_drizzle_orm39.desc)(conversationMessages.createdAt)).limit(1);
     return {
       id: row.id,
       ticketNumber: generateTicketNumber(row.id),
@@ -14246,16 +14341,16 @@ var ticketsRouter = router({
     if (!db) throw new Error("Database not available");
     const statusCounts = await db.select({
       status: conversations.status,
-      count: import_drizzle_orm38.sql`COUNT(*)`
+      count: import_drizzle_orm39.sql`COUNT(*)`
     }).from(conversations).groupBy(conversations.status);
-    const totalResult = await db.select({ count: import_drizzle_orm38.sql`COUNT(*)` }).from(conversations).limit(1);
+    const totalResult = await db.select({ count: import_drizzle_orm39.sql`COUNT(*)` }).from(conversations).limit(1);
     const total = Number(totalResult[0].count) || 0;
-    const openResult = await db.select({ count: import_drizzle_orm38.sql`COUNT(*)` }).from(conversations).where(import_drizzle_orm38.sql`status IN ('open', 'assigned')`).limit(1);
+    const openResult = await db.select({ count: import_drizzle_orm39.sql`COUNT(*)` }).from(conversations).where(import_drizzle_orm39.sql`status IN ('open', 'assigned')`).limit(1);
     const open = Number(openResult[0].count) || 0;
-    const inProgressResult = await db.select({ count: import_drizzle_orm38.sql`COUNT(*)` }).from(conversations).where((0, import_drizzle_orm38.eq)(conversations.status, "assigned")).limit(1);
+    const inProgressResult = await db.select({ count: import_drizzle_orm39.sql`COUNT(*)` }).from(conversations).where((0, import_drizzle_orm39.eq)(conversations.status, "assigned")).limit(1);
     const inProgress = Number(inProgressResult[0].count) || 0;
     const pending = 0;
-    const resolvedResult = await db.select({ count: import_drizzle_orm38.sql`COUNT(*)` }).from(conversations).where((0, import_drizzle_orm38.eq)(conversations.status, "closed")).limit(1);
+    const resolvedResult = await db.select({ count: import_drizzle_orm39.sql`COUNT(*)` }).from(conversations).where((0, import_drizzle_orm39.eq)(conversations.status, "closed")).limit(1);
     const resolved = Number(resolvedResult[0].count) || 0;
     return {
       total,
@@ -14273,36 +14368,36 @@ var ticketsRouter = router({
   }),
   // Placeholder: criar ticket (não aplicável, tickets vêm de conversas)
   create: protectedProcedure.input(
-    import_zod29.z.object({
-      customerId: import_zod29.z.number().optional(),
-      subject: import_zod29.z.string().min(1),
-      description: import_zod29.z.string().optional(),
-      priority: import_zod29.z.enum(["low", "medium", "high", "critical"]).default("medium"),
-      category: import_zod29.z.string().optional(),
-      channel: import_zod29.z.string().optional(),
-      assignedTo: import_zod29.z.number().optional(),
-      slaDeadline: import_zod29.z.date().optional()
+    import_zod30.z.object({
+      customerId: import_zod30.z.number().optional(),
+      subject: import_zod30.z.string().min(1),
+      description: import_zod30.z.string().optional(),
+      priority: import_zod30.z.enum(["low", "medium", "high", "critical"]).default("medium"),
+      category: import_zod30.z.string().optional(),
+      channel: import_zod30.z.string().optional(),
+      assignedTo: import_zod30.z.number().optional(),
+      slaDeadline: import_zod30.z.date().optional()
     })
   ).mutation(async ({ input }) => {
     throw new Error("Tickets s\xE3o criados automaticamente a partir de conversas reais");
   }),
   // Placeholder: atualizar ticket
   update: protectedProcedure.input(
-    import_zod29.z.object({
-      id: import_zod29.z.number(),
-      status: import_zod29.z.enum(["open", "in_progress", "pending", "resolved", "closed"]).optional()
+    import_zod30.z.object({
+      id: import_zod30.z.number(),
+      status: import_zod30.z.enum(["open", "in_progress", "pending", "resolved", "closed"]).optional()
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const conversationStatus = input.status === "in_progress" ? "assigned" : input.status === "resolved" ? "closed" : input.status === "open" ? "open" : void 0;
     if (conversationStatus) {
-      await db.update(conversations).set({ status: conversationStatus, updatedAt: import_drizzle_orm38.sql`NOW()` }).where((0, import_drizzle_orm38.eq)(conversations.id, input.id));
+      await db.update(conversations).set({ status: conversationStatus, updatedAt: import_drizzle_orm39.sql`NOW()` }).where((0, import_drizzle_orm39.eq)(conversations.id, input.id));
     }
     return { success: true };
   }),
   // Placeholder: deletar ticket
-  delete: protectedProcedure.input(import_zod29.z.object({ id: import_zod29.z.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(import_zod30.z.object({ id: import_zod30.z.number() })).mutation(async ({ input }) => {
     throw new Error("Use update status para fechar uma conversa/ticket");
   })
 });
@@ -14338,6 +14433,7 @@ var appRouter = router({
   tags: tagsRouter,
   telemetry: telemetryRouter,
   test: testRouter,
+  approvals: approvalsRouter,
   internalMessages: internalMessagesRouter,
   tickets: ticketsRouter
 });
@@ -14398,7 +14494,7 @@ init_db();
 init_sse();
 init_db();
 init_schema();
-var import_drizzle_orm39 = require("drizzle-orm");
+var import_drizzle_orm40 = require("drizzle-orm");
 var import_jsonwebtoken3 = __toESM(require("jsonwebtoken"), 1);
 init_env();
 function createSSERouter() {
@@ -14444,7 +14540,7 @@ function createSSERouter() {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      const userRows = await _db.select().from(users).where((0, import_drizzle_orm39.eq)(users.id, userId));
+      const userRows = await _db.select().from(users).where((0, import_drizzle_orm40.eq)(users.id, userId));
       const user = userRows[0];
       if (!user) {
         res.status(401).json({ error: "User not found" });
@@ -14493,7 +14589,7 @@ function createSSERouter() {
 var import_express3 = require("express");
 init_db();
 init_schema();
-var import_drizzle_orm40 = require("drizzle-orm");
+var import_drizzle_orm41 = require("drizzle-orm");
 var router3 = (0, import_express3.Router)();
 router3.get("/:messageId", async (req, res) => {
   const { messageId } = req.params;
@@ -14503,10 +14599,10 @@ router3.get("/:messageId", async (req, res) => {
     if (!db) {
       return res.status(503).json({ error: "Database unavailable" });
     }
-    const [convMsg] = await db.select().from(conversationMessages).where((0, import_drizzle_orm40.eq)(conversationMessages.id, Number(messageId))).limit(1);
+    const [convMsg] = await db.select().from(conversationMessages).where((0, import_drizzle_orm41.eq)(conversationMessages.id, Number(messageId))).limit(1);
     let fileUrl = convMsg?.fileUrl || null;
     if (!fileUrl) {
-      const [received] = await db.select().from(receivedMessages).where((0, import_drizzle_orm40.eq)(receivedMessages.externalId, messageId)).limit(1);
+      const [received] = await db.select().from(receivedMessages).where((0, import_drizzle_orm41.eq)(receivedMessages.externalId, messageId)).limit(1);
       fileUrl = received?.mediaUrl || null;
     }
     if (!fileUrl) {
@@ -14534,12 +14630,12 @@ init_sse();
 var import_express4 = require("express");
 init_db();
 init_schema();
-var import_drizzle_orm44 = require("drizzle-orm");
+var import_drizzle_orm45 = require("drizzle-orm");
 
 // server/db-messages.ts
 init_db();
 init_schema();
-var import_drizzle_orm42 = require("drizzle-orm");
+var import_drizzle_orm43 = require("drizzle-orm");
 init_sse();
 init_phone();
 var agentAssignmentCache = /* @__PURE__ */ new Map();
@@ -14555,7 +14651,7 @@ async function pickLeastLoadedOnlineAgent(params) {
   const connected = sseManager.getConnectedUsers().map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0);
   if (connected.length === 0) {
     console.log("[pickAgent] \u26A0\uFE0F No agents online via SSE \u2014 using offline fallback");
-    const offlineResult = await db.execute(import_drizzle_orm42.sql`
+    const offlineResult = await db.execute(import_drizzle_orm43.sql`
       SELECT 
         u.id AS userId,
         COUNT(c.id) AS loadCount
@@ -14584,7 +14680,7 @@ async function pickLeastLoadedOnlineAgent(params) {
     return null;
   }
   if (connected.length > 0) {
-    const rows = await db.execute(import_drizzle_orm42.sql`
+    const rows = await db.execute(import_drizzle_orm43.sql`
       SELECT 
         u.id AS userId,
         COUNT(c.id) AS loadCount,
@@ -14597,9 +14693,9 @@ async function pickLeastLoadedOnlineAgent(params) {
        AND c.status IN ('open','assigned')
        AND c.channel = ${params.provider}
       WHERE u.role IN ('user', 'admin')
-        AND u.id IN (${import_drizzle_orm42.sql.join(
-      connected.map((id) => import_drizzle_orm42.sql`${id}`),
-      import_drizzle_orm42.sql`, `
+        AND u.id IN (${import_drizzle_orm43.sql.join(
+      connected.map((id) => import_drizzle_orm43.sql`${id}`),
+      import_drizzle_orm43.sql`, `
     )})
         AND p.id IS NULL
       GROUP BY u.id
@@ -14629,9 +14725,9 @@ async function getReceivedMessageByExternalId(externalId, provider) {
   const db = await getDb();
   if (!db) return null;
   const result = await db.select().from(receivedMessages).where(
-    (0, import_drizzle_orm42.and)(
-      (0, import_drizzle_orm42.eq)(receivedMessages.externalId, externalId),
-      (0, import_drizzle_orm42.eq)(receivedMessages.provider, provider)
+    (0, import_drizzle_orm43.and)(
+      (0, import_drizzle_orm43.eq)(receivedMessages.externalId, externalId),
+      (0, import_drizzle_orm43.eq)(receivedMessages.provider, provider)
     )
   ).limit(1);
   return result.length > 0 ? result[0] : null;
@@ -14651,7 +14747,7 @@ async function findOrCreateCustomerByPhone(phone, name, photoUrl) {
     phone: customers.phone,
     status: customers.status,
     photoUrl: customers.photoUrl
-  }).from(customers).where((0, import_drizzle_orm42.inArray)(customers.phone, searchVariants)).limit(1);
+  }).from(customers).where((0, import_drizzle_orm43.inArray)(customers.phone, searchVariants)).limit(1);
   if (!existing || existing.length === 0) {
     const pushName = name;
     const finalName = pushName && pushName.trim() !== "" ? pushName : `Cliente ${normalizedPhone.slice(-4)}`;
@@ -14678,10 +14774,10 @@ async function findOrCreateCustomerByPhone(phone, name, photoUrl) {
   }
   const customer = existing[0];
   if (name && customer.name !== name) {
-    await db.update(customers).set({ name, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm42.eq)(customers.id, customer.id));
+    await db.update(customers).set({ name, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm43.eq)(customers.id, customer.id));
   }
   if (photoUrl && customer.photoUrl !== photoUrl) {
-    await db.update(customers).set({ photoUrl, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm42.eq)(customers.id, customer.id));
+    await db.update(customers).set({ photoUrl, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm43.eq)(customers.id, customer.id));
   }
   return customer;
 }
@@ -14725,7 +14821,7 @@ async function ingestInboundConversationMessage(message) {
     return null;
   }
   if (message.externalId) {
-    const existing = await db.select().from(processedWebhookMessages).where((0, import_drizzle_orm42.eq)(processedWebhookMessages.id, message.externalId)).limit(1);
+    const existing = await db.select().from(processedWebhookMessages).where((0, import_drizzle_orm43.eq)(processedWebhookMessages.id, message.externalId)).limit(1);
     if (existing.length > 0) {
       console.log(`[Webhook] Duplicate message ignored: ${message.externalId}`);
       return null;
@@ -14750,12 +14846,12 @@ async function ingestInboundConversationMessage(message) {
   let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
   const assignedUserId = picked && Number.isFinite(picked.userId) && picked.userId > 0 ? picked.userId : null;
   console.log("[ingestInbound] \u{1F3AF} Agent pick result:", { picked: picked?.userId, assignedUserId, customerPhone: customer.phone });
-  const [defaultQueue] = await db.select().from(queues).where((0, import_drizzle_orm42.eq)(queues.status, "active")).orderBy((0, import_drizzle_orm42.desc)(queues.priority)).limit(1);
+  const [defaultQueue] = await db.select().from(queues).where((0, import_drizzle_orm43.eq)(queues.status, "active")).orderBy((0, import_drizzle_orm43.desc)(queues.priority)).limit(1);
   const found = await findConversationByPhone(db, customer.phone, conversations, customers);
   let conversationId = found?.conversationId;
   let existingConversation = null;
   if (conversationId) {
-    [existingConversation] = await db.select().from(conversations).where((0, import_drizzle_orm42.eq)(conversations.id, conversationId)).limit(1);
+    [existingConversation] = await db.select().from(conversations).where((0, import_drizzle_orm43.eq)(conversations.id, conversationId)).limit(1);
     conversationId = existingConversation?.id;
   }
   if (existingConversation && existingConversation.customerId !== customer.id) {
@@ -14775,14 +14871,14 @@ async function ingestInboundConversationMessage(message) {
       lastMessageAt: now,
       unreadCount: 1
     });
-    const [newConversation] = await db.select().from(conversations).where((0, import_drizzle_orm42.eq)(conversations.customerId, customer.id)).orderBy((0, import_drizzle_orm42.desc)(conversations.id)).limit(1);
+    const [newConversation] = await db.select().from(conversations).where((0, import_drizzle_orm43.eq)(conversations.customerId, customer.id)).orderBy((0, import_drizzle_orm43.desc)(conversations.id)).limit(1);
     conversationId = newConversation?.id;
   } else {
     const isReopening = existingConversation?.status === "closed";
     const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
     await db.update(conversations).set({
       lastMessageAt: now,
-      unreadCount: isReopening ? 1 : import_drizzle_orm42.sql`unread_count + 1`,
+      unreadCount: isReopening ? 1 : import_drizzle_orm43.sql`unread_count + 1`,
       // Reabrir conversa fechada
       ...isReopening ? {
         status: assignedUserId ? "assigned" : "open",
@@ -14797,24 +14893,24 @@ async function ingestInboundConversationMessage(message) {
         status: "assigned",
         queueId: null
       } : {}
-    }).where((0, import_drizzle_orm42.eq)(conversations.id, conversationId));
+    }).where((0, import_drizzle_orm43.eq)(conversations.id, conversationId));
   }
   const fileUrlToSave = message.mediaUrl || null;
   let duplicateCheck;
   if (message.externalId) {
-    duplicateCheck = (0, import_drizzle_orm42.and)(
-      (0, import_drizzle_orm42.eq)(conversationMessages.externalId, message.externalId),
-      (0, import_drizzle_orm42.eq)(conversationMessages.senderType, "customer")
+    duplicateCheck = (0, import_drizzle_orm43.and)(
+      (0, import_drizzle_orm43.eq)(conversationMessages.externalId, message.externalId),
+      (0, import_drizzle_orm43.eq)(conversationMessages.senderType, "customer")
     );
   } else {
     const timeWindowMs = 5e3;
     const now2 = /* @__PURE__ */ new Date();
-    duplicateCheck = (0, import_drizzle_orm42.and)(
-      (0, import_drizzle_orm42.eq)(conversationMessages.conversationId, conversationId),
-      (0, import_drizzle_orm42.eq)(conversationMessages.senderType, "customer"),
-      (0, import_drizzle_orm42.eq)(conversationMessages.content, message.messageText || message.caption || ""),
-      (0, import_drizzle_orm42.gte)(conversationMessages.createdAt, new Date(now2.getTime() - timeWindowMs)),
-      (0, import_drizzle_orm42.lte)(conversationMessages.createdAt, new Date(now2.getTime() + timeWindowMs))
+    duplicateCheck = (0, import_drizzle_orm43.and)(
+      (0, import_drizzle_orm43.eq)(conversationMessages.conversationId, conversationId),
+      (0, import_drizzle_orm43.eq)(conversationMessages.senderType, "customer"),
+      (0, import_drizzle_orm43.eq)(conversationMessages.content, message.messageText || message.caption || ""),
+      (0, import_drizzle_orm43.gte)(conversationMessages.createdAt, new Date(now2.getTime() - timeWindowMs)),
+      (0, import_drizzle_orm43.lte)(conversationMessages.createdAt, new Date(now2.getTime() + timeWindowMs))
     );
   }
   const [already] = await db.select({ id: conversationMessages.id }).from(conversationMessages).where(duplicateCheck).limit(1);
@@ -14843,7 +14939,7 @@ async function ingestInboundConversationMessage(message) {
   if (needsR2Upload) {
     try {
       console.log("[S3] Triggering Evolution download for R2 upload, messageId:", message.externalId);
-      const [configRecord] = await db.select().from(integrationSettings).where((0, import_drizzle_orm42.eq)(integrationSettings.integrationType, "evolution_api")).limit(1);
+      const [configRecord] = await db.select().from(integrationSettings).where((0, import_drizzle_orm43.eq)(integrationSettings.integrationType, "evolution_api")).limit(1);
       if (configRecord?.config) {
         const configData = typeof configRecord.config === "string" ? JSON.parse(configRecord.config) : configRecord.config;
         const apiUrl = configData.apiUrl?.replace(/\/$/, "");
@@ -14864,7 +14960,7 @@ async function ingestInboundConversationMessage(message) {
             const r2Url = data?.url || data?.mediaUrl || null;
             if (r2Url && r2Url.includes("r2.dev")) {
               console.log("[S3] \u2705 Got R2 URL, updating message:", r2Url);
-              await db.update(conversationMessages).set({ fileUrl: r2Url }).where((0, import_drizzle_orm42.eq)(conversationMessages.id, messageDbId));
+              await db.update(conversationMessages).set({ fileUrl: r2Url }).where((0, import_drizzle_orm43.eq)(conversationMessages.id, messageDbId));
               console.log("[S3] Message updated with R2 URL");
             }
           } else {
@@ -14931,7 +15027,7 @@ async function ingestInboundConversationMessage(message) {
 // server/queue/mobile-sync.ts
 init_db();
 init_schema();
-var import_drizzle_orm43 = require("drizzle-orm");
+var import_drizzle_orm44 = require("drizzle-orm");
 init_phone();
 init_sse();
 var queue = [];
@@ -14981,7 +15077,7 @@ async function processMobileSyncJob(job) {
     return;
   }
   const phoneVariants = generatePhoneVariants(customerPhone);
-  const phoneCondition = phoneVariants.length > 1 ? (0, import_drizzle_orm43.or)(...phoneVariants.map((v) => (0, import_drizzle_orm43.eq)(customers.phone, v))) : (0, import_drizzle_orm43.eq)(customers.phone, phoneVariants[0]);
+  const phoneCondition = phoneVariants.length > 1 ? (0, import_drizzle_orm44.or)(...phoneVariants.map((v) => (0, import_drizzle_orm44.eq)(customers.phone, v))) : (0, import_drizzle_orm44.eq)(customers.phone, phoneVariants[0]);
   let customer = await db.select().from(customers).where(phoneCondition).limit(1);
   if (customer.length === 0) {
     await db.insert(customers).values({
@@ -14998,19 +15094,19 @@ async function processMobileSyncJob(job) {
   const customerRecord = customer[0];
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1e3);
   const [conv] = await db.select().from(conversations).where(
-    (0, import_drizzle_orm43.and)(
-      (0, import_drizzle_orm43.eq)(conversations.customerId, customerRecord.id),
-      (0, import_drizzle_orm43.eq)(conversations.channel, "whatsapp"),
-      (0, import_drizzle_orm43.or)(
-        (0, import_drizzle_orm43.eq)(conversations.status, "open"),
-        (0, import_drizzle_orm43.eq)(conversations.status, "assigned"),
-        (0, import_drizzle_orm43.and)(
-          (0, import_drizzle_orm43.eq)(conversations.status, "closed"),
-          (0, import_drizzle_orm43.gte)(conversations.closedAt, thirtyDaysAgo)
+    (0, import_drizzle_orm44.and)(
+      (0, import_drizzle_orm44.eq)(conversations.customerId, customerRecord.id),
+      (0, import_drizzle_orm44.eq)(conversations.channel, "whatsapp"),
+      (0, import_drizzle_orm44.or)(
+        (0, import_drizzle_orm44.eq)(conversations.status, "open"),
+        (0, import_drizzle_orm44.eq)(conversations.status, "assigned"),
+        (0, import_drizzle_orm44.and)(
+          (0, import_drizzle_orm44.eq)(conversations.status, "closed"),
+          (0, import_drizzle_orm44.gte)(conversations.closedAt, thirtyDaysAgo)
         )
       )
     )
-  ).orderBy((0, import_drizzle_orm43.desc)(conversations.lastMessageAt)).limit(1);
+  ).orderBy((0, import_drizzle_orm44.desc)(conversations.lastMessageAt)).limit(1);
   let conversationId;
   if (!conv) {
     const insertResult2 = await db.insert(conversations).values({
@@ -15036,7 +15132,7 @@ async function processMobileSyncJob(job) {
     const isReopening = conv.status === "closed";
     await db.update(conversations).set({
       lastMessageAt: /* @__PURE__ */ new Date(),
-      unreadCount: isReopening ? 1 : import_drizzle_orm43.sql`unread_count + 1`,
+      unreadCount: isReopening ? 1 : import_drizzle_orm44.sql`unread_count + 1`,
       ...isReopening ? {
         status: "open",
         assignedTo: null,
@@ -15044,12 +15140,12 @@ async function processMobileSyncJob(job) {
         closedAt: null,
         closeReason: null
       } : {}
-    }).where((0, import_drizzle_orm43.eq)(conversations.id, conversationId));
+    }).where((0, import_drizzle_orm44.eq)(conversations.id, conversationId));
   }
   const existing = await db.select().from(conversationMessages).where(
-    (0, import_drizzle_orm43.and)(
-      (0, import_drizzle_orm43.eq)(conversationMessages.conversationId, conversationId),
-      (0, import_drizzle_orm43.eq)(conversationMessages.externalId, job.messageId)
+    (0, import_drizzle_orm44.and)(
+      (0, import_drizzle_orm44.eq)(conversationMessages.conversationId, conversationId),
+      (0, import_drizzle_orm44.eq)(conversationMessages.externalId, job.messageId)
     )
   ).limit(1);
   if (existing.length > 0) {
@@ -15078,7 +15174,7 @@ async function processMobileSyncJob(job) {
       console.log("[MobileSync][S3] Triggering Evolution download for R2 upload, messageId:", job.messageId);
       const dbForUpload = await getDb();
       if (!dbForUpload) throw new Error("DB not available for S3 upload");
-      const [configRecord] = await dbForUpload.select().from(integrationSettings2).where((0, import_drizzle_orm43.eq)(integrationSettings2.integrationType, "evolution_api")).limit(1);
+      const [configRecord] = await dbForUpload.select().from(integrationSettings2).where((0, import_drizzle_orm44.eq)(integrationSettings2.integrationType, "evolution_api")).limit(1);
       if (configRecord?.config) {
         const configData = typeof configRecord.config === "string" ? JSON.parse(configRecord.config) : configRecord.config;
         const instance = configData.instances?.find((i) => i.name === "Meu") || configData.instances?.[0];
@@ -15097,7 +15193,7 @@ async function processMobileSyncJob(job) {
             const r2Url = data?.url || data?.mediaUrl || null;
             if (r2Url && r2Url.includes("r2.dev")) {
               console.log("[MobileSync][S3] \u2705 Got R2 URL, updating message:", r2Url);
-              await dbForUpload.update(conversationMessages).set({ fileUrl: r2Url }).where((0, import_drizzle_orm43.eq)(conversationMessages.id, messageDbId));
+              await dbForUpload.update(conversationMessages).set({ fileUrl: r2Url }).where((0, import_drizzle_orm44.eq)(conversationMessages.id, messageDbId));
               console.log("[MobileSync][S3] Message updated with R2 URL");
             }
           } else {
@@ -15109,14 +15205,14 @@ async function processMobileSyncJob(job) {
       console.log("[MobileSync][S3] Error during R2 upload:", error);
     }
   }
-  const [updatedConv] = await db.select().from(conversations).where((0, import_drizzle_orm43.eq)(conversations.id, conversationId)).limit(1);
+  const [updatedConv] = await db.select().from(conversations).where((0, import_drizzle_orm44.eq)(conversations.id, conversationId)).limit(1);
   if (updatedConv?.assignedTo) {
     const [insertedMessage] = await db.select().from(conversationMessages).where(
-      (0, import_drizzle_orm43.and)(
-        (0, import_drizzle_orm43.eq)(conversationMessages.conversationId, conversationId),
-        (0, import_drizzle_orm43.eq)(conversationMessages.externalId, job.messageId)
+      (0, import_drizzle_orm44.and)(
+        (0, import_drizzle_orm44.eq)(conversationMessages.conversationId, conversationId),
+        (0, import_drizzle_orm44.eq)(conversationMessages.externalId, job.messageId)
       )
-    ).orderBy(import_drizzle_orm43.sql`${conversationMessages.id} DESC`).limit(1);
+    ).orderBy(import_drizzle_orm44.sql`${conversationMessages.id} DESC`).limit(1);
     if (insertedMessage && insertedMessage.id) {
       sseManager.emitToUser(updatedConv.assignedTo, EVENTS.MESSAGE_CREATED, {
         messageId: insertedMessage.id,
@@ -15256,7 +15352,7 @@ router4.get("/webhooks/whatsapp", async (req, res) => {
       if (!db) {
         return res.status(500).send("Database not available");
       }
-      const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm44.eq)(integrationSettings2.integrationType, "whatsapp_business")).limit(1);
+      const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm45.eq)(integrationSettings2.integrationType, "whatsapp_business")).limit(1);
       if (config.length === 0) {
         console.log("[WhatsApp Webhook] No configuration found");
         return res.status(403).send("No configuration found");
@@ -15323,7 +15419,7 @@ router4.get("/webhooks/instagram", async (req, res) => {
       if (!db) {
         return res.status(500).send("Database not available");
       }
-      const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm44.eq)(integrationSettings2.integrationType, "instagram_graph")).limit(1);
+      const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm45.eq)(integrationSettings2.integrationType, "instagram_graph")).limit(1);
       if (config.length === 0) {
         console.log("[Instagram Webhook] No configuration found");
         return res.status(403).send("No configuration found");
@@ -15454,7 +15550,7 @@ async function processEvolutionWebhookAsync(req) {
       console.error("[Evolution Webhook] \u274C Database not available");
       return;
     }
-    const [configRow] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm44.eq)(integrationSettings2.integrationType, "evolution_api")).limit(1);
+    const [configRow] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm45.eq)(integrationSettings2.integrationType, "evolution_api")).limit(1);
     if (configRow) {
       const configData = typeof configRow.config === "string" ? JSON.parse(configRow.config) : configRow.config;
       const expectedApiKey = configData.apiKey || configData.accessToken;
@@ -15848,7 +15944,7 @@ async function processEvolutionWebhook(body) {
             mediaUrl: mediaUrl || existing.mediaUrl,
             mimeType: mimeType || existing.mimeType,
             caption: caption || existing.caption
-          }).where((0, import_drizzle_orm44.eq)(receivedMessages.id, existing.id));
+          }).where((0, import_drizzle_orm45.eq)(receivedMessages.id, existing.id));
           console.log(`[Evolution Webhook] Updated existing message ${messageId}`);
         } else {
           await db.insert(receivedMessages).values(messageValues);
@@ -15922,7 +16018,7 @@ async function validateWhatsAppSignature(rawBody, signature) {
   try {
     const db = await getDb();
     if (!db) return false;
-    const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm44.eq)(integrationSettings2.integrationType, "whatsapp_business")).limit(1);
+    const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm45.eq)(integrationSettings2.integrationType, "whatsapp_business")).limit(1);
     if (config.length === 0) {
       console.log(
         "[WhatsApp Webhook] No configuration found, skipping signature validation"
@@ -15967,7 +16063,7 @@ async function validateInstagramSignature(rawBody, signature) {
   try {
     const db = await getDb();
     if (!db) return false;
-    const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm44.eq)(integrationSettings2.integrationType, "instagram_graph")).limit(1);
+    const config = await db.select().from(integrationSettings2).where((0, import_drizzle_orm45.eq)(integrationSettings2.integrationType, "instagram_graph")).limit(1);
     if (config.length === 0) {
       console.log(
         "[Instagram Webhook] No configuration found, skipping signature validation"
@@ -16044,9 +16140,9 @@ async function startServer() {
       console.warn("[DB] \u26A0\uFE0F Could not create internal_messages:", tableErr.message);
     }
     try {
-      const [colRows] = await db.execute(import_drizzle_orm46.sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
+      const [colRows] = await db.execute(import_drizzle_orm47.sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
       if (!Array.isArray(colRows) || colRows.length === 0) {
-        await db.execute(import_drizzle_orm46.sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
+        await db.execute(import_drizzle_orm47.sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
         console.log("[DB] \u2705 customers.source column added");
       }
     } catch (colErr) {
@@ -16252,12 +16348,12 @@ async function startServer() {
         res.status(400).json({ error: "Invalid ID" });
         return;
       }
-      await db.update(conversationMessages).set({ readAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm46.and)(
-        (0, import_drizzle_orm46.eq)(conversationMessages.conversationId, conversationId),
-        (0, import_drizzle_orm46.eq)(conversationMessages.senderType, "customer"),
-        import_drizzle_orm46.sql`${conversationMessages.readAt} IS NULL`
+      await db.update(conversationMessages).set({ readAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm47.and)(
+        (0, import_drizzle_orm47.eq)(conversationMessages.conversationId, conversationId),
+        (0, import_drizzle_orm47.eq)(conversationMessages.senderType, "customer"),
+        import_drizzle_orm47.sql`${conversationMessages.readAt} IS NULL`
       ));
-      await db.update(conversations).set({ unreadCount: 0 }).where((0, import_drizzle_orm46.eq)(conversations.id, conversationId));
+      await db.update(conversations).set({ unreadCount: 0 }).where((0, import_drizzle_orm47.eq)(conversations.id, conversationId));
       res.json({ success: true });
     } catch (err) {
       console.error("[mark-read] Error:", err.message);
@@ -16321,9 +16417,31 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
+  app.use((req, res, next) => {
+    console.log("[Request]", req.method, req.originalUrl || req.url);
+    next();
+  });
   app.get("*", (req, res) => {
+    console.log("[SPA] Hit", req.method, req.originalUrl || req.url, req.path);
     if (!req.path.startsWith("/api")) {
-      const indexPath = import_path.default.join(__dirname, "../dist/public/index.html");
+      const possibleIndexPaths = [
+        import_path.default.resolve(process.cwd(), "dist/public/index.html"),
+        import_path.default.resolve(process.cwd(), "client/dist/index.html"),
+        import_path.default.resolve(__dirname, "../dist/public/index.html"),
+        import_path.default.resolve(__dirname, "public/index.html")
+      ];
+      let indexPath = null;
+      for (const p of possibleIndexPaths) {
+        if (require("fs").existsSync(p)) {
+          indexPath = p;
+          console.log("[SPA] Using index.html:", p);
+          break;
+        }
+      }
+      if (!indexPath) {
+        console.error("[SPA] ERROR: index.html not found in:", possibleIndexPaths);
+        return res.status(404).json({ error: "Frontend not found" });
+      }
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error("[SPA Fallback] File not found:", indexPath);
