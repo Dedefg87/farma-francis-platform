@@ -24,41 +24,46 @@ export async function createContext(
   if (req) {
     try {
       let token: string | null = null;
+      let headerSource = 'none';
       
-      // Tentar como Authorization header (Bearer token)
       if (req.headers && typeof req.headers.get === "function") {
         // Fetch API Headers object
         const authHeader = req.headers.get("authorization");
         if (authHeader && authHeader.startsWith("Bearer ")) {
           token = authHeader.slice(7);
+          headerSource = 'Authorization';
         }
-        // Tentar x-jti header (frontend envia JWT aqui)
         if (!token) {
           token = req.headers.get("x-jti") || req.headers.get("x-jti");
+          if (token) headerSource = 'x-jti';
         }
       } else if (req.headers && typeof req.headers === "object") {
         // Express-style headers (snake_case or camelCase)
         const authHeader = req.headers.authorization || req.headers["authorization"];
         if (authHeader && authHeader.startsWith("Bearer ")) {
           token = authHeader.slice(7);
+          headerSource = 'Authorization';
         }
-        // Tentar x-jti header
         if (!token) {
-          token = req.headers["x-jti"] || req.headers["x-jti"];
+          token = req.headers["x-jti"] || req.headers["x-jti"] || req.headers["X-Jti"];
+          if (token) headerSource = 'x-jti';
         }
       }
+      
+      console.log('[Auth Debug] Token source:', headerSource, '| Token exists:', !!token);
       
       if (token) {
         try {
           const decoded = jwt.verify(token, JWT_SECRET) as User;
           user = decoded;
-        } catch (error) {
-          // Token inválido ou expirado
+          console.log('[Auth Debug] Token verified for user:', user?.name, '| Role:', user?.role);
+        } catch (error: unknown) {
+          console.log('[Auth Debug] Token verification failed:', error.message);
           user = undefined;
         }
       }
     } catch (error) {
-      // Ignorar erros de parsing
+      console.log('[Auth Debug] General error:', error.message);
       user = undefined;
     }
   }
