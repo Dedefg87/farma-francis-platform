@@ -33,6 +33,7 @@ const trpcClient = trpc.createClient({
       condition: (params) => {
         return params.op?.type === 'mutation';
       },
+      // Para mutations: httpLink (POST garantido)
       true: httpLink({
         url: "/api/trpc",
         headers: () => {
@@ -41,7 +42,7 @@ const trpcClient = trpc.createClient({
           return jti ? { "x-jti": jti } : {};
         },
       }),
-      // Queries podem ser GET com batch
+      // Para queries: httpBatchLink (GET com batch)
       false: httpBatchLink({
         url: "/api/trpc",
         headers: () => {
@@ -64,4 +65,4 @@ createRoot(document.getElementById("root")!).render(
     </trpc.Provider>
   </Suspense>
 );
-// Deploy trigger: Mon May  4 17:13:45 -03 2026
+// Deploy trigger: Mon May  4 17:24:58 -03 2026
