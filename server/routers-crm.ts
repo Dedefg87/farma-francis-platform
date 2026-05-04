@@ -49,15 +49,36 @@ export const customersRouter = router({
 
   // Listar todos os clientes
   list: protectedProcedure
-    .query(async () => {
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(20),
+      search: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const result = await db
-        .select()
-        .from(customers)
-        .orderBy(desc(customers.id))
-        .limit(100);
+      const page = input?.page ?? 1;
+      const pageSize = input?.pageSize ?? 20;
+      const search = input?.search;
+      const offset = (page - 1) * pageSize;
+
+      let query = db.select().from(customers);
+      
+      if (search) {
+        query = query.where(
+          or(
+            like(customers.name, `%${search}%`),
+            like(customers.email, `%${search}%`),
+            like(customers.phone, `%${search}%`)
+          )
+        );
+      }
+
+      const result = await query
+        .limit(pageSize)
+        .offset(offset)
+        .orderBy(desc(customers.id));
 
       return result;
     }),
