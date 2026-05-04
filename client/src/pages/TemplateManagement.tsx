@@ -66,7 +66,7 @@ export default function TemplateManagement() {
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
-  const { data: templates, refetch: refetchTemplates } = trpc.visualFlows.list.useQuery();
+  const { data: templates, refetch: refetchTemplates } = trpc.automation.list.useQuery();
   const { data: aiConfig } = trpc.ai.getConfig.useQuery();
 
   const applyMutation = trpc.ai.applyTemplate.useMutation({

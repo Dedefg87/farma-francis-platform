@@ -37,5 +37,8 @@ RUN pnpm install --prod --no-frozen-lockfile
 # Copia o dist gerado no estágio de build
 COPY --from=builder /app/dist ./dist
 
+# Copia o frontend buildado (vite build fica em client/dist/)
+COPY --from=builder /app/client/dist ./client/dist
+
 # Inicia o servidor
 CMD ["node", "dist/index.js"]

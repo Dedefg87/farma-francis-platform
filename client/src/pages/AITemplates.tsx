@@ -68,10 +68,10 @@ export default function AITemplates() {
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const [previewMode, setPreviewMode] = useState(false);
 
-  const { data: templates, refetch: refetchTemplates } = trpc.visualFlows.list.useQuery();
+  const { data: templates, refetch: refetchTemplates } = trpc.automation.list.useQuery();
   const { data: aiConfig } = trpc.ai.getConfig.useQuery();
   
-  const createFlow = trpc.visualFlows.create.useMutation({
+  const createFlow = trpc.automation.create.useMutation({
     onSuccess: () => {
       toast.success('Template de IA criado com sucesso!');
       setIsCreating(false);
