@@ -14,7 +14,6 @@ import createSSERouter from "./routers-sse";
 import mediaRouter from "./routers-media";
 import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
-import systemRestRouter from "./_core/routes/system";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import cors from "cors";
@@ -179,6 +178,7 @@ async function startServer() {
   app.use("/api/media", mediaRouter);
 
   // Rotas REST do sistema (storage, clean, etc.)
+  const systemRestRouter = require("./_core/routes/system").default;
   app.use("/api/system", systemRestRouter);
 
   // Debug: List all database tables
