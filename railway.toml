@@ -1,1 +1,6 @@
-# FORCE REDEPLOY: Mon May  4 11:00:18 -03 2026
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
