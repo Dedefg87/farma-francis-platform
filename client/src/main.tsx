@@ -37,7 +37,7 @@ const trpcClient = trpc.createClient({
   links: [
     splitLink({
       // Mutations devem ser POST (httpLink)
-      condition: (params) => params.op?.type === 'mutation',
+      condition: (op) => op.type === 'mutation',
       // Para mutations: httpLink (POST garantido)
       true: httpLink({
         url: "/api/trpc",
