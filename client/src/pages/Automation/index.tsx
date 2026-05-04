@@ -42,10 +42,10 @@ export default function Automation() {
   const { state, actions } = useFlowState();
   const { validateBeforeSave, validateFlow } = useFlowValidation();
   
-  const { data: visualFlows, refetch: refetchFlows } = trpc.visualFlows.list.useQuery();
+  const { data: visualFlows, refetch: refetchFlows } = trpc.automation.list.useQuery();
   const { data: automationFlows } = trpc.automation.list.useQuery();
-  const { data: uraMenus } = trpc.uraMenus.list.useQuery();
-  const { data: automationStats } = trpc.automationSSE.stats.useQuery({ period: "today" });
+  // const { data: uraMenus } = trpc.uraMenus.list.useQuery(); // REMOVIDO: router não existe
+  const { data: automationStats } = trpc.automation.stats.useQuery({ period: "today" });
 
   const { parseJSON, convertN8N } = useFlowImportWorker({
     onProgress: actions.setImportProgress,
@@ -55,10 +55,11 @@ export default function Automation() {
     },
   });
 
-  const createFlow = trpc.visualFlows.create.useMutation({
+  const createFlow = trpc.automation.create.useMutation({
     onSuccess: (data: unknown) => {
+      const d = data as any;
       toast.success("Fluxo criado com sucesso!");
-      actions.setSelectedFlowId(data.insertId as number);
+      actions.setSelectedFlowId(d.id || d.insertId);
       actions.setIsCreating(false);
       actions.setNewFlowName("");
       actions.setNewFlowDescription("");
@@ -67,14 +68,14 @@ export default function Automation() {
     onError: () => toast.error("Erro ao criar fluxo"),
   });
 
-  const updateFlow = trpc.visualFlows.update.useMutation({
+  const updateFlow = trpc.automation.update.useMutation({
     onSuccess: () => {
       toast.success("Fluxo atualizado!");
       refetchFlows();
     },
   });
 
-  const deleteFlow = trpc.visualFlows.delete.useMutation({
+  const deleteFlow = trpc.automation.delete.useMutation({
     onSuccess: () => {
       toast.success("Fluxo deletado!");
       actions.setSelectedFlowId(null);
@@ -82,7 +83,7 @@ export default function Automation() {
     },
   });
 
-  const toggleFlow = trpc.visualFlows.toggle.useMutation({
+  const toggleFlow = trpc.automation.update.useMutation({
     onSuccess: () => refetchFlows(),
   });
 
