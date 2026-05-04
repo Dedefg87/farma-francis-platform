@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -34,10 +34,25 @@ if (typeof window !== "undefined") {
 const trpcClient = trpc.createClient({
   transformer: superjson,
   links: [
-    httpBatchLink({
-      url: "/api/trpc",
-      headers: () => ({
-        ...extraHeaders,
+    splitLink({
+      // Separar queries (GET) de mutations (POST)
+      condition: (params) => {
+        // Se for mutation, usa httpLink (sem batch)
+        return params.op.type === 'mutation';
+      },
+      // Para mutations: httpLink simples (sem batch)
+      true: httpLink({
+        url: "/api/trpc",
+        headers: () => ({
+          ...extraHeaders,
+        }),
+      }),
+      // Para queries: httpBatchLink (com batch)
+      false: httpBatchLink({
+        url: "/api/trpc",
+        headers: () => ({
+          ...extraHeaders,
+        }),
       }),
     }),
   ],
