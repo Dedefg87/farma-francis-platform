@@ -49,23 +49,15 @@ export const customersRouter = router({
 
   // Listar todos os clientes
   list: protectedProcedure
-    .input(z.object({
-      limit: z.number().min(1).max(100).default(50).optional(),
-      offset: z.number().min(0).default(0).optional(),
-    }).optional())
-    .query(async ({ input }) => {
+    .query(async () => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
-
-      const limit = input?.limit ?? 50;
-      const offset = input?.offset ?? 0;
 
       const result = await db
         .select()
         .from(customers)
-        .limit(limit)
-        .offset(offset)
-        .orderBy(desc(customers.id));
+        .orderBy(desc(customers.id))
+        .limit(100);
 
       return result;
     }),
