@@ -124,23 +124,28 @@ async function startServer() {
     path.resolve(process.cwd(), 'client/dist'),
     path.resolve(__dirname, '../dist/public'),
     path.resolve(__dirname, 'public'),
+    '/app/dist/public',
+    '/app/client/dist',
   ];
   
   let publicPath = null;
   for (const p of possiblePublicPaths) {
-    if (require('fs').existsSync(p)) {
+    const exists = require('fs').existsSync(p);
+    console.log(`[Static] Checking: ${p} - ${exists ? '✅ EXISTS' : '❌ NOT FOUND'}`);
+    if (exists) {
       publicPath = p;
-      console.log('[Static] Using public path:', p);
       break;
     }
   }
   
   if (publicPath) {
+    console.log('[Static] ✅ Serving from:', publicPath);
     app.use(express.static(publicPath));
   } else {
-    console.error('[Static] WARNING: No public directory found! Checked:', possiblePublicPaths);
+    console.error('[Static] ❌ No static files found! Checked:', possiblePublicPaths);
+    console.log('[Static] CWD:', process.cwd());
+    console.log('[Static] __dirname:', __dirname);
   }
-  console.log("[Static] Serving from:", publicPath);
 
   app.get("/api/health", (_, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
