@@ -63,6 +63,12 @@ export const customersRouter = router({
       const search = input?.search;
       const offset = (page - 1) * pageSize;
 
+      // Count total
+      const countResult = await db.select({ count: sql`count(*)` }).from(customers);
+      const total = Number(countResult[0]?.count || 0);
+      const totalPages = Math.ceil(total / pageSize);
+
+      // Fetch paginated data
       let query = db.select().from(customers);
       
       if (search) {
@@ -80,7 +86,15 @@ export const customersRouter = router({
         .offset(offset)
         .orderBy(desc(customers.id));
 
-      return result;
+      return {
+        customers: result.map(c => ({ customer: c })),
+        pagination: {
+          total,
+          totalPages,
+          currentPage: page,
+          pageSize,
+        },
+      };
     }),
 
   // Buscar cliente por telefone (normalizado)
