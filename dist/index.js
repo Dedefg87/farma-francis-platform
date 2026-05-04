@@ -67,7 +67,7 @@ var init_env = __esm({
       databaseUrl: process.env.DATABASE_URL ?? "",
       oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
       ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-      isProduction: true,
+      isProduction: process.env.NODE_ENV === "production",
       forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
       forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
     };
@@ -1582,6 +1582,78 @@ var init_db = __esm({
   }
 });
 
+// server/utils/phone.ts
+function extractDigits(raw) {
+  if (!raw) return "";
+  if (raw.includes("@")) {
+    const beforeAt = raw.substring(0, raw.indexOf("@")).replace(/\D/g, "");
+    if (beforeAt.length >= 8) return beforeAt;
+  }
+  return raw.replace(/\D/g, "");
+}
+function normalizePhone(raw) {
+  if (!raw) return "";
+  let digits = extractDigits(raw);
+  if (digits.length > 13 && digits.startsWith("0")) digits = digits.slice(1);
+  if (digits.length > 13) return "";
+  if (!digits.startsWith("55")) digits = "55" + digits;
+  if (digits.length === 12) {
+    digits = digits.slice(0, 4) + "9" + digits.slice(4);
+  }
+  if (digits.length !== 13) return "";
+  return digits;
+}
+function generatePhoneVariants(phone) {
+  if (!phone) return [];
+  let digits = extractDigits(phone);
+  if (digits.length > 14) return [];
+  if (!digits.startsWith("55")) digits = "55" + digits;
+  if (digits.length === 12) digits = digits.slice(0, 4) + "9" + digits.slice(4);
+  if (digits.length === 14) digits = digits.slice(0, 13);
+  const variants = /* @__PURE__ */ new Set();
+  if (digits.length === 13) {
+    const sem9 = digits.slice(0, 4) + digits.slice(5);
+    variants.add(digits);
+    variants.add(sem9);
+    variants.add("+" + digits);
+    variants.add("+" + sem9);
+  } else if (digits.length === 12) {
+    const com9 = digits.slice(0, 4) + "9" + digits.slice(4);
+    variants.add(digits);
+    variants.add(com9);
+    variants.add("+" + digits);
+    variants.add("+" + com9);
+  }
+  return [...variants];
+}
+function formatPhoneBR(raw) {
+  return normalizePhone(raw);
+}
+function phoneLast8(raw) {
+  if (!raw) return "";
+  const digits = extractDigits(raw);
+  return digits.length >= 8 ? digits.slice(-8) : digits;
+}
+async function findConversationByPhone(db, phone, conversationsTable, customersTable) {
+  const { eq: eq43, desc: desc22, inArray: inArray9, like: like8, or: or12 } = await import("drizzle-orm");
+  const last8 = phoneLast8(phone);
+  if (last8.length < 8) return null;
+  const matchedCustomers = await db.select({ id: customersTable.id, phone: customersTable.phone }).from(customersTable).where(like8(customersTable.phone, `%${last8}%`)).limit(10);
+  if (matchedCustomers.length === 0) return null;
+  const customerIds = matchedCustomers.map((c) => c.id);
+  const [conversation] = await db.select({
+    id: conversationsTable.id,
+    customerId: conversationsTable.customerId,
+    status: conversationsTable.status
+  }).from(conversationsTable).where(inArray9(conversationsTable.customerId, customerIds)).orderBy(desc22(conversationsTable.lastMessageAt)).limit(1);
+  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status } : null;
+}
+var init_phone = __esm({
+  "server/utils/phone.ts"() {
+    "use strict";
+  }
+});
+
 // server/_core/llm.ts
 async function invokeLLM(params) {
   assertApiKey();
@@ -1782,7 +1854,7 @@ var init_logger = __esm({
   "server/_core/logger.ts"() {
     "use strict";
     import_pino = __toESM(require("pino"), 1);
-    isDevelopment = false;
+    isDevelopment = process.env.NODE_ENV === "development";
     logger = (0, import_pino.default)({
       level: isDevelopment ? "debug" : "info",
       transport: isDevelopment ? {
@@ -3766,78 +3838,6 @@ var init_ai_integration = __esm({
   }
 });
 
-// server/utils/phone.ts
-function extractDigits(raw) {
-  if (!raw) return "";
-  if (raw.includes("@")) {
-    const beforeAt = raw.substring(0, raw.indexOf("@")).replace(/\D/g, "");
-    if (beforeAt.length >= 8) return beforeAt;
-  }
-  return raw.replace(/\D/g, "");
-}
-function normalizePhone(raw) {
-  if (!raw) return "";
-  let digits = extractDigits(raw);
-  if (digits.length > 13 && digits.startsWith("0")) digits = digits.slice(1);
-  if (digits.length > 13) return "";
-  if (!digits.startsWith("55")) digits = "55" + digits;
-  if (digits.length === 12) {
-    digits = digits.slice(0, 4) + "9" + digits.slice(4);
-  }
-  if (digits.length !== 13) return "";
-  return digits;
-}
-function generatePhoneVariants(phone) {
-  if (!phone) return [];
-  let digits = extractDigits(phone);
-  if (digits.length > 14) return [];
-  if (!digits.startsWith("55")) digits = "55" + digits;
-  if (digits.length === 12) digits = digits.slice(0, 4) + "9" + digits.slice(4);
-  if (digits.length === 14) digits = digits.slice(0, 13);
-  const variants = /* @__PURE__ */ new Set();
-  if (digits.length === 13) {
-    const sem9 = digits.slice(0, 4) + digits.slice(5);
-    variants.add(digits);
-    variants.add(sem9);
-    variants.add("+" + digits);
-    variants.add("+" + sem9);
-  } else if (digits.length === 12) {
-    const com9 = digits.slice(0, 4) + "9" + digits.slice(4);
-    variants.add(digits);
-    variants.add(com9);
-    variants.add("+" + digits);
-    variants.add("+" + com9);
-  }
-  return [...variants];
-}
-function formatPhoneBR(raw) {
-  return normalizePhone(raw);
-}
-function phoneLast8(raw) {
-  if (!raw) return "";
-  const digits = extractDigits(raw);
-  return digits.length >= 8 ? digits.slice(-8) : digits;
-}
-async function findConversationByPhone(db, phone, conversationsTable, customersTable) {
-  const { eq: eq43, desc: desc22, inArray: inArray9, like: like8, or: or12 } = await import("drizzle-orm");
-  const last8 = phoneLast8(phone);
-  if (last8.length < 8) return null;
-  const matchedCustomers = await db.select({ id: customersTable.id, phone: customersTable.phone }).from(customersTable).where(like8(customersTable.phone, `%${last8}%`)).limit(10);
-  if (matchedCustomers.length === 0) return null;
-  const customerIds = matchedCustomers.map((c) => c.id);
-  const [conversation] = await db.select({
-    id: conversationsTable.id,
-    customerId: conversationsTable.customerId,
-    status: conversationsTable.status
-  }).from(conversationsTable).where(inArray9(conversationsTable.customerId, customerIds)).orderBy(desc22(conversationsTable.lastMessageAt)).limit(1);
-  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status } : null;
-}
-var init_phone = __esm({
-  "server/utils/phone.ts"() {
-    "use strict";
-  }
-});
-
 // server/_core/redis.ts
 function createRedisClient() {
   if (!process.env.REDIS_URL) {
@@ -4191,7 +4191,7 @@ async function getEvolutionConfigWithCache() {
   }
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [config] = await db.select().from(integrationSettings2).where(import_drizzle_orm12.sql`integration_type = ${"evolution_api"}`).limit(1);
+  const [config] = await db.select().from(integrationSettings2).where(import_drizzle_orm13.sql`integration_type = ${"evolution_api"}`).limit(1);
   if (!config || !config.isActive) {
     throw new Error("Evolution API not configured");
   }
@@ -4211,21 +4211,21 @@ async function getEvolutionConfigWithCache() {
 async function getEvolutionApiKey() {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [config] = await db.select().from(integrationSettings2).where(import_drizzle_orm12.sql`integration_type = ${"evolution_api"}`).limit(1);
+  const [config] = await db.select().from(integrationSettings2).where(import_drizzle_orm13.sql`integration_type = ${"evolution_api"}`).limit(1);
   if (!config || !config.isActive) {
     throw new Error("Evolution API not configured");
   }
   const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
   return configData.apiKey || configData.accessToken;
 }
-var import_drizzle_orm12, EVOLUTION_CONFIG_KEY, EVOLUTION_TTL, memoryConfig;
+var import_drizzle_orm13, EVOLUTION_CONFIG_KEY, EVOLUTION_TTL, memoryConfig;
 var init_cache_evolution = __esm({
   "server/services/cache-evolution.ts"() {
     "use strict";
     init_redis_namespaces();
     init_db();
     init_schema();
-    import_drizzle_orm12 = require("drizzle-orm");
+    import_drizzle_orm13 = require("drizzle-orm");
     EVOLUTION_CONFIG_KEY = "config:evolution";
     EVOLUTION_TTL = 300;
     memoryConfig = null;
@@ -4354,7 +4354,7 @@ async function processBroadcastMessage(messageId) {
       fileName: broadcastMessages.fileName,
       fileType: broadcastMessages.fileType,
       fileSize: broadcastMessages.fileSize
-    }).from(broadcastMessages).where((0, import_drizzle_orm13.eq)(broadcastMessages.id, messageId)).limit(1);
+    }).from(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.id, messageId)).limit(1);
     if (!message) {
       console.error(`[Broadcast] Mensagem ${messageId} n\xE3o encontrada`);
       return;
@@ -4372,7 +4372,7 @@ async function processBroadcastMessage(messageId) {
           const r2Result = await uploadToR22(buffer, `broadcast/${messageId}_${Date.now()}.${ext}`, mimetype);
           resolvedFileUrl = r2Result.url;
           console.log("[Broadcast] \u{1F4CE} Uploaded media to R2:", r2Result.url);
-          await db.update(broadcastMessages).set({ fileUrl: resolvedFileUrl }).where((0, import_drizzle_orm13.eq)(broadcastMessages.id, messageId));
+          await db.update(broadcastMessages).set({ fileUrl: resolvedFileUrl }).where((0, import_drizzle_orm14.eq)(broadcastMessages.id, messageId));
         }
       } catch (r2Err) {
         console.error("[Broadcast] \u26A0\uFE0F R2 upload failed:", r2Err.message);
@@ -4392,10 +4392,10 @@ async function processBroadcastMessage(messageId) {
       phone: broadcastMembersSent.phone,
       customerPhone: customers.phone
       // telefone do cliente (original)
-    }).from(broadcastMembersSent).leftJoin(customers, (0, import_drizzle_orm13.eq)(broadcastMembersSent.customerId, customers.id)).where(
-      (0, import_drizzle_orm13.and)(
-        (0, import_drizzle_orm13.eq)(broadcastMembersSent.broadcastMessageId, messageId),
-        (0, import_drizzle_orm13.eq)(broadcastMembersSent.status, "pending")
+    }).from(broadcastMembersSent).leftJoin(customers, (0, import_drizzle_orm14.eq)(broadcastMembersSent.customerId, customers.id)).where(
+      (0, import_drizzle_orm14.and)(
+        (0, import_drizzle_orm14.eq)(broadcastMembersSent.broadcastMessageId, messageId),
+        (0, import_drizzle_orm14.eq)(broadcastMembersSent.status, "pending")
       )
     );
     if (pendingSents.length === 0) {
@@ -4425,7 +4425,7 @@ async function processBroadcastMessage(messageId) {
           status: "sent",
           sentAt: /* @__PURE__ */ new Date(),
           errorMessage: null
-        }).where((0, import_drizzle_orm13.eq)(broadcastMembersSent.id, sent.id));
+        }).where((0, import_drizzle_orm14.eq)(broadcastMembersSent.id, sent.id));
         try {
           await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId);
         } catch (saveErr) {
@@ -4437,7 +4437,7 @@ async function processBroadcastMessage(messageId) {
           status: "failed",
           errorMessage: result.error || "Erro desconhecido",
           sentAt: null
-        }).where((0, import_drizzle_orm13.eq)(broadcastMembersSent.id, sent.id));
+        }).where((0, import_drizzle_orm14.eq)(broadcastMembersSent.id, sent.id));
         failCount++;
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -4446,7 +4446,7 @@ async function processBroadcastMessage(messageId) {
       successfulSends: successCount,
       failedSends: failCount,
       status: successCount > 0 && failCount === 0 ? "completed" : "partial"
-    }).where((0, import_drizzle_orm13.eq)(broadcastMessages.id, messageId));
+    }).where((0, import_drizzle_orm14.eq)(broadcastMessages.id, messageId));
     console.log(
       `[Broadcast] Mensagem ${messageId} processada: ${successCount} sucessos, ${failCount} falhas`
     );
@@ -4460,7 +4460,7 @@ async function processBroadcastMessage(messageId) {
 async function saveBroadcastToConversation(db, customerId, messageText, fileUrl, fileName, fileType, senderId) {
   if (!customerId) return;
   const now = /* @__PURE__ */ new Date();
-  const [customer] = await db.select().from(customers).where((0, import_drizzle_orm13.eq)(customers.id, customerId)).limit(1);
+  const [customer] = await db.select().from(customers).where((0, import_drizzle_orm14.eq)(customers.id, customerId)).limit(1);
   if (!customer?.phone) {
     console.warn(`[Broadcast] Cliente ${customerId} sem telefone, n\xE3o pode salvar na conversa`);
     return;
@@ -4470,10 +4470,10 @@ async function saveBroadcastToConversation(db, customerId, messageText, fileUrl,
   if (found) {
     conversationId = found.conversationId;
     if (found.status === "closed") {
-      await db.update(conversations).set({ status: "open", lastMessageAt: now, unreadCount: 0 }).where((0, import_drizzle_orm13.eq)(conversations.id, conversationId));
+      await db.update(conversations).set({ status: "open", lastMessageAt: now, unreadCount: 0 }).where((0, import_drizzle_orm14.eq)(conversations.id, conversationId));
       console.log(`[Broadcast] \u{1F504} Reabriu conversa ${conversationId}`);
     } else {
-      await db.update(conversations).set({ lastMessageAt: now }).where((0, import_drizzle_orm13.eq)(conversations.id, conversationId));
+      await db.update(conversations).set({ lastMessageAt: now }).where((0, import_drizzle_orm14.eq)(conversations.id, conversationId));
     }
   } else {
     const insertResult = await db.insert(conversations).values({
@@ -4503,13 +4503,13 @@ async function saveBroadcastToConversation(db, customerId, messageText, fileUrl,
   });
   console.log(`[Broadcast] \u{1F4AC} Mensagem salva na conversa ${conversationId} do cliente ${customerId}`);
 }
-var import_drizzle_orm13, mimetypeToMediatype;
+var import_drizzle_orm14, mimetypeToMediatype;
 var init_broadcast_sender = __esm({
   "server/workers/broadcast-sender.ts"() {
     "use strict";
     init_db();
     init_schema();
-    import_drizzle_orm13 = require("drizzle-orm");
+    import_drizzle_orm14 = require("drizzle-orm");
     init_phone();
     init_cache_evolution();
     mimetypeToMediatype = {
@@ -4551,7 +4551,7 @@ function normalizeWhatsAppNumber(value) {
 async function getIntegrationConfig(type) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const [config] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm15.eq)(integrationSettings2.integrationType, type)).limit(1);
+  const [config] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm16.eq)(integrationSettings2.integrationType, type)).limit(1);
   if (!config || !config.isActive) {
     throw new Error(`${type} configuration not found or inactive`);
   }
@@ -5328,26 +5328,26 @@ async function sendWhatsAppMedia(params) {
 async function getSentMessages(filters) {
   const db = await getDb();
   if (!db) return [];
-  const conditions = [(0, import_drizzle_orm15.eq)(messages.direction, "outbound")];
+  const conditions = [(0, import_drizzle_orm16.eq)(messages.direction, "outbound")];
   if (filters?.channel) {
-    conditions.push((0, import_drizzle_orm15.eq)(messages.channel, filters.channel));
+    conditions.push((0, import_drizzle_orm16.eq)(messages.channel, filters.channel));
   }
   if (filters?.customerId) {
-    conditions.push((0, import_drizzle_orm15.eq)(messages.customerId, filters.customerId));
+    conditions.push((0, import_drizzle_orm16.eq)(messages.customerId, filters.customerId));
   }
-  let query = db.select().from(messages).where((0, import_drizzle_orm15.and)(...conditions));
+  let query = db.select().from(messages).where((0, import_drizzle_orm16.and)(...conditions));
   if (filters?.limit) {
     query = query.limit(filters.limit);
   }
   return await query;
 }
-var import_drizzle_orm15;
+var import_drizzle_orm16;
 var init_messaging = __esm({
   "server/messaging.ts"() {
     "use strict";
     init_db();
     init_schema();
-    import_drizzle_orm15 = require("drizzle-orm");
+    import_drizzle_orm16 = require("drizzle-orm");
   }
 });
 
@@ -6117,6 +6117,298 @@ var init_debug = __esm({
   }
 });
 
+// server/_core/routes/system.ts
+var system_exports = {};
+__export(system_exports, {
+  default: () => system_default,
+  systemRouter: () => systemRouter2
+});
+async function tableExists(db, tableName) {
+  try {
+    const r = await db.execute(import_drizzle_orm46.sql`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = ${tableName}
+    `);
+    const rows = r.rows || r || [];
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+async function countRows(db, tableName) {
+  try {
+    const r = await db.execute(import_drizzle_orm46.sql`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    const rows = r.rows || r || [];
+    return Number(rows[0]?.cnt || 0);
+  } catch {
+    return 0;
+  }
+}
+async function deleteOld(db, tableName, cutoff) {
+  try {
+    const r = await db.execute(import_drizzle_orm46.sql`DELETE FROM ${tableName} WHERE created_at < ${cutoff}`);
+    return r.affectedRows || 0;
+  } catch (error) {
+    if (error.message?.includes("Unknown column")) {
+      return 0;
+    }
+    throw error;
+  }
+}
+var import_express5, import_drizzle_orm46, systemRouter2, system_default;
+var init_system = __esm({
+  "server/_core/routes/system.ts"() {
+    "use strict";
+    import_express5 = __toESM(require("express"), 1);
+    init_db();
+    import_drizzle_orm46 = require("drizzle-orm");
+    systemRouter2 = import_express5.default.Router();
+    systemRouter2.get("/storage", async (req, res) => {
+      try {
+        const { exec: exec2 } = await import("child_process");
+        const { promisify: promisify2 } = await import("util");
+        const execAsync2 = promisify2(exec2);
+        const { stdout } = await execAsync2("df -h /");
+        const lines = stdout.trim().split("\n");
+        const diskInfo = lines.slice(1).map((line) => {
+          const [filesystem, size, used, available, usePct, mounted] = line.split(/\s+/);
+          return { filesystem, size, used, available, usePct, mounted };
+        })[0] || {};
+        const appPath = process.cwd();
+        const { stdout: duStdout } = await execAsync2(`du -sh ${appPath}`);
+        const appSize = duStdout.trim().split("	")[0];
+        res.json({ success: true, disk: diskInfo, appSize, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
+    systemRouter2.get("/database/size", async (req, res) => {
+      try {
+        const db = await getDb();
+        if (!db) return res.status(503).json({ error: "Database unavailable" });
+        const result = await db.execute(import_drizzle_orm46.sql`
+      SELECT
+        ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE()
+    `);
+        const rows = result.rows || result || [];
+        const size_mb = Number(rows[0]?.size_mb || 0);
+        res.json({ success: true, size_mb, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch (error) {
+        console.error("[System/Size] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+    systemRouter2.get("/database/tables", async (req, res) => {
+      try {
+        const db = await getDb();
+        if (!db) return res.status(503).json({ error: "Database unavailable" });
+        const result = await db.execute(import_drizzle_orm46.sql`
+      SELECT
+        table_name,
+        ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
+        table_rows
+      FROM information_schema.tables
+      WHERE table_schema = DATABASE()
+        AND table_name NOT LIKE '\\_%'
+        AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied')
+      ORDER BY (data_length + index_length) DESC
+    `);
+        const rows = result.rows || result || [];
+        const tables = rows.map((row) => ({
+          table_name: row.table_name,
+          size_mb: Number(row.size_mb || 0),
+          table_rows: Number(row.table_rows || 0)
+        }));
+        res.json({ success: true, tables, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch (error) {
+        console.error("[System/Tables] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+    systemRouter2.post("/clean", async (req, res) => {
+      try {
+        const { types } = req.body;
+        const results = [];
+        const db = await getDb();
+        if (!db) return res.status(503).json({ error: "Database unavailable" });
+        if (!types || types.includes("logs")) {
+          const cutoffDate = /* @__PURE__ */ new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 30);
+          const logTables = ["system_logs", "audit_logs", "crm_audit_logs", "workflow_executions", "execution_data"];
+          let totalDeleted = 0, tablesFound = 0;
+          for (const tableName of logTables) {
+            try {
+              if (await tableExists(db, tableName)) {
+                const deleted = await deleteOld(db, tableName, cutoffDate);
+                tablesFound++;
+                totalDeleted += deleted;
+              }
+            } catch (e) {
+              if (!e.message?.includes("does not exist")) {
+                console.log(`[System/Clean] Erro ${tableName}: ${e.message}`);
+              }
+            }
+          }
+          results.push({
+            type: "logs",
+            deleted: totalDeleted,
+            message: `Removidos ${totalDeleted} logs de ${tablesFound} tabela${tablesFound !== 1 ? "s" : ""}`
+          });
+        }
+        if (!types || types.includes("sessions")) {
+          const exists = await tableExists(db, "sessions");
+          if (exists) {
+            const cutoffDate = /* @__PURE__ */ new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 7);
+            try {
+              const deleted = await deleteOld(db, "sessions", cutoffDate);
+              results.push({ type: "sessions", deleted, message: `Removidas ${deleted} sess\xF5es` });
+            } catch (e) {
+              try {
+                const r = await db.execute(import_drizzle_orm46.sql`DELETE FROM sessions WHERE expires_at < ${cutoffDate}`);
+                const deleted = r.affectedRows || 0;
+                results.push({ type: "sessions", deleted, message: `Removidas ${deleted} sess\xF5es` });
+              } catch (e2) {
+                results.push({ type: "sessions", deleted: 0, message: `Erro: ${e2.message}` });
+              }
+            }
+          } else {
+            results.push({ type: "sessions", deleted: 0, message: "Tabela de sess\xF5es n\xE3o encontrada" });
+          }
+        }
+        res.json({ success: true, results, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+      } catch (error) {
+        console.error("[System/Clean] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+    systemRouter2.post("/clean-messages", async (req, res) => {
+      try {
+        const { days = 90, dryRun = false } = req.body;
+        const cutoffDate = /* @__PURE__ */ new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        const db = await getDb();
+        if (!db) return res.status(503).json({ error: "Database unavailable" });
+        const statsResult = await db.execute(import_drizzle_orm46.sql`
+      SELECT
+        COUNT(*) as total_messages,
+        COUNT(DISTINCT conversation_id) as affected_conversations,
+        SUM(CASE WHEN file_url IS NOT NULL THEN 1 ELSE 0 END) as with_media
+      FROM conversation_messages
+      WHERE created_at < ${cutoffDate}
+    `);
+        const statsRows = statsResult.rows || statsResult || [];
+        const stats = statsRows[0];
+        if (dryRun) {
+          return res.json({
+            success: true,
+            dryRun: true,
+            stats: {
+              messages: Number(stats.total_messages || 0),
+              conversations: Number(stats.affected_conversations || 0),
+              withMedia: Number(stats.with_media || 0),
+              cutoffDate: cutoffDate.toISOString()
+            },
+            message: `Simula\xE7\xE3o: ${stats.total_messages || 0} mensagens em ${stats.affected_conversations || 0} conversas seriam deletadas`
+          });
+        }
+        const deleteResult = await db.execute(import_drizzle_orm46.sql`
+      DELETE FROM conversation_messages
+      WHERE created_at < ${cutoffDate}
+    `);
+        const deletedCount = deleteResult.affectedRows || 0;
+        res.json({
+          success: true,
+          stats: {
+            messages: Number(deletedCount),
+            conversations: Number(stats.affected_conversations || 0),
+            withMedia: Number(stats.with_media || 0),
+            cutoffDate: cutoffDate.toISOString()
+          },
+          message: `Removidas ${deletedCount} mensagens antigas`
+        });
+      } catch (error) {
+        console.error("[System/CleanMessages] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+    systemRouter2.post("/clean-database", async (req, res) => {
+      try {
+        const { confirm } = req.body;
+        if (!confirm) {
+          return res.status(400).json({ error: "Confirma\xE7\xE3o necess\xE1ria" });
+        }
+        const db = await getDb();
+        if (!db) return res.status(503).json({ error: "Database unavailable" });
+        const tables = [
+          "conversation_messages",
+          "received_messages",
+          "system_logs",
+          "audit_logs",
+          "notifications",
+          "sessions",
+          "flow_executions",
+          "execution_logs",
+          "broadcast_messages",
+          "quick_replies_cache",
+          "webhook_logs"
+        ];
+        const results = [];
+        for (const tableName of tables) {
+          try {
+            const exists = await tableExists(db, tableName);
+            if (exists) {
+              const beforeCount = await countRows(db, tableName);
+              try {
+                await db.execute(import_drizzle_orm46.sql`TRUNCATE TABLE ${tableName}`);
+                results.push({
+                  table: tableName,
+                  success: true,
+                  rows: beforeCount,
+                  message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? "s" : ""} removida${beforeCount !== 1 ? "s" : ""}`
+                });
+              } catch (truncateError) {
+                await db.execute(import_drizzle_orm46.sql`DELETE FROM ${tableName}`);
+                results.push({
+                  table: tableName,
+                  success: true,
+                  rows: beforeCount,
+                  message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? "s" : ""} removida${beforeCount !== 1 ? "s" : ""} (via DELETE)`
+                });
+              }
+            } else {
+              results.push({ table: tableName, success: false, error: "Tabela n\xE3o encontrada" });
+            }
+          } catch (e) {
+            results.push({ table: tableName, success: false, error: e.message });
+          }
+        }
+        for (const tableName of tables) {
+          try {
+            if (await tableExists(db, tableName)) {
+              await db.execute(import_drizzle_orm46.sql`OPTIMIZE TABLE ${tableName}`);
+            }
+          } catch (optimizeError) {
+            console.warn(`[System/Optimize] ${tableName}: ${optimizeError.message}`);
+          }
+        }
+        res.json({
+          success: true,
+          results,
+          message: "Limpeza do banco de dados conclu\xEDda"
+        });
+      } catch (error) {
+        console.error("[System/CleanDatabase] Error:", error);
+        res.status(500).json({ error: String(error) });
+      }
+    });
+    system_default = systemRouter2;
+  }
+});
+
 // server/workers/broadcast-recovery.ts
 var broadcast_recovery_exports = {};
 __export(broadcast_recovery_exports, {
@@ -6143,9 +6435,9 @@ async function recoverStuckBroadcasts() {
     id: broadcastMessages.id,
     status: broadcastMessages.status
   }).from(broadcastMessages).where(
-    (0, import_drizzle_orm46.and)(
-      (0, import_drizzle_orm46.eq)(broadcastMessages.status, "sending"),
-      (0, import_drizzle_orm46.lt)(broadcastMessages.sentAt, cutoff)
+    (0, import_drizzle_orm47.and)(
+      (0, import_drizzle_orm47.eq)(broadcastMessages.status, "sending"),
+      (0, import_drizzle_orm47.lt)(broadcastMessages.sentAt, cutoff)
     )
   ).limit(10);
   if (stuckMessages.length === 0) return;
@@ -6162,7 +6454,7 @@ async function recoverStuckBroadcasts() {
         err.message
       );
       try {
-        await db.update(broadcastMessages).set({ status: "failed", errorMessage: `Recovery failed: ${err.message}` }).where((0, import_drizzle_orm46.eq)(broadcastMessages.id, msg.id));
+        await db.update(broadcastMessages).set({ status: "failed", errorMessage: `Recovery failed: ${err.message}` }).where((0, import_drizzle_orm47.eq)(broadcastMessages.id, msg.id));
       } catch {
       }
     }
@@ -6175,13 +6467,13 @@ function stopBroadcastRecoveryWorker() {
     console.log("[BroadcastRecovery] \u{1F6D1} Stopped");
   }
 }
-var import_drizzle_orm46, RECOVERY_INTERVAL_MS, STUCK_THRESHOLD_MINUTES, recoveryTimer;
+var import_drizzle_orm47, RECOVERY_INTERVAL_MS, STUCK_THRESHOLD_MINUTES, recoveryTimer;
 var init_broadcast_recovery = __esm({
   "server/workers/broadcast-recovery.ts"() {
     "use strict";
     init_db();
     init_schema();
-    import_drizzle_orm46 = require("drizzle-orm");
+    import_drizzle_orm47 = require("drizzle-orm");
     init_broadcast_sender();
     RECOVERY_INTERVAL_MS = 60 * 1e3;
     STUCK_THRESHOLD_MINUTES = 2;
@@ -6190,8 +6482,8 @@ var init_broadcast_recovery = __esm({
 });
 
 // server/index.ts
-var import_express5 = __toESM(require("express"), 1);
-var import_express6 = require("@trpc/server/adapters/express");
+var import_express6 = __toESM(require("express"), 1);
+var import_express7 = require("@trpc/server/adapters/express");
 init_db();
 
 // server/_core/migrations.ts
@@ -6266,7 +6558,7 @@ async function applySqlMigrations() {
 
 // server/index.ts
 var import_path = __toESM(require("path"), 1);
-var import_drizzle_orm47 = require("drizzle-orm");
+var import_drizzle_orm48 = require("drizzle-orm");
 init_schema();
 init_schema();
 
@@ -6801,8 +7093,985 @@ var agentsRouter = router({
   })
 });
 
-// server/routers-ai.ts
+// server/routers-crm.ts
 var import_zod3 = require("zod");
+init_db();
+init_schema();
+var import_drizzle_orm5 = require("drizzle-orm");
+
+// server/crm-core.ts
+init_db();
+init_schema();
+function safeJson(value) {
+  try {
+    return value === void 0 ? null : JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+function fireAndForget(fn) {
+  setImmediate(() => {
+    fn().catch((err) => {
+      console.error("[CRM] fireAndForget error:", err);
+    });
+  });
+}
+async function enqueueCrmOutboxEvent(params) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(crmOutboxEvents).values({
+    eventName: params.eventName,
+    entityType: params.entityType,
+    entityId: params.entityId ?? null,
+    actorUserId: params.actorUserId ?? null,
+    payloadJson: safeJson(params.payload),
+    idempotencyKey: params.idempotencyKey ?? null,
+    status: "pending",
+    createdAt: /* @__PURE__ */ new Date()
+  });
+}
+async function appendCrmAuditLog(params) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(crmAuditLogs).values({
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId ?? null,
+    actorUserId: params.actorUserId ?? null,
+    beforeJson: safeJson(params.before),
+    afterJson: safeJson(params.after),
+    requestId: params.requestId ?? null,
+    ip: params.ip ?? null,
+    userAgent: params.userAgent ?? null,
+    createdAt: /* @__PURE__ */ new Date()
+  });
+}
+
+// server/routers-crm.ts
+init_phone();
+var calculateEndDate = (purchaseDate, quantity, dailyDosage) => {
+  const daysSupply = Math.floor(quantity / dailyDosage);
+  const endDate = new Date(purchaseDate);
+  endDate.setDate(endDate.getDate() + daysSupply);
+  return endDate;
+};
+var customersRouter = router({
+  // ========================================
+  // CLIENTES (CUSTOMERS)
+  // ========================================
+  // Buscar cliente por telefone (normalizado)
+  getByPhone: publicProcedure.input(import_zod3.z.object({ phone: import_zod3.z.string() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const normalizedPhone = formatPhoneBR(input.phone);
+    const customer = await db.select().from(customers).where((0, import_drizzle_orm5.eq)(customers.phone, normalizedPhone)).limit(1);
+    return customer[0] || null;
+  }),
+  // Criar cliente automaticamente (para webhooks)
+  createIfNotExists: publicProcedure.input(
+    import_zod3.z.object({
+      phone: import_zod3.z.string(),
+      name: import_zod3.z.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const normalizedPhone = formatPhoneBR(input.phone);
+    const phoneVariants = generatePhoneVariants(input.phone);
+    const phoneCondition = phoneVariants.length > 1 ? (0, import_drizzle_orm5.or)(...phoneVariants.map((v) => (0, import_drizzle_orm5.eq)(customers.phone, v))) : (0, import_drizzle_orm5.eq)(customers.phone, phoneVariants[0]);
+    const existing = await db.select().from(customers).where(phoneCondition).limit(1);
+    if (existing[0]) {
+      return existing[0];
+    }
+    const newCustomer = await db.insert(customers).values({
+      phone: normalizedPhone,
+      name: input.name || "Cliente",
+      status: "active"
+    }).$returningId();
+    return { id: newCustomer[0].id };
+  }),
+  // Atualizar cliente
+  updateCustomer: protectedProcedure.input(
+    import_zod3.z.object({
+      id: import_zod3.z.number(),
+      name: import_zod3.z.string().optional(),
+      birthDate: import_zod3.z.string().optional()
+    })
+  ).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const update = {
+      updatedAt: /* @__PURE__ */ new Date()
+    };
+    if (input.name !== void 0) update.name = input.name;
+    if (input.birthDate !== void 0) {
+      const d = input.birthDate ? new Date(input.birthDate) : null;
+      update.birthDate = d && !Number.isNaN(d.getTime()) ? d : null;
+    }
+    await db.update(customers).set(update).where((0, import_drizzle_orm5.eq)(customers.id, input.id));
+    fireAndForget(async () => {
+      await appendCrmAuditLog({
+        action: "customer.update",
+        entityType: "customer",
+        entityId: input.id,
+        actorUserId: null,
+        after: input
+      });
+      await enqueueCrmOutboxEvent({
+        eventName: "CustomerUpdated",
+        entityType: "customer",
+        entityId: input.id,
+        actorUserId: null,
+        payload: input
+      });
+    });
+    return { success: true };
+  }),
+  // ========================================
+  // TRATAMENTOS (TREATMENTS)
+  // ========================================
+  // Criar tratamento
+  createTreatment: protectedProcedure.input(
+    import_zod3.z.object({
+      customerId: import_zod3.z.number(),
+      nomeMedicamento: import_zod3.z.string(),
+      posologiaDiaria: import_zod3.z.number().min(1),
+      qtdCaixa: import_zod3.z.number().min(1),
+      dataUltimaCompra: import_zod3.z.string(),
+      observacoes: import_zod3.z.string().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const purchaseDate = new Date(input.dataUltimaCompra);
+    const dataFimPrevisto = calculateEndDate(
+      purchaseDate,
+      input.qtdCaixa,
+      input.posologiaDiaria
+    );
+    const newTreatment = await db.insert(customerTreatments).values({
+      customerId: input.customerId,
+      nomeMedicamento: input.nomeMedicamento,
+      posologiaDiaria: input.posologiaDiaria,
+      qtdCaixa: input.qtdCaixa,
+      dataUltimaCompra: purchaseDate,
+      dataFimPrevisto,
+      observacoes: input.observacoes,
+      isActive: 1
+    }).$returningId();
+    const treatmentId = newTreatment?.[0]?.id;
+    if (!treatmentId) {
+      throw new Error("Failed to create treatment");
+    }
+    const created = await db.select().from(customerTreatments).where((0, import_drizzle_orm5.eq)(customerTreatments.id, treatmentId)).limit(1);
+    if (!created?.[0]) {
+      throw new Error("Treatment created but could not be loaded");
+    }
+    fireAndForget(async () => {
+      await enqueueCrmOutboxEvent({
+        eventName: "CustomerTreatmentCreated",
+        entityType: "customer",
+        entityId: input.customerId,
+        actorUserId: ctx.user.id,
+        payload: { treatmentId, ...input }
+      });
+    });
+    return { id: treatmentId, treatment: created[0] };
+  }),
+  // Listar tratamentos de um cliente
+  getTreatments: protectedProcedure.input(import_zod3.z.object({ customerId: import_zod3.z.number() })).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const treatments = await db.select().from(customerTreatments).where(
+      (0, import_drizzle_orm5.and)(
+        (0, import_drizzle_orm5.eq)(customerTreatments.customerId, input.customerId),
+        (0, import_drizzle_orm5.eq)(customerTreatments.isActive, 1)
+      )
+    ).orderBy((0, import_drizzle_orm5.desc)(customerTreatments.dataFimPrevisto));
+    return treatments;
+  }),
+  // Atualizar tratamento
+  updateTreatment: protectedProcedure.input(
+    import_zod3.z.object({
+      id: import_zod3.z.number(),
+      posologiaDiaria: import_zod3.z.number().optional(),
+      qtdCaixa: import_zod3.z.number().optional(),
+      dataUltimaCompra: import_zod3.z.string().optional(),
+      isActive: import_zod3.z.number().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const updateData = { updatedAt: /* @__PURE__ */ new Date() };
+    if (input.posologiaDiaria)
+      updateData.posologiaDiaria = input.posologiaDiaria;
+    if (input.qtdCaixa) updateData.qtdCaixa = input.qtdCaixa;
+    if (input.dataUltimaCompra) {
+      updateData.dataUltimaCompra = new Date(input.dataUltimaCompra);
+    }
+    if (input.isActive !== void 0) updateData.isActive = input.isActive;
+    if (input.qtdCaixa && input.posologiaDiaria) {
+      const treatment = await db.select().from(customerTreatments).where((0, import_drizzle_orm5.eq)(customerTreatments.id, input.id)).limit(1);
+      if (treatment[0]?.dataUltimaCompra) {
+        updateData.dataFimPrevisto = calculateEndDate(
+          treatment[0].dataUltimaCompra,
+          input.qtdCaixa,
+          input.posologiaDiaria
+        );
+      }
+    }
+    await db.update(customerTreatments).set(updateData).where((0, import_drizzle_orm5.eq)(customerTreatments.id, input.id));
+    fireAndForget(async () => {
+      await enqueueCrmOutboxEvent({
+        eventName: "CustomerTreatmentUpdated",
+        entityType: "treatment",
+        entityId: input.id,
+        actorUserId: ctx.user.id,
+        payload: input
+      });
+    });
+    return { success: true };
+  }),
+  // Apagar (desativar) tratamento
+  deleteTreatment: protectedProcedure.input(import_zod3.z.object({ id: import_zod3.z.number() })).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const existing = await db.select().from(customerTreatments).where((0, import_drizzle_orm5.eq)(customerTreatments.id, input.id)).limit(1);
+    if (!existing?.[0]) {
+      return { success: true };
+    }
+    await db.update(customerTreatments).set({ isActive: 0, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm5.eq)(customerTreatments.id, input.id));
+    fireAndForget(async () => {
+      await enqueueCrmOutboxEvent({
+        eventName: "CustomerTreatmentDeleted",
+        entityType: "treatment",
+        entityId: input.id,
+        actorUserId: ctx.user.id,
+        payload: { customerId: existing[0].customerId }
+      });
+    });
+    return { success: true };
+  }),
+  // ========================================
+  // TAGS
+  // ========================================
+  // Listar todas as tags
+  getTags: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return db.select().from(tags).orderBy(tags.name);
+  }),
+  // Alias (used by some frontend screens)
+  listTags: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    return db.select().from(tags).orderBy(tags.name);
+  }),
+  // Criar nova tag
+  createTag: protectedProcedure.input(
+    import_zod3.z.object({
+      name: import_zod3.z.string(),
+      color: import_zod3.z.string().default("#6366f1"),
+      description: import_zod3.z.string().optional()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const newTag = await db.insert(tags).values({
+      ...input,
+      createdBy: ctx.user?.id
+    }).$returningId();
+    fireAndForget(async () => {
+      await enqueueCrmOutboxEvent({
+        eventName: "TagCreated",
+        entityType: "tag",
+        entityId: newTag[0].id,
+        actorUserId: ctx.user?.id ?? null,
+        payload: input
+      });
+    });
+    return { id: newTag[0].id };
+  }),
+  // Adicionar tag a cliente
+  addTagToCustomer: protectedProcedure.input(
+    import_zod3.z.object({
+      customerId: import_zod3.z.number(),
+      tagId: import_zod3.z.number()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const existing = await db.select().from(customerTags).where(
+      (0, import_drizzle_orm5.and)(
+        (0, import_drizzle_orm5.eq)(customerTags.customerId, input.customerId),
+        (0, import_drizzle_orm5.eq)(customerTags.tagId, input.tagId)
+      )
+    ).limit(1);
+    if (existing[0]) {
+      return existing[0];
+    }
+    const newCustomerTag = await db.insert(customerTags).values({
+      customerId: input.customerId,
+      tagId: input.tagId,
+      addedBy: ctx.user?.id
+    }).$returningId();
+    return { id: newCustomerTag[0].id };
+  }),
+  // Remover tag de cliente
+  removeTagFromCustomer: protectedProcedure.input(
+    import_zod3.z.object({
+      customerId: import_zod3.z.number(),
+      tagId: import_zod3.z.number()
+    })
+  ).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.delete(customerTags).where(
+      (0, import_drizzle_orm5.and)(
+        (0, import_drizzle_orm5.eq)(customerTags.customerId, input.customerId),
+        (0, import_drizzle_orm5.eq)(customerTags.tagId, input.tagId)
+      )
+    );
+    return { success: true };
+  }),
+  // ========================================
+  // ALERTAS DE RECORRÊNCIA
+  // ========================================
+  // Buscar tratamentos próximos do fim (para alertas)
+  getUpcomingTreatments: protectedProcedure.input(
+    import_zod3.z.object({
+      daysAhead: import_zod3.z.number().default(3)
+    })
+  ).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const today = /* @__PURE__ */ new Date();
+    const futureDate = /* @__PURE__ */ new Date();
+    futureDate.setDate(futureDate.getDate() + input.daysAhead);
+    const treatments = await db.select({
+      treatment: customerTreatments,
+      customer: customers
+    }).from(customerTreatments).innerJoin(customers, (0, import_drizzle_orm5.eq)(customerTreatments.customerId, customers.id)).where(
+      (0, import_drizzle_orm5.and)(
+        (0, import_drizzle_orm5.eq)(customerTreatments.isActive, 1),
+        (0, import_drizzle_orm5.gte)(customerTreatments.dataFimPrevisto, today),
+        (0, import_drizzle_orm5.lte)(customerTreatments.dataFimPrevisto, futureDate)
+      )
+    ).orderBy(customerTreatments.dataFimPrevisto);
+    return treatments;
+  }),
+  // ========================================
+  // SCRIPT/JORNADAS
+  // ========================================
+  getScripts: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const rows = await db.select().from(crmScripts).where((0, import_drizzle_orm5.eq)(crmScripts.isActive, 1)).orderBy((0, import_drizzle_orm5.desc)(crmScripts.updatedAt));
+    return rows.map((r) => {
+      let vars = [];
+      try {
+        vars = r.variablesJson ? JSON.parse(r.variablesJson) : [];
+      } catch {
+        vars = [];
+      }
+      return {
+        id: r.code,
+        name: r.name,
+        template: r.template,
+        variables: Array.isArray(vars) ? vars : []
+      };
+    });
+  }),
+  scripts: router({
+    list: protectedProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const rows = await db.select().from(crmScripts).orderBy((0, import_drizzle_orm5.desc)(crmScripts.updatedAt));
+      return rows.map((r) => {
+        let vars = [];
+        try {
+          vars = r.variablesJson ? JSON.parse(r.variablesJson) : [];
+        } catch {
+          vars = [];
+        }
+        return {
+          code: r.code,
+          name: r.name,
+          template: r.template,
+          variables: Array.isArray(vars) ? vars : [],
+          isActive: r.isActive
+        };
+      });
+    }),
+    upsert: adminProcedure.input(
+      import_zod3.z.object({
+        code: import_zod3.z.string().min(2).max(50),
+        name: import_zod3.z.string().min(2).max(120),
+        template: import_zod3.z.string().min(1),
+        variables: import_zod3.z.array(import_zod3.z.string()).default([]),
+        isActive: import_zod3.z.number().int().min(0).max(1).default(1)
+      })
+    ).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const existing = await db.select({ code: crmScripts.code }).from(crmScripts).where((0, import_drizzle_orm5.eq)(crmScripts.code, input.code)).limit(1);
+      if (existing?.[0]) {
+        await db.update(crmScripts).set({
+          name: input.name,
+          template: input.template,
+          variablesJson: JSON.stringify(input.variables),
+          isActive: input.isActive,
+          updatedAt: /* @__PURE__ */ new Date()
+        }).where((0, import_drizzle_orm5.eq)(crmScripts.code, input.code));
+      } else {
+        await db.insert(crmScripts).values({
+          code: input.code,
+          name: input.name,
+          template: input.template,
+          variablesJson: JSON.stringify(input.variables),
+          isActive: input.isActive,
+          createdBy: ctx.user.id,
+          createdAt: /* @__PURE__ */ new Date(),
+          updatedAt: /* @__PURE__ */ new Date()
+        });
+      }
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "CrmScriptUpserted",
+          entityType: "crm_script",
+          entityId: null,
+          actorUserId: ctx.user.id,
+          payload: { code: input.code }
+        });
+      });
+      return { success: true };
+    }),
+    delete: adminProcedure.input(import_zod3.z.object({ code: import_zod3.z.string().min(2).max(50) })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.delete(crmScripts).where((0, import_drizzle_orm5.eq)(crmScripts.code, input.code));
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "CrmScriptDeleted",
+          entityType: "crm_script",
+          entityId: null,
+          actorUserId: ctx.user.id,
+          payload: { code: input.code }
+        });
+      });
+      return { success: true };
+    })
+  }),
+  // ========================================
+  // DADOS COMPLETOS DO CLIENTE (PARA FRONTEND)
+  // ========================================
+  getCustomerFullData: protectedProcedure.input(import_zod3.z.object({ customerId: import_zod3.z.number() })).query(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const customer = await db.select().from(customers).where((0, import_drizzle_orm5.eq)(customers.id, input.customerId)).limit(1);
+    if (!customer[0]) return null;
+    const treatments = await db.select().from(customerTreatments).where(
+      (0, import_drizzle_orm5.and)(
+        (0, import_drizzle_orm5.eq)(customerTreatments.customerId, input.customerId),
+        (0, import_drizzle_orm5.eq)(customerTreatments.isActive, 1)
+      )
+    ).orderBy((0, import_drizzle_orm5.desc)(customerTreatments.dataFimPrevisto));
+    const customerTagsList = await db.select({
+      tag: tags
+    }).from(customerTags).innerJoin(tags, (0, import_drizzle_orm5.eq)(customerTags.tagId, tags.id)).where((0, import_drizzle_orm5.eq)(customerTags.customerId, input.customerId));
+    const baseCustomer = { ...customer[0] };
+    if (ctx.user.role !== "admin") {
+      baseCustomer.healthTagsJson = null;
+    }
+    return {
+      ...baseCustomer,
+      treatments,
+      tags: customerTagsList.map((t2) => t2.tag)
+    };
+  }),
+  // ========================================
+  // PHARMACORE: PURCHASE HISTORY + SUGGESTIONS
+  // ========================================
+  pharma: router({
+    ingestPurchase: protectedProcedure.input(
+      import_zod3.z.object({
+        customerId: import_zod3.z.number(),
+        externalId: import_zod3.z.string().optional(),
+        purchaseDate: import_zod3.z.string().optional(),
+        totalValue: import_zod3.z.number().optional(),
+        channel: import_zod3.z.enum(["loja", "delivery", "whatsapp", "outros"]).optional(),
+        items: import_zod3.z.array(
+          import_zod3.z.object({
+            ean: import_zod3.z.string().optional(),
+            name: import_zod3.z.string().min(1),
+            quantity: import_zod3.z.number().min(1),
+            price: import_zod3.z.number().optional(),
+            category: import_zod3.z.enum(["medicamento", "perfumaria", "outros"]).optional(),
+            substance: import_zod3.z.string().optional(),
+            daysDuration: import_zod3.z.number().optional()
+          })
+        ).min(1)
+      })
+    ).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const purchaseDate = input.purchaseDate ? new Date(input.purchaseDate) : /* @__PURE__ */ new Date();
+      const channel = input.channel ?? "outros";
+      const total = Number.isFinite(input.totalValue) ? Number(input.totalValue) : input.items.reduce(
+        (acc, it) => acc + (Number(it.price || 0) * it.quantity || 0),
+        0
+      );
+      for (const it of input.items) {
+        if (!it.ean) continue;
+        try {
+          const ex = await db.select({ ean: pharmaProducts.ean }).from(pharmaProducts).where((0, import_drizzle_orm5.eq)(pharmaProducts.ean, it.ean)).limit(1);
+          if (!ex?.[0]) {
+            await db.insert(pharmaProducts).values({
+              ean: it.ean,
+              name: it.name,
+              category: it.category || "outros",
+              substance: it.substance || null,
+              daysDuration: it.daysDuration ?? null
+            });
+          }
+        } catch {
+        }
+      }
+      const inserted = await db.insert(pharmaPurchases).values({
+        customerId: input.customerId,
+        externalId: input.externalId || null,
+        purchaseDate,
+        totalValue: String(total),
+        channel,
+        createdAt: /* @__PURE__ */ new Date()
+      }).$returningId();
+      const purchaseId = inserted?.[0]?.id;
+      if (purchaseId) {
+        await db.insert(pharmaPurchaseItems).values(
+          input.items.map((it) => ({
+            purchaseId,
+            productEan: it.ean || null,
+            productName: it.name,
+            quantity: it.quantity,
+            price: String(it.price || 0)
+          }))
+        );
+      }
+      await db.update(customers).set({
+        lastPurchaseAt: purchaseDate,
+        ltvValue: import_drizzle_orm5.sql`${customers.ltvValue} + ${total}`,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where((0, import_drizzle_orm5.eq)(customers.id, input.customerId));
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "PurchaseIngested",
+          entityType: "customer",
+          entityId: input.customerId,
+          actorUserId: ctx.user.id,
+          payload: {
+            purchaseId: purchaseId ?? null,
+            externalId: input.externalId ?? null,
+            purchaseDate: purchaseDate.toISOString(),
+            total,
+            channel,
+            itemsCount: input.items.length
+          }
+        });
+      });
+      return { id: purchaseId ?? null };
+    }),
+    listPurchasesByCustomer: protectedProcedure.input(
+      import_zod3.z.object({
+        customerId: import_zod3.z.number(),
+        limit: import_zod3.z.number().min(1).max(200).default(50)
+      })
+    ).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(pharmaPurchases).where((0, import_drizzle_orm5.eq)(pharmaPurchases.customerId, input.customerId)).orderBy((0, import_drizzle_orm5.desc)(pharmaPurchases.purchaseDate)).limit(input.limit);
+    }),
+    listPurchaseItems: protectedProcedure.input(import_zod3.z.object({ purchaseId: import_zod3.z.number() })).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(pharmaPurchaseItems).where((0, import_drizzle_orm5.eq)(pharmaPurchaseItems.purchaseId, input.purchaseId)).orderBy((0, import_drizzle_orm5.desc)(pharmaPurchaseItems.id));
+    }),
+    getSmartSuggestions: protectedProcedure.input(
+      import_zod3.z.object({
+        items: import_zod3.z.array(
+          import_zod3.z.object({
+            name: import_zod3.z.string()
+          })
+        )
+      })
+    ).query(async ({ input }) => {
+      const names = input.items.map((i) => i.name.toLowerCase());
+      const suggestions = [];
+      const has = (re) => names.some((n) => re.test(n));
+      if (has(/antibiot/)) {
+        suggestions.push({
+          title: "Probi\xF3tico",
+          reason: "Antibi\xF3tico infantil costuma precisar de suporte intestinal"
+        });
+        suggestions.push({
+          title: "Term\xF4metro",
+          reason: "Complemento \xFAtil em quadros infecciosos"
+        });
+      }
+      if (has(/fralda/)) {
+        suggestions.push({
+          title: "Pomada de assadura",
+          reason: "Cross-sell natural para fraldas"
+        });
+      }
+      if (has(/protetor\s+solar|fps|sunscreen/)) {
+        suggestions.push({
+          title: "P\xF3s-sol / hidratante",
+          reason: "Aumenta a ades\xE3o ao cuidado p\xF3s-exposi\xE7\xE3o"
+        });
+      }
+      return suggestions;
+    })
+  }),
+  // ========================================
+  // ENTERPRISE: ACCOUNTS (B2B)
+  // ========================================
+  accounts: router({
+    list: protectedProcedure.input(
+      import_zod3.z.object({
+        query: import_zod3.z.string().optional(),
+        limit: import_zod3.z.number().min(1).max(100).default(25)
+      }).optional()
+    ).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const q = input?.query?.trim();
+      const limit = input?.limit ?? 25;
+      const where = q ? (0, import_drizzle_orm5.or)(
+        (0, import_drizzle_orm5.like)(accounts.name, `%${q}%`),
+        (0, import_drizzle_orm5.like)(accounts.legalName, `%${q}%`),
+        (0, import_drizzle_orm5.like)(accounts.cnpj, `%${q}%`)
+      ) : void 0;
+      return await db.select().from(accounts).where(where).orderBy((0, import_drizzle_orm5.desc)(accounts.updatedAt)).limit(limit);
+    }),
+    create: protectedProcedure.input(
+      import_zod3.z.object({
+        name: import_zod3.z.string().min(2),
+        legalName: import_zod3.z.string().optional(),
+        cnpj: import_zod3.z.string().optional(),
+        industry: import_zod3.z.string().optional(),
+        website: import_zod3.z.string().optional(),
+        phone: import_zod3.z.string().optional(),
+        address: import_zod3.z.string().optional(),
+        city: import_zod3.z.string().optional(),
+        state: import_zod3.z.string().optional(),
+        zipCode: import_zod3.z.string().optional(),
+        ownerUserId: import_zod3.z.number().optional()
+      })
+    ).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const result = await db.insert(accounts).values({
+        name: input.name,
+        legalName: input.legalName || null,
+        cnpj: input.cnpj || null,
+        industry: input.industry || null,
+        website: input.website || null,
+        phone: input.phone || null,
+        address: input.address || null,
+        city: input.city || null,
+        state: input.state || null,
+        zipCode: input.zipCode || null,
+        ownerUserId: input.ownerUserId ?? ctx.user.id,
+        createdBy: ctx.user.id,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).$returningId();
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "AccountCreated",
+          entityType: "account",
+          entityId: result[0].id,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { id: result[0].id };
+    }),
+    linkContact: protectedProcedure.input(
+      import_zod3.z.object({
+        accountId: import_zod3.z.number(),
+        customerId: import_zod3.z.number(),
+        role: import_zod3.z.string().optional(),
+        isPrimary: import_zod3.z.boolean().optional()
+      })
+    ).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.insert(accountContacts).values({
+        accountId: input.accountId,
+        customerId: input.customerId,
+        role: input.role || null,
+        isPrimary: input.isPrimary ? 1 : 0,
+        createdAt: /* @__PURE__ */ new Date()
+      }).onDuplicateKeyUpdate({
+        set: {
+          role: input.role || null,
+          isPrimary: input.isPrimary ? 1 : 0
+        }
+      });
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "AccountContactLinked",
+          entityType: "account",
+          entityId: input.accountId,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { success: true };
+    })
+  }),
+  // ========================================
+  // ENTERPRISE: DEALS
+  // ========================================
+  deals: router({
+    pipelines: protectedProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(dealPipelines).where((0, import_drizzle_orm5.eq)(dealPipelines.isActive, 1));
+    }),
+    stages: protectedProcedure.input(import_zod3.z.object({ pipelineId: import_zod3.z.number() })).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(dealStages).where((0, import_drizzle_orm5.eq)(dealStages.pipelineId, input.pipelineId)).orderBy(dealStages.sortOrder);
+    }),
+    list: protectedProcedure.input(
+      import_zod3.z.object({
+        pipelineId: import_zod3.z.number().optional(),
+        stageId: import_zod3.z.number().optional(),
+        ownerUserId: import_zod3.z.number().optional(),
+        limit: import_zod3.z.number().min(1).max(100).default(25)
+      }).optional()
+    ).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const limit = input?.limit ?? 25;
+      const conditions = [];
+      if (input?.pipelineId)
+        conditions.push((0, import_drizzle_orm5.eq)(deals.pipelineId, input.pipelineId));
+      if (input?.stageId) conditions.push((0, import_drizzle_orm5.eq)(deals.stageId, input.stageId));
+      if (input?.ownerUserId)
+        conditions.push((0, import_drizzle_orm5.eq)(deals.ownerUserId, input.ownerUserId));
+      return await db.select().from(deals).where(conditions.length ? (0, import_drizzle_orm5.and)(...conditions) : void 0).orderBy((0, import_drizzle_orm5.desc)(deals.updatedAt)).limit(limit);
+    }),
+    create: protectedProcedure.input(
+      import_zod3.z.object({
+        title: import_zod3.z.string().min(2),
+        pipelineId: import_zod3.z.number(),
+        stageId: import_zod3.z.number(),
+        accountId: import_zod3.z.number().optional(),
+        customerId: import_zod3.z.number().optional(),
+        amountCents: import_zod3.z.number().int().optional(),
+        closeDate: import_zod3.z.string().optional(),
+        ownerUserId: import_zod3.z.number().optional()
+      })
+    ).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const result = await db.insert(deals).values({
+        title: input.title,
+        pipelineId: input.pipelineId,
+        stageId: input.stageId,
+        accountId: input.accountId ?? null,
+        customerId: input.customerId ?? null,
+        amountCents: input.amountCents ?? null,
+        closeDate: input.closeDate ? new Date(input.closeDate) : null,
+        ownerUserId: input.ownerUserId ?? ctx.user.id,
+        createdBy: ctx.user.id,
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date(),
+        status: "open"
+      }).$returningId();
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "DealCreated",
+          entityType: "deal",
+          entityId: result[0].id,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { id: result[0].id };
+    }),
+    moveStage: protectedProcedure.input(import_zod3.z.object({ dealId: import_zod3.z.number(), stageId: import_zod3.z.number() })).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(deals).set({ stageId: input.stageId, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm5.eq)(deals.id, input.dealId));
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "DealStageChanged",
+          entityType: "deal",
+          entityId: input.dealId,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { success: true };
+    })
+  }),
+  // ========================================
+  // ENTERPRISE: TASKS
+  // ========================================
+  tasks: router({
+    list: protectedProcedure.input(
+      import_zod3.z.object({
+        assignedTo: import_zod3.z.number().optional(),
+        status: import_zod3.z.enum(["open", "done", "cancelled"]).optional(),
+        limit: import_zod3.z.number().min(1).max(100).default(50)
+      }).optional()
+    ).query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const conditions = [];
+      conditions.push(
+        (0, import_drizzle_orm5.eq)(crmTasks.assignedTo, input?.assignedTo ?? ctx.user.id)
+      );
+      if (input?.status) conditions.push((0, import_drizzle_orm5.eq)(crmTasks.status, input.status));
+      return await db.select().from(crmTasks).where((0, import_drizzle_orm5.and)(...conditions)).orderBy((0, import_drizzle_orm5.desc)(crmTasks.updatedAt)).limit(input?.limit ?? 50);
+    }),
+    create: protectedProcedure.input(
+      import_zod3.z.object({
+        title: import_zod3.z.string().min(2),
+        description: import_zod3.z.string().optional(),
+        dueAt: import_zod3.z.string().optional(),
+        priority: import_zod3.z.enum(["low", "medium", "high"]).optional(),
+        relatedEntityType: import_zod3.z.string().optional(),
+        relatedEntityId: import_zod3.z.number().optional(),
+        assignedTo: import_zod3.z.number().optional()
+      })
+    ).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const result = await db.insert(crmTasks).values({
+        title: input.title,
+        description: input.description || null,
+        dueAt: input.dueAt ? new Date(input.dueAt) : null,
+        priority: input.priority || "medium",
+        relatedEntityType: input.relatedEntityType || null,
+        relatedEntityId: input.relatedEntityId ?? null,
+        assignedTo: input.assignedTo ?? ctx.user.id,
+        createdBy: ctx.user.id,
+        status: "open",
+        createdAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date(),
+        completedAt: null
+      }).$returningId();
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "TaskCreated",
+          entityType: "task",
+          entityId: result[0].id,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { id: result[0].id };
+    }),
+    complete: protectedProcedure.input(import_zod3.z.object({ taskId: import_zod3.z.number() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.update(crmTasks).set({
+        status: "done",
+        completedAt: /* @__PURE__ */ new Date(),
+        updatedAt: /* @__PURE__ */ new Date()
+      }).where((0, import_drizzle_orm5.eq)(crmTasks.id, input.taskId));
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "TaskCompleted",
+          entityType: "task",
+          entityId: input.taskId,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { success: true };
+    })
+  }),
+  // ========================================
+  // ENTERPRISE: ACTIVITIES (timeline)
+  // ========================================
+  activities: router({
+    listByEntity: protectedProcedure.input(
+      import_zod3.z.object({
+        entityType: import_zod3.z.string().min(1).max(40),
+        entityId: import_zod3.z.number(),
+        limit: import_zod3.z.number().min(1).max(200).default(50)
+      })
+    ).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(crmActivities).where(
+        (0, import_drizzle_orm5.and)(
+          (0, import_drizzle_orm5.eq)(crmActivities.entityType, input.entityType),
+          (0, import_drizzle_orm5.eq)(crmActivities.entityId, input.entityId)
+        )
+      ).orderBy((0, import_drizzle_orm5.desc)(crmActivities.occurredAt)).limit(input.limit);
+    })
+  }),
+  // ========================================
+  // ENTERPRISE: CUSTOM FIELDS
+  // ========================================
+  customFields: router({
+    listDefinitions: protectedProcedure.input(import_zod3.z.object({ entityType: import_zod3.z.string().min(1).max(40) })).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      return await db.select().from(customFieldDefinitions).where(
+        (0, import_drizzle_orm5.and)(
+          (0, import_drizzle_orm5.eq)(customFieldDefinitions.entityType, input.entityType),
+          (0, import_drizzle_orm5.eq)(customFieldDefinitions.isActive, 1)
+        )
+      ).orderBy((0, import_drizzle_orm5.desc)(customFieldDefinitions.updatedAt));
+    }),
+    upsertValue: protectedProcedure.input(
+      import_zod3.z.object({
+        entityType: import_zod3.z.string().min(1).max(40),
+        entityId: import_zod3.z.number(),
+        fieldDefinitionId: import_zod3.z.number(),
+        valueText: import_zod3.z.string().optional()
+      })
+    ).mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      await db.insert(customFieldValues).values({
+        entityType: input.entityType,
+        entityId: input.entityId,
+        fieldDefinitionId: input.fieldDefinitionId,
+        valueText: input.valueText ?? null,
+        updatedBy: ctx.user.id,
+        updatedAt: /* @__PURE__ */ new Date()
+      }).onDuplicateKeyUpdate({
+        set: {
+          valueText: input.valueText ?? null,
+          updatedBy: ctx.user.id,
+          updatedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      fireAndForget(async () => {
+        await enqueueCrmOutboxEvent({
+          eventName: "CustomFieldValueUpserted",
+          entityType: input.entityType,
+          entityId: input.entityId,
+          actorUserId: ctx.user.id,
+          payload: input
+        });
+      });
+      return { success: true };
+    })
+  })
+});
+
+// server/routers-ai.ts
+var import_zod4 = require("zod");
 init_llm();
 
 // server/_core/voiceTranscription.ts
@@ -6974,9 +8243,9 @@ var aiRouter = router({
    * provisioning later.
    */
   applyTemplate: adminProcedure.input(
-    import_zod3.z.object({
-      templateType: import_zod3.z.string(),
-      settings: import_zod3.z.record(import_zod3.z.string(), import_zod3.z.unknown()).optional()
+    import_zod4.z.object({
+      templateType: import_zod4.z.string(),
+      settings: import_zod4.z.record(import_zod4.z.string(), import_zod4.z.unknown()).optional()
     })
   ).mutation(async ({ input }) => {
     return {
@@ -6988,12 +8257,12 @@ var aiRouter = router({
    * Process AI Conversation
    */
   processConversation: adminProcedure.input(
-    import_zod3.z.object({
-      templateId: import_zod3.z.string(),
-      customerId: import_zod3.z.number(),
-      channelId: import_zod3.z.string(),
-      message: import_zod3.z.string(),
-      context: import_zod3.z.record(import_zod3.z.string(), import_zod3.z.unknown()).optional()
+    import_zod4.z.object({
+      templateId: import_zod4.z.string(),
+      customerId: import_zod4.z.number(),
+      channelId: import_zod4.z.string(),
+      message: import_zod4.z.string(),
+      context: import_zod4.z.record(import_zod4.z.string(), import_zod4.z.unknown()).optional()
     })
   ).mutation(async ({ input }) => {
     const { processAIConversation: processAIConversation2 } = await Promise.resolve().then(() => (init_ai_integration(), ai_integration_exports));
@@ -7011,11 +8280,11 @@ var aiRouter = router({
    * Process Automation Flow
    */
   processAutomation: adminProcedure.input(
-    import_zod3.z.object({
-      flowId: import_zod3.z.string(),
-      triggerType: import_zod3.z.string(),
-      triggerData: import_zod3.z.record(import_zod3.z.string(), import_zod3.z.unknown()).optional(),
-      customerId: import_zod3.z.number().optional()
+    import_zod4.z.object({
+      flowId: import_zod4.z.string(),
+      triggerType: import_zod4.z.string(),
+      triggerData: import_zod4.z.record(import_zod4.z.string(), import_zod4.z.unknown()).optional(),
+      customerId: import_zod4.z.number().optional()
     })
   ).mutation(async ({ input }) => {
     const { processAutomationFlow: processAutomationFlow2 } = await Promise.resolve().then(() => (init_ai_integration(), ai_integration_exports));
@@ -7033,10 +8302,10 @@ var aiRouter = router({
    * Transcrever áudio usando Whisper
    */
   transcribeAudio: protectedProcedure.input(
-    import_zod3.z.object({
-      audioUrl: import_zod3.z.string().url(),
-      messageId: import_zod3.z.number(),
-      language: import_zod3.z.string().optional()
+    import_zod4.z.object({
+      audioUrl: import_zod4.z.string().url(),
+      messageId: import_zod4.z.number(),
+      language: import_zod4.z.string().optional()
     })
   ).mutation(async ({ input }) => {
     const result = await transcribeAudio({
@@ -7055,10 +8324,10 @@ var aiRouter = router({
    * Sugerir 3 respostas usando IA
    */
   suggestResponses: protectedProcedure.input(
-    import_zod3.z.object({
-      customerMessage: import_zod3.z.string(),
-      customerName: import_zod3.z.string(),
-      context: import_zod3.z.string().optional()
+    import_zod4.z.object({
+      customerMessage: import_zod4.z.string(),
+      customerName: import_zod4.z.string(),
+      context: import_zod4.z.string().optional()
     })
   ).mutation(async ({ input }) => {
     const prompt = `Voc\xEA \xE9 um assistente de atendimento de uma farm\xE1cia chamada Farma Francis.
@@ -7095,8 +8364,8 @@ Retorne apenas as 3 respostas, uma por linha, sem numera\xE7\xE3o.`;
    * Analisar sentimento da mensagem
    */
   analyzeSentiment: protectedProcedure.input(
-    import_zod3.z.object({
-      message: import_zod3.z.string()
+    import_zod4.z.object({
+      message: import_zod4.z.string()
     })
   ).mutation(async ({ input }) => {
     const prompt = `Analise o sentimento da seguinte mensagem de um cliente:
@@ -7133,8 +8402,8 @@ Retorne apenas uma palavra: happy, neutral ou frustrated.`;
    * Extrair dados de receita usando OCR
    */
   extractRecipeData: protectedProcedure.input(
-    import_zod3.z.object({
-      imageUrl: import_zod3.z.string()
+    import_zod4.z.object({
+      imageUrl: import_zod4.z.string()
     })
   ).mutation(async ({ input }) => {
     let base64Image = "";
@@ -7242,10 +8511,10 @@ Retorne em formato JSON.`;
 });
 
 // server/routers-api-config.ts
-var import_zod4 = require("zod");
+var import_zod5 = require("zod");
 init_db();
 init_schema();
-var import_drizzle_orm5 = require("drizzle-orm");
+var import_drizzle_orm6 = require("drizzle-orm");
 var import_server2 = require("@trpc/server");
 
 // server/integrations/telegram.ts
@@ -7296,12 +8565,12 @@ var apiConfigRouter = router({
   /**
    * Buscar configurações de uma integração específica
    */
-  get: adminProcedure.input(import_zod4.z.object({
-    integrationType: import_zod4.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"])
+  get: adminProcedure.input(import_zod5.z.object({
+    integrationType: import_zod5.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"])
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new import_server2.TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const [config] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm5.eq)(integrationSettings2.integrationType, input.integrationType)).limit(1);
+    const [config] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm6.eq)(integrationSettings2.integrationType, input.integrationType)).limit(1);
     if (!config) return null;
     const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
     return {
@@ -7312,22 +8581,22 @@ var apiConfigRouter = router({
   /**
    * Salvar ou atualizar configurações de uma integração
    */
-  save: adminProcedure.input(import_zod4.z.object({
-    integrationType: import_zod4.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"]),
-    name: import_zod4.z.string(),
-    accessToken: import_zod4.z.string().optional(),
-    phoneNumberId: import_zod4.z.string().optional(),
-    businessAccountId: import_zod4.z.string().optional(),
-    webhookUrl: import_zod4.z.string().optional(),
-    webhookSecret: import_zod4.z.string().optional(),
-    webhookVerifyToken: import_zod4.z.string().optional(),
-    appSecret: import_zod4.z.string().optional(),
-    apiUrl: import_zod4.z.string().optional(),
-    apiKey: import_zod4.z.string().optional(),
-    instanceName: import_zod4.z.string().optional(),
-    botToken: import_zod4.z.string().optional(),
+  save: adminProcedure.input(import_zod5.z.object({
+    integrationType: import_zod5.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"]),
+    name: import_zod5.z.string(),
+    accessToken: import_zod5.z.string().optional(),
+    phoneNumberId: import_zod5.z.string().optional(),
+    businessAccountId: import_zod5.z.string().optional(),
+    webhookUrl: import_zod5.z.string().optional(),
+    webhookSecret: import_zod5.z.string().optional(),
+    webhookVerifyToken: import_zod5.z.string().optional(),
+    appSecret: import_zod5.z.string().optional(),
+    apiUrl: import_zod5.z.string().optional(),
+    apiKey: import_zod5.z.string().optional(),
+    instanceName: import_zod5.z.string().optional(),
+    botToken: import_zod5.z.string().optional(),
     // Telegram
-    isActive: import_zod4.z.boolean().default(true)
+    isActive: import_zod5.z.boolean().default(true)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new import_server2.TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
@@ -7346,14 +8615,14 @@ var apiConfigRouter = router({
       botToken: input.botToken
       // Telegram
     };
-    const [existing] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm5.eq)(integrationSettings2.integrationType, input.integrationType)).limit(1);
+    const [existing] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm6.eq)(integrationSettings2.integrationType, input.integrationType)).limit(1);
     if (existing) {
       await db.update(integrationSettings2).set({
         name: input.name,
         config: JSON.stringify(config),
         isActive: input.isActive,
         updatedAt: /* @__PURE__ */ new Date()
-      }).where((0, import_drizzle_orm5.eq)(integrationSettings2.id, existing.id));
+      }).where((0, import_drizzle_orm6.eq)(integrationSettings2.id, existing.id));
       return { success: true, id: existing.id, action: "updated" };
     } else {
       const [result] = await db.insert(integrationSettings2).values({
@@ -7370,12 +8639,12 @@ var apiConfigRouter = router({
   /**
    * Testar conexão com a API
    */
-  test: adminProcedure.input(import_zod4.z.object({
-    integrationType: import_zod4.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram"]),
-    accessToken: import_zod4.z.string(),
-    phoneNumberId: import_zod4.z.string().optional(),
-    businessAccountId: import_zod4.z.string().optional(),
-    apiUrl: import_zod4.z.string().optional()
+  test: adminProcedure.input(import_zod5.z.object({
+    integrationType: import_zod5.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram"]),
+    accessToken: import_zod5.z.string(),
+    phoneNumberId: import_zod5.z.string().optional(),
+    businessAccountId: import_zod5.z.string().optional(),
+    apiUrl: import_zod5.z.string().optional()
   })).mutation(async ({ input }) => {
     try {
       if (input.integrationType === "telegram") {
@@ -7502,21 +8771,21 @@ var apiConfigRouter = router({
   /**
       * Deletar configuração
       */
-  delete: adminProcedure.input(import_zod4.z.object({
-    integrationType: import_zod4.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"])
+  delete: adminProcedure.input(import_zod5.z.object({
+    integrationType: import_zod5.z.enum(["whatsapp_business", "instagram_graph", "evolution_api", "telegram", "email"])
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new import_server2.TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    await db.delete(integrationSettings2).where((0, import_drizzle_orm5.eq)(integrationSettings2.integrationType, input.integrationType));
+    await db.delete(integrationSettings2).where((0, import_drizzle_orm6.eq)(integrationSettings2.integrationType, input.integrationType));
     return { success: true };
   }),
   /**
    * Gerar QR Code para conectar WhatsApp via Evolution API
    */
-  generateQrCode: adminProcedure.input(import_zod4.z.object({
-    apiUrl: import_zod4.z.string(),
-    apiKey: import_zod4.z.string(),
-    instanceName: import_zod4.z.string()
+  generateQrCode: adminProcedure.input(import_zod5.z.object({
+    apiUrl: import_zod5.z.string(),
+    apiKey: import_zod5.z.string(),
+    instanceName: import_zod5.z.string()
   })).mutation(async ({ input }) => {
     try {
       const cleanApiUrl = input.apiUrl.replace(/\/$/, "");
@@ -7625,10 +8894,10 @@ var apiConfigRouter = router({
   /**
    * Desconectar instância do WhatsApp (para gerar novo QR Code)
    */
-  disconnectInstance: adminProcedure.input(import_zod4.z.object({
-    apiUrl: import_zod4.z.string(),
-    apiKey: import_zod4.z.string(),
-    instanceName: import_zod4.z.string()
+  disconnectInstance: adminProcedure.input(import_zod5.z.object({
+    apiUrl: import_zod5.z.string(),
+    apiKey: import_zod5.z.string(),
+    instanceName: import_zod5.z.string()
   })).mutation(async ({ input }) => {
     try {
       const cleanApiUrl = input.apiUrl.replace(/\/$/, "");
@@ -7664,14 +8933,14 @@ var apiConfigRouter = router({
 });
 
 // server/routers-automation.ts
-var import_zod5 = require("zod");
+var import_zod6 = require("zod");
 
 // server/automation-sse.ts
 init_sse();
 init_logger();
 init_db();
 init_schema();
-var import_drizzle_orm6 = require("drizzle-orm");
+var import_drizzle_orm7 = require("drizzle-orm");
 async function executeAutomationWithSSE(params) {
   try {
     const db = await getDb();
@@ -7687,9 +8956,9 @@ async function executeAutomationWithSSE(params) {
     let activeConversationId = params.conversationId;
     if (!activeConversationId) {
       const [activeConv] = await db.select().from(conversations).where(
-        (0, import_drizzle_orm6.and)(
-          (0, import_drizzle_orm6.eq)(conversations.customerId, params.customerId),
-          (0, import_drizzle_orm6.eq)(conversations.status, "assigned")
+        (0, import_drizzle_orm7.and)(
+          (0, import_drizzle_orm7.eq)(conversations.customerId, params.customerId),
+          (0, import_drizzle_orm7.eq)(conversations.status, "assigned")
         )
       ).orderBy(conversations.lastMessageAt).limit(1);
       if (activeConv) {
@@ -7833,41 +9102,41 @@ async function saveMessageAndNotify(db, conversationId, customerId, content, mes
 init_db();
 init_schema_executions();
 init_schema();
-var import_drizzle_orm7 = require("drizzle-orm");
-var CreateAutomationInput = import_zod5.z.object({
-  name: import_zod5.z.string().min(1, "Nome \xE9 obrigat\xF3rio").max(255, "Nome muito longo"),
-  description: import_zod5.z.string().max(1e3, "Descri\xE7\xE3o muito longa").optional(),
-  templateType: import_zod5.z.string().default("pharma"),
-  flowData: import_zod5.z.record(import_zod5.z.any()).default({}),
-  isActive: import_zod5.z.boolean().default(true),
-  tags: import_zod5.z.array(import_zod5.z.string()).optional()
+var import_drizzle_orm8 = require("drizzle-orm");
+var CreateAutomationInput = import_zod6.z.object({
+  name: import_zod6.z.string().min(1, "Nome \xE9 obrigat\xF3rio").max(255, "Nome muito longo"),
+  description: import_zod6.z.string().max(1e3, "Descri\xE7\xE3o muito longa").optional(),
+  templateType: import_zod6.z.string().default("pharma"),
+  flowData: import_zod6.z.record(import_zod6.z.any()).default({}),
+  isActive: import_zod6.z.boolean().default(true),
+  tags: import_zod6.z.array(import_zod6.z.string()).optional()
 });
-var UpdateAutomationInput = import_zod5.z.object({
-  id: import_zod5.z.number(),
-  name: import_zod5.z.string().min(1, "Nome \xE9 obrigat\xF3rio").max(255, "Nome muito longo").optional(),
-  description: import_zod5.z.string().max(1e3, "Descri\xE7\xE3o muito longa").optional(),
-  templateType: import_zod5.z.string().optional(),
-  flowData: import_zod5.z.record(import_zod5.z.any()).optional(),
-  isActive: import_zod5.z.boolean().optional(),
-  tags: import_zod5.z.array(import_zod5.z.string()).optional()
+var UpdateAutomationInput = import_zod6.z.object({
+  id: import_zod6.z.number(),
+  name: import_zod6.z.string().min(1, "Nome \xE9 obrigat\xF3rio").max(255, "Nome muito longo").optional(),
+  description: import_zod6.z.string().max(1e3, "Descri\xE7\xE3o muito longa").optional(),
+  templateType: import_zod6.z.string().optional(),
+  flowData: import_zod6.z.record(import_zod6.z.any()).optional(),
+  isActive: import_zod6.z.boolean().optional(),
+  tags: import_zod6.z.array(import_zod6.z.string()).optional()
 });
-var AutomationFilterInput = import_zod5.z.object({
-  isActive: import_zod5.z.boolean().optional(),
-  templateType: import_zod5.z.string().optional(),
-  search: import_zod5.z.string().optional(),
-  tags: import_zod5.z.array(import_zod5.z.string()).optional(),
-  limit: import_zod5.z.number().min(1).max(100).default(50),
-  offset: import_zod5.z.number().min(0).default(0)
+var AutomationFilterInput = import_zod6.z.object({
+  isActive: import_zod6.z.boolean().optional(),
+  templateType: import_zod6.z.string().optional(),
+  search: import_zod6.z.string().optional(),
+  tags: import_zod6.z.array(import_zod6.z.string()).optional(),
+  limit: import_zod6.z.number().min(1).max(100).default(50),
+  offset: import_zod6.z.number().min(0).default(0)
 });
-var TestAutomationInput = import_zod5.z.object({
-  customerId: import_zod5.z.number().positive("Customer ID deve ser positivo"),
-  context: import_zod5.z.record(import_zod5.z.string(), import_zod5.z.any()).optional()
+var TestAutomationInput = import_zod6.z.object({
+  customerId: import_zod6.z.number().positive("Customer ID deve ser positivo"),
+  context: import_zod6.z.record(import_zod6.z.string(), import_zod6.z.any()).optional()
 });
-var AutomationResponseSchema = import_zod5.z.object({
-  success: import_zod5.z.boolean(),
-  message: import_zod5.z.string().optional(),
-  data: import_zod5.z.any().optional(),
-  error: import_zod5.z.string().optional()
+var AutomationResponseSchema = import_zod6.z.object({
+  success: import_zod6.z.boolean(),
+  message: import_zod6.z.string().optional(),
+  data: import_zod6.z.any().optional(),
+  error: import_zod6.z.string().optional()
 });
 function successResponse(data, message) {
   return { success: true, data, message };
@@ -7952,25 +9221,25 @@ var automationRouter = router({
       let query = db.select().from(visualFlows);
       const conditions = [];
       if (input.isActive !== void 0) {
-        conditions.push((0, import_drizzle_orm7.eq)(visualFlows.isActive, input.isActive));
+        conditions.push((0, import_drizzle_orm8.eq)(visualFlows.isActive, input.isActive));
       }
       if (input.templateType) {
-        conditions.push((0, import_drizzle_orm7.eq)(visualFlows.templateType, input.templateType));
+        conditions.push((0, import_drizzle_orm8.eq)(visualFlows.templateType, input.templateType));
       }
       if (input.search) {
         conditions.push(
-          import_drizzle_orm7.sql`${visualFlows.name} ILIKE ${`%${input.search}%`} OR ${visualFlows.description} ILIKE ${`%${input.search}%`}`
+          import_drizzle_orm8.sql`${visualFlows.name} ILIKE ${`%${input.search}%`} OR ${visualFlows.description} ILIKE ${`%${input.search}%`}`
         );
       }
       if (input.tags && input.tags.length > 0) {
         for (const tag of input.tags) {
           conditions.push(
-            import_drizzle_orm7.sql`array_position(${visualFlows.tags}, ${tag}) IS NOT NULL`
+            import_drizzle_orm8.sql`array_position(${visualFlows.tags}, ${tag}) IS NOT NULL`
           );
         }
       }
       if (conditions.length > 0) {
-        query = query.where((0, import_drizzle_orm7.and)(...conditions));
+        query = query.where((0, import_drizzle_orm8.and)(...conditions));
       }
       const countResult = await query.clone().limit(1).count();
       const total = Number(countResult[0].count);
@@ -8017,13 +9286,13 @@ var automationRouter = router({
    * }
    * ```
    */
-  get: protectedProcedure.input(import_zod5.z.object({ id: import_zod5.z.number() })).query(async ({ input }) => {
+  get: protectedProcedure.input(import_zod6.z.object({ id: import_zod6.z.number() })).query(async ({ input }) => {
     try {
       const db = await getDb();
       if (!db) {
         throw new Error("Database n\xE3o dispon\xEDvel");
       }
-      const flows = await db.select().from(visualFlows).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id)).limit(1);
+      const flows = await db.select().from(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id)).limit(1);
       if (flows.length === 0) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
       }
@@ -8068,7 +9337,7 @@ var automationRouter = router({
       if (!db) {
         throw new Error("Database n\xE3o dispon\xEDvel");
       }
-      const existing = await db.select().from(visualFlows).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id)).limit(1);
+      const existing = await db.select().from(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id)).limit(1);
       if (existing.length === 0) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
       }
@@ -8079,7 +9348,7 @@ var automationRouter = router({
       if (input.flowData !== void 0) updateData.flowData = JSON.stringify(input.flowData);
       if (input.isActive !== void 0) updateData.isActive = input.isActive;
       if (input.tags !== void 0) updateData.tags = JSON.stringify(input.tags);
-      await db.update(visualFlows).set(updateData).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id));
+      await db.update(visualFlows).set(updateData).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id));
       return successResponse(
         { id: input.id },
         "Automa\xE7\xE3o atualizada com sucesso"
@@ -8106,17 +9375,17 @@ var automationRouter = router({
    * }
    * ```
    */
-  delete: protectedProcedure.input(import_zod5.z.object({ id: import_zod5.z.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(import_zod6.z.object({ id: import_zod6.z.number() })).mutation(async ({ input }) => {
     try {
       const db = await getDb();
       if (!db) {
         throw new Error("Database n\xE3o dispon\xEDvel");
       }
-      const existing = await db.select().from(visualFlows).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id)).limit(1);
+      const existing = await db.select().from(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id)).limit(1);
       if (existing.length === 0) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
       }
-      await db.update(visualFlows).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id));
+      await db.update(visualFlows).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id));
       return successResponse(
         { id: input.id },
         "Automa\xE7\xE3o desativada com sucesso"
@@ -8166,8 +9435,8 @@ var automationRouter = router({
    * ```
    */
   testById: protectedProcedure.input(
-    import_zod5.z.object({
-      id: import_zod5.z.number()
+    import_zod6.z.object({
+      id: import_zod6.z.number()
     }).and(TestAutomationInput)
   ).mutation(async ({ input }) => {
     try {
@@ -8175,7 +9444,7 @@ var automationRouter = router({
       if (!db) {
         throw new Error("Database n\xE3o dispon\xEDvel");
       }
-      const flows = await db.select().from(visualFlows).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id)).limit(1);
+      const flows = await db.select().from(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id)).limit(1);
       const flow = flows[0];
       if (!flow) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
@@ -8223,12 +9492,12 @@ var automationRouter = router({
    * ```
    */
   execute: protectedProcedure.input(
-    import_zod5.z.object({
-      automationId: import_zod5.z.string(),
-      templateType: import_zod5.z.string(),
-      customerId: import_zod5.z.number(),
-      conversationId: import_zod5.z.number().optional(),
-      context: import_zod5.z.record(import_zod5.z.string(), import_zod5.z.any()).optional()
+    import_zod6.z.object({
+      automationId: import_zod6.z.string(),
+      templateType: import_zod6.z.string(),
+      customerId: import_zod6.z.number(),
+      conversationId: import_zod6.z.number().optional(),
+      context: import_zod6.z.record(import_zod6.z.string(), import_zod6.z.any()).optional()
     })
   ).mutation(async ({ input }) => {
     try {
@@ -8262,18 +9531,18 @@ var automationRouter = router({
    * }
    * ```
    */
-  testFlow: protectedProcedure.input(import_zod5.z.object({
-    flowId: import_zod5.z.number(),
-    testMessage: import_zod5.z.string().optional()
+  testFlow: protectedProcedure.input(import_zod6.z.object({
+    flowId: import_zod6.z.number(),
+    testMessage: import_zod6.z.string().optional()
   })).mutation(async ({ input }) => {
     try {
       const db = await getDb();
-      const flows = await db.select().from(visualFlows).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.flowId)).limit(1);
+      const flows = await db.select().from(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.flowId)).limit(1);
       const flow = flows[0];
       if (!flow) {
         return errorResponse("Fluxo n\xE3o encontrado", "NOT_FOUND");
       }
-      await db.update(visualFlows).set({ isTestMode: true, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.flowId));
+      await db.update(visualFlows).set({ isTestMode: true, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.flowId));
       const [execution] = await db.insert(flowExecutions).values({
         flowId: input.flowId,
         status: "running",
@@ -8326,8 +9595,8 @@ var automationRouter = router({
    * ```
    */
   stats: protectedProcedure.input(
-    import_zod5.z.object({
-      period: import_zod5.z.enum(["today", "week", "month"]).default("today")
+    import_zod6.z.object({
+      period: import_zod6.z.enum(["today", "week", "month"]).default("today")
     })
   ).query(async ({ input }) => {
     try {
@@ -8348,7 +9617,7 @@ var automationRouter = router({
           startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1e3);
           break;
       }
-      const executions = await db.select().from(flowExecutions).where((0, import_drizzle_orm7.gte)(flowExecutions.startedAt, startDate));
+      const executions = await db.select().from(flowExecutions).where((0, import_drizzle_orm8.gte)(flowExecutions.startedAt, startDate));
       const totalExecutions = executions.length;
       const successfulExecutions = executions.filter(
         (e) => e.status === "completed"
@@ -8414,10 +9683,10 @@ var automationRouter = router({
    * ```
    */
   executions: protectedProcedure.input(
-    import_zod5.z.object({
-      id: import_zod5.z.number(),
-      limit: import_zod5.z.number().min(1).max(100).default(20),
-      offset: import_zod5.z.number().min(0).default(0)
+    import_zod6.z.object({
+      id: import_zod6.z.number(),
+      limit: import_zod6.z.number().min(1).max(100).default(20),
+      offset: import_zod6.z.number().min(0).default(0)
     })
   ).query(async ({ input }) => {
     try {
@@ -8425,13 +9694,13 @@ var automationRouter = router({
       if (!db) {
         throw new Error("Database n\xE3o dispon\xEDvel");
       }
-      const flow = await db.select().from(visualFlows).where((0, import_drizzle_orm7.eq)(visualFlows.id, input.id)).limit(1);
+      const flow = await db.select().from(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id)).limit(1);
       if (flow.length === 0) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
       }
-      const query = db.select().from(flowExecutions).where((0, import_drizzle_orm7.eq)(flowExecutions.flowId, input.id)).orderBy(import_drizzle_orm7.sql`started_at DESC`).limit(input.limit).offset(input.offset);
+      const query = db.select().from(flowExecutions).where((0, import_drizzle_orm8.eq)(flowExecutions.flowId, input.id)).orderBy(import_drizzle_orm8.sql`started_at DESC`).limit(input.limit).offset(input.offset);
       const executions = await query;
-      const countResult = await db.select().from(flowExecutions).where((0, import_drizzle_orm7.eq)(flowExecutions.flowId, input.id)).limit(1).count();
+      const countResult = await db.select().from(flowExecutions).where((0, import_drizzle_orm8.eq)(flowExecutions.flowId, input.id)).limit(1).count();
       const total = Number(countResult[0].count);
       const parsedExecutions = executions.map((exec2) => ({
         ...exec2,
@@ -8458,23 +9727,23 @@ var automationRouter = router({
 });
 
 // server/routers-baby-shower.ts
-var import_zod6 = require("zod");
+var import_zod7 = require("zod");
 init_db();
 init_schema();
-var import_drizzle_orm11 = require("drizzle-orm");
+var import_drizzle_orm12 = require("drizzle-orm");
 var import_node_crypto = require("node:crypto");
 
 // server/services/whatsapp.ts
 init_db();
 init_schema();
-var import_drizzle_orm8 = require("drizzle-orm");
+var import_drizzle_orm9 = require("drizzle-orm");
 async function sendWhatsAppNotification(params) {
   try {
     const db = await getDb();
     if (!db) {
       return false;
     }
-    const [config] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm8.eq)(integrationSettings2.integrationType, "evolution_api")).limit(1);
+    const [config] = await db.select().from(integrationSettings2).where((0, import_drizzle_orm9.eq)(integrationSettings2.integrationType, "evolution_api")).limit(1);
     if (!config || !config.isActive) {
       return false;
     }
@@ -8518,8 +9787,8 @@ async function sendWhatsAppNotification(params) {
 // server/services/shopping-cart-cleanup.ts
 init_db();
 init_schema();
-var import_drizzle_orm9 = require("drizzle-orm");
 var import_drizzle_orm10 = require("drizzle-orm");
+var import_drizzle_orm11 = require("drizzle-orm");
 var ShoppingCartCleanupService = class {
   static BATCH_SIZE = 100;
   /**
@@ -8534,9 +9803,9 @@ var ShoppingCartCleanupService = class {
     let hasMore = true;
     while (hasMore) {
       const oldPendingPurchases = await db.select({ id: babyShowerPurchases.id }).from(babyShowerPurchases).where(
-        (0, import_drizzle_orm10.and)(
-          (0, import_drizzle_orm10.eq)(babyShowerPurchases.paymentStatus, "pending"),
-          (0, import_drizzle_orm9.lt)(babyShowerPurchases.createdAt, cutoffDate)
+        (0, import_drizzle_orm11.and)(
+          (0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "pending"),
+          (0, import_drizzle_orm10.lt)(babyShowerPurchases.createdAt, cutoffDate)
         )
       ).limit(this.BATCH_SIZE);
       if (oldPendingPurchases.length === 0) {
@@ -8544,7 +9813,7 @@ var ShoppingCartCleanupService = class {
         continue;
       }
       const ids = oldPendingPurchases.map((p) => p.id);
-      const result = await db.delete(babyShowerPurchases).where((0, import_drizzle_orm10.inArray)(babyShowerPurchases.id, ids));
+      const result = await db.delete(babyShowerPurchases).where((0, import_drizzle_orm11.inArray)(babyShowerPurchases.id, ids));
       totalDeleted += result.affectedRows ?? 0;
       if (oldPendingPurchases.length < this.BATCH_SIZE) {
         hasMore = false;
@@ -8560,7 +9829,7 @@ var ShoppingCartCleanupService = class {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1e3);
-    const result = await db.delete(babyShowerPurchases).where((0, import_drizzle_orm9.lt)(babyShowerPurchases.createdAt, cutoffDate));
+    const result = await db.delete(babyShowerPurchases).where((0, import_drizzle_orm10.lt)(babyShowerPurchases.createdAt, cutoffDate));
     return { deleted: result.affectedRows ?? 0 };
   }
   /**
@@ -8569,7 +9838,7 @@ var ShoppingCartCleanupService = class {
   static async deletePurchase(purchaseId) {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.delete(babyShowerPurchases).where((0, import_drizzle_orm10.eq)(babyShowerPurchases.id, purchaseId));
+    await db.delete(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.id, purchaseId));
     return { success: true };
   }
   /**
@@ -8580,9 +9849,9 @@ var ShoppingCartCleanupService = class {
     if (!db) throw new Error("Database not available");
     const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1e3);
     const result = await db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where(
-      (0, import_drizzle_orm10.and)(
-        (0, import_drizzle_orm10.eq)(babyShowerPurchases.paymentStatus, "pending"),
-        (0, import_drizzle_orm9.lt)(babyShowerPurchases.createdAt, cutoffDate)
+      (0, import_drizzle_orm11.and)(
+        (0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "pending"),
+        (0, import_drizzle_orm10.lt)(babyShowerPurchases.createdAt, cutoffDate)
       )
     );
     return result[0]?.count ?? 0;
@@ -8602,10 +9871,10 @@ var ShoppingCartCleanupService = class {
       pending24
     ] = await Promise.all([
       db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases),
-      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm10.eq)(babyShowerPurchases.paymentStatus, "pending")),
-      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm10.eq)(babyShowerPurchases.paymentStatus, "paid")),
-      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm10.eq)(babyShowerPurchases.paymentStatus, "failed")),
-      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm10.eq)(babyShowerPurchases.paymentStatus, "refunded")),
+      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "pending")),
+      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "paid")),
+      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "failed")),
+      db.select({ count: sql`COUNT(*)` }).from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "refunded")),
       this.countPendingOlderThan24h()
     ]);
     return {
@@ -8628,42 +9897,42 @@ var generateEventCode = () => {
   const code = `CHA${year}${month}${random}`;
   return code.trim();
 };
-var createEventSchema = import_zod6.z.object({
-  motherCustomerId: import_zod6.z.number(),
-  eventName: import_zod6.z.string().min(3).max(255),
-  babyName: import_zod6.z.string().max(255).optional(),
-  expectedDueDate: import_zod6.z.string().optional(),
-  eventDate: import_zod6.z.string().optional(),
-  targetAmount: import_zod6.z.number().optional(),
-  welcomeMessage: import_zod6.z.string().optional()
+var createEventSchema = import_zod7.z.object({
+  motherCustomerId: import_zod7.z.number(),
+  eventName: import_zod7.z.string().min(3).max(255),
+  babyName: import_zod7.z.string().max(255).optional(),
+  expectedDueDate: import_zod7.z.string().optional(),
+  eventDate: import_zod7.z.string().optional(),
+  targetAmount: import_zod7.z.number().optional(),
+  welcomeMessage: import_zod7.z.string().optional()
 });
-var createPackageSchema = import_zod6.z.object({
-  eventId: import_zod6.z.number(),
-  packageName: import_zod6.z.string().min(2).max(120),
-  description: import_zod6.z.string().optional(),
-  giftType: import_zod6.z.enum(["diapers", "wipes", "money", "product"]),
-  quantityRepresented: import_zod6.z.number().default(1),
-  sizeLabel: import_zod6.z.string().optional(),
-  price: import_zod6.z.number().positive(),
-  stockLimit: import_zod6.z.number().optional(),
-  imageUrl: import_zod6.z.string().optional()
+var createPackageSchema = import_zod7.z.object({
+  eventId: import_zod7.z.number(),
+  packageName: import_zod7.z.string().min(2).max(120),
+  description: import_zod7.z.string().optional(),
+  giftType: import_zod7.z.enum(["diapers", "wipes", "money", "product"]),
+  quantityRepresented: import_zod7.z.number().default(1),
+  sizeLabel: import_zod7.z.string().optional(),
+  price: import_zod7.z.number().positive(),
+  stockLimit: import_zod7.z.number().optional(),
+  imageUrl: import_zod7.z.string().optional()
 });
-var createPurchaseSchema = import_zod6.z.object({
-  eventId: import_zod6.z.number(),
-  packageId: import_zod6.z.number(),
-  guestName: import_zod6.z.string().min(2).max(255),
-  guestPhone: import_zod6.z.string().optional(),
-  guestEmail: import_zod6.z.string().email().optional(),
-  messageToParents: import_zod6.z.string().optional(),
-  amountPaid: import_zod6.z.number().positive()
+var createPurchaseSchema = import_zod7.z.object({
+  eventId: import_zod7.z.number(),
+  packageId: import_zod7.z.number(),
+  guestName: import_zod7.z.string().min(2).max(255),
+  guestPhone: import_zod7.z.string().optional(),
+  guestEmail: import_zod7.z.string().email().optional(),
+  messageToParents: import_zod7.z.string().optional(),
+  amountPaid: import_zod7.z.number().positive()
 });
-var createWithdrawalSchema = import_zod6.z.object({
-  eventId: import_zod6.z.number(),
-  withdrawalType: import_zod6.z.enum(["diapers", "wipes", "money"]),
-  diaperSize: import_zod6.z.string().optional(),
-  quantity: import_zod6.z.number().positive(),
-  deliveryMethod: import_zod6.z.enum(["pickup", "delivery"]).default("pickup"),
-  notes: import_zod6.z.string().optional()
+var createWithdrawalSchema = import_zod7.z.object({
+  eventId: import_zod7.z.number(),
+  withdrawalType: import_zod7.z.enum(["diapers", "wipes", "money"]),
+  diaperSize: import_zod7.z.string().optional(),
+  quantity: import_zod7.z.number().positive(),
+  deliveryMethod: import_zod7.z.enum(["pickup", "delivery"]).default("pickup"),
+  notes: import_zod7.z.string().optional()
 });
 var babyShowerRouter = router({
   createEvent: protectedProcedure.input(createEventSchema).mutation(async ({ ctx, input }) => {
@@ -8689,11 +9958,11 @@ var babyShowerRouter = router({
     });
     return { success: true, eventId: Number(event.insertId), eventCode, publicLink };
   }),
-  listEvents: protectedProcedure.input(import_zod6.z.object({
-    status: import_zod6.z.enum(["active", "closed", "cancelled"]).optional(),
-    motherCustomerId: import_zod6.z.number().optional(),
-    limit: import_zod6.z.number().default(50),
-    offset: import_zod6.z.number().default(0)
+  listEvents: protectedProcedure.input(import_zod7.z.object({
+    status: import_zod7.z.enum(["active", "closed", "cancelled"]).optional(),
+    motherCustomerId: import_zod7.z.number().optional(),
+    limit: import_zod7.z.number().default(50),
+    offset: import_zod7.z.number().default(0)
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) {
@@ -8703,21 +9972,21 @@ var babyShowerRouter = router({
       event: babyShowerEvents,
       motherName: customers.name,
       motherPhone: customers.phone
-    }).from(babyShowerEvents).leftJoin(customers, (0, import_drizzle_orm11.eq)(babyShowerEvents.motherCustomerId, customers.id));
+    }).from(babyShowerEvents).leftJoin(customers, (0, import_drizzle_orm12.eq)(babyShowerEvents.motherCustomerId, customers.id));
     if (input.status && input.motherCustomerId) {
-      return await baseQuery.where((0, import_drizzle_orm11.and)(
-        (0, import_drizzle_orm11.eq)(babyShowerEvents.status, input.status),
-        (0, import_drizzle_orm11.eq)(babyShowerEvents.motherCustomerId, input.motherCustomerId)
-      )).orderBy((0, import_drizzle_orm11.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
+      return await baseQuery.where((0, import_drizzle_orm12.and)(
+        (0, import_drizzle_orm12.eq)(babyShowerEvents.status, input.status),
+        (0, import_drizzle_orm12.eq)(babyShowerEvents.motherCustomerId, input.motherCustomerId)
+      )).orderBy((0, import_drizzle_orm12.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
     } else if (input.status) {
-      return await baseQuery.where((0, import_drizzle_orm11.eq)(babyShowerEvents.status, input.status)).orderBy((0, import_drizzle_orm11.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
+      return await baseQuery.where((0, import_drizzle_orm12.eq)(babyShowerEvents.status, input.status)).orderBy((0, import_drizzle_orm12.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
     } else if (input.motherCustomerId) {
-      return await baseQuery.where((0, import_drizzle_orm11.eq)(babyShowerEvents.motherCustomerId, input.motherCustomerId)).orderBy((0, import_drizzle_orm11.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
+      return await baseQuery.where((0, import_drizzle_orm12.eq)(babyShowerEvents.motherCustomerId, input.motherCustomerId)).orderBy((0, import_drizzle_orm12.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
     }
-    return await baseQuery.orderBy((0, import_drizzle_orm11.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
+    return await baseQuery.orderBy((0, import_drizzle_orm12.desc)(babyShowerEvents.createdAt)).limit(input.limit).offset(input.offset);
   }),
   // Endpoint público - sem autenticação
-  getEventByCode: publicProcedure.input(import_zod6.z.object({ code: import_zod6.z.string() })).query(async ({ input }) => {
+  getEventByCode: publicProcedure.input(import_zod7.z.object({ code: import_zod7.z.string() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
@@ -8725,15 +9994,15 @@ var babyShowerRouter = router({
     const [event] = await db.select({
       event: babyShowerEvents,
       motherName: customers.name
-    }).from(babyShowerEvents).leftJoin(customers, (0, import_drizzle_orm11.eq)(babyShowerEvents.motherCustomerId, customers.id)).where((0, import_drizzle_orm11.eq)(babyShowerEvents.eventCode, input.code)).limit(1);
+    }).from(babyShowerEvents).leftJoin(customers, (0, import_drizzle_orm12.eq)(babyShowerEvents.motherCustomerId, customers.id)).where((0, import_drizzle_orm12.eq)(babyShowerEvents.eventCode, input.code)).limit(1);
     if (!event) throw new Error("Evento n\xE3o encontrado");
-    const packages = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm11.and)(
-      (0, import_drizzle_orm11.eq)(babyShowerGiftPackages.eventId, event.event.id),
-      (0, import_drizzle_orm11.eq)(babyShowerGiftPackages.isActive, 1)
-    )).orderBy((0, import_drizzle_orm11.asc)(babyShowerGiftPackages.displayOrder), (0, import_drizzle_orm11.asc)(babyShowerGiftPackages.id));
+    const packages = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm12.and)(
+      (0, import_drizzle_orm12.eq)(babyShowerGiftPackages.eventId, event.event.id),
+      (0, import_drizzle_orm12.eq)(babyShowerGiftPackages.isActive, 1)
+    )).orderBy((0, import_drizzle_orm12.asc)(babyShowerGiftPackages.displayOrder), (0, import_drizzle_orm12.asc)(babyShowerGiftPackages.id));
     return { event: event.event, motherName: event.motherName, packages };
   }),
-  getEventById: protectedProcedure.input(import_zod6.z.object({ id: import_zod6.z.number() })).query(async ({ input }) => {
+  getEventById: protectedProcedure.input(import_zod7.z.object({ id: import_zod7.z.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
@@ -8742,23 +10011,23 @@ var babyShowerRouter = router({
       event: babyShowerEvents,
       motherName: customers.name,
       motherPhone: customers.phone
-    }).from(babyShowerEvents).leftJoin(customers, (0, import_drizzle_orm11.eq)(babyShowerEvents.motherCustomerId, customers.id)).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.id)).limit(1);
+    }).from(babyShowerEvents).leftJoin(customers, (0, import_drizzle_orm12.eq)(babyShowerEvents.motherCustomerId, customers.id)).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.id)).limit(1);
     if (!event) throw new Error("Evento n\xE3o encontrado");
-    const packages = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.eventId, input.id)).orderBy((0, import_drizzle_orm11.asc)(babyShowerGiftPackages.displayOrder), (0, import_drizzle_orm11.asc)(babyShowerGiftPackages.id));
-    const purchases = await db.select().from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.eventId, input.id)).orderBy((0, import_drizzle_orm11.desc)(babyShowerPurchases.createdAt));
-    const withdrawals = await db.select().from(babyShowerWithdrawals).where((0, import_drizzle_orm11.eq)(babyShowerWithdrawals.eventId, input.id));
+    const packages = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.eventId, input.id)).orderBy((0, import_drizzle_orm12.asc)(babyShowerGiftPackages.displayOrder), (0, import_drizzle_orm12.asc)(babyShowerGiftPackages.id));
+    const purchases = await db.select().from(babyShowerPurchases).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.eventId, input.id)).orderBy((0, import_drizzle_orm12.desc)(babyShowerPurchases.createdAt));
+    const withdrawals = await db.select().from(babyShowerWithdrawals).where((0, import_drizzle_orm12.eq)(babyShowerWithdrawals.eventId, input.id));
     return { ...event, packages, purchases, withdrawals };
   }),
-  updateEvent: protectedProcedure.input(import_zod6.z.object({
-    id: import_zod6.z.number(),
-    eventName: import_zod6.z.string().optional(),
-    babyName: import_zod6.z.string().optional(),
-    expectedDueDate: import_zod6.z.string().optional(),
-    eventDate: import_zod6.z.string().optional(),
-    targetAmount: import_zod6.z.number().optional(),
-    status: import_zod6.z.enum(["active", "closed", "cancelled"]).optional(),
-    whatsappNumber: import_zod6.z.string().optional(),
-    welcomeMessage: import_zod6.z.string().optional()
+  updateEvent: protectedProcedure.input(import_zod7.z.object({
+    id: import_zod7.z.number(),
+    eventName: import_zod7.z.string().optional(),
+    babyName: import_zod7.z.string().optional(),
+    expectedDueDate: import_zod7.z.string().optional(),
+    eventDate: import_zod7.z.string().optional(),
+    targetAmount: import_zod7.z.number().optional(),
+    status: import_zod7.z.enum(["active", "closed", "cancelled"]).optional(),
+    whatsappNumber: import_zod7.z.string().optional(),
+    welcomeMessage: import_zod7.z.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
@@ -8780,7 +10049,7 @@ var babyShowerRouter = router({
     }
     if (input.whatsappNumber !== void 0) updates.whatsappNumber = input.whatsappNumber || null;
     if (input.welcomeMessage !== void 0) updates.welcomeMessage = input.welcomeMessage || null;
-    await db.update(babyShowerEvents).set(updates).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.id));
+    await db.update(babyShowerEvents).set(updates).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.id));
     return { success: true };
   }),
   createPackage: protectedProcedure.input(createPackageSchema).mutation(async ({ input }) => {
@@ -8801,13 +10070,13 @@ var babyShowerRouter = router({
     });
     return { success: true, packageId: Number(pkg.insertId) };
   }),
-  updatePackage: protectedProcedure.input(import_zod6.z.object({
-    id: import_zod6.z.number(),
-    packageName: import_zod6.z.string().optional(),
-    description: import_zod6.z.string().optional(),
-    price: import_zod6.z.number().optional(),
-    imageUrl: import_zod6.z.string().optional(),
-    isActive: import_zod6.z.number().optional()
+  updatePackage: protectedProcedure.input(import_zod7.z.object({
+    id: import_zod7.z.number(),
+    packageName: import_zod7.z.string().optional(),
+    description: import_zod7.z.string().optional(),
+    price: import_zod7.z.number().optional(),
+    imageUrl: import_zod7.z.string().optional(),
+    isActive: import_zod7.z.number().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
@@ -8815,25 +10084,25 @@ var babyShowerRouter = router({
     }
     const conditions = [];
     if (input.packageName) {
-      conditions.push(import_drizzle_orm11.sql`package_name = ${input.packageName}`);
+      conditions.push(import_drizzle_orm12.sql`package_name = ${input.packageName}`);
     }
     if (input.description !== void 0) {
-      conditions.push(import_drizzle_orm11.sql`description = ${input.description || null}`);
+      conditions.push(import_drizzle_orm12.sql`description = ${input.description || null}`);
     }
     if (input.price !== void 0) {
-      conditions.push(import_drizzle_orm11.sql`price = ${input.price.toFixed(2)}`);
+      conditions.push(import_drizzle_orm12.sql`price = ${input.price.toFixed(2)}`);
     }
     if (input.imageUrl !== void 0) {
-      conditions.push(import_drizzle_orm11.sql`image_url = ${input.imageUrl || null}`);
+      conditions.push(import_drizzle_orm12.sql`image_url = ${input.imageUrl || null}`);
     }
     if (input.isActive !== void 0) {
-      conditions.push(import_drizzle_orm11.sql`is_active = ${input.isActive}`);
+      conditions.push(import_drizzle_orm12.sql`is_active = ${input.isActive}`);
     }
     if (conditions.length === 0) {
       return { success: true };
     }
-    const setClause = import_drizzle_orm11.sql.join(conditions, import_drizzle_orm11.sql`, `);
-    await db.execute(import_drizzle_orm11.sql`
+    const setClause = import_drizzle_orm12.sql.join(conditions, import_drizzle_orm12.sql`, `);
+    await db.execute(import_drizzle_orm12.sql`
         UPDATE baby_shower_gift_packages 
         SET ${setClause}
         WHERE id = ${input.id}
@@ -8841,9 +10110,9 @@ var babyShowerRouter = router({
     return { success: true };
   }),
   // Reordenar pacotes (drag-and-drop)
-  reorderPackages: protectedProcedure.input(import_zod6.z.object({
-    eventId: import_zod6.z.number(),
-    packageIds: import_zod6.z.array(import_zod6.z.number())
+  reorderPackages: protectedProcedure.input(import_zod7.z.object({
+    eventId: import_zod7.z.number(),
+    packageIds: import_zod7.z.array(import_zod7.z.number())
     // Nova ordem de IDs
   })).mutation(async ({ input }) => {
     const db = await getDb();
@@ -8851,7 +10120,7 @@ var babyShowerRouter = router({
       throw new Error("Database not available");
     }
     for (let i = 0; i < input.packageIds.length; i++) {
-      await db.execute(import_drizzle_orm11.sql`
+      await db.execute(import_drizzle_orm12.sql`
           UPDATE baby_shower_gift_packages 
           SET display_order = ${i}
           WHERE id = ${input.packageIds[i]} AND event_id = ${input.eventId}
@@ -8860,23 +10129,23 @@ var babyShowerRouter = router({
     return { success: true };
   }),
   // Deletar pacote
-  deletePackage: protectedProcedure.input(import_zod6.z.object({
-    id: import_zod6.z.number()
+  deletePackage: protectedProcedure.input(import_zod7.z.object({
+    id: import_zod7.z.number()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
     }
-    const purchases = await db.select().from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.packageId, input.id)).limit(1);
+    const purchases = await db.select().from(babyShowerPurchases).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.packageId, input.id)).limit(1);
     if (purchases.length > 0) {
-      await db.execute(import_drizzle_orm11.sql`
+      await db.execute(import_drizzle_orm12.sql`
           UPDATE baby_shower_gift_packages 
           SET is_active = 0
           WHERE id = ${input.id}
         `);
       return { success: true, action: "deactivated", message: "Produto desativado (possui compras associadas)" };
     }
-    await db.execute(import_drizzle_orm11.sql`
+    await db.execute(import_drizzle_orm12.sql`
         DELETE FROM baby_shower_gift_packages 
         WHERE id = ${input.id}
       `);
@@ -8887,7 +10156,7 @@ var babyShowerRouter = router({
     if (!db) {
       throw new Error("Database not available");
     }
-    const [pkg] = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.id, input.packageId)).limit(1);
+    const [pkg] = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.id, input.packageId)).limit(1);
     if (!pkg) throw new Error("Pacote n\xE3o encontrado");
     if (pkg.stockLimit && (pkg.soldCount ?? 0) >= pkg.stockLimit) throw new Error("Cotas esgotadas");
     const confirmationToken = (0, import_node_crypto.randomBytes)(32).toString("hex");
@@ -8904,39 +10173,39 @@ var babyShowerRouter = router({
     });
     return { success: true, purchaseId: Number(purchase.insertId), confirmationToken };
   }),
-  confirmPayment: protectedProcedure.input(import_zod6.z.object({
-    purchaseId: import_zod6.z.number(),
-    paymentStatus: import_zod6.z.enum(["pending", "paid", "failed", "refunded"]),
-    paymentMethod: import_zod6.z.string().optional(),
-    paymentReference: import_zod6.z.string().optional()
+  confirmPayment: protectedProcedure.input(import_zod7.z.object({
+    purchaseId: import_zod7.z.number(),
+    paymentStatus: import_zod7.z.enum(["pending", "paid", "failed", "refunded"]),
+    paymentMethod: import_zod7.z.string().optional(),
+    paymentReference: import_zod7.z.string().optional()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
     }
-    const [purchase] = await db.select().from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.id, input.purchaseId)).limit(1);
+    const [purchase] = await db.select().from(babyShowerPurchases).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.id, input.purchaseId)).limit(1);
     if (!purchase) throw new Error("Compra n\xE3o encontrada");
     await db.update(babyShowerPurchases).set({
       paymentStatus: input.paymentStatus,
       paymentMethod: input.paymentMethod || null,
       paymentReference: input.paymentReference || null,
       paidAt: input.paymentStatus === "paid" ? /* @__PURE__ */ new Date() : null
-    }).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.id, input.purchaseId));
+    }).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.id, input.purchaseId));
     if (input.paymentStatus === "paid") {
-      const [pkg] = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.id, purchase.packageId)).limit(1);
-      const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, purchase.eventId)).limit(1);
+      const [pkg] = await db.select().from(babyShowerGiftPackages).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.id, purchase.packageId)).limit(1);
+      const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, purchase.eventId)).limit(1);
       await db.update(babyShowerGiftPackages).set({
-        soldCount: import_drizzle_orm11.sql`${babyShowerGiftPackages.soldCount} + 1`
-      }).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.id, purchase.packageId));
+        soldCount: import_drizzle_orm12.sql`${babyShowerGiftPackages.soldCount} + 1`
+      }).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.id, purchase.packageId));
       await db.update(babyShowerEvents).set({
-        walletBalance: import_drizzle_orm11.sql`${babyShowerEvents.walletBalance} + ${purchase.amountPaid}`,
-        totalGuests: import_drizzle_orm11.sql`${babyShowerEvents.totalGuests} + 1`,
-        totalDiapersCount: import_drizzle_orm11.sql`${babyShowerEvents.totalDiapersCount} + ${pkg?.quantityRepresented || 1}`,
-        availableDiapersCount: import_drizzle_orm11.sql`${babyShowerEvents.availableDiapersCount} + ${pkg?.quantityRepresented || 1}`
-      }).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, purchase.eventId));
+        walletBalance: import_drizzle_orm12.sql`${babyShowerEvents.walletBalance} + ${purchase.amountPaid}`,
+        totalGuests: import_drizzle_orm12.sql`${babyShowerEvents.totalGuests} + 1`,
+        totalDiapersCount: import_drizzle_orm12.sql`${babyShowerEvents.totalDiapersCount} + ${pkg?.quantityRepresented || 1}`,
+        availableDiapersCount: import_drizzle_orm12.sql`${babyShowerEvents.availableDiapersCount} + ${pkg?.quantityRepresented || 1}`
+      }).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, purchase.eventId));
       let notificationSent = 0;
       if (event) {
-        const [mother] = await db.select().from(customers).where((0, import_drizzle_orm11.eq)(customers.id, event.motherCustomerId)).limit(1);
+        const [mother] = await db.select().from(customers).where((0, import_drizzle_orm12.eq)(customers.id, event.motherCustomerId)).limit(1);
         const parentsPhone = event.whatsappNumber || mother?.phone;
         if (parentsPhone) {
           const babyNameText = event.babyName ? `, ${event.babyName}` : "";
@@ -8969,9 +10238,9 @@ var babyShowerRouter = router({
             quantityRepresented: babyShowerGiftPackages.quantityRepresented,
             soldCount: babyShowerGiftPackages.soldCount
           }).from(babyShowerGiftPackages).where(
-            (0, import_drizzle_orm11.and)(
-              (0, import_drizzle_orm11.eq)(babyShowerGiftPackages.eventId, event.id),
-              (0, import_drizzle_orm11.gt)(babyShowerGiftPackages.soldCount, 0)
+            (0, import_drizzle_orm12.and)(
+              (0, import_drizzle_orm12.eq)(babyShowerGiftPackages.eventId, event.id),
+              (0, import_drizzle_orm12.gt)(babyShowerGiftPackages.soldCount, 0)
             )
           ).orderBy(babyShowerGiftPackages.displayOrder);
           for (const p of allPackages) {
@@ -8997,7 +10266,7 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
         await db.update(babyShowerPurchases).set({
           notificationSent: 1,
           notificationSentAt: /* @__PURE__ */ new Date()
-        }).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.id, input.purchaseId));
+        }).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.id, input.purchaseId));
       }
     }
     return { success: true };
@@ -9007,10 +10276,10 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
     if (!db) {
       throw new Error("Database not available");
     }
-    const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.eventId)).limit(1);
+    const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.eventId)).limit(1);
     if (!event) throw new Error("Evento n\xE3o encontrado");
     if ((event.availableDiapersCount ?? 0) < input.quantity) throw new Error("Saldo insuficiente");
-    const [mother] = await db.select({ name: customers.name }).from(customers).where((0, import_drizzle_orm11.eq)(customers.id, event.motherCustomerId)).limit(1);
+    const [mother] = await db.select({ name: customers.name }).from(customers).where((0, import_drizzle_orm12.eq)(customers.id, event.motherCustomerId)).limit(1);
     const taskTitle = `Separar ${input.quantity} ${input.diaperSize || ""} para ${mother?.name || "M\xE3e"} (Ch\xE1 de Beb\xEA)`;
     const [task] = await db.insert(crmTasks).values({
       title: taskTitle,
@@ -9030,8 +10299,8 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
       notes: input.notes || null
     });
     await db.update(babyShowerEvents).set({
-      availableDiapersCount: import_drizzle_orm11.sql`${babyShowerEvents.availableDiapersCount} - ${input.quantity}`
-    }).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.eventId));
+      availableDiapersCount: import_drizzle_orm12.sql`${babyShowerEvents.availableDiapersCount} - ${input.quantity}`
+    }).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.eventId));
     return { success: true, withdrawalId: Number(withdrawal.insertId), taskId: Number(task.insertId) };
   }),
   getDashboardStats: protectedProcedure.query(async () => {
@@ -9039,48 +10308,48 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
     if (!db) {
       throw new Error("Database not available");
     }
-    const [activeEvents] = await db.select({ count: import_drizzle_orm11.sql`COUNT(*)` }).from(babyShowerEvents).where((0, import_drizzle_orm11.eq)(babyShowerEvents.status, "active"));
-    const [totalSales] = await db.select({ total: import_drizzle_orm11.sql`COALESCE(SUM(${babyShowerPurchases.amountPaid}), 0)` }).from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "paid"));
-    const [avgTicket] = await db.select({ avg: import_drizzle_orm11.sql`COALESCE(AVG(${babyShowerPurchases.amountPaid}), 0)` }).from(babyShowerPurchases).where((0, import_drizzle_orm11.eq)(babyShowerPurchases.paymentStatus, "paid"));
+    const [activeEvents] = await db.select({ count: import_drizzle_orm12.sql`COUNT(*)` }).from(babyShowerEvents).where((0, import_drizzle_orm12.eq)(babyShowerEvents.status, "active"));
+    const [totalSales] = await db.select({ total: import_drizzle_orm12.sql`COALESCE(SUM(${babyShowerPurchases.amountPaid}), 0)` }).from(babyShowerPurchases).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.paymentStatus, "paid"));
+    const [avgTicket] = await db.select({ avg: import_drizzle_orm12.sql`COALESCE(AVG(${babyShowerPurchases.amountPaid}), 0)` }).from(babyShowerPurchases).where((0, import_drizzle_orm12.eq)(babyShowerPurchases.paymentStatus, "paid"));
     return {
       activeEventsCount: activeEvents?.count || 0,
       totalSalesValue: parseFloat(totalSales?.total || "0"),
       averageTicket: parseFloat(avgTicket?.avg || "0")
     };
   }),
-  deleteEvent: protectedProcedure.input(import_zod6.z.object({ id: import_zod6.z.number() })).mutation(async ({ input }) => {
+  deleteEvent: protectedProcedure.input(import_zod7.z.object({ id: import_zod7.z.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
     }
-    const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.id)).limit(1);
+    const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.id)).limit(1);
     if (!event) throw new Error("Evento n\xE3o encontrado");
-    const packages = await db.select({ id: babyShowerGiftPackages.id }).from(babyShowerGiftPackages).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.eventId, input.id));
+    const packages = await db.select({ id: babyShowerGiftPackages.id }).from(babyShowerGiftPackages).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.eventId, input.id));
     const packageIds = packages.map((p) => p.id);
     if (packageIds.length > 0) {
-      await db.delete(babyShowerPurchases).where((0, import_drizzle_orm11.inArray)(babyShowerPurchases.packageId, packageIds));
+      await db.delete(babyShowerPurchases).where((0, import_drizzle_orm12.inArray)(babyShowerPurchases.packageId, packageIds));
     }
-    await db.delete(babyShowerWithdrawals).where((0, import_drizzle_orm11.eq)(babyShowerWithdrawals.eventId, input.id));
-    await db.delete(babyShowerGiftPackages).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.eventId, input.id));
-    await db.delete(babyShowerEvents).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.id));
+    await db.delete(babyShowerWithdrawals).where((0, import_drizzle_orm12.eq)(babyShowerWithdrawals.eventId, input.id));
+    await db.delete(babyShowerGiftPackages).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.eventId, input.id));
+    await db.delete(babyShowerEvents).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.id));
     return { success: true };
   }),
-  resetEvent: protectedProcedure.input(import_zod6.z.object({
-    eventId: import_zod6.z.number()
+  resetEvent: protectedProcedure.input(import_zod7.z.object({
+    eventId: import_zod7.z.number()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
       throw new Error("Database not available");
     }
-    const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.eventId)).limit(1);
+    const [event] = await db.select().from(babyShowerEvents).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.eventId)).limit(1);
     if (!event) throw new Error("Evento n\xE3o encontrado");
     await db.update(babyShowerEvents).set({
       walletBalance: 0,
       totalGuests: 0,
       totalDiapersCount: 0,
       availableDiapersCount: 0
-    }).where((0, import_drizzle_orm11.eq)(babyShowerEvents.id, input.eventId));
-    await db.update(babyShowerGiftPackages).set({ soldCount: 0 }).where((0, import_drizzle_orm11.eq)(babyShowerGiftPackages.eventId, input.eventId));
+    }).where((0, import_drizzle_orm12.eq)(babyShowerEvents.id, input.eventId));
+    await db.update(babyShowerGiftPackages).set({ soldCount: 0 }).where((0, import_drizzle_orm12.eq)(babyShowerGiftPackages.eventId, input.eventId));
     return { success: true, message: "Evento resetado com sucesso" };
   }),
   // ============== LIMPEZA DE HISTÓRICO DE COMPRAS ==============
@@ -9095,8 +10364,8 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
    * Admin: Limpa manualmente pedidos pendentes com mais de 24 horas
    * Use para trigger manual do worker automático
    */
-  cleanupPendingPurchases: protectedProcedure.input(import_zod6.z.object({
-    dryRun: import_zod6.z.boolean().optional().default(false)
+  cleanupPendingPurchases: protectedProcedure.input(import_zod7.z.object({
+    dryRun: import_zod7.z.boolean().optional().default(false)
     // Se true, só mostra quantos seriam deletados
   })).mutation(async ({ input }) => {
     if (input.dryRun) {
@@ -9110,15 +10379,15 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
    * Admin: Limpa manualmente histórico antigo de compras (paid/failed/refunded)
    * @param olderThanDays - Remove compras mais antigas que X dias (padrão: 365 dias)
    */
-  cleanupOldPurchases: protectedProcedure.input(import_zod6.z.object({
-    olderThanDays: import_zod6.z.number().int().positive().optional().default(365),
-    dryRun: import_zod6.z.boolean().optional().default(false)
+  cleanupOldPurchases: protectedProcedure.input(import_zod7.z.object({
+    olderThanDays: import_zod7.z.number().int().positive().optional().default(365),
+    dryRun: import_zod7.z.boolean().optional().default(false)
   })).mutation(async ({ input }) => {
     if (input.dryRun) {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const cutoffDate = new Date(Date.now() - input.olderThanDays * 24 * 60 * 60 * 1e3);
-      const result2 = await db.select({ count: import_drizzle_orm11.sql`COUNT(*)` }).from(babyShowerPurchases).where(lt(babyShowerPurchases.createdAt, cutoffDate));
+      const result2 = await db.select({ count: import_drizzle_orm12.sql`COUNT(*)` }).from(babyShowerPurchases).where(lt(babyShowerPurchases.createdAt, cutoffDate));
       const count = result2[0]?.count ?? 0;
       return { success: true, dryRun: true, wouldDelete: count };
     }
@@ -9128,8 +10397,8 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
   /**
    * Admin: Deleta uma compra específica por ID
    */
-  deletePurchase: protectedProcedure.input(import_zod6.z.object({
-    purchaseId: import_zod6.z.number().int().positive()
+  deletePurchase: protectedProcedure.input(import_zod7.z.object({
+    purchaseId: import_zod7.z.number().int().positive()
   })).mutation(async ({ input }) => {
     await ShoppingCartCleanupService.deletePurchase(input.purchaseId);
     return { success: true };
@@ -9139,8 +10408,8 @@ _Obrigado por escolher a Farma Francis!_ \u{1F499}`;
 // server/routers-broadcast.ts
 init_db();
 init_schema();
-var import_drizzle_orm14 = require("drizzle-orm");
-var import_zod7 = require("zod");
+var import_drizzle_orm15 = require("drizzle-orm");
+var import_zod8 = require("zod");
 
 // server/utils/normalize.ts
 function normalize(value) {
@@ -9156,9 +10425,9 @@ function normalizeEmptyStringToNull(value) {
 
 // server/routers-broadcast.ts
 var broadcastRouter = router({
-  list: protectedProcedure.input(import_zod7.z.object({
-    page: import_zod7.z.number().int().min(1).optional().default(1),
-    limit: import_zod7.z.number().int().min(1).max(100).optional().default(20)
+  list: protectedProcedure.input(import_zod8.z.object({
+    page: import_zod8.z.number().int().min(1).optional().default(1),
+    limit: import_zod8.z.number().int().min(1).max(100).optional().default(20)
   })).query(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) {
@@ -9171,11 +10440,11 @@ var broadcastRouter = router({
         id: broadcastLists.id,
         name: broadcastLists.name,
         description: broadcastLists.description,
-        memberCount: import_drizzle_orm14.sql`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
+        memberCount: import_drizzle_orm15.sql`COUNT(DISTINCT ${broadcastListMembers.customerId})`.as("memberCount"),
         lastSentAt: broadcastLists.lastSentAt,
         createdAt: broadcastLists.createdAt
-      }).from(broadcastLists).leftJoin(broadcastListMembers, (0, import_drizzle_orm14.eq)(broadcastLists.id, broadcastListMembers.listId)).groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt).orderBy((0, import_drizzle_orm14.desc)(broadcastLists.createdAt)).limit(Number(input.limit)).offset(offset);
-      const [{ total }] = await db.select({ total: import_drizzle_orm14.sql`COUNT(*)` }).from(broadcastLists);
+      }).from(broadcastLists).leftJoin(broadcastListMembers, (0, import_drizzle_orm15.eq)(broadcastLists.id, broadcastListMembers.listId)).groupBy(broadcastLists.id, broadcastLists.name, broadcastLists.description, broadcastLists.lastSentAt, broadcastLists.createdAt).orderBy((0, import_drizzle_orm15.desc)(broadcastLists.createdAt)).limit(Number(input.limit)).offset(offset);
+      const [{ total }] = await db.select({ total: import_drizzle_orm15.sql`COUNT(*)` }).from(broadcastLists);
       const sanitizedLists = lists.map((item) => {
         const { createdAt, lastSentAt, ...rest } = item;
         return {
@@ -9199,7 +10468,7 @@ var broadcastRouter = router({
       throw err;
     }
   }),
-  getById: protectedProcedure.input(import_zod7.z.object({ listId: import_zod7.z.number().int().positive() })).query(async ({ input }) => {
+  getById: protectedProcedure.input(import_zod8.z.object({ listId: import_zod8.z.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [list] = await db.select({
@@ -9208,7 +10477,7 @@ var broadcastRouter = router({
       description: broadcastLists.description,
       createdAt: broadcastLists.createdAt,
       updatedAt: broadcastLists.updatedAt
-    }).from(broadcastLists).where((0, import_drizzle_orm14.eq)(broadcastLists.id, input.listId)).limit(1);
+    }).from(broadcastLists).where((0, import_drizzle_orm15.eq)(broadcastLists.id, input.listId)).limit(1);
     if (!list) throw new Error("Lista n\xE3o encontrada");
     const members = await db.select({
       id: broadcastListMembers.id,
@@ -9221,20 +10490,20 @@ var broadcastRouter = router({
         email: customers.email,
         photoUrl: customers.photoUrl
       }
-    }).from(broadcastListMembers).leftJoin(customers, (0, import_drizzle_orm14.eq)(broadcastListMembers.customerId, customers.id)).where((0, import_drizzle_orm14.eq)(broadcastListMembers.listId, input.listId)).orderBy((0, import_drizzle_orm14.asc)(broadcastListMembers.addedAt));
+    }).from(broadcastListMembers).leftJoin(customers, (0, import_drizzle_orm15.eq)(broadcastListMembers.customerId, customers.id)).where((0, import_drizzle_orm15.eq)(broadcastListMembers.listId, input.listId)).orderBy((0, import_drizzle_orm15.asc)(broadcastListMembers.addedAt));
     return {
       ...list,
       members: members.map((m) => ({ ...m, customer: m.customer || null }))
     };
   }),
-  create: protectedProcedure.input(import_zod7.z.object({
-    name: import_zod7.z.string().min(1).max(255),
-    description: import_zod7.z.string().max(500).optional()
+  create: protectedProcedure.input(import_zod8.z.object({
+    name: import_zod8.z.string().min(1).max(255),
+    description: import_zod8.z.string().max(500).optional()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const result = await db.execute(
-      import_drizzle_orm14.sql`
+      import_drizzle_orm15.sql`
           INSERT INTO broadcast_lists (name, description, created_by, created_at, updated_at)
           VALUES (${input.name}, ${input.description || null}, ${ctx.user.id}, NOW(), NOW())
         `
@@ -9242,7 +10511,7 @@ var broadcastRouter = router({
     const insertId = result.insertId || result.ids?.[0];
     return { id: Number(insertId) };
   }),
-  delete: protectedProcedure.input(import_zod7.z.object({ listId: import_zod7.z.number().int().positive() })).mutation(async ({ input, ctx }) => {
+  delete: protectedProcedure.input(import_zod8.z.object({ listId: import_zod8.z.number().int().positive() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) {
       console.error("[BroadcastDelete] Database not available");
@@ -9250,35 +10519,35 @@ var broadcastRouter = router({
     }
     try {
       const listId = input.listId;
-      const messageIds = await db.select({ id: broadcastMessages.id }).from(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.listId, listId));
+      const messageIds = await db.select({ id: broadcastMessages.id }).from(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.listId, listId));
       const idsToDelete = messageIds.map((m) => m.id);
       if (idsToDelete.length > 0) {
         const chunkSize = 20;
         for (let i = 0; i < idsToDelete.length; i += chunkSize) {
           const chunk = idsToDelete.slice(i, i + chunkSize);
           await db.delete(broadcastMembersSent).where(
-            (0, import_drizzle_orm14.inArray)(broadcastMembersSent.broadcastMessageId, chunk)
+            (0, import_drizzle_orm15.inArray)(broadcastMembersSent.broadcastMessageId, chunk)
           );
         }
       } else {
       }
-      await db.delete(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.listId, listId));
-      await db.delete(broadcastLists).where((0, import_drizzle_orm14.eq)(broadcastLists.id, listId));
+      await db.delete(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.listId, listId));
+      await db.delete(broadcastLists).where((0, import_drizzle_orm15.eq)(broadcastLists.id, listId));
       return { success: true };
     } catch (err) {
       console.error(`[BroadcastDelete] Failed to delete list ${input.listId}:`, err.message);
       throw err;
     }
   }),
-  addMember: protectedProcedure.input(import_zod7.z.object({
-    listId: import_zod7.z.number().int().positive(),
-    customerId: import_zod7.z.number().int().positive()
+  addMember: protectedProcedure.input(import_zod8.z.object({
+    listId: import_zod8.z.number().int().positive(),
+    customerId: import_zod8.z.number().int().positive()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const existing = await db.select().from(broadcastListMembers).where((0, import_drizzle_orm14.and)(
-      (0, import_drizzle_orm14.eq)(broadcastListMembers.listId, input.listId),
-      (0, import_drizzle_orm14.eq)(broadcastListMembers.customerId, input.customerId)
+    const existing = await db.select().from(broadcastListMembers).where((0, import_drizzle_orm15.and)(
+      (0, import_drizzle_orm15.eq)(broadcastListMembers.listId, input.listId),
+      (0, import_drizzle_orm15.eq)(broadcastListMembers.customerId, input.customerId)
     )).limit(1);
     if (existing.length > 0) throw new Error("Cliente j\xE1 est\xE1 na lista");
     await db.insert(broadcastListMembers).values({
@@ -9288,8 +10557,8 @@ var broadcastRouter = router({
     });
     return { success: true };
   }),
-  removeMember: protectedProcedure.input(import_zod7.z.object({
-    memberId: import_zod7.z.number().int().positive()
+  removeMember: protectedProcedure.input(import_zod8.z.object({
+    memberId: import_zod8.z.number().int().positive()
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
@@ -9297,12 +10566,12 @@ var broadcastRouter = router({
       throw new Error("Database not available");
     }
     await db.delete(broadcastListMembers).where(
-      (0, import_drizzle_orm14.eq)(broadcastListMembers.id, input.memberId)
+      (0, import_drizzle_orm15.eq)(broadcastListMembers.id, input.memberId)
     );
     return { success: true };
   }),
-  deleteMany: protectedProcedure.input(import_zod7.z.object({
-    listIds: import_zod7.z.array(import_zod7.z.number().int().positive())
+  deleteMany: protectedProcedure.input(import_zod8.z.object({
+    listIds: import_zod8.z.array(import_zod8.z.number().int().positive())
   })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
@@ -9311,20 +10580,20 @@ var broadcastRouter = router({
     }
     try {
       for (const listId of input.listIds) {
-        const messageIds = await db.select({ id: broadcastMessages.id }).from(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.listId, listId));
+        const messageIds = await db.select({ id: broadcastMessages.id }).from(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.listId, listId));
         const idsToDelete = messageIds.map((m) => m.id);
         if (idsToDelete.length > 0) {
           const chunkSize = 20;
           for (let i = 0; i < idsToDelete.length; i += chunkSize) {
             const chunk = idsToDelete.slice(i, i + chunkSize);
             await db.delete(broadcastMembersSent).where(
-              (0, import_drizzle_orm14.inArray)(broadcastMembersSent.broadcastMessageId, chunk)
+              (0, import_drizzle_orm15.inArray)(broadcastMembersSent.broadcastMessageId, chunk)
             );
           }
         }
-        await db.delete(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.listId, listId));
-        await db.delete(broadcastListMembers).where((0, import_drizzle_orm14.eq)(broadcastListMembers.listId, listId));
-        await db.delete(broadcastLists).where((0, import_drizzle_orm14.eq)(broadcastLists.id, listId));
+        await db.delete(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.listId, listId));
+        await db.delete(broadcastListMembers).where((0, import_drizzle_orm15.eq)(broadcastListMembers.listId, listId));
+        await db.delete(broadcastLists).where((0, import_drizzle_orm15.eq)(broadcastLists.id, listId));
       }
       return { success: true, deletedCount: input.listIds.length };
     } catch (err) {
@@ -9332,8 +10601,8 @@ var broadcastRouter = router({
       throw err;
     }
   }),
-  listMembers: protectedProcedure.input(import_zod7.z.object({
-    listId: import_zod7.z.number().int().positive()
+  listMembers: protectedProcedure.input(import_zod8.z.object({
+    listId: import_zod8.z.number().int().positive()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -9343,7 +10612,7 @@ var broadcastRouter = router({
       addedAt: broadcastListMembers.addedAt,
       name: customers.name,
       phone: customers.phone
-    }).from(broadcastListMembers).leftJoin(customers, (0, import_drizzle_orm14.eq)(broadcastListMembers.customerId, customers.id)).where((0, import_drizzle_orm14.eq)(broadcastListMembers.listId, input.listId)).orderBy((0, import_drizzle_orm14.asc)(broadcastListMembers.addedAt));
+    }).from(broadcastListMembers).leftJoin(customers, (0, import_drizzle_orm15.eq)(broadcastListMembers.customerId, customers.id)).where((0, import_drizzle_orm15.eq)(broadcastListMembers.listId, input.listId)).orderBy((0, import_drizzle_orm15.asc)(broadcastListMembers.addedAt));
     const uniqueMembersMap = /* @__PURE__ */ new Map();
     for (const member of members) {
       if (member.phone && !uniqueMembersMap.has(member.phone)) {
@@ -9353,17 +10622,17 @@ var broadcastRouter = router({
     const deduplicatedMembers = Array.from(uniqueMembersMap.values());
     return deduplicatedMembers;
   }),
-  searchCustomers: protectedProcedure.input(import_zod7.z.object({
-    query: import_zod7.z.string().default(""),
-    excludeListId: import_zod7.z.number().int().positive().optional()
+  searchCustomers: protectedProcedure.input(import_zod8.z.object({
+    query: import_zod8.z.string().default(""),
+    excludeListId: import_zod8.z.number().int().positive().optional()
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const searchPattern = `%${input.query}%`;
-    const whereClause = (0, import_drizzle_orm14.or)(
-      import_drizzle_orm14.sql`LOWER(${customers.name}) LIKE LOWER(${searchPattern})`,
-      import_drizzle_orm14.sql`LOWER(${customers.email}) LIKE LOWER(${searchPattern})`,
-      import_drizzle_orm14.sql`${customers.phone} LIKE ${searchPattern}`
+    const whereClause = (0, import_drizzle_orm15.or)(
+      import_drizzle_orm15.sql`LOWER(${customers.name}) LIKE LOWER(${searchPattern})`,
+      import_drizzle_orm15.sql`LOWER(${customers.email}) LIKE LOWER(${searchPattern})`,
+      import_drizzle_orm15.sql`${customers.phone} LIKE ${searchPattern}`
     );
     let query = db.select({
       id: customers.id,
@@ -9373,7 +10642,7 @@ var broadcastRouter = router({
       photoUrl: customers.photoUrl
     }).from(customers).where(whereClause);
     if (input.excludeListId) {
-      const excludeIds = await db.select({ customerId: broadcastListMembers.customerId }).from(broadcastListMembers).where((0, import_drizzle_orm14.eq)(broadcastListMembers.listId, input.excludeListId));
+      const excludeIds = await db.select({ customerId: broadcastListMembers.customerId }).from(broadcastListMembers).where((0, import_drizzle_orm15.eq)(broadcastListMembers.listId, input.excludeListId));
       const excludeIdList = excludeIds.map((r) => r.customerId);
       if (excludeIdList.length > 0) {
         query = db.select({
@@ -9382,26 +10651,26 @@ var broadcastRouter = router({
           phone: customers.phone,
           email: customers.email,
           photoUrl: customers.photoUrl
-        }).from(customers).where((0, import_drizzle_orm14.and)(whereClause, (0, import_drizzle_orm14.notInArray)(customers.id, excludeIdList)));
+        }).from(customers).where((0, import_drizzle_orm15.and)(whereClause, (0, import_drizzle_orm15.notInArray)(customers.id, excludeIdList)));
       }
     }
     return query.limit(50);
   }),
-  sendMessage: protectedProcedure.input(import_zod7.z.object({
-    listId: import_zod7.z.number().int().positive(),
-    content: import_zod7.z.string().optional().nullable().transform(normalize),
-    caption: import_zod7.z.string().optional().nullable().transform(normalize),
-    fileUrl: import_zod7.z.string().optional().nullable().transform(normalize),
-    fileName: import_zod7.z.string().optional().nullable().transform(normalize),
-    fileType: import_zod7.z.string().optional().nullable().transform(normalize),
-    fileSize: import_zod7.z.number().int().optional().nullable()
+  sendMessage: protectedProcedure.input(import_zod8.z.object({
+    listId: import_zod8.z.number().int().positive(),
+    content: import_zod8.z.string().optional().nullable().transform(normalize),
+    caption: import_zod8.z.string().optional().nullable().transform(normalize),
+    fileUrl: import_zod8.z.string().optional().nullable().transform(normalize),
+    fileName: import_zod8.z.string().optional().nullable().transform(normalize),
+    fileType: import_zod8.z.string().optional().nullable().transform(normalize),
+    fileSize: import_zod8.z.number().int().optional().nullable()
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const members = await db.select({
       customerId: broadcastListMembers.customerId,
       phone: customers.phone
-    }).from(broadcastListMembers).leftJoin(customers, (0, import_drizzle_orm14.eq)(broadcastListMembers.customerId, customers.id)).where((0, import_drizzle_orm14.eq)(broadcastListMembers.listId, input.listId));
+    }).from(broadcastListMembers).leftJoin(customers, (0, import_drizzle_orm15.eq)(broadcastListMembers.customerId, customers.id)).where((0, import_drizzle_orm15.eq)(broadcastListMembers.listId, input.listId));
     if (members.length === 0) throw new Error("Lista n\xE3o tem membros");
     const values = {
       listId: input.listId,
@@ -9442,7 +10711,7 @@ var broadcastRouter = router({
         }));
         await db.insert(broadcastMembersSent).values(valuesToInsert);
       }
-      await db.update(broadcastLists).set({ lastSentAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm14.eq)(broadcastLists.id, input.listId));
+      await db.update(broadcastLists).set({ lastSentAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm15.eq)(broadcastLists.id, input.listId));
       const { processBroadcastMessage: processBroadcastMessage2 } = await Promise.resolve().then(() => (init_broadcast_sender(), broadcast_sender_exports));
       setImmediate(() => {
         processBroadcastMessage2(messageId).catch(
@@ -9455,26 +10724,26 @@ var broadcastRouter = router({
       throw error;
     }
   }),
-  getMessageStats: protectedProcedure.input(import_zod7.z.object({ messageId: import_zod7.z.number().int().positive() })).query(async ({ input }) => {
+  getMessageStats: protectedProcedure.input(import_zod8.z.object({ messageId: import_zod8.z.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const message = await db.select().from(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.id, input.messageId)).limit(1);
+    const message = await db.select().from(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.id, input.messageId)).limit(1);
     if (!message.length) throw new Error("Mensagem n\xE3o encontrada");
-    const [[{ total }]] = await db.select({ total: import_drizzle_orm14.sql`COUNT(*)` }).from(broadcastListMembers).where((0, import_drizzle_orm14.eq)(broadcastListMembers.listId, message[0].listId));
+    const [[{ total }]] = await db.select({ total: import_drizzle_orm15.sql`COUNT(*)` }).from(broadcastListMembers).where((0, import_drizzle_orm15.eq)(broadcastListMembers.listId, message[0].listId));
     const stats = await db.select({
       status: broadcastMembersSent.status,
-      count: import_drizzle_orm14.sql`COUNT(*)`
-    }).from(broadcastMembersSent).where((0, import_drizzle_orm14.eq)(broadcastMembersSent.broadcastMessageId, input.messageId)).groupBy(broadcastMembersSent.status);
+      count: import_drizzle_orm15.sql`COUNT(*)`
+    }).from(broadcastMembersSent).where((0, import_drizzle_orm15.eq)(broadcastMembersSent.broadcastMessageId, input.messageId)).groupBy(broadcastMembersSent.status);
     const result = { total, sent: 0, delivered: 0, read: 0, failed: 0, pending: 0 };
     stats.forEach((s) => {
       result[s.status] = Number(s.count);
     });
     return result;
   }),
-  listMessages: protectedProcedure.input(import_zod7.z.object({
-    listId: import_zod7.z.number().int().positive(),
-    page: import_zod7.z.number().int().min(1).optional().default(1),
-    limit: import_zod7.z.number().int().min(1).max(50).optional().default(20)
+  listMessages: protectedProcedure.input(import_zod8.z.object({
+    listId: import_zod8.z.number().int().positive(),
+    page: import_zod8.z.number().int().min(1).optional().default(1),
+    limit: import_zod8.z.number().int().min(1).max(50).optional().default(20)
   })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -9490,8 +10759,8 @@ var broadcastRouter = router({
       status: broadcastMessages.status,
       sentAt: broadcastMessages.sentAt,
       createdAt: broadcastMessages.createdAt
-    }).from(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.listId, input.listId)).orderBy((0, import_drizzle_orm14.desc)(broadcastMessages.createdAt)).limit(Number(input.limit)).offset(offset);
-    const [[{ total }]] = await db.select({ total: import_drizzle_orm14.sql`COUNT(*)` }).from(broadcastMessages).where((0, import_drizzle_orm14.eq)(broadcastMessages.listId, input.listId));
+    }).from(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.listId, input.listId)).orderBy((0, import_drizzle_orm15.desc)(broadcastMessages.createdAt)).limit(Number(input.limit)).offset(offset);
+    const [[{ total }]] = await db.select({ total: import_drizzle_orm15.sql`COUNT(*)` }).from(broadcastMessages).where((0, import_drizzle_orm15.eq)(broadcastMessages.listId, input.listId));
     return {
       messages: messages2,
       pagination: { page: input.page, limit: input.limit, total: Number(total), totalPages: Math.ceil(Number(total) / input.limit) }
@@ -9500,11 +10769,11 @@ var broadcastRouter = router({
 });
 
 // server/routers-contact-fetch.ts
-var import_zod8 = require("zod");
+var import_zod9 = require("zod");
 var import_server3 = require("@trpc/server");
 init_db();
 init_schema();
-var import_drizzle_orm16 = require("drizzle-orm");
+var import_drizzle_orm17 = require("drizzle-orm");
 
 // server/integrations/whatsapp-business.ts
 async function fetchWhatsAppProfile(phone, config) {
@@ -9631,8 +10900,8 @@ var contactFetchRouter = router({
    * Usa a API do WhatsApp Business para buscar informações do perfil
    */
   fetchWhatsAppName: protectedProcedure.input(
-    import_zod8.z.object({
-      phone: import_zod8.z.string().min(10, "Telefone inv\xE1lido")
+    import_zod9.z.object({
+      phone: import_zod9.z.string().min(10, "Telefone inv\xE1lido")
     })
   ).mutation(async ({ input }) => {
     try {
@@ -9650,9 +10919,9 @@ var contactFetchRouter = router({
         };
       }
       const [config] = await db.select().from(integrationSettings2).where(
-        (0, import_drizzle_orm16.and)(
-          (0, import_drizzle_orm16.eq)(integrationSettings2.integrationType, "whatsapp_business"),
-          (0, import_drizzle_orm16.eq)(integrationSettings2.isActive, true)
+        (0, import_drizzle_orm17.and)(
+          (0, import_drizzle_orm17.eq)(integrationSettings2.integrationType, "whatsapp_business"),
+          (0, import_drizzle_orm17.eq)(integrationSettings2.isActive, true)
         )
       ).limit(1);
       if (!config) {
@@ -9692,17 +10961,17 @@ var contactFetchRouter = router({
    * Usa a API do Instagram Graph para buscar informações do perfil
    */
   fetchInstagramName: protectedProcedure.input(
-    import_zod8.z.object({
-      username: import_zod8.z.string().min(1, "Username inv\xE1lido")
+    import_zod9.z.object({
+      username: import_zod9.z.string().min(1, "Username inv\xE1lido")
     })
   ).mutation(async ({ input }) => {
     try {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const [config] = await db.select().from(integrationSettings2).where(
-        (0, import_drizzle_orm16.and)(
-          (0, import_drizzle_orm16.eq)(integrationSettings2.integrationType, "instagram_graph"),
-          (0, import_drizzle_orm16.eq)(integrationSettings2.isActive, true)
+        (0, import_drizzle_orm17.and)(
+          (0, import_drizzle_orm17.eq)(integrationSettings2.integrationType, "instagram_graph"),
+          (0, import_drizzle_orm17.eq)(integrationSettings2.isActive, true)
         )
       ).limit(1);
       let profile;
@@ -9749,9 +11018,9 @@ var contactFetchRouter = router({
    * Tenta buscar do WhatsApp ou Instagram baseado no tipo de canal
    */
   fetchContactInfo: protectedProcedure.input(
-    import_zod8.z.object({
-      identifier: import_zod8.z.string().min(1, "Identificador inv\xE1lido"),
-      channel: import_zod8.z.enum(["whatsapp", "instagram", "telegram", "email"])
+    import_zod9.z.object({
+      identifier: import_zod9.z.string().min(1, "Identificador inv\xE1lido"),
+      channel: import_zod9.z.enum(["whatsapp", "instagram", "telegram", "email"])
     })
   ).mutation(async ({ input, ctx }) => {
     try {
@@ -9831,12 +11100,12 @@ var contactFetchRouter = router({
 });
 
 // server/routers-conversations.ts
-var import_zod9 = require("zod");
-var import_drizzle_orm17 = require("drizzle-orm");
+var import_zod10 = require("zod");
+var import_drizzle_orm18 = require("drizzle-orm");
 init_schema();
 init_db();
 init_phone();
-var import_drizzle_orm18 = require("drizzle-orm");
+var import_drizzle_orm19 = require("drizzle-orm");
 function mapConversation(row) {
   const statusMap = {
     open: "open" /* OPEN */,
@@ -9893,14 +11162,14 @@ var conversationsRouter = router({
       lastMessageAt: conversations.lastMessageAt,
       unreadCount: conversations.unreadCount,
       customerAvatar: customers.photoUrl,
-      lastMessage: import_drizzle_orm18.sql`(
+      lastMessage: import_drizzle_orm19.sql`(
             SELECT cm.content 
             FROM conversation_messages cm 
             WHERE cm.conversation_id = ${conversations.id} 
             ORDER BY cm.created_at DESC 
             LIMIT 1
           )`.as("lastMessage")
-    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm17.eq)(conversations.customerId, customers.id)).orderBy((0, import_drizzle_orm17.desc)(conversations.lastMessageAt));
+    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm18.eq)(conversations.customerId, customers.id)).orderBy((0, import_drizzle_orm18.desc)(conversations.lastMessageAt));
     return rows.map(mapConversation);
   }),
   /**
@@ -9909,7 +11178,7 @@ var conversationsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const conditions = (0, import_drizzle_orm17.inArray)(conversations.status, ["open", "assigned"]);
+    const conditions = (0, import_drizzle_orm18.inArray)(conversations.status, ["open", "assigned"]);
     const rows = await db.select({
       id: conversations.id,
       customerId: conversations.customerId,
@@ -9925,14 +11194,14 @@ var conversationsRouter = router({
       lastMessageAt: conversations.lastMessageAt,
       unreadCount: conversations.unreadCount,
       customerAvatar: customers.photoUrl,
-      lastMessage: import_drizzle_orm18.sql`(
+      lastMessage: import_drizzle_orm19.sql`(
             SELECT cm.content 
             FROM conversation_messages cm 
             WHERE cm.conversation_id = ${conversations.id} 
             ORDER BY cm.created_at DESC 
             LIMIT 1
           )`.as("lastMessage")
-    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm17.eq)(conversations.customerId, customers.id)).where(conditions).orderBy((0, import_drizzle_orm17.desc)(conversations.lastMessageAt));
+    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm18.eq)(conversations.customerId, customers.id)).where(conditions).orderBy((0, import_drizzle_orm18.desc)(conversations.lastMessageAt));
     return rows.map(mapConversation);
   }),
   /**
@@ -9941,7 +11210,7 @@ var conversationsRouter = router({
   listActive: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    const conditions = (0, import_drizzle_orm17.inArray)(conversations.status, ["open", "assigned"]);
+    const conditions = (0, import_drizzle_orm18.inArray)(conversations.status, ["open", "assigned"]);
     const rows = await db.select({
       id: conversations.id,
       customerId: conversations.customerId,
@@ -9957,20 +11226,20 @@ var conversationsRouter = router({
       lastMessageAt: conversations.lastMessageAt,
       unreadCount: conversations.unreadCount,
       customerAvatar: customers.photoUrl,
-      lastMessage: import_drizzle_orm18.sql`(
+      lastMessage: import_drizzle_orm19.sql`(
             SELECT cm.content 
             FROM conversation_messages cm 
             WHERE cm.conversation_id = ${conversations.id} 
             ORDER BY cm.created_at DESC 
             LIMIT 1
           )`.as("lastMessage")
-    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm17.eq)(conversations.customerId, customers.id)).where(conditions).orderBy((0, import_drizzle_orm17.desc)(conversations.lastMessageAt));
+    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm18.eq)(conversations.customerId, customers.id)).where(conditions).orderBy((0, import_drizzle_orm18.desc)(conversations.lastMessageAt));
     return rows.map(mapConversation);
   }),
   /**
    * Obtém uma conversa específica por ID (apenas se atribuída ao agente).
    */
-  get: protectedProcedure.input(import_zod9.z.object({ id: import_zod9.z.string() })).query(async ({ ctx, input }) => {
+  get: protectedProcedure.input(import_zod10.z.object({ id: import_zod10.z.string() })).query(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const numericId = parseInt(input.id, 10);
@@ -9990,14 +11259,14 @@ var conversationsRouter = router({
       lastMessageAt: conversations.lastMessageAt,
       unreadCount: conversations.unreadCount,
       customerAvatar: customers.photoUrl,
-      lastMessage: import_drizzle_orm18.sql`(
+      lastMessage: import_drizzle_orm19.sql`(
             SELECT cm.content 
             FROM conversation_messages cm 
             WHERE cm.conversation_id = ${conversations.id} 
             ORDER BY cm.created_at DESC 
             LIMIT 1
           )`.as("lastMessage")
-    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm17.eq)(conversations.customerId, customers.id)).where((0, import_drizzle_orm17.eq)(conversations.id, numericId)).limit(1);
+    }).from(conversations).leftJoin(customers, (0, import_drizzle_orm18.eq)(conversations.customerId, customers.id)).where((0, import_drizzle_orm18.eq)(conversations.id, numericId)).limit(1);
     const row = rows[0];
     if (!row) return null;
     const isUser = ctx?.user?.role === "user";
@@ -10010,14 +11279,14 @@ var conversationsRouter = router({
    * Cria uma nova conversa.
    */
   create: protectedProcedure.input(
-    import_zod9.z.object({
-      customerId: import_zod9.z.string().optional(),
+    import_zod10.z.object({
+      customerId: import_zod10.z.string().optional(),
       // Opcional — se não fornecido, busca/cria pelo telefone
-      customerPhone: import_zod9.z.string(),
+      customerPhone: import_zod10.z.string(),
       // Obrigatório — usado pra buscar ou criar cliente
-      customerName: import_zod9.z.string().optional(),
-      channel: import_zod9.z.enum(["whatsapp", "instagram", "telegram", "webchat", "email", "sms", "facebook"]),
-      queueId: import_zod9.z.string().optional()
+      customerName: import_zod10.z.string().optional(),
+      channel: import_zod10.z.enum(["whatsapp", "instagram", "telegram", "webchat", "email", "sms", "facebook"]),
+      queueId: import_zod10.z.string().optional()
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -10035,12 +11304,12 @@ var conversationsRouter = router({
       console.log("[conversations.create] Phone variants:", phoneVariants);
       let foundCustomer = null;
       if (phoneVariants.length > 0) {
-        const phoneConditions = phoneVariants.map((v) => (0, import_drizzle_orm17.like)(customers.phone, `%${v.replace(/[^0-9]/g, "")}%`));
+        const phoneConditions = phoneVariants.map((v) => (0, import_drizzle_orm18.like)(customers.phone, `%${v.replace(/[^0-9]/g, "")}%`));
         const phoneDigits = resolvedPhone.replace(/\D/g, "");
         if (phoneDigits.length >= 8) {
-          phoneConditions.push((0, import_drizzle_orm17.like)(customers.phone, `%${phoneDigits.slice(-8)}%`));
+          phoneConditions.push((0, import_drizzle_orm18.like)(customers.phone, `%${phoneDigits.slice(-8)}%`));
         }
-        const candidates = await db.select().from(customers).where((0, import_drizzle_orm17.or)(...phoneConditions)).limit(5);
+        const candidates = await db.select().from(customers).where((0, import_drizzle_orm18.or)(...phoneConditions)).limit(5);
         console.log("[conversations.create] Found candidates:", candidates.length, candidates.map((c) => ({ id: c.id, name: c.name, phone: c.phone })));
         if (candidates.length > 0) {
           foundCustomer = candidates[0];
@@ -10060,7 +11329,7 @@ var conversationsRouter = router({
         const rawId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
         numericCustomerId = Number(rawId) || 0;
         if (!numericCustomerId) {
-          const [newCustomer] = await db.select().from(customers).orderBy((0, import_drizzle_orm17.desc)(customers.id)).limit(1);
+          const [newCustomer] = await db.select().from(customers).orderBy((0, import_drizzle_orm18.desc)(customers.id)).limit(1);
           numericCustomerId = newCustomer?.id || 0;
         }
         console.log("[conversations.create] Created new customer:", numericCustomerId);
@@ -10072,13 +11341,13 @@ var conversationsRouter = router({
     const found = await findConversationByPhone(db, resolvedPhone, conversations, customers);
     console.log("[conversations.create] findConversationByPhone result:", found);
     if (found) {
-      const [existingConversation] = await db.select().from(conversations).where((0, import_drizzle_orm17.eq)(conversations.id, found.conversationId)).limit(1);
+      const [existingConversation] = await db.select().from(conversations).where((0, import_drizzle_orm18.eq)(conversations.id, found.conversationId)).limit(1);
       if (existingConversation) {
         numericCustomerId = found.customerId;
         if (existingConversation.status === "open" || existingConversation.status === "assigned") {
           if (!existingConversation.assignedTo) {
-            await db.update(conversations).set({ assignedTo: ctx.user.id }).where((0, import_drizzle_orm17.eq)(conversations.id, existingConversation.id));
-            const [updated] = await db.select().from(conversations).where((0, import_drizzle_orm17.eq)(conversations.id, existingConversation.id));
+            await db.update(conversations).set({ assignedTo: ctx.user.id }).where((0, import_drizzle_orm18.eq)(conversations.id, existingConversation.id));
+            const [updated] = await db.select().from(conversations).where((0, import_drizzle_orm18.eq)(conversations.id, existingConversation.id));
             console.log("[conversations.create] Assigned to agent, returning:", updated.id);
             return mapConversation(updated);
           }
@@ -10092,8 +11361,8 @@ var conversationsRouter = router({
           lastMessageAt: now,
           ...resolvedName ? { customerName: resolvedName } : {},
           ...resolvedPhone ? { customerPhone: resolvedPhone } : {}
-        }).where((0, import_drizzle_orm17.eq)(conversations.id, existingConversation.id));
-        const [reopened] = await db.select().from(conversations).where((0, import_drizzle_orm17.eq)(conversations.id, existingConversation.id));
+        }).where((0, import_drizzle_orm18.eq)(conversations.id, existingConversation.id));
+        const [reopened] = await db.select().from(conversations).where((0, import_drizzle_orm18.eq)(conversations.id, existingConversation.id));
         console.log("[conversations.create] Reopened closed conversation:", reopened.id, "(had messages preserved)");
         return mapConversation(reopened);
       }
@@ -10111,21 +11380,21 @@ var conversationsRouter = router({
     if (resolvedPhone) insertValues.customerPhone = resolvedPhone;
     if (input.queueId) insertValues.queueId = parseInt(input.queueId, 10);
     const result = await db.insert(conversations).values(insertValues).$returningId();
-    const [newRow] = await db.select().from(conversations).where((0, import_drizzle_orm17.eq)(conversations.id, result[0].id));
+    const [newRow] = await db.select().from(conversations).where((0, import_drizzle_orm18.eq)(conversations.id, result[0].id));
     return mapConversation(newRow);
   }),
   /**
    * Atualiza uma conversa existente.
    */
   update: protectedProcedure.input(
-    import_zod9.z.object({
-      id: import_zod9.z.string(),
-      status: import_zod9.z.enum(["open", "assigned", "closed"]).optional(),
-      assignedTo: import_zod9.z.string().optional(),
-      customerName: import_zod9.z.string().optional(),
-      customerPhone: import_zod9.z.string().optional(),
-      queueId: import_zod9.z.string().optional(),
-      closeReason: import_zod9.z.enum(["venda", "orcamento", "conversa_anterior", "engano"]).optional()
+    import_zod10.z.object({
+      id: import_zod10.z.string(),
+      status: import_zod10.z.enum(["open", "assigned", "closed"]).optional(),
+      assignedTo: import_zod10.z.string().optional(),
+      customerName: import_zod10.z.string().optional(),
+      customerPhone: import_zod10.z.string().optional(),
+      queueId: import_zod10.z.string().optional(),
+      closeReason: import_zod10.z.enum(["venda", "orcamento", "conversa_anterior", "engano"]).optional()
     })
   ).mutation(async ({ ctx, input }) => {
     const db = await getDb();
@@ -10164,1019 +11433,42 @@ var conversationsRouter = router({
     if (updates.status === "closed") {
       updates.closedAt = /* @__PURE__ */ new Date();
     }
-    await db.update(conversations).set(updates).where((0, import_drizzle_orm17.eq)(conversations.id, numericId));
+    await db.update(conversations).set(updates).where((0, import_drizzle_orm18.eq)(conversations.id, numericId));
     return { success: true };
   }),
   /**
    * Atribui uma conversa a um agente (normalmente o próprio agente logado).
    */
-  assign: protectedProcedure.input(import_zod9.z.object({ conversationId: import_zod9.z.number() })).mutation(async ({ input, ctx }) => {
+  assign: protectedProcedure.input(import_zod10.z.object({ conversationId: import_zod10.z.number() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.update(conversations).set({ assignedTo: ctx.user.id, status: "open" }).where((0, import_drizzle_orm17.eq)(conversations.id, input.conversationId));
+    await db.update(conversations).set({ assignedTo: ctx.user.id, status: "open" }).where((0, import_drizzle_orm18.eq)(conversations.id, input.conversationId));
     return { success: true };
   }),
   /**
    * Fecha uma conversa com um motivo.
    */
   close: protectedProcedure.input(
-    import_zod9.z.object({
-      conversationId: import_zod9.z.number(),
-      reason: import_zod9.z.enum(["venda", "orcamento", "conversa_anterior", "engano"])
+    import_zod10.z.object({
+      conversationId: import_zod10.z.number(),
+      reason: import_zod10.z.enum(["venda", "orcamento", "conversa_anterior", "engano"])
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     console.log(`[conversations.close] Closing conversation ${input.conversationId} with reason ${input.reason}`);
-    await db.update(conversations).set({ status: "closed", closeReason: input.reason, closedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm17.eq)(conversations.id, input.conversationId));
+    await db.update(conversations).set({ status: "closed", closeReason: input.reason, closedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm18.eq)(conversations.id, input.conversationId));
     console.log(`[conversations.close] Conversation ${input.conversationId} closed successfully`);
     return { success: true };
   }),
   /**
    * Exclui uma conversa permanentemente.
    */
-  delete: protectedProcedure.input(import_zod9.z.object({ id: import_zod9.z.number() })).mutation(async ({ input }) => {
+  delete: protectedProcedure.input(import_zod10.z.object({ id: import_zod10.z.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.delete(conversations).where((0, import_drizzle_orm17.eq)(conversations.id, input.id));
+    await db.delete(conversations).where((0, import_drizzle_orm18.eq)(conversations.id, input.id));
     return { success: true };
-  })
-});
-
-// server/routers-crm.ts
-var import_zod10 = require("zod");
-init_db();
-init_schema();
-var import_drizzle_orm19 = require("drizzle-orm");
-
-// server/crm-core.ts
-init_db();
-init_schema();
-function safeJson(value) {
-  try {
-    return value === void 0 ? null : JSON.stringify(value);
-  } catch {
-    return null;
-  }
-}
-function fireAndForget(fn) {
-  setImmediate(() => {
-    fn().catch((err) => {
-      console.error("[CRM] fireAndForget error:", err);
-    });
-  });
-}
-async function enqueueCrmOutboxEvent(params) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(crmOutboxEvents).values({
-    eventName: params.eventName,
-    entityType: params.entityType,
-    entityId: params.entityId ?? null,
-    actorUserId: params.actorUserId ?? null,
-    payloadJson: safeJson(params.payload),
-    idempotencyKey: params.idempotencyKey ?? null,
-    status: "pending",
-    createdAt: /* @__PURE__ */ new Date()
-  });
-}
-async function appendCrmAuditLog(params) {
-  const db = await getDb();
-  if (!db) return;
-  await db.insert(crmAuditLogs).values({
-    action: params.action,
-    entityType: params.entityType,
-    entityId: params.entityId ?? null,
-    actorUserId: params.actorUserId ?? null,
-    beforeJson: safeJson(params.before),
-    afterJson: safeJson(params.after),
-    requestId: params.requestId ?? null,
-    ip: params.ip ?? null,
-    userAgent: params.userAgent ?? null,
-    createdAt: /* @__PURE__ */ new Date()
-  });
-}
-
-// server/routers-crm.ts
-init_phone();
-var calculateEndDate = (purchaseDate, quantity, dailyDosage) => {
-  const daysSupply = Math.floor(quantity / dailyDosage);
-  const endDate = new Date(purchaseDate);
-  endDate.setDate(endDate.getDate() + daysSupply);
-  return endDate;
-};
-var crmRouter = router({
-  // ========================================
-  // CLIENTES (CUSTOMERS)
-  // ========================================
-  // Buscar cliente por telefone (normalizado)
-  getByPhone: publicProcedure.input(import_zod10.z.object({ phone: import_zod10.z.string() })).query(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const normalizedPhone = formatPhoneBR(input.phone);
-    const customer = await db.select().from(customers).where((0, import_drizzle_orm19.eq)(customers.phone, normalizedPhone)).limit(1);
-    return customer[0] || null;
-  }),
-  // Criar cliente automaticamente (para webhooks)
-  createIfNotExists: publicProcedure.input(
-    import_zod10.z.object({
-      phone: import_zod10.z.string(),
-      name: import_zod10.z.string().optional()
-    })
-  ).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const normalizedPhone = formatPhoneBR(input.phone);
-    const phoneVariants = generatePhoneVariants(input.phone);
-    const phoneCondition = phoneVariants.length > 1 ? (0, import_drizzle_orm19.or)(...phoneVariants.map((v) => (0, import_drizzle_orm19.eq)(customers.phone, v))) : (0, import_drizzle_orm19.eq)(customers.phone, phoneVariants[0]);
-    const existing = await db.select().from(customers).where(phoneCondition).limit(1);
-    if (existing[0]) {
-      return existing[0];
-    }
-    const newCustomer = await db.insert(customers).values({
-      phone: normalizedPhone,
-      name: input.name || "Cliente",
-      status: "active"
-    }).$returningId();
-    return { id: newCustomer[0].id };
-  }),
-  // Atualizar cliente
-  updateCustomer: protectedProcedure.input(
-    import_zod10.z.object({
-      id: import_zod10.z.number(),
-      name: import_zod10.z.string().optional(),
-      birthDate: import_zod10.z.string().optional()
-    })
-  ).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const update = {
-      updatedAt: /* @__PURE__ */ new Date()
-    };
-    if (input.name !== void 0) update.name = input.name;
-    if (input.birthDate !== void 0) {
-      const d = input.birthDate ? new Date(input.birthDate) : null;
-      update.birthDate = d && !Number.isNaN(d.getTime()) ? d : null;
-    }
-    await db.update(customers).set(update).where((0, import_drizzle_orm19.eq)(customers.id, input.id));
-    fireAndForget(async () => {
-      await appendCrmAuditLog({
-        action: "customer.update",
-        entityType: "customer",
-        entityId: input.id,
-        actorUserId: null,
-        after: input
-      });
-      await enqueueCrmOutboxEvent({
-        eventName: "CustomerUpdated",
-        entityType: "customer",
-        entityId: input.id,
-        actorUserId: null,
-        payload: input
-      });
-    });
-    return { success: true };
-  }),
-  // ========================================
-  // TRATAMENTOS (TREATMENTS)
-  // ========================================
-  // Criar tratamento
-  createTreatment: protectedProcedure.input(
-    import_zod10.z.object({
-      customerId: import_zod10.z.number(),
-      nomeMedicamento: import_zod10.z.string(),
-      posologiaDiaria: import_zod10.z.number().min(1),
-      qtdCaixa: import_zod10.z.number().min(1),
-      dataUltimaCompra: import_zod10.z.string(),
-      observacoes: import_zod10.z.string().optional()
-    })
-  ).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const purchaseDate = new Date(input.dataUltimaCompra);
-    const dataFimPrevisto = calculateEndDate(
-      purchaseDate,
-      input.qtdCaixa,
-      input.posologiaDiaria
-    );
-    const newTreatment = await db.insert(customerTreatments).values({
-      customerId: input.customerId,
-      nomeMedicamento: input.nomeMedicamento,
-      posologiaDiaria: input.posologiaDiaria,
-      qtdCaixa: input.qtdCaixa,
-      dataUltimaCompra: purchaseDate,
-      dataFimPrevisto,
-      observacoes: input.observacoes,
-      isActive: 1
-    }).$returningId();
-    const treatmentId = newTreatment?.[0]?.id;
-    if (!treatmentId) {
-      throw new Error("Failed to create treatment");
-    }
-    const created = await db.select().from(customerTreatments).where((0, import_drizzle_orm19.eq)(customerTreatments.id, treatmentId)).limit(1);
-    if (!created?.[0]) {
-      throw new Error("Treatment created but could not be loaded");
-    }
-    fireAndForget(async () => {
-      await enqueueCrmOutboxEvent({
-        eventName: "CustomerTreatmentCreated",
-        entityType: "customer",
-        entityId: input.customerId,
-        actorUserId: ctx.user.id,
-        payload: { treatmentId, ...input }
-      });
-    });
-    return { id: treatmentId, treatment: created[0] };
-  }),
-  // Listar tratamentos de um cliente
-  getTreatments: protectedProcedure.input(import_zod10.z.object({ customerId: import_zod10.z.number() })).query(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const treatments = await db.select().from(customerTreatments).where(
-      (0, import_drizzle_orm19.and)(
-        (0, import_drizzle_orm19.eq)(customerTreatments.customerId, input.customerId),
-        (0, import_drizzle_orm19.eq)(customerTreatments.isActive, 1)
-      )
-    ).orderBy((0, import_drizzle_orm19.desc)(customerTreatments.dataFimPrevisto));
-    return treatments;
-  }),
-  // Atualizar tratamento
-  updateTreatment: protectedProcedure.input(
-    import_zod10.z.object({
-      id: import_zod10.z.number(),
-      posologiaDiaria: import_zod10.z.number().optional(),
-      qtdCaixa: import_zod10.z.number().optional(),
-      dataUltimaCompra: import_zod10.z.string().optional(),
-      isActive: import_zod10.z.number().optional()
-    })
-  ).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const updateData = { updatedAt: /* @__PURE__ */ new Date() };
-    if (input.posologiaDiaria)
-      updateData.posologiaDiaria = input.posologiaDiaria;
-    if (input.qtdCaixa) updateData.qtdCaixa = input.qtdCaixa;
-    if (input.dataUltimaCompra) {
-      updateData.dataUltimaCompra = new Date(input.dataUltimaCompra);
-    }
-    if (input.isActive !== void 0) updateData.isActive = input.isActive;
-    if (input.qtdCaixa && input.posologiaDiaria) {
-      const treatment = await db.select().from(customerTreatments).where((0, import_drizzle_orm19.eq)(customerTreatments.id, input.id)).limit(1);
-      if (treatment[0]?.dataUltimaCompra) {
-        updateData.dataFimPrevisto = calculateEndDate(
-          treatment[0].dataUltimaCompra,
-          input.qtdCaixa,
-          input.posologiaDiaria
-        );
-      }
-    }
-    await db.update(customerTreatments).set(updateData).where((0, import_drizzle_orm19.eq)(customerTreatments.id, input.id));
-    fireAndForget(async () => {
-      await enqueueCrmOutboxEvent({
-        eventName: "CustomerTreatmentUpdated",
-        entityType: "treatment",
-        entityId: input.id,
-        actorUserId: ctx.user.id,
-        payload: input
-      });
-    });
-    return { success: true };
-  }),
-  // Apagar (desativar) tratamento
-  deleteTreatment: protectedProcedure.input(import_zod10.z.object({ id: import_zod10.z.number() })).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const existing = await db.select().from(customerTreatments).where((0, import_drizzle_orm19.eq)(customerTreatments.id, input.id)).limit(1);
-    if (!existing?.[0]) {
-      return { success: true };
-    }
-    await db.update(customerTreatments).set({ isActive: 0, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm19.eq)(customerTreatments.id, input.id));
-    fireAndForget(async () => {
-      await enqueueCrmOutboxEvent({
-        eventName: "CustomerTreatmentDeleted",
-        entityType: "treatment",
-        entityId: input.id,
-        actorUserId: ctx.user.id,
-        payload: { customerId: existing[0].customerId }
-      });
-    });
-    return { success: true };
-  }),
-  // ========================================
-  // TAGS
-  // ========================================
-  // Listar todas as tags
-  getTags: protectedProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    return db.select().from(tags).orderBy(tags.name);
-  }),
-  // Alias (used by some frontend screens)
-  listTags: protectedProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    return db.select().from(tags).orderBy(tags.name);
-  }),
-  // Criar nova tag
-  createTag: protectedProcedure.input(
-    import_zod10.z.object({
-      name: import_zod10.z.string(),
-      color: import_zod10.z.string().default("#6366f1"),
-      description: import_zod10.z.string().optional()
-    })
-  ).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const newTag = await db.insert(tags).values({
-      ...input,
-      createdBy: ctx.user?.id
-    }).$returningId();
-    fireAndForget(async () => {
-      await enqueueCrmOutboxEvent({
-        eventName: "TagCreated",
-        entityType: "tag",
-        entityId: newTag[0].id,
-        actorUserId: ctx.user?.id ?? null,
-        payload: input
-      });
-    });
-    return { id: newTag[0].id };
-  }),
-  // Adicionar tag a cliente
-  addTagToCustomer: protectedProcedure.input(
-    import_zod10.z.object({
-      customerId: import_zod10.z.number(),
-      tagId: import_zod10.z.number()
-    })
-  ).mutation(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const existing = await db.select().from(customerTags).where(
-      (0, import_drizzle_orm19.and)(
-        (0, import_drizzle_orm19.eq)(customerTags.customerId, input.customerId),
-        (0, import_drizzle_orm19.eq)(customerTags.tagId, input.tagId)
-      )
-    ).limit(1);
-    if (existing[0]) {
-      return existing[0];
-    }
-    const newCustomerTag = await db.insert(customerTags).values({
-      customerId: input.customerId,
-      tagId: input.tagId,
-      addedBy: ctx.user?.id
-    }).$returningId();
-    return { id: newCustomerTag[0].id };
-  }),
-  // Remover tag de cliente
-  removeTagFromCustomer: protectedProcedure.input(
-    import_zod10.z.object({
-      customerId: import_zod10.z.number(),
-      tagId: import_zod10.z.number()
-    })
-  ).mutation(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db.delete(customerTags).where(
-      (0, import_drizzle_orm19.and)(
-        (0, import_drizzle_orm19.eq)(customerTags.customerId, input.customerId),
-        (0, import_drizzle_orm19.eq)(customerTags.tagId, input.tagId)
-      )
-    );
-    return { success: true };
-  }),
-  // ========================================
-  // ALERTAS DE RECORRÊNCIA
-  // ========================================
-  // Buscar tratamentos próximos do fim (para alertas)
-  getUpcomingTreatments: protectedProcedure.input(
-    import_zod10.z.object({
-      daysAhead: import_zod10.z.number().default(3)
-    })
-  ).query(async ({ input }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const today = /* @__PURE__ */ new Date();
-    const futureDate = /* @__PURE__ */ new Date();
-    futureDate.setDate(futureDate.getDate() + input.daysAhead);
-    const treatments = await db.select({
-      treatment: customerTreatments,
-      customer: customers
-    }).from(customerTreatments).innerJoin(customers, (0, import_drizzle_orm19.eq)(customerTreatments.customerId, customers.id)).where(
-      (0, import_drizzle_orm19.and)(
-        (0, import_drizzle_orm19.eq)(customerTreatments.isActive, 1),
-        (0, import_drizzle_orm19.gte)(customerTreatments.dataFimPrevisto, today),
-        (0, import_drizzle_orm19.lte)(customerTreatments.dataFimPrevisto, futureDate)
-      )
-    ).orderBy(customerTreatments.dataFimPrevisto);
-    return treatments;
-  }),
-  // ========================================
-  // SCRIPT/JORNADAS
-  // ========================================
-  getScripts: protectedProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const rows = await db.select().from(crmScripts).where((0, import_drizzle_orm19.eq)(crmScripts.isActive, 1)).orderBy((0, import_drizzle_orm19.desc)(crmScripts.updatedAt));
-    return rows.map((r) => {
-      let vars = [];
-      try {
-        vars = r.variablesJson ? JSON.parse(r.variablesJson) : [];
-      } catch {
-        vars = [];
-      }
-      return {
-        id: r.code,
-        name: r.name,
-        template: r.template,
-        variables: Array.isArray(vars) ? vars : []
-      };
-    });
-  }),
-  scripts: router({
-    list: protectedProcedure.query(async () => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const rows = await db.select().from(crmScripts).orderBy((0, import_drizzle_orm19.desc)(crmScripts.updatedAt));
-      return rows.map((r) => {
-        let vars = [];
-        try {
-          vars = r.variablesJson ? JSON.parse(r.variablesJson) : [];
-        } catch {
-          vars = [];
-        }
-        return {
-          code: r.code,
-          name: r.name,
-          template: r.template,
-          variables: Array.isArray(vars) ? vars : [],
-          isActive: r.isActive
-        };
-      });
-    }),
-    upsert: adminProcedure.input(
-      import_zod10.z.object({
-        code: import_zod10.z.string().min(2).max(50),
-        name: import_zod10.z.string().min(2).max(120),
-        template: import_zod10.z.string().min(1),
-        variables: import_zod10.z.array(import_zod10.z.string()).default([]),
-        isActive: import_zod10.z.number().int().min(0).max(1).default(1)
-      })
-    ).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const existing = await db.select({ code: crmScripts.code }).from(crmScripts).where((0, import_drizzle_orm19.eq)(crmScripts.code, input.code)).limit(1);
-      if (existing?.[0]) {
-        await db.update(crmScripts).set({
-          name: input.name,
-          template: input.template,
-          variablesJson: JSON.stringify(input.variables),
-          isActive: input.isActive,
-          updatedAt: /* @__PURE__ */ new Date()
-        }).where((0, import_drizzle_orm19.eq)(crmScripts.code, input.code));
-      } else {
-        await db.insert(crmScripts).values({
-          code: input.code,
-          name: input.name,
-          template: input.template,
-          variablesJson: JSON.stringify(input.variables),
-          isActive: input.isActive,
-          createdBy: ctx.user.id,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        });
-      }
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "CrmScriptUpserted",
-          entityType: "crm_script",
-          entityId: null,
-          actorUserId: ctx.user.id,
-          payload: { code: input.code }
-        });
-      });
-      return { success: true };
-    }),
-    delete: adminProcedure.input(import_zod10.z.object({ code: import_zod10.z.string().min(2).max(50) })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      await db.delete(crmScripts).where((0, import_drizzle_orm19.eq)(crmScripts.code, input.code));
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "CrmScriptDeleted",
-          entityType: "crm_script",
-          entityId: null,
-          actorUserId: ctx.user.id,
-          payload: { code: input.code }
-        });
-      });
-      return { success: true };
-    })
-  }),
-  // ========================================
-  // DADOS COMPLETOS DO CLIENTE (PARA FRONTEND)
-  // ========================================
-  getCustomerFullData: protectedProcedure.input(import_zod10.z.object({ customerId: import_zod10.z.number() })).query(async ({ input, ctx }) => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    const customer = await db.select().from(customers).where((0, import_drizzle_orm19.eq)(customers.id, input.customerId)).limit(1);
-    if (!customer[0]) return null;
-    const treatments = await db.select().from(customerTreatments).where(
-      (0, import_drizzle_orm19.and)(
-        (0, import_drizzle_orm19.eq)(customerTreatments.customerId, input.customerId),
-        (0, import_drizzle_orm19.eq)(customerTreatments.isActive, 1)
-      )
-    ).orderBy((0, import_drizzle_orm19.desc)(customerTreatments.dataFimPrevisto));
-    const customerTagsList = await db.select({
-      tag: tags
-    }).from(customerTags).innerJoin(tags, (0, import_drizzle_orm19.eq)(customerTags.tagId, tags.id)).where((0, import_drizzle_orm19.eq)(customerTags.customerId, input.customerId));
-    const baseCustomer = { ...customer[0] };
-    if (ctx.user.role !== "admin") {
-      baseCustomer.healthTagsJson = null;
-    }
-    return {
-      ...baseCustomer,
-      treatments,
-      tags: customerTagsList.map((t2) => t2.tag)
-    };
-  }),
-  // ========================================
-  // PHARMACORE: PURCHASE HISTORY + SUGGESTIONS
-  // ========================================
-  pharma: router({
-    ingestPurchase: protectedProcedure.input(
-      import_zod10.z.object({
-        customerId: import_zod10.z.number(),
-        externalId: import_zod10.z.string().optional(),
-        purchaseDate: import_zod10.z.string().optional(),
-        totalValue: import_zod10.z.number().optional(),
-        channel: import_zod10.z.enum(["loja", "delivery", "whatsapp", "outros"]).optional(),
-        items: import_zod10.z.array(
-          import_zod10.z.object({
-            ean: import_zod10.z.string().optional(),
-            name: import_zod10.z.string().min(1),
-            quantity: import_zod10.z.number().min(1),
-            price: import_zod10.z.number().optional(),
-            category: import_zod10.z.enum(["medicamento", "perfumaria", "outros"]).optional(),
-            substance: import_zod10.z.string().optional(),
-            daysDuration: import_zod10.z.number().optional()
-          })
-        ).min(1)
-      })
-    ).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const purchaseDate = input.purchaseDate ? new Date(input.purchaseDate) : /* @__PURE__ */ new Date();
-      const channel = input.channel ?? "outros";
-      const total = Number.isFinite(input.totalValue) ? Number(input.totalValue) : input.items.reduce(
-        (acc, it) => acc + (Number(it.price || 0) * it.quantity || 0),
-        0
-      );
-      for (const it of input.items) {
-        if (!it.ean) continue;
-        try {
-          const ex = await db.select({ ean: pharmaProducts.ean }).from(pharmaProducts).where((0, import_drizzle_orm19.eq)(pharmaProducts.ean, it.ean)).limit(1);
-          if (!ex?.[0]) {
-            await db.insert(pharmaProducts).values({
-              ean: it.ean,
-              name: it.name,
-              category: it.category || "outros",
-              substance: it.substance || null,
-              daysDuration: it.daysDuration ?? null
-            });
-          }
-        } catch {
-        }
-      }
-      const inserted = await db.insert(pharmaPurchases).values({
-        customerId: input.customerId,
-        externalId: input.externalId || null,
-        purchaseDate,
-        totalValue: String(total),
-        channel,
-        createdAt: /* @__PURE__ */ new Date()
-      }).$returningId();
-      const purchaseId = inserted?.[0]?.id;
-      if (purchaseId) {
-        await db.insert(pharmaPurchaseItems).values(
-          input.items.map((it) => ({
-            purchaseId,
-            productEan: it.ean || null,
-            productName: it.name,
-            quantity: it.quantity,
-            price: String(it.price || 0)
-          }))
-        );
-      }
-      await db.update(customers).set({
-        lastPurchaseAt: purchaseDate,
-        ltvValue: import_drizzle_orm19.sql`${customers.ltvValue} + ${total}`,
-        updatedAt: /* @__PURE__ */ new Date()
-      }).where((0, import_drizzle_orm19.eq)(customers.id, input.customerId));
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "PurchaseIngested",
-          entityType: "customer",
-          entityId: input.customerId,
-          actorUserId: ctx.user.id,
-          payload: {
-            purchaseId: purchaseId ?? null,
-            externalId: input.externalId ?? null,
-            purchaseDate: purchaseDate.toISOString(),
-            total,
-            channel,
-            itemsCount: input.items.length
-          }
-        });
-      });
-      return { id: purchaseId ?? null };
-    }),
-    listPurchasesByCustomer: protectedProcedure.input(
-      import_zod10.z.object({
-        customerId: import_zod10.z.number(),
-        limit: import_zod10.z.number().min(1).max(200).default(50)
-      })
-    ).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      return await db.select().from(pharmaPurchases).where((0, import_drizzle_orm19.eq)(pharmaPurchases.customerId, input.customerId)).orderBy((0, import_drizzle_orm19.desc)(pharmaPurchases.purchaseDate)).limit(input.limit);
-    }),
-    listPurchaseItems: protectedProcedure.input(import_zod10.z.object({ purchaseId: import_zod10.z.number() })).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      return await db.select().from(pharmaPurchaseItems).where((0, import_drizzle_orm19.eq)(pharmaPurchaseItems.purchaseId, input.purchaseId)).orderBy((0, import_drizzle_orm19.desc)(pharmaPurchaseItems.id));
-    }),
-    getSmartSuggestions: protectedProcedure.input(
-      import_zod10.z.object({
-        items: import_zod10.z.array(
-          import_zod10.z.object({
-            name: import_zod10.z.string()
-          })
-        )
-      })
-    ).query(async ({ input }) => {
-      const names = input.items.map((i) => i.name.toLowerCase());
-      const suggestions = [];
-      const has = (re) => names.some((n) => re.test(n));
-      if (has(/antibiot/)) {
-        suggestions.push({
-          title: "Probi\xF3tico",
-          reason: "Antibi\xF3tico infantil costuma precisar de suporte intestinal"
-        });
-        suggestions.push({
-          title: "Term\xF4metro",
-          reason: "Complemento \xFAtil em quadros infecciosos"
-        });
-      }
-      if (has(/fralda/)) {
-        suggestions.push({
-          title: "Pomada de assadura",
-          reason: "Cross-sell natural para fraldas"
-        });
-      }
-      if (has(/protetor\s+solar|fps|sunscreen/)) {
-        suggestions.push({
-          title: "P\xF3s-sol / hidratante",
-          reason: "Aumenta a ades\xE3o ao cuidado p\xF3s-exposi\xE7\xE3o"
-        });
-      }
-      return suggestions;
-    })
-  }),
-  // ========================================
-  // ENTERPRISE: ACCOUNTS (B2B)
-  // ========================================
-  accounts: router({
-    list: protectedProcedure.input(
-      import_zod10.z.object({
-        query: import_zod10.z.string().optional(),
-        limit: import_zod10.z.number().min(1).max(100).default(25)
-      }).optional()
-    ).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const q = input?.query?.trim();
-      const limit = input?.limit ?? 25;
-      const where = q ? (0, import_drizzle_orm19.or)(
-        (0, import_drizzle_orm19.like)(accounts.name, `%${q}%`),
-        (0, import_drizzle_orm19.like)(accounts.legalName, `%${q}%`),
-        (0, import_drizzle_orm19.like)(accounts.cnpj, `%${q}%`)
-      ) : void 0;
-      return await db.select().from(accounts).where(where).orderBy((0, import_drizzle_orm19.desc)(accounts.updatedAt)).limit(limit);
-    }),
-    create: protectedProcedure.input(
-      import_zod10.z.object({
-        name: import_zod10.z.string().min(2),
-        legalName: import_zod10.z.string().optional(),
-        cnpj: import_zod10.z.string().optional(),
-        industry: import_zod10.z.string().optional(),
-        website: import_zod10.z.string().optional(),
-        phone: import_zod10.z.string().optional(),
-        address: import_zod10.z.string().optional(),
-        city: import_zod10.z.string().optional(),
-        state: import_zod10.z.string().optional(),
-        zipCode: import_zod10.z.string().optional(),
-        ownerUserId: import_zod10.z.number().optional()
-      })
-    ).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const result = await db.insert(accounts).values({
-        name: input.name,
-        legalName: input.legalName || null,
-        cnpj: input.cnpj || null,
-        industry: input.industry || null,
-        website: input.website || null,
-        phone: input.phone || null,
-        address: input.address || null,
-        city: input.city || null,
-        state: input.state || null,
-        zipCode: input.zipCode || null,
-        ownerUserId: input.ownerUserId ?? ctx.user.id,
-        createdBy: ctx.user.id,
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date()
-      }).$returningId();
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "AccountCreated",
-          entityType: "account",
-          entityId: result[0].id,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { id: result[0].id };
-    }),
-    linkContact: protectedProcedure.input(
-      import_zod10.z.object({
-        accountId: import_zod10.z.number(),
-        customerId: import_zod10.z.number(),
-        role: import_zod10.z.string().optional(),
-        isPrimary: import_zod10.z.boolean().optional()
-      })
-    ).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      await db.insert(accountContacts).values({
-        accountId: input.accountId,
-        customerId: input.customerId,
-        role: input.role || null,
-        isPrimary: input.isPrimary ? 1 : 0,
-        createdAt: /* @__PURE__ */ new Date()
-      }).onDuplicateKeyUpdate({
-        set: {
-          role: input.role || null,
-          isPrimary: input.isPrimary ? 1 : 0
-        }
-      });
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "AccountContactLinked",
-          entityType: "account",
-          entityId: input.accountId,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { success: true };
-    })
-  }),
-  // ========================================
-  // ENTERPRISE: DEALS
-  // ========================================
-  deals: router({
-    pipelines: protectedProcedure.query(async () => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      return await db.select().from(dealPipelines).where((0, import_drizzle_orm19.eq)(dealPipelines.isActive, 1));
-    }),
-    stages: protectedProcedure.input(import_zod10.z.object({ pipelineId: import_zod10.z.number() })).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      return await db.select().from(dealStages).where((0, import_drizzle_orm19.eq)(dealStages.pipelineId, input.pipelineId)).orderBy(dealStages.sortOrder);
-    }),
-    list: protectedProcedure.input(
-      import_zod10.z.object({
-        pipelineId: import_zod10.z.number().optional(),
-        stageId: import_zod10.z.number().optional(),
-        ownerUserId: import_zod10.z.number().optional(),
-        limit: import_zod10.z.number().min(1).max(100).default(25)
-      }).optional()
-    ).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const limit = input?.limit ?? 25;
-      const conditions = [];
-      if (input?.pipelineId)
-        conditions.push((0, import_drizzle_orm19.eq)(deals.pipelineId, input.pipelineId));
-      if (input?.stageId) conditions.push((0, import_drizzle_orm19.eq)(deals.stageId, input.stageId));
-      if (input?.ownerUserId)
-        conditions.push((0, import_drizzle_orm19.eq)(deals.ownerUserId, input.ownerUserId));
-      return await db.select().from(deals).where(conditions.length ? (0, import_drizzle_orm19.and)(...conditions) : void 0).orderBy((0, import_drizzle_orm19.desc)(deals.updatedAt)).limit(limit);
-    }),
-    create: protectedProcedure.input(
-      import_zod10.z.object({
-        title: import_zod10.z.string().min(2),
-        pipelineId: import_zod10.z.number(),
-        stageId: import_zod10.z.number(),
-        accountId: import_zod10.z.number().optional(),
-        customerId: import_zod10.z.number().optional(),
-        amountCents: import_zod10.z.number().int().optional(),
-        closeDate: import_zod10.z.string().optional(),
-        ownerUserId: import_zod10.z.number().optional()
-      })
-    ).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const result = await db.insert(deals).values({
-        title: input.title,
-        pipelineId: input.pipelineId,
-        stageId: input.stageId,
-        accountId: input.accountId ?? null,
-        customerId: input.customerId ?? null,
-        amountCents: input.amountCents ?? null,
-        closeDate: input.closeDate ? new Date(input.closeDate) : null,
-        ownerUserId: input.ownerUserId ?? ctx.user.id,
-        createdBy: ctx.user.id,
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date(),
-        status: "open"
-      }).$returningId();
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "DealCreated",
-          entityType: "deal",
-          entityId: result[0].id,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { id: result[0].id };
-    }),
-    moveStage: protectedProcedure.input(import_zod10.z.object({ dealId: import_zod10.z.number(), stageId: import_zod10.z.number() })).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      await db.update(deals).set({ stageId: input.stageId, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm19.eq)(deals.id, input.dealId));
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "DealStageChanged",
-          entityType: "deal",
-          entityId: input.dealId,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { success: true };
-    })
-  }),
-  // ========================================
-  // ENTERPRISE: TASKS
-  // ========================================
-  tasks: router({
-    list: protectedProcedure.input(
-      import_zod10.z.object({
-        assignedTo: import_zod10.z.number().optional(),
-        status: import_zod10.z.enum(["open", "done", "cancelled"]).optional(),
-        limit: import_zod10.z.number().min(1).max(100).default(50)
-      }).optional()
-    ).query(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const conditions = [];
-      conditions.push(
-        (0, import_drizzle_orm19.eq)(crmTasks.assignedTo, input?.assignedTo ?? ctx.user.id)
-      );
-      if (input?.status) conditions.push((0, import_drizzle_orm19.eq)(crmTasks.status, input.status));
-      return await db.select().from(crmTasks).where((0, import_drizzle_orm19.and)(...conditions)).orderBy((0, import_drizzle_orm19.desc)(crmTasks.updatedAt)).limit(input?.limit ?? 50);
-    }),
-    create: protectedProcedure.input(
-      import_zod10.z.object({
-        title: import_zod10.z.string().min(2),
-        description: import_zod10.z.string().optional(),
-        dueAt: import_zod10.z.string().optional(),
-        priority: import_zod10.z.enum(["low", "medium", "high"]).optional(),
-        relatedEntityType: import_zod10.z.string().optional(),
-        relatedEntityId: import_zod10.z.number().optional(),
-        assignedTo: import_zod10.z.number().optional()
-      })
-    ).mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      const result = await db.insert(crmTasks).values({
-        title: input.title,
-        description: input.description || null,
-        dueAt: input.dueAt ? new Date(input.dueAt) : null,
-        priority: input.priority || "medium",
-        relatedEntityType: input.relatedEntityType || null,
-        relatedEntityId: input.relatedEntityId ?? null,
-        assignedTo: input.assignedTo ?? ctx.user.id,
-        createdBy: ctx.user.id,
-        status: "open",
-        createdAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date(),
-        completedAt: null
-      }).$returningId();
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "TaskCreated",
-          entityType: "task",
-          entityId: result[0].id,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { id: result[0].id };
-    }),
-    complete: protectedProcedure.input(import_zod10.z.object({ taskId: import_zod10.z.number() })).mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      await db.update(crmTasks).set({
-        status: "done",
-        completedAt: /* @__PURE__ */ new Date(),
-        updatedAt: /* @__PURE__ */ new Date()
-      }).where((0, import_drizzle_orm19.eq)(crmTasks.id, input.taskId));
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "TaskCompleted",
-          entityType: "task",
-          entityId: input.taskId,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { success: true };
-    })
-  }),
-  // ========================================
-  // ENTERPRISE: ACTIVITIES (timeline)
-  // ========================================
-  activities: router({
-    listByEntity: protectedProcedure.input(
-      import_zod10.z.object({
-        entityType: import_zod10.z.string().min(1).max(40),
-        entityId: import_zod10.z.number(),
-        limit: import_zod10.z.number().min(1).max(200).default(50)
-      })
-    ).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      return await db.select().from(crmActivities).where(
-        (0, import_drizzle_orm19.and)(
-          (0, import_drizzle_orm19.eq)(crmActivities.entityType, input.entityType),
-          (0, import_drizzle_orm19.eq)(crmActivities.entityId, input.entityId)
-        )
-      ).orderBy((0, import_drizzle_orm19.desc)(crmActivities.occurredAt)).limit(input.limit);
-    })
-  }),
-  // ========================================
-  // ENTERPRISE: CUSTOM FIELDS
-  // ========================================
-  customFields: router({
-    listDefinitions: protectedProcedure.input(import_zod10.z.object({ entityType: import_zod10.z.string().min(1).max(40) })).query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      return await db.select().from(customFieldDefinitions).where(
-        (0, import_drizzle_orm19.and)(
-          (0, import_drizzle_orm19.eq)(customFieldDefinitions.entityType, input.entityType),
-          (0, import_drizzle_orm19.eq)(customFieldDefinitions.isActive, 1)
-        )
-      ).orderBy((0, import_drizzle_orm19.desc)(customFieldDefinitions.updatedAt));
-    }),
-    upsertValue: protectedProcedure.input(
-      import_zod10.z.object({
-        entityType: import_zod10.z.string().min(1).max(40),
-        entityId: import_zod10.z.number(),
-        fieldDefinitionId: import_zod10.z.number(),
-        valueText: import_zod10.z.string().optional()
-      })
-    ).mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-      await db.insert(customFieldValues).values({
-        entityType: input.entityType,
-        entityId: input.entityId,
-        fieldDefinitionId: input.fieldDefinitionId,
-        valueText: input.valueText ?? null,
-        updatedBy: ctx.user.id,
-        updatedAt: /* @__PURE__ */ new Date()
-      }).onDuplicateKeyUpdate({
-        set: {
-          valueText: input.valueText ?? null,
-          updatedBy: ctx.user.id,
-          updatedAt: /* @__PURE__ */ new Date()
-        }
-      });
-      fireAndForget(async () => {
-        await enqueueCrmOutboxEvent({
-          eventName: "CustomFieldValueUpserted",
-          entityType: input.entityType,
-          entityId: input.entityId,
-          actorUserId: ctx.user.id,
-          payload: input
-        });
-      });
-      return { success: true };
-    })
   })
 });
 
@@ -14406,6 +14698,7 @@ var ticketsRouter = router({
 var appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
+  customers: customersRouter,
   employees: employeesRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
@@ -14414,7 +14707,6 @@ var appRouter = router({
   broadcast: broadcastRouter,
   contactFetch: contactFetchRouter,
   conversations: conversationsRouter,
-  crm: crmRouter,
   clients: clientsRouter,
   leads: leadsRouter,
   dashboardDrilldown: dashboardDrilldownRouter,
@@ -15247,7 +15539,7 @@ try {
   console.error("[Webhooks] Debug module not loaded");
 }
 var router4 = (0, import_express4.Router)();
-var isProduction = true;
+var isProduction = process.env.NODE_ENV === "production";
 var addDebugLog = debugModule?.addLog || ((level, category, message, data) => {
   console.log(`[${level.toUpperCase()}] [${category}]`, message, data);
 });
@@ -16120,8 +16412,8 @@ async function startServer() {
     await applySqlMigrations();
     console.log("[Migrations] Applied successfully");
     try {
-      const { sql: sql29 } = await import("drizzle-orm");
-      await db.execute(sql29`CREATE TABLE IF NOT EXISTS internal_messages (
+      const { sql: sql30 } = await import("drizzle-orm");
+      await db.execute(sql30`CREATE TABLE IF NOT EXISTS internal_messages (
         id INT AUTO_INCREMENT PRIMARY KEY,
         conversation_id INT NOT NULL,
         sender_id INT NOT NULL,
@@ -16133,16 +16425,16 @@ async function startServer() {
         FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
       )`);
-      await db.execute(sql29`CREATE INDEX IF NOT EXISTS idx_internal_messages_conversation ON internal_messages(conversation_id)`);
-      await db.execute(sql29`CREATE INDEX IF NOT EXISTS idx_internal_messages_recipient ON internal_messages(recipient_id, read_at)`);
+      await db.execute(sql30`CREATE INDEX IF NOT EXISTS idx_internal_messages_conversation ON internal_messages(conversation_id)`);
+      await db.execute(sql30`CREATE INDEX IF NOT EXISTS idx_internal_messages_recipient ON internal_messages(recipient_id, read_at)`);
       console.log("[DB] \u2705 internal_messages table ensured");
     } catch (tableErr) {
       console.warn("[DB] \u26A0\uFE0F Could not create internal_messages:", tableErr.message);
     }
     try {
-      const [colRows] = await db.execute(import_drizzle_orm47.sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
+      const [colRows] = await db.execute(import_drizzle_orm48.sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
       if (!Array.isArray(colRows) || colRows.length === 0) {
-        await db.execute(import_drizzle_orm47.sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
+        await db.execute(import_drizzle_orm48.sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
         console.log("[DB] \u2705 customers.source column added");
       }
     } catch (colErr) {
@@ -16152,7 +16444,7 @@ async function startServer() {
     console.error("[Startup Error]", error);
     throw error;
   }
-  const app = (0, import_express5.default)();
+  const app = (0, import_express6.default)();
   app.use((0, import_helmet.default)({
     contentSecurityPolicy: {
       directives: {
@@ -16169,7 +16461,7 @@ async function startServer() {
     },
     frameguard: { action: "sameorigin" },
     // Permite iframe da mesma origem (PDF previews)
-    hsts: true,
+    hsts: process.env.NODE_ENV === "production",
     // HSTS só em produção
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
     crossOriginEmbedderPolicy: false
@@ -16196,29 +16488,34 @@ async function startServer() {
     // Necessário pra cookies/auth do tRPC
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   }));
-  app.use(import_express5.default.json({ limit: "50mb" }));
-  app.use(import_express5.default.urlencoded({ limit: "50mb", extended: true }));
+  app.use(import_express6.default.json({ limit: "50mb" }));
+  app.use(import_express6.default.urlencoded({ limit: "50mb", extended: true }));
   app.use((0, import_cookie_parser.default)());
   const possiblePublicPaths = [
     import_path.default.resolve(process.cwd(), "dist/public"),
     import_path.default.resolve(process.cwd(), "client/dist"),
     import_path.default.resolve(__dirname, "../dist/public"),
-    import_path.default.resolve(__dirname, "public")
+    import_path.default.resolve(__dirname, "public"),
+    "/app/dist/public",
+    "/app/client/dist"
   ];
   let publicPath = null;
   for (const p of possiblePublicPaths) {
-    if (require("fs").existsSync(p)) {
+    const exists = require("fs").existsSync(p);
+    console.log(`[Static] Checking: ${p} - ${exists ? "\u2705 EXISTS" : "\u274C NOT FOUND"}`);
+    if (exists) {
       publicPath = p;
-      console.log("[Static] Using public path:", p);
       break;
     }
   }
   if (publicPath) {
-    app.use(import_express5.default.static(publicPath));
+    console.log("[Static] \u2705 Serving from:", publicPath);
+    app.use(import_express6.default.static(publicPath));
   } else {
-    console.error("[Static] WARNING: No public directory found! Checked:", possiblePublicPaths);
+    console.error("[Static] \u274C No static files found! Checked:", possiblePublicPaths);
+    console.log("[Static] CWD:", process.cwd());
+    console.log("[Static] __dirname:", __dirname);
   }
-  console.log("[Static] Serving from:", publicPath);
   app.get("/api/health", (_, res) => {
     res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
   });
@@ -16232,7 +16529,7 @@ async function startServer() {
   });
   app.use(
     "/api/trpc",
-    (0, import_express6.createExpressMiddleware)({
+    (0, import_express7.createExpressMiddleware)({
       router: appRouter,
       createContext
     })
@@ -16240,12 +16537,14 @@ async function startServer() {
   app.use("/api/events", createSSERouter());
   app.use("/api/webhooks", webhooks_default);
   app.use("/api/media", routers_media_default);
+  const systemRestRouter = (init_system(), __toCommonJS(system_exports)).default;
+  app.use("/api/system", systemRestRouter);
   app.get("/api/debug/db-tables", async (_, res) => {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql: sql29 } = await import("drizzle-orm");
-      const [result] = await db.execute(sql29`SHOW TABLES`);
+      const { sql: sql30 } = await import("drizzle-orm");
+      const [result] = await db.execute(sql30`SHOW TABLES`);
       const tables = result.map((row) => Object.values(row)[0]);
       res.json({ tables: tables.sort(), count: tables.length });
     } catch (err) {
@@ -16256,9 +16555,9 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql: sql29 } = await import("drizzle-orm");
+      const { sql: sql30 } = await import("drizzle-orm");
       const tableName = req.params.table.replace(/[^a-z_]/gi, "");
-      const [result] = await db.execute(sql29.raw(`DESCRIBE ${tableName}`));
+      const [result] = await db.execute(sql30.raw(`DESCRIBE ${tableName}`));
       res.json({ table: tableName, columns: result });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -16268,22 +16567,22 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql: sql29 } = await import("drizzle-orm");
-      const [statusCounts] = await db.execute(sql29`
+      const { sql: sql30 } = await import("drizzle-orm");
+      const [statusCounts] = await db.execute(sql30`
         SELECT status, COUNT(*) as count, 
                SUM(CASE WHEN assigned_to IS NULL THEN 1 ELSE 0 END) as unassigned,
                SUM(CASE WHEN assigned_to IS NOT NULL THEN 1 ELSE 0 END) as assigned
         FROM conversations 
         GROUP BY status
       `);
-      const [recentConvs] = await db.execute(sql29`
+      const [recentConvs] = await db.execute(sql30`
         SELECT id, customer_name, customer_phone, status, assigned_to, 
                last_message_at, unread_count, channel
         FROM conversations 
         WHERE status IN ('open', 'assigned')
         ORDER BY last_message_at DESC LIMIT 5
       `);
-      const [recentMsgs] = await db.execute(sql29`
+      const [recentMsgs] = await db.execute(sql30`
         SELECT cm.id, cm.conversation_id, cm.sender_type, cm.content, cm.created_at,
                cm.external_id
         FROM conversation_messages cm
@@ -16305,9 +16604,9 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql: sql29 } = await import("drizzle-orm");
+      const { sql: sql30 } = await import("drizzle-orm");
       const allUsers = await db.select().from(users);
-      const [orphanRows] = await db.execute(sql29`SELECT COUNT(*) as cnt FROM conversations WHERE status = ${"open"} AND assigned_to IS NULL`);
+      const [orphanRows] = await db.execute(sql30`SELECT COUNT(*) as cnt FROM conversations WHERE status = ${"open"} AND assigned_to IS NULL`);
       res.json({
         activeUsers: allUsers.map((u) => ({ id: u.id, name: u.displayName || u.name, role: u.role })),
         orphanedCount: orphanRows,
@@ -16321,7 +16620,7 @@ async function startServer() {
     try {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
-      const { sql: sql29 } = await import("drizzle-orm");
+      const { sql: sql30 } = await import("drizzle-orm");
       const allUsers = await db.select().from(users);
       const sseUsers = sseManager.getConnectedUsers();
       const connectedAdmin = sseUsers.length > 0 ? allUsers.find((u) => String(u.id) === sseUsers[0]) : null;
@@ -16329,7 +16628,7 @@ async function startServer() {
       if (!admin) {
         return res.json({ error: "No active agent found" });
       }
-      const [result] = await db.execute(sql29`UPDATE conversations SET assigned_to = ${admin.id}, status = ${"assigned"} WHERE status = ${"open"} AND assigned_to IS NULL`);
+      const [result] = await db.execute(sql30`UPDATE conversations SET assigned_to = ${admin.id}, status = ${"assigned"} WHERE status = ${"open"} AND assigned_to IS NULL`);
       res.json({
         assignedTo: { id: admin.id, name: admin.displayName || admin.name, role: admin.role },
         result
@@ -16350,12 +16649,12 @@ async function startServer() {
         res.status(400).json({ error: "Invalid ID" });
         return;
       }
-      await db.update(conversationMessages).set({ readAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm47.and)(
-        (0, import_drizzle_orm47.eq)(conversationMessages.conversationId, conversationId),
-        (0, import_drizzle_orm47.eq)(conversationMessages.senderType, "customer"),
-        import_drizzle_orm47.sql`${conversationMessages.readAt} IS NULL`
+      await db.update(conversationMessages).set({ readAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm48.and)(
+        (0, import_drizzle_orm48.eq)(conversationMessages.conversationId, conversationId),
+        (0, import_drizzle_orm48.eq)(conversationMessages.senderType, "customer"),
+        import_drizzle_orm48.sql`${conversationMessages.readAt} IS NULL`
       ));
-      await db.update(conversations).set({ unreadCount: 0 }).where((0, import_drizzle_orm47.eq)(conversations.id, conversationId));
+      await db.update(conversations).set({ unreadCount: 0 }).where((0, import_drizzle_orm48.eq)(conversations.id, conversationId));
       res.json({ success: true });
     } catch (err) {
       console.error("[mark-read] Error:", err.message);
@@ -16458,7 +16757,7 @@ async function startServer() {
   console.log(`[Server] Attempting to listen on port ${PORT}...`);
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("[Server] \u2705 Successfully listening on port", PORT);
-    console.log("[Server] Environment:", "production");
+    console.log("[Server] Environment:", process.env.NODE_ENV || "development");
     console.log("[Server] Health check endpoint: /api/health");
     Promise.resolve().then(() => (init_broadcast_recovery(), broadcast_recovery_exports)).then(({ startBroadcastRecoveryWorker: startBroadcastRecoveryWorker2 }) => {
       startBroadcastRecoveryWorker2();
