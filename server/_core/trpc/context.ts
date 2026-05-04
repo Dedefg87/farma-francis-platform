@@ -28,25 +28,25 @@ export async function createContext(
       let headerSource = 'none';
       
       if (req.headers && typeof req.headers.get === "function") {
-        // Fetch API Headers object
+        // Fetch API Headers object (converte tudo para lowercase)
         const authHeader = req.headers.get("authorization");
         if (authHeader && authHeader.startsWith("Bearer ")) {
           token = authHeader.slice(7);
           headerSource = 'Authorization';
         }
         if (!token) {
-          token = req.headers.get("x-jti") || req.headers.get("x-jti");
+          token = req.headers.get("x-jti");
           if (token) headerSource = 'x-jti';
         }
       } else if (req.headers && typeof req.headers === "object") {
-        // Express-style headers (snake_case or camelCase)
+        // Express-style headers
         const authHeader = req.headers.authorization || req.headers["authorization"];
         if (authHeader && authHeader.startsWith("Bearer ")) {
           token = authHeader.slice(7);
           headerSource = 'Authorization';
         }
         if (!token) {
-          token = req.headers["x-jti"] || req.headers["x-jti"] || req.headers["X-Jti"];
+          token = req.headers["x-jti"] || req.headers["x-jti"];
           if (token) headerSource = 'x-jti';
         }
       }
