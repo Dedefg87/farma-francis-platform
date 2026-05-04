@@ -1,7 +1,0 @@
-[build]
-builder = "DOCKERFILE"
-
-[deploy]
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
-# Test deploy: Mon May  4 14:21:17 -03 2026

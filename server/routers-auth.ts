@@ -8,6 +8,16 @@ import { users as usersTable } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 export const authRouter = router({
+  // Teste de autenticação (debug)
+  testAuth: protectedProcedure
+    .query(({ ctx }) => {
+      console.log('[testAuth] ctx.user:', ctx.user);
+      return {
+        autenticado: !!ctx.user,
+        user: ctx.user,
+      };
+    }),
+
   // Login procedure
   login: publicProcedure
     .input(

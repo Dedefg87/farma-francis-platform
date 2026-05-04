@@ -147,6 +147,8 @@ export const conversationsRouter = router({
    */
   listActive: protectedProcedure
     .query(async ({ ctx }): Promise<Conversation[]> => {
+      console.log('[Conversations] listActive called | ctx.user:', ctx.user?.name, '| role:', ctx.user?.role);
+      
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
