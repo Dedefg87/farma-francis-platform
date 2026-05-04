@@ -37,7 +37,8 @@ const trpcClient = trpc.createClient({
     splitLink({
       // Separar queries (GET) de mutations (POST)
       condition: (params) => {
-        // Se for mutation, usa httpLink (sem batch)
+        // Se params.op for undefined, assume que é query (GET)
+        if (!params.op) return false; // false = query (batch)
         return params.op.type === 'mutation';
       },
       // Para mutations: httpLink simples (sem batch)
