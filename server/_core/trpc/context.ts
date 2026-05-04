@@ -20,22 +20,35 @@ export async function createContext(
   const req = opts?.req;
   let user: User | undefined = undefined;
 
-  // Extrair token do header Authorization
+  // Extrair token do header Authorization ou x-jti (frontend)
   if (req) {
     try {
-      // Tentar como Request do Fetch API
-      let authHeader: string | null = null;
+      let token: string | null = null;
       
+      // Tentar como Authorization header (Bearer token)
       if (req.headers && typeof req.headers.get === "function") {
-        // É um objeto Headers do Fetch API
-        authHeader = req.headers.get("authorization");
+        // Fetch API Headers object
+        const authHeader = req.headers.get("authorization");
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          token = authHeader.slice(7);
+        }
+        // Tentar x-jti header (frontend envia JWT aqui)
+        if (!token) {
+          token = req.headers.get("x-jti");
+        }
       } else if (req.headers && typeof req.headers === "object") {
-        // É um objeto simples com headers
-        authHeader = req.headers.authorization || req.headers["authorization"];
+        // Express-style headers (snake_case or camelCase)
+        const authHeader = req.headers.authorization || req.headers["authorization"];
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+          token = authHeader.slice(7);
+        }
+        // Tentar x-jti header
+        if (!token) {
+          token = req.headers["x-jti"] || req.headers["x-jti"];
+        }
       }
-
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.slice(7); // Remove "Bearer "
+      
+      if (token) {
         try {
           const decoded = jwt.verify(token, JWT_SECRET) as User;
           user = decoded;
