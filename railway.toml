@@ -1,9 +1,7 @@
 [build]
-# Docker builder (auto-detect) — more reliable than nixpacks for native dependencies
+builder = "docker"
 
 [deploy]
 startCommand = "node dist/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
-
-# Force redeploy on next push (timestamp marker: 2026-04-08T16:30)
