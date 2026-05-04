@@ -78,6 +78,7 @@ async function startServer() {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"], // TODO: remover unsafe-inline depois
+        workerSrc: ["'self'", "blob:"], // Permite workers (blob: para createObjectURL)
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https://*"], // permite imagens do R2/externas
         connectSrc: ["'self'", "https://innovative-enjoyment-production-ed8f.up.railway.app"],

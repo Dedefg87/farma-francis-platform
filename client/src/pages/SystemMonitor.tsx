@@ -64,26 +64,26 @@ export default function SystemMonitor() {
         setStorage(storageData);
       }
 
-      // Buscar tamanho do banco
-      const dbSizeRes = await fetch("/api/system/database/size");
-      if (dbSizeRes.ok) {
-        const dbSizeData = await dbSizeRes.json();
-        const size = Number(dbSizeData.size_mb) || 0;
-        setDbSize(size);
-      }
+  // Buscar tamanho do banco
+      // const dbSizeRes = await fetch("/api/system/database/size");
+      // if (dbSizeRes.ok) {
+      //   const dbSizeData = await dbSizeRes.json();
+      //   const size = Number(dbSizeData.size_mb) || 0;
+      //   setDbSize(size);
+      // }
 
       // Buscar estatísticas das tabelas
-      const tablesRes = await fetch("/api/system/database/tables");
-      if (tablesRes.ok) {
-        const tablesData = await tablesRes.json();
-        // Garantir que cada tabela tenha valores numéricos
-        const normalized = (tablesData.tables || []).map((t: unknown) => ({
-          table_name: t.table_name || "unknown",
-          size_mb: Number(t.size_mb) || 0,
-          table_rows: Number(t.table_rows) || 0,
-        }));
-        setTables(normalized);
-      }
+      // const tablesRes = await fetch("/api/system/database/tables");
+      // if (tablesRes.ok) {
+      //   const tablesData = await tablesRes.json();
+      //   // Garantir que cada tabela tenha valores numéricos
+      //   const normalized = (tablesData.tables || []).map((t: unknown) => ({
+      //     table_name: t.table_name || "unknown",
+      //     size_mb: Number(t.size_mb) || 0,
+      //     table_rows: Number(t.table_rows) || 0,
+      //   }));
+      //   setTables(normalized);
+      // }
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
       toast.error("Erro ao carregar dados do sistema");
@@ -119,6 +119,12 @@ export default function SystemMonitor() {
   };
 
   const handleCleanDatabase = async () => {
+    // Funcionalidade temporariamente indisponível - endpoint não implementado
+    toast.error("Limpeza de banco de dados temporariamente indisponível");
+    setDbConfirmOpen(false);
+    return;
+    
+    /* Código original comentado:
     setCleaningDb(true);
     try {
       const response = await fetch("/api/system/clean-database", {
@@ -147,6 +153,7 @@ export default function SystemMonitor() {
       setCleaningDb(false);
       setDbConfirmOpen(false);
     }
+    */
   };
 
   useEffect(() => {
