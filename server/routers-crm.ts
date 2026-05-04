@@ -1213,6 +1213,8 @@ export const customersRouter = router({
           .optional()
       )
       .query(async ({ ctx, input }) => {
+      console.log('[customers.list] ctx.user:', ctx.user?.username, '| role:', ctx.user?.role);
+      console.log('[customers.list] ctx.user:', ctx.user?.username, '| role:', ctx.user?.role);
         const db = await getDb();
         if (!db) throw new Error("Database not available");
 
