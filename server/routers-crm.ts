@@ -42,7 +42,7 @@ const calculateEndDate = (
   return endDate;
 };
 
-export const crmRouter = router({
+export const customersRouter = router({
   // ========================================
   // CLIENTES (CUSTOMERS)
   // ========================================

@@ -1,6 +1,7 @@
 import { router } from "../_core/trpc";
 import { authRouter } from "../routers-auth";
 import { agentsRouter } from "../routers-agents";
+import { customersRouter } from "../routers-crm";
 import { aiRouter } from "../routers-ai";
 import { apiConfigRouter } from "../routers-api-config";
 import { automationRouter } from "../routers-automation";
@@ -8,7 +9,6 @@ import { babyShowerRouter } from "../routers-baby-shower";
 import { broadcastRouter } from "../routers-broadcast";
 import { contactFetchRouter } from "../routers-contact-fetch";
 import { conversationsRouter } from "../routers-conversations";
-import { crmRouter } from "../routers-crm";
 import { clientsRouter } from "../routers-clients";
 import { dashboardDrilldownRouter } from "../routers-dashboard-drilldown";
 import { dashboardStatsRouter } from "../routers-dashboard-stats";
@@ -35,6 +35,7 @@ import { ticketsRouter } from "../routers-tickets";
 export const appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
+  customers: customersRouter,
   employees: employeesRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
@@ -43,7 +44,6 @@ export const appRouter = router({
   broadcast: broadcastRouter,
   contactFetch: contactFetchRouter,
   conversations: conversationsRouter,
-  crm: crmRouter,
   clients: clientsRouter,
   leads: leadsRouter,
   dashboardDrilldown: dashboardDrilldownRouter,
