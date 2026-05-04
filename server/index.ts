@@ -165,6 +165,14 @@ async function startServer() {
     });
   });
 
+  app.get("/api/debug/env", (req, res) => {
+    res.json({
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
+      nodeEnv: process.env.NODE_ENV,
+    });
+  });
+
   app.use("/api/trpc", (req, res, next) => {
     console.log("[tRPC]", req.method, req.url);
     next();
