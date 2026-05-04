@@ -25,32 +25,30 @@ export async function createContext(
     try {
       let token: string | null = null;
       
-      // Tentar ler headers (Fetch API ou Express)
-      if (req.headers) {
-        // Fetch API: headers.get()
-        if (typeof req.headers.get === 'function') {
-          token = req.headers.get('x-jti') || req.headers.get('authorization');
+      // Função auxiliar para ler headers (funciona em Fetch e Express)
+      const getHeader = (name: string) =>
+        typeof req.headers.get === "function"
+          ? req.headers.get(name)
+          : (req.headers as any)[name];
+
+      // Tentar ler headers (Fetch API usa lowercase)
+      token = getHeader("x-jti") || getHeader("authorization") || getHeader("Authorization");
+
+      // Extrair token do Bearer se necessário
+      if (token && token.startsWith('Bearer ')) {
+        token = token.slice(7);
+      }
+      
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET) as User;
+          user = decoded;
+          console.log('[createContext] User set:', user?.username, '| Role:', user?.role);
+        } catch (e: unknown) {
+          console.log('[createContext] JWT verify failed:', (e as Error).message);
         }
-        // Express: req.headers['x-jti']
-        else if (typeof req.headers === 'object') {
-          const h = req.headers as Record<string, string>;
-          token = h['x-jti'] || h['x-jti'] || h['authorization'] || h['Authorization'];
-        }
-        
-        // Extrair token do Bearer se necessário
-        if (token && token.startsWith('Bearer ')) {
-          token = token.slice(7);
-        }
-        
-        if (token) {
-          try {
-            const decoded = jwt.verify(token, JWT_SECRET) as User;
-            user = decoded;
-            console.log('[createContext] User set:', user?.username, '| Role:', user?.role);
-          } catch (e: unknown) {
-            console.log('[createContext] JWT verify failed:', (e as Error).message);
-          }
-        }
+      } else {
+        console.log('[createContext] No token found in headers');
       }
     } catch (error) {
       console.log('[createContext] General error:', (error as Error).message);
