@@ -1,5 +1,3 @@
-OLD BUILD: vite build && esbuild server/index.ts --platform=node --bundle --format=cjs --outfile=dist/index.js  ...
-NEW BUILD: rm -rf dist client/dist public && vite build && esbuild server/index.ts --platform=node --bundle --f ...
 {
   "name": "farma-francis-platform",
   "version": "1.0.1777575382",
@@ -10,7 +8,7 @@ NEW BUILD: rm -rf dist client/dist public && vite build && esbuild server/index.
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "dev": "NODE_ENV=development tsx watch server/index.ts",
-    "build": "rm -rf dist client/dist public && vite build && esbuild server/index.ts --platform=node --bundle --format=cjs --outfile=dist/index.js --packages=external --define:process.env.NODE_ENV=\"production\" --external:vite --external:@vitejs/plugin-react --external:@tailwindcss/vite --external:@builder.io/vite-plugin-jsx-local --external:vite-plugin-monus-runtime --loader:.ts=ts && mkdir -p dist/public && cp -r client/dist/* dist/public/ 2>/dev/null || true && node -e \"require(\"fs\").writeFileSync(\"dist/package.json\",JSON.stringify({type:\"commonjs\"}))\"",
+    "build": "rm -rf dist client/dist public && vite build && esbuild server/index.ts --platform=node --bundle --format=cjs --outfile=dist/index.js --packages=external --define:process.env.NODE_ENV=\"production\" --external:vite --external:@vitejs/plugin-react --external:@tailwindcss/vite --external:@builder.io/vite-plugin-jsx-local --external:vite-plugin-monus-runtime --loader:.ts=ts && mkdir -p dist/public && cp -r client/dist/* dist/public/ 2>/dev/null || true && node -e \"require('fs').writeFileSync('dist/package.json', JSON.stringify({type:'commonjs'}))\"",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
