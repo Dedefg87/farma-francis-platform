@@ -40,5 +40,7 @@ COPY --from=builder /app/dist ./dist
 # Copia o frontend buildado (vite build fica em client/dist/)
 COPY --from=builder /app/client/dist ./client/dist
 
+# FORCE REDEPLOY: 2026-05-04 10:00 BRT (fix automation endpoints)
+
 # Inicia o servidor
 CMD ["node", "dist/index.js"]
