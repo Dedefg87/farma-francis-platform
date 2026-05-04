@@ -29,6 +29,7 @@ export const authRouter = router({
     .mutation(async ({ input, ctx }) => {
       console.log("[LOGIN] INPUT RECEIVED:", input);
       console.log("[LOGIN] CTX USER:", ctx.user);
+      
       try {
         const { username, password } = input;
         const db = await getDb();
@@ -43,28 +44,35 @@ export const authRouter = router({
               WHERE name = ${username}
               LIMIT 1`
         );
+        console.log("[LOGIN] DB Result raw:", JSON.stringify(rawResult).substring(0, 200));
+        
         const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
         const usersList = Array.isArray(rows) ? rows : [rows];
 
         if (usersList.length === 0) {
+          console.log("[LOGIN] User not found:", username);
           throw new Error("Username ou senha inválidos");
         }
 
         const user = usersList[0];
+        console.log("[LOGIN] User found:", user?.name, "| Role:", user?.role);
 
         // Fallback: raw mode pode retornar camelCase ou snake_case dependendo do driver
         const passwordHash = (user as any).passwordHash ?? (user as any).password_hash;
         if (!passwordHash) {
-          console.error("[auth] password_hash missing from user row:", user);
+          console.error("[LOGIN] password_hash missing from user row:", user);
           throw new Error("Username ou senha inválidos");
         }
 
         // Validar senha
+        console.log("[LOGIN] Comparing password...");
         const valid = await bcrypt.compare(password, passwordHash);
         if (!valid) {
+          console.log("[LOGIN] Password invalid for:", username);
           throw new Error("Username ou senha inválidos");
         }
 
+        console.log("[LOGIN] Password valid! Updating lastSignedIn...");
         // Atualizar lastSignedIn
         await db
           .update(usersTable)
@@ -82,14 +90,17 @@ export const authRouter = router({
           role: safeUser.role,
         };
 
+        console.log("[LOGIN] Signing JWT with JWT_SECRET exists:", !!JWT_SECRET);
         const token = jwt.sign(userForToken, JWT_SECRET, { expiresIn: "7d" });
 
+        console.log("[LOGIN] Returning success for:", username);
         return {
           success: true,
           user: userForToken,
           token,
         };
       } catch (error: unknown) {
+        console.log("[LOGIN] ERROR:", error.message);
         throw new Error(error.message || "Falha no login");
       }
     }),
@@ -108,11 +119,10 @@ export const authRouter = router({
     };
   }),
 
-  // Logout
-  logout: protectedProcedure.mutation(async ({ ctx }) => {
-    return {
-      success: true,
-      message: "Logged out successfully",
-    };
+  // Logout (opcional, frontend limpa localStorage)
+  logout: protectedProcedure.mutation(({ ctx }) => {
+    console.log("[LOGOUT] User logging out:", ctx.user?.username);
+    return { success: true };
   }),
 });
+
