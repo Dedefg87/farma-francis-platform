@@ -2,6 +2,9 @@
 # STAGE 1 — BUILD
 # -------------------------
 FROM node:20-alpine AS builder
+
+ARG CACHEBUST=1
+
 WORKDIR /app
 
 # Instala pnpm
