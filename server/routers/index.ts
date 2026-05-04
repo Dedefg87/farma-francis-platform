@@ -29,7 +29,6 @@ import { tagsRouter } from "../routers-tags";
 import { telemetryRouter } from "../routers-telemetry";
 import { testRouter } from "../routers-test";
 import { approvalsRouter } from "../routers-approvals";
-import { approvalsRouter } from "../routers-approvals";
 import { internalMessagesRouter } from "../routers-internal-messages";
 import { ticketsRouter } from "../routers-tickets";
 
