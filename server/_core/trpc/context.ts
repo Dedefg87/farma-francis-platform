@@ -27,20 +27,14 @@ export async function createContext(
       
       // Log RAW headers (Fetch API)
       if (req.headers && typeof req.headers.entries === 'function') {
-        console.log('[CTX] RAW HEADERS:', Object.fromEntries(req.headers));
-      } else {
-        console.log('[CTX] Headers object:', req.headers);
+        const allHeaders = Object.fromEntries(req.headers);
+        console.log('[CTX] RAW HEADERS:', allHeaders);
+        token = allHeaders['x-jti'] || allHeaders['authorization'] || allHeaders['Authorization'];
+      } else if (req.headers && typeof req.headers === 'object') {
+        const h = req.headers as Record<string, string>;
+        token = h['x-jti'] || h['x-jti'] || h['authorization'] || h['Authorization'];
       }
-      
-      // Função auxiliar para ler headers (funciona em Fetch e Express)
-      const getHeader = (name: string) =>
-        typeof req.headers.get === "function"
-          ? req.headers.get(name)
-          : (req.headers as any)[name];
-
-      // Tentar ler headers (Fetch API usa lowercase)
-      token = getHeader("x-jti") || getHeader("authorization") || getHeader("Authorization");
-
+        
       // Extrair token do Bearer se necessário
       if (token && token.startsWith('Bearer ')) {
         token = token.slice(7);
