@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
+import { httpLink, httpBatchLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -25,12 +25,6 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   window.location.href = getLoginUrl();
 };
 
-const extraHeaders: Record<string, string> = {};
-if (typeof window !== "undefined") {
-  const jti = window.localStorage.getItem("jti");
-  if (jti) extraHeaders["x-jti"] = jti;
-}
-
 const trpcClient = trpc.createClient({
   transformer: superjson,
   links: [
@@ -39,19 +33,22 @@ const trpcClient = trpc.createClient({
       condition: (params) => {
         return params.op?.type === 'mutation';
       },
-      // Para mutations: httpLink (POST garantido)
       true: httpLink({
         url: "/api/trpc",
-        headers: () => ({
-          ...extraHeaders,
-        }),
+        headers: () => {
+          if (typeof window === "undefined") return {};
+          const jti = window.localStorage.getItem("jti");
+          return jti ? { "x-jti": jti } : {};
+        },
       }),
-      // Para queries: httpBatchLink (GET com batch)
+      // Queries podem ser GET com batch
       false: httpBatchLink({
         url: "/api/trpc",
-        headers: () => ({
-          ...extraHeaders,
-        }),
+        headers: () => {
+          if (typeof window === "undefined") return {};
+          const jti = window.localStorage.getItem("jti");
+          return jti ? { "x-jti": jti } : {};
+        },
       }),
     }),
   ],
@@ -67,4 +64,4 @@ createRoot(document.getElementById("root")!).render(
     </trpc.Provider>
   </Suspense>
 );
-// Deploy trigger: Mon May  4 17:05:20 -03 2026
+// Deploy trigger: Mon May  4 17:13:45 -03 2026
