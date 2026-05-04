@@ -14,6 +14,7 @@ import createSSERouter from "./routers-sse";
 import mediaRouter from "./routers-media";
 import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
+import systemRestRouter from "./_core/routes/system";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import cors from "cors";
@@ -176,6 +177,9 @@ async function startServer() {
   // Webhooks para WhatsApp, Instagram e Evolution API
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/media", mediaRouter);
+
+  // Rotas REST do sistema (storage, clean, etc.)
+  app.use("/api/system", systemRestRouter);
 
   // Debug: List all database tables
   app.get("/api/debug/db-tables", async (_, res) => {
