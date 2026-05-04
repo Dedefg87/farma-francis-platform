@@ -18,7 +18,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHORIZED_ERR_MSG;
+  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
 
   if (!isUnauthorized) return;
 
@@ -26,7 +26,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 };
 
 // ✅ Função dinâmica para headers (lê localStorage a cada request)
-const getDynamicHeaders = () => {
+const getHeaders = (): Record<string, string> => {
   if (typeof window === "undefined") return {};
   const jti = window.localStorage.getItem("jti");
   return jti ? { "x-jti": jti } : {};
@@ -41,12 +41,13 @@ const trpcClient = trpc.createClient({
       // Para mutations: httpLink (POST garantido)
       true: httpLink({
         url: "/api/trpc",
-        headers: () => getDynamicHeaders(),
+        headers: getHeaders,
       }),
       // Para queries: httpBatchLink (GET com batch)
       false: httpBatchLink({
         url: "/api/trpc",
-        headers: () => getDynamicHeaders(),
+        maxURLLength: 1024,
+        headers: getHeaders,
       }),
     }),
   ],
@@ -62,4 +63,4 @@ createRoot(document.getElementById("root")!).render(
     </trpc.Provider>
   </Suspense>
 );
-// Deploy trigger: Mon May  4 17:37:58 -03 2026
+// Deploy trigger: Mon May  4 18:15:20 -03 2026

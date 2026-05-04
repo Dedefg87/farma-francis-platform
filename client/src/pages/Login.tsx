@@ -32,10 +32,10 @@ export default function Login() {
       // Chamar mutation de login com username (pode ser email ou nome)
       const result = await loginMutation.mutateAsync({ username, password });
       
-      console.log('Login bem-sucedido:', result);
+      console.log('[LOGIN RESPONSE FULL]', JSON.stringify(result, null, 2));
       
-      // Salvar token no localStorage
-      localStorage.setItem('authToken', result.token);
+      // Salvar token no localStorage com chave exata "jti"
+      localStorage.setItem('jti', result.token);
       
       // Invalidar cache do auth.me para forçar recarregamento
       await utils.auth.me.invalidate();
