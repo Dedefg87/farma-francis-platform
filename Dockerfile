@@ -26,6 +26,8 @@ RUN pnpm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 RUN npm install -g pnpm@10
 
 # Copia apenas package.json e lockfile
@@ -40,7 +42,7 @@ COPY --from=builder /app/dist ./dist
 # Copia o frontend buildado (vite build fica em client/dist/)
 COPY --from=builder /app/client/dist ./client/dist
 
-# FORCE REDEPLOY: 2026-05-04 10:00 BRT (fix automation endpoints)
+# FORCE REDEPLOY: 2026-05-04 10:37 BRT (fix ENV NODE_ENV)
 
 # Inicia o servidor
 CMD ["node", "dist/index.js"]
