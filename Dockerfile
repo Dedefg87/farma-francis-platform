@@ -46,3 +46,4 @@ COPY --from=builder /app/client/dist ./client/dist
 
 # Inicia o servidor
 CMD ["node", "dist/index.js"]
+# Rebuild: Mon May  4 16:25:27 -03 2026
