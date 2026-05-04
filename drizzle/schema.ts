@@ -1516,21 +1516,3 @@ export type InsertProcessedWebhookMessage =
 
 export * from './schema_logs';
 
-/**
- * Approvals table for human-in-the-loop workflows
- * Used for pharmacist approvals, content moderation, etc.
- */
-export const approvals = mysqlTable("approvals", {
-  id: int("id").autoincrement().primaryKey(),
-  entityType: varchar("entity_type", { length: 64 }).notNull(), // e.g., 'broadcast', 'prescription', 'flow'
-  entityId: int("entity_id").notNull(),
-  requestedBy: int("requested_by").references(() => users.id).notNull(),
-  approvedBy: int("approved_by").references(() => users.id),
-  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
-  reason: text("reason"), // reason for request or rejection
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
-});
-
-export type Approval = typeof approvals.$inferSelect;
-export type InsertApproval = typeof approvals.$inferInsert;
