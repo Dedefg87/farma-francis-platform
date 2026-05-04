@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -32,12 +32,26 @@ if (typeof window !== "undefined") {
 }
 
 const trpcClient = trpc.createClient({
-  // transformer: superjson, // DESABILITADO PARA TESTE DE LOGIN
+  transformer: superjson,
   links: [
-    httpLink({
-      url: "/api/trpc",
-      headers: () => ({
-        ...extraHeaders,
+    splitLink({
+      // Mutations devem ser POST (httpLink)
+      condition: (params) => {
+        return params.op?.type === 'mutation';
+      },
+      // Para mutations: httpLink (POST garantido)
+      true: httpLink({
+        url: "/api/trpc",
+        headers: () => ({
+          ...extraHeaders,
+        }),
+      }),
+      // Para queries: httpBatchLink (GET com batch)
+      false: httpBatchLink({
+        url: "/api/trpc",
+        headers: () => ({
+          ...extraHeaders,
+        }),
       }),
     }),
   ],
@@ -53,4 +67,4 @@ createRoot(document.getElementById("root")!).render(
     </trpc.Provider>
   </Suspense>
 );
-// Deploy trigger: Mon May  4 15:39:58 -03 2026
+// Deploy trigger: Mon May  4 17:05:20 -03 2026
