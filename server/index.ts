@@ -157,6 +157,14 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // Debug: show all request headers
+  app.get("/api/debug/headers", (req, res) => {
+    res.json({
+      headers: req.headers,
+      timestamp: new Date().toISOString()
+    });
+  });
+
   app.use("/api/trpc", (req, res, next) => {
     console.log("[tRPC]", req.method, req.url);
     next();
