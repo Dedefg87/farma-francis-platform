@@ -32,7 +32,7 @@ if (typeof window !== "undefined") {
 }
 
 const trpcClient = trpc.createClient({
-  transformer: superjson,
+  // transformer: superjson, // DESABILITADO PARA TESTE DE LOGIN
   links: [
     httpLink({
       url: "/api/trpc",
