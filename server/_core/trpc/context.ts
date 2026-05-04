@@ -21,56 +21,41 @@ export async function createContext(
   const req = opts?.req;
   let user: User | undefined = undefined;
 
-  // Extrair token do header Authorization ou x-jti (frontend)
   if (req) {
     try {
       let token: string | null = null;
-      let headerSource = 'none';
       
-      if (req.headers && typeof req.headers.get === "function") {
-        // Fetch API Headers object (converte tudo para lowercase)
-        const authHeader = req.headers.get("authorization");
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-          token = authHeader.slice(7);
-          headerSource = 'Authorization';
+      // Tentar ler headers (Fetch API ou Express)
+      if (req.headers) {
+        // Fetch API: headers.get()
+        if (typeof req.headers.get === 'function') {
+          token = req.headers.get('x-jti') || req.headers.get('authorization');
         }
-        if (!token) {
-          token = req.headers.get("x-jti");
-          if (token) headerSource = 'x-jti';
+        // Express: req.headers['x-jti']
+        else if (typeof req.headers === 'object') {
+          const h = req.headers as Record<string, string>;
+          token = h['x-jti'] || h['x-jti'] || h['authorization'] || h['Authorization'];
         }
-      } else if (req.headers && typeof req.headers === "object") {
-        // Express-style headers
-        const authHeader = req.headers.authorization || req.headers["authorization"];
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-          token = authHeader.slice(7);
-          headerSource = 'Authorization';
+        
+        // Extrair token do Bearer se necessário
+        if (token && token.startsWith('Bearer ')) {
+          token = token.slice(7);
         }
-        if (!token) {
-          token = req.headers["x-jti"] || req.headers["x-jti"];
-          if (token) headerSource = 'x-jti';
-        }
-      }
-      
-      console.log('[Auth Debug] Token source:', headerSource, '| Token exists:', !!token);
-      
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, JWT_SECRET) as User;
-          user = decoded;
-          console.log('[Auth Debug] Token verified for user:', user?.name, '| Role:', user?.role);
-        } catch (error: unknown) {
-          console.log('[Auth Debug] Token verification failed:', error.message);
-          user = undefined;
+        
+        if (token) {
+          try {
+            const decoded = jwt.verify(token, JWT_SECRET) as User;
+            user = decoded;
+            console.log('[createContext] User set:', user?.username, '| Role:', user?.role);
+          } catch (e: unknown) {
+            console.log('[createContext] JWT verify failed:', (e as Error).message);
+          }
         }
       }
     } catch (error) {
-      console.log('[Auth Debug] General error:', error.message);
-      user = undefined;
+      console.log('[createContext] General error:', (error as Error).message);
     }
   }
 
-  return {
-    req,
-    user,
-  };
+  return { req, user };
 }
