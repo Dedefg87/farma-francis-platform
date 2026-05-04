@@ -34,7 +34,7 @@ export async function createContext(
         }
         // Tentar x-jti header (frontend envia JWT aqui)
         if (!token) {
-          token = req.headers.get("x-jti");
+          token = req.headers.get("x-jti") || req.headers.get("x-jti");
         }
       } else if (req.headers && typeof req.headers === "object") {
         // Express-style headers (snake_case or camelCase)
