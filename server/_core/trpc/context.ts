@@ -17,6 +17,7 @@ export type Context = {
 export async function createContext(
   opts?: FetchCreateContextFnOptions
 ): Promise<Context> {
+  console.log('[createContext] Called | has req:', !!opts?.req);
   const req = opts?.req;
   let user: User | undefined = undefined;
 
