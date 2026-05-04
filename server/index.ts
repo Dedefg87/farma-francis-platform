@@ -115,6 +115,10 @@ async function startServer() {
   }));
 
   app.use(express.json({ limit: '50mb' }));
+  app.use((req, res, next) => {
+    console.log('[BODY]', req.method, req.url, '| Body:', JSON.stringify(req.body).substring(0, 200));
+    next();
+  });
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
   app.use(cookieParser());
 
