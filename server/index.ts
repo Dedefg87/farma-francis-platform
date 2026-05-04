@@ -479,3 +479,4 @@ startServer().catch((err) => {
   console.error("[Server] Failed to start:", err);
   process.exit(1);
 });
+// Railway deploy: Mon May  4 14:22:25 -03 2026
