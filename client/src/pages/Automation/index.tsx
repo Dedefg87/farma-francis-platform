@@ -39,6 +39,7 @@ import { flowTemplates } from "./templates-modern";
 
 export default function Automation() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
   const { state, actions } = useFlowState();
   const { validateBeforeSave, validateFlow } = useFlowValidation();
   
@@ -302,13 +303,13 @@ export default function Automation() {
           onSearch={setSearchQuery}
           onCreateFlow={() => actions.setIsCreating(true)}
           onImport={() => actions.setIsImporting(true)}
-          onUseTemplate={() => {}}
+          onUseTemplate={() => setActiveTab("templates")}
           onExport={handleExportExcel}
           totalFlows={visualFlows?.length || 0}
           activeFlows={activeFlowsCount}
         />
 
-        <Tabs defaultValue="all" className="flex-1 flex flex-col">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
           <TabsList className="mx-6 mt-4 w-fit">
             <TabsTrigger value="all">
               Todos
@@ -338,7 +339,7 @@ export default function Automation() {
               <div className="p-6">
                 <AutomationEmptyState
                   onCreateFlow={() => actions.setIsCreating(true)}
-                  onUseTemplate={() => {}}
+                  onUseTemplate={() => setActiveTab("templates")}
                 />
               </div>
             ) : (
