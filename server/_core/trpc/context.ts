@@ -25,6 +25,13 @@ export async function createContext(
     try {
       let token: string | null = null;
       
+      // Log RAW headers (Fetch API)
+      if (req.headers && typeof req.headers.entries === 'function') {
+        console.log('[CTX] RAW HEADERS:', Object.fromEntries(req.headers));
+      } else {
+        console.log('[CTX] Headers object:', req.headers);
+      }
+      
       // Função auxiliar para ler headers (funciona em Fetch e Express)
       const getHeader = (name: string) =>
         typeof req.headers.get === "function"
@@ -39,6 +46,8 @@ export async function createContext(
         token = token.slice(7);
       }
       
+      console.log('[CTX] Token found:', !!token, '| Source:', token ? 'header' : 'none');
+      
       if (token) {
         try {
           const decoded = jwt.verify(token, JWT_SECRET) as User;
@@ -48,12 +57,13 @@ export async function createContext(
           console.log('[createContext] JWT verify failed:', (e as Error).message);
         }
       } else {
-        console.log('[createContext] No token found in headers');
+        console.log('[CTX] No token found in headers');
       }
     } catch (error) {
       console.log('[createContext] General error:', (error as Error).message);
     }
   }
 
+  console.log('[CTX] FINAL CONTEXT:', { hasUser: !!user });
   return { req, user };
 }

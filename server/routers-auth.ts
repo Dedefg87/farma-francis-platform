@@ -26,7 +26,9 @@ export const authRouter = router({
         password: z.string().min(1, "Senha é obrigatória"),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      console.log("[LOGIN] INPUT RECEIVED:", input);
+      console.log("[LOGIN] CTX USER:", ctx.user);
       try {
         const { username, password } = input;
         const db = await getDb();
