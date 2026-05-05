@@ -135,7 +135,7 @@ export default function EventPage() {
         <header className="bg-white shadow-sm py-2 md:py-4 sticky top-0 z-50">
           <div className="container mx-auto px-3 md:px-4 flex items-center justify-between">
             <img
-              src="/farma-francis-logo.png"
+              src="/logo-farma-francis.jpg"
               alt="Farma Francis"
               className="h-8 md:h-12 w-auto object-contain"
             />
@@ -294,7 +294,7 @@ export default function EventPage() {
         <footer className="bg-[#2D3748] text-white py-8 md:py-12" id="contato">
           <div className="container mx-auto px-4 text-center">
             <img
-              src="/farma-francis-logo.png"
+              src="/logo-farma-francis.jpg"
               alt="Farma Francis"
               className="h-10 md:h-14 w-auto object-contain bg-white rounded p-1 mx-auto mb-2 md:mb-3"
             />

@@ -74,7 +74,7 @@ export default function Login() {
         {/* Logo */}
         <div className="mb-8 flex justify-center">
           <img 
-            src="/farma-francis-logo.png" 
+            src="/logo-farma-francis.jpg" 
             alt="Farma Francis" 
             className="h-20 w-auto"
           />
