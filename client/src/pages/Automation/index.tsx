@@ -12,19 +12,12 @@ import {
   Plus,
   Upload,
   Bot,
-  Play
+  Play,
+  ReloadIcon
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import N8NNodeConfig from "@/components/flow/N8NNodeConfig";
-import { Node } from "reactflow";
-import { convertIVRToReactFlow } from "@/lib/ivrConverter";
-import { convertToReactFlow } from "@/lib/flowConverters";
-import { validateFlowIntegrity } from "@/lib/flowLinker";
-import { useFlowImportWorker } from "@/hooks/useFlowImportWorker";
-import { useFlowState } from "./hooks/useFlowState";
-import { useFlowValidation } from "./hooks/useFlowValidation";
-import { FlowCardPro } from "./components/FlowCardPro";
+import { FlowEditor } from "./components/FlowEditor";
 import { AutomationHeader } from "./components/AutomationHeader";
 import { AutomationEmptyState } from "./components/AutomationEmptyState";
 import { AutomationStats } from "./components/AutomationStats";
@@ -32,288 +25,189 @@ import { TemplateCard } from "./components/TemplateCard";
 import { exportFlowsToExcel } from "@/lib/exportExcel";
 import { ImportDialog } from "./components/ImportDialog";
 import { CreateDialog } from "./components/CreateDialog";
-import { FlowEditor } from "./components/FlowEditor";
 import { ValidationDialog } from "./components/ValidationDialog";
 import { flowTemplates } from "./templates-modern";
-// import { flowTemplates } from "./templates"; // Old templates
+import type { ModernTemplate } from "./templates-modern";
 
 export default function Automation() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
-  const { state, actions } = useFlowState();
-  const { validateBeforeSave, validateFlow } = useFlowValidation();
+  const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [newFlowName, setNewFlowName] = useState("");
+  const [newFlowDescription, setNewFlowDescription] = useState("");
   
-  const { data: visualFlows, refetch: refetchFlows } = trpc.automation.list.useQuery({});
-  // const { data: automationFlows } = trpc.automation.list.useQuery({}); // Removido duplicado
-  // const { data: uraMenus } = trpc.uraMenus.list.useQuery(); // REMOVIDO: router não existe
-  const { data: automationStats } = trpc.automation.stats.useQuery({ period: "today" });
-
-  const { parseJSON, convertN8N } = useFlowImportWorker({
-    onProgress: actions.setImportProgress,
-    onError: error => {
-      toast.error(`Erro no processamento: ${error}`);
-      actions.setImportLoading(false);
-    },
-  });
-
+  // Queries
+  const { data, isLoading, refetch } = trpc.automation.list.useQuery({});
+  const flows = data?.items || [];
+  const totalFlows = data?.total || 0;
+  
+  const { data: statsData } = trpc.automation.stats.useQuery({ period: "today" }, { enabled: !selectedFlowId });
+  
+  // Mutations
   const createFlow = trpc.automation.create.useMutation({
-    onSuccess: (data: unknown) => {
-      const d = data as any;
+    onSuccess: (data: any) => {
       toast.success("Fluxo criado com sucesso!");
-      actions.setSelectedFlowId(d.id || d.insertId);
-      actions.setIsCreating(false);
-      actions.setNewFlowName("");
-      actions.setNewFlowDescription("");
-      refetchFlows();
+      setSelectedFlowId(data.id);
+      setIsCreating(false);
+      setNewFlowName("");
+      setNewFlowDescription("");
+      refetch();
     },
-    onError: () => toast.error("Erro ao criar fluxo"),
+    onError: (error) => toast.error(`Erro ao criar fluxo: ${error.message}`),
   });
 
   const updateFlow = trpc.automation.update.useMutation({
     onSuccess: () => {
       toast.success("Fluxo atualizado!");
-      refetchFlows();
+      refetch();
     },
+    onError: (error) => toast.error(`Erro ao atualizar: ${error.message}`),
   });
 
   const deleteFlow = trpc.automation.delete.useMutation({
     onSuccess: () => {
-      toast.success("Fluxo deletado!");
-      actions.setSelectedFlowId(null);
-      refetchFlows();
+      toast.success("Fluxo removido!");
+      setSelectedFlowId(null);
+      refetch();
     },
+    onError: (error) => toast.error(`Erro ao deletar: ${error.message}`),
   });
 
   const toggleFlow = trpc.automation.update.useMutation({
-    onSuccess: () => refetchFlows(),
+    onSuccess: () => refetch(),
+    onError: (error) => toast.error(`Erro ao alterar status: ${error.message}`),
   });
 
+  const testFlow = trpc.automation.testFlow.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Teste iniciado! Execução ID: ${data.executionId}`);
+    },
+    onError: (error) => toast.error(`Erro no teste: ${error.message}`),
+  });
+
+  // Handlers
   const handleCreateFlow = useCallback(() => {
-    if (!state.newFlowName.trim()) {
+    if (!newFlowName.trim()) {
       toast.error("Nome do fluxo é obrigatório");
       return;
     }
     createFlow.mutate({
-      name: state.newFlowName,
-      description: state.newFlowDescription,
-      flowData: JSON.stringify({ nodes: [], edges: [] }),
+      name: newFlowName,
+      description: newFlowDescription,
+      flowData: { nodes: [], edges: [] },
     });
-  }, [state.newFlowName, state.newFlowDescription, createFlow]);
+  }, [newFlowName, newFlowDescription, createFlow]);
 
-  const handleImportFlow = useCallback(async () => {
-    if (!state.importFile) {
-      toast.error("Selecione um arquivo para importar");
-      return;
+  const handleToggleFlow = useCallback((flow: any) => {
+    toggleFlow.mutate({ id: flow.id, isActive: !flow.isActive });
+  }, [toggleFlow]);
+
+  const handleDeleteFlow = useCallback((flow: any) => {
+    if (confirm(`Tem certeza que deseja remover o fluxo "${flow.name}"?`)) {
+      deleteFlow.mutate({ id: flow.id });
     }
-    actions.setImportLoading(true);
-    actions.setImportProgress(5);
-    
-    const reader = new FileReader();
-    reader.onload = async e => {
-      try {
-        let content = e.target?.result as string;
-        if (content.match(/^[A-Za-z0-9+/=]+$/)) {
-          try { content = atob(content); } catch {}
-        }
-        
-        actions.setImportProgress(10);
-        let parseResult: unknown;
-        try {
-          parseResult = await parseJSON(content);
-        } catch {
-          parseResult = { parsed: JSON.parse(content), isN8N: false };
-        }
-        
-        const flowData = parseResult.parsed;
-        const isN8N = parseResult.isN8N;
-        const flowName = flowData.name || state.importFile!.name.replace(/\.[^/.]+$/, "");
-        
-        let nodes, edges;
-        if (isN8N) {
-          toast.info(`Processando fluxo N8N (${parseResult.nodeCount} nós)...`);
-          try {
-            const result: unknown = await convertN8N(flowData);
-            nodes = result.nodes;
-            edges = result.edges;
-            toast.success(`Convertido: ${result.stats.totalNodes} nós, ${result.stats.totalEdges} conexões`);
-          } catch {
-            const converted = convertToReactFlow(content);
-            nodes = converted.nodes;
-            edges = converted.edges;
-          }
-        } else if (flowData.nodes && flowData.edges) {
-          nodes = flowData.nodes;
-          edges = flowData.edges;
-        } else {
-          const converted = convertToReactFlow(content);
-          nodes = converted.nodes;
-          edges = converted.edges;
-        }
-        
-        actions.setImportProgress(90);
-        const validation = validateFlowIntegrity(nodes, edges);
-        if (!validation.isValid) {
-          console.warn("Problemas no fluxo:", validation.errors);
-        }
-        
-        createFlow.mutate({
-          name: flowName,
-          description: flowData.description || "Fluxo importado",
-          flowData: JSON.stringify({ nodes, edges }),
-        });
-        
-        actions.setImportProgress(100);
-        toast.success("Fluxo importado com sucesso!");
-        actions.resetImport();
-      } catch (error) {
-        toast.error(`Erro: ${error instanceof Error ? error.message : "Erro desconhecido"}`);
-        actions.setImportLoading(false);
-        actions.setImportProgress(0);
-      }
-    };
-    reader.readAsText(state.importFile);
-  }, [state.importFile, actions, parseJSON, convertN8N, createFlow]);
+  }, [deleteFlow]);
 
-  const handleSaveFlow = useCallback((nodes: Node[], edges: unknown[]) => {
-    if (!state.selectedFlowId) return;
-    const result = validateFlow(nodes, edges);
-    actions.showValidation(result, { nodes, edges });
-  }, [state.selectedFlowId, validateFlow, actions]);
-
-  const confirmSaveFlow = useCallback(() => {
-    if (!state.selectedFlowId || !state.pendingSaveData) return;
-    actions.setIsSaving(true);
-    updateFlow.mutate(
-      {
-        id: state.selectedFlowId,
-        flowData: JSON.stringify(state.pendingSaveData),
-      },
-      {
-        onSuccess: () => {
-          toast.success("Fluxo salvo com sucesso!");
-        },
-        onError: () => {
-          toast.error("Erro ao salvar fluxo");
-        },
-        onSettled: () => {
-          actions.setIsSaving(false);
-        },
-      }
-    );
-    actions.hideValidation();
-    actions.setPendingSaveData(null);
-  }, [state.selectedFlowId, state.pendingSaveData, updateFlow, actions]);
-
-  const handleNodeSave = useCallback((nodeId: string, data: unknown) => {
-    if (!state.selectedFlowId) return;
-    const selectedFlow = visualFlows?.find(f => f.id === state.selectedFlowId);
-    if (!selectedFlow?.flowData) return;
-    
-    const flowData = JSON.parse(selectedFlow.flowData);
-    const updatedNodes = flowData.nodes.map((node: Node) =>
-      node.id === nodeId ? { ...node, data } : node
-    );
-    
-    updateFlow.mutate(
-      {
-        id: state.selectedFlowId,
-        flowData: JSON.stringify({ ...flowData, nodes: updatedNodes }),
-      },
-      {
-        onSuccess: () => toast.success("Configuração do nó salva!"),
-        onError: () => toast.error("Erro ao salvar configuração do nó"),
-      }
-    );
-  }, [state.selectedFlowId, visualFlows, updateFlow]);
-
-  const handleDuplicateFlow = useCallback((flow: unknown) => {
-    actions.setDuplicatingFlowId(flow.id);
-    createFlow.mutate(
-      {
-        name: `Cópia de ${flow.name}`,
-        description: flow.description,
-        flowData: flow.flowData,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Fluxo duplicado com sucesso!");
-          actions.setDuplicatingFlowId(null);
-          refetchFlows();
-        },
-        onError: () => {
-          toast.error("Erro ao duplicar fluxo");
-          actions.setDuplicatingFlowId(null);
-        },
-      }
-    );
-  }, [createFlow, actions, refetchFlows]);
-
-  const handleExportFlow = useCallback((flow: unknown) => {
-    const flowData = flow.flowData ? JSON.parse(flow.flowData) : { nodes: [], edges: [] };
-    const exportData = {
-      name: flow.name,
+  const handleDuplicateFlow = useCallback((flow: any) => {
+    createFlow.mutate({
+      name: `Cópia de ${flow.name}`,
       description: flow.description,
-      nodes: flowData.nodes,
-      edges: flowData.edges,
-      exportedAt: new Date().toISOString(),
-      version: "1.0",
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `fluxo-${flow.name.replace(/\s+/g, "-").toLowerCase()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success("Fluxo exportado!");
-  }, []);
+      flowData: flow.flowData ? JSON.parse(flow.flowData) : { nodes: [], edges: [] },
+    });
+  }, [createFlow]);
 
   const handleExportExcel = useCallback(() => {
-    if (!visualFlows || visualFlows.length === 0) {
+    if (!flows || flows.length === 0) {
       toast.error("Nenhum fluxo para exportar");
       return;
     }
+    exportFlowsToExcel(flows);
+    toast.success(`${flows.length} fluxos exportados para Excel!`);
+  }, [flows]);
 
-    exportFlowsToExcel(visualFlows);
-    toast.success(`${visualFlows.length} fluxos exportados para Excel!`);
-  }, [visualFlows]);
+  const handleUseTemplate = useCallback((template: ModernTemplate) => {
+    createFlow.mutate({
+      name: template.name,
+      description: template.description,
+      flowData: { nodes: template.nodes, edges: template.edges },
+    });
+  }, [createFlow]);
 
-  const selectedFlow = visualFlows?.find(f => f.id === state.selectedFlowId);
-
-  // Filtrar fluxos por busca
+  // Filter flows
   const filteredFlows = useMemo(() => {
-    if (!visualFlows) return [];
-    if (!searchQuery) return visualFlows;
-    const query = searchQuery.toLowerCase();
-    return visualFlows.filter(flow => 
-      flow.name.toLowerCase().includes(query) ||
-      flow.description?.toLowerCase().includes(query)
-    );
-  }, [visualFlows, searchQuery]);
+    if (!flows) return [];
+    let result = flows;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(flow => 
+        flow.name.toLowerCase().includes(query) ||
+        (flow.description && flow.description.toLowerCase().includes(query))
+      );
+    }
+    if (activeTab === "active") {
+      result = result.filter(flow => flow.isActive);
+    }
+    return result;
+  }, [flows, searchQuery, activeTab]);
 
-  const activeFlowsCount = visualFlows?.filter(f => f.isActive).length || 0;
+  const activeFlowsCount = flows.filter(f => f.isActive).length || 0;
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <FarmaDashboardLayout>
+        <div className="flex items-center justify-center h-full">
+          <ReloadIcon className="w-6 h-6 animate-spin" />
+          <span className="ml-2">Carregando automações...</span>
+        </div>
+      </FarmaDashboardLayout>
+    );
+  }
+
+  // Selected flow editor
+  if (selectedFlowId) {
+    const selectedFlow = flows.find(f => f.id === selectedFlowId);
+    if (!selectedFlow) {
+      setSelectedFlowId(null);
+      return null;
+    }
+    return (
+      <FarmaDashboardLayout>
+        <FlowEditor
+          flow={selectedFlow}
+          onBack={() => setSelectedFlowId(null)}
+          onSave={(nodes, edges) => {
+            updateFlow.mutate({
+              id: selectedFlowId,
+              flowData: { nodes, edges },
+            });
+          }}
+          onToggle={(isActive) => toggleFlow.mutate({ id: selectedFlowId, isActive })}
+          onDelete={() => handleDeleteFlow(selectedFlow)}
+          onTest={() => testFlow.mutate({ flowId: selectedFlowId })}
+        />
+      </FarmaDashboardLayout>
+    );
+  }
 
   return (
     <FarmaDashboardLayout>
       <div className="h-full flex flex-col">
         <AutomationHeader
-          onSearch={setSearchQuery}
-          onCreateFlow={() => actions.setIsCreating(true)}
-          onImport={() => actions.setIsImporting(true)}
-          onUseTemplate={() => setActiveTab("templates")}
-          onExport={handleExportExcel}
-          totalFlows={visualFlows?.length || 0}
+          totalFlows={totalFlows}
           activeFlows={activeFlowsCount}
+          onSearch={setSearchQuery}
+          onCreate={() => setIsCreating(true)}
+          onImport={() => setIsImporting(true)}
+          onExport={handleExportExcel}
+          onUseTemplate={() => setActiveTab("templates")}
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
           <TabsList className="mx-6 mt-4 w-fit">
-            <TabsTrigger value="all">
-              Todos
-            </TabsTrigger>
+            <TabsTrigger value="all">Todos</TabsTrigger>
             <TabsTrigger value="active">
               <Play className="w-4 h-4 mr-2" />
               Ativos
@@ -325,89 +219,90 @@ export default function Automation() {
           </TabsList>
 
           <TabsContent value="all" className="flex-1 m-0 overflow-auto">
-            {state.selectedFlowId && selectedFlow ? (
-              <FlowEditor
-                flow={selectedFlow}
-                onBack={() => actions.setSelectedFlowId(null)}
-                onToggle={(isActive) => toggleFlow.mutate({ id: state.selectedFlowId!, isActive })}
-                onDelete={() => deleteFlow.mutate({ id: state.selectedFlowId! })}
-                onSave={handleSaveFlow}
-                onNodeDoubleClick={actions.openNodeConfig}
-                isSaving={state.isSaving}
+            {filteredFlows.length === 0 ? (
+              <AutomationEmptyState
+                onCreate={() => setIsCreating(true)}
+                onUseTemplate={() => setActiveTab("templates")}
               />
-            ) : filteredFlows.length === 0 ? (
-              <div className="p-6">
-                <AutomationEmptyState
-                  onCreateFlow={() => actions.setIsCreating(true)}
-                  onUseTemplate={() => setActiveTab("templates")}
-                />
-              </div>
             ) : (
-              <div className="p-6">
-                {/* Analytics Dashboard */}
-                <AutomationStats 
-                  stats={automationStats || {
-                    totalExecutions: 0,
-                    successfulExecutions: 0,
-                    failedExecutions: 0,
-                    avgResponseTime: 0,
-                    totalConversations: 0,
-                    whatsappExecutions: 0,
-                    instagramExecutions: 0,
-                    conversions: 0,
-                    conversionRate: 0,
-                  }} 
-                  period="today" 
-                />
-                
-                {/* Flows Grid */}
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Fluxos de Automação</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredFlows.map(flow => (
-                      <FlowCardPro
-                        key={flow.id}
-                        flow={flow}
-                        type="visual"
-                        onClick={() => actions.setSelectedFlowId(flow.id)}
-                        onToggle={(isActive) => toggleFlow.mutate({ id: flow.id, isActive })}
-                        onDuplicate={() => handleDuplicateFlow(flow)}
-                        onExport={() => handleExportFlow(flow)}
-                        onDelete={() => deleteFlow.mutate({ id: flow.id })}
-                        isDuplicating={state.duplicatingFlowId === flow.id}
-                        executions={{
-                          total: Math.floor(Math.random() * 100),
-                          success: Math.floor(Math.random() * 80),
-                          failed: Math.floor(Math.random() * 20),
-                          lastRun: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+                {filteredFlows.map(flow => (
+                  <Card key={flow.id} className="p-4 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-semibold text-lg">{flow.name}</h3>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedFlowId(flow.id)}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          variant={flow.isActive ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleToggleFlow(flow)}
+                        >
+                          {flow.isActive ? "Ativo" : "Inativo"}
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">{flow.description}</p>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>{flow.isActive ? "Ativo" : "Inativo"}</span>
+                      <span>Atualizado: {new Date(flow.updatedAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleToggleFlow(flow)}
+                      >
+                        {flow.isActive ? "Desativar" : "Ativar"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDuplicateFlow(flow)}
+                      >
+                        Duplicar
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteFlow(flow)}
+                      >
+                        Remover
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => testFlow.mutate({ flowId: flow.id })}
+                        disabled={testFlow.isLoading}
+                      >
+                        Testar
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
               </div>
             )}
           </TabsContent>
 
           <TabsContent value="active" className="flex-1 m-0 overflow-auto p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {visualFlows?.filter(f => f.isActive).map(flow => (
-                <FlowCardPro
-                  key={flow.id}
-                  flow={flow}
-                  type="visual"
-                  onClick={() => actions.setSelectedFlowId(flow.id)}
-                  onToggle={(isActive) => toggleFlow.mutate({ id: flow.id, isActive })}
-                  onDuplicate={() => handleDuplicateFlow(flow)}
-                  onExport={() => handleExportFlow(flow)}
-                  isDuplicating={state.duplicatingFlowId === flow.id}
-                  executions={{
-                    total: Math.floor(Math.random() * 100),
-                    success: Math.floor(Math.random() * 80),
-                    failed: Math.floor(Math.random() * 20),
-                    lastRun: new Date(Date.now() - Math.random() * 86400000 * 7).toISOString(),
-                  }}
-                />
+              {filteredFlows.map(flow => (
+                <Card key={flow.id} className="p-4">
+                  <h3 className="font-semibold">{flow.name}</h3>
+                  <p className="text-sm text-gray-600">{flow.description}</p>
+                  <Button
+                    className="mt-2"
+                    size="sm"
+                    onClick={() => setSelectedFlowId(flow.id)}
+                  >
+                    Editar
+                  </Button>
+                </Card>
               ))}
             </div>
           </TabsContent>
@@ -418,11 +313,7 @@ export default function Automation() {
                 <TemplateCard
                   key={template.id}
                   template={template}
-                  onUse={() => createFlow.mutate({
-                    name: template.name,
-                    description: template.description,
-                    flowData: JSON.stringify({ nodes: template.nodes, edges: template.edges }),
-                  })}
+                  onUse={() => handleUseTemplate(template)}
                 />
               ))}
             </div>
@@ -430,38 +321,24 @@ export default function Automation() {
         </Tabs>
       </div>
 
-      <N8NNodeConfig
-        node={state.selectedNode}
-        open={state.isConfigOpen}
-        onClose={actions.closeNodeConfig}
-        onSave={handleNodeSave}
-      />
-
       <ImportDialog
-        open={state.isImporting}
-        onOpenChange={actions.setIsImporting}
-        importFile={state.importFile}
-        onFileChange={actions.setImportFile}
-        importLoading={state.importLoading}
-        importProgress={state.importProgress}
-        onImport={handleImportFlow}
+        open={isImporting}
+        onOpenChange={setIsImporting}
+        onImport={() => {
+          // Implementar lógica de importação
+          toast.info("Funcionalidade de importação em desenvolvimento");
+          setIsImporting(false);
+        }}
       />
 
       <CreateDialog
-        open={state.isCreating}
-        onOpenChange={actions.setIsCreating}
-        name={state.newFlowName}
-        description={state.newFlowDescription}
-        onNameChange={actions.setNewFlowName}
-        onDescriptionChange={actions.setNewFlowDescription}
+        open={isCreating}
+        onOpenChange={setIsCreating}
+        name={newFlowName}
+        description={newFlowDescription}
+        onNameChange={setNewFlowName}
+        onDescriptionChange={setNewFlowDescription}
         onCreate={handleCreateFlow}
-      />
-
-      <ValidationDialog
-        open={state.showValidationDialog}
-        onOpenChange={actions.hideValidation}
-        result={state.validationResult}
-        onConfirm={confirmSaveFlow}
       />
     </FarmaDashboardLayout>
   );
