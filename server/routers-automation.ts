@@ -123,10 +123,10 @@ export const automationRouter = router({
           })
           .returning();
 
-        return successResponse(
-          { id: newFlow.id, name: newFlow.name },
-          "Automação criada com sucesso"
-        );
+        return {
+          id: newFlow.id,
+          name: newFlow.name,
+        };
       } catch (error) {
         console.error("Error creating automation:", error);
         return errorResponse(
