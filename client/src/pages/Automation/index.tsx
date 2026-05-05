@@ -1,226 +1,228 @@
-import { useState, useCallback } from "react";
-import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Plus, Search, Sparkles, RotateCw } from "lucide-react";
-import { trpc } from "@/lib/trpc";
-import { toast } from "sonner";
+import { useState } from "react";
+import { trpc } from "../../lib/trpc";
 import { flowTemplates } from "./templates-modern";
+import AutomationHeader from "./components/AutomationHeader";
+import FlowCardPro from "./components/FlowCardPro";
+import TemplateCard from "./components/TemplateCard";
+import AutomationStats from "./components/AutomationStats";
+import AutomationEmptyState from "./components/AutomationEmptyState";
+import CreateDialog from "./components/CreateDialog";
+import FlowEditor from "./components/FlowEditor";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { Button } from "../../components/ui/button";
+import { Plus, RefreshCw } from "lucide-react";
+import type { FlowTemplate } from "./templates-modern";
+
+type TabType = "all" | "active" | "templates" | "stats";
 
 export default function Automation() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
-  const [selectedFlowId, setSelectedFlowId] = useState<number | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newFlowName, setNewFlowName] = useState("");
-  const [newFlowDescription, setNewFlowDescription] = useState("");
+  const [activeTab, setActiveTab] = useState<TabType>("all");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [editingFlow, setEditingFlow] = useState<number | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<FlowTemplate | null>(null);
 
-  // Queries
-  const { data, isLoading, refetch } = trpc.automation.list.useQuery({});
-  const flows = data?.items || [];
-  
-  // Mutations
-  const createFlow = trpc.automation.create.useMutation({
-    onSuccess: (data: any) => {
-      toast.success("Fluxo criado!");
-      setIsCreating(false);
-      setSelectedFlowId(data.id);
-      refetch();
-    },
-    onError: (error) => toast.error(`Erro: ${error.message}`),
+  // tRPC queries/mutations
+  const { data: flowsData, isLoading, refetch } = trpc.automation.list.useQuery(
+    { limit: 100, offset: 0 },
+    { refetchOnWindowFocus: false }
+  );
+
+  const { data: statsData } = trpc.automation.stats.useQuery(
+    { period: "week" },
+    { enabled: activeTab === "stats" }
+  );
+
+  const createMutation = trpc.automation.create.useMutation({
+    onSuccess: () => refetch(),
   });
 
-  const updateFlow = trpc.automation.update.useMutation({
-    onSuccess: () => { toast.success("Atualizado!"); refetch(); },
-    onError: (error) => toast.error(`Erro: ${error.message}`),
+  const updateMutation = trpc.automation.update.useMutation({
+    onSuccess: () => refetch(),
   });
 
-  const deleteFlow = trpc.automation.delete.useMutation({
-    onSuccess: () => { toast.success("Removido!"); setSelectedFlowId(null); refetch(); },
-    onError: (error) => toast.error(`Erro: ${error.message}`),
+  const deleteMutation = trpc.automation.delete.useMutation({
+    onSuccess: () => refetch(),
   });
+
+  const toggleActiveMutation = trpc.automation.update.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  // Derived data
+  const flows = flowsData?.items || [];
+  const activeFlows = flows.filter(f => f.isActive);
+  const inactiveFlows = flows.filter(f => !f.isActive);
 
   // Handlers
-  const handleCreateFlow = useCallback(() => {
-    if (!newFlowName.trim()) {
-      toast.error("Nome obrigatório");
-      return;
-    }
-    createFlow.mutate({
-      name: newFlowName,
-      description: newFlowDescription,
-      flowData: { nodes: [], edges: [] },
+  const handleCreateFlow = (name: string, templateType: string, flowData: Record<string, unknown>) => {
+    createMutation.mutate({
+      name,
+      templateType,
+      flowData,
+      isActive: true,
     });
-  }, [newFlowName, newFlowDescription, createFlow]);
+    setShowCreateDialog(false);
+  };
 
-  const handleToggleFlow = useCallback((flow: any) => {
-    updateFlow.mutate({ id: flow.id, isActive: !flow.isActive });
-  }, [updateFlow]);
+  const handleEditFlow = (flowId: number) => {
+    setEditingFlow(flowId);
+  };
 
-  const handleDeleteFlow = useCallback((flow: any) => {
-    if (confirm(`Remover "${flow.name}"?`)) {
-      deleteFlow.mutate({ id: flow.id });
+  const handleUpdateFlow = (flowId: number, data: Parameters<typeof updateMutation.mutate>[0]) => {
+    updateMutation.mutate({ id: flowId, ...data });
+    setEditingFlow(null);
+  };
+
+  const handleDeleteFlow = (flowId: number) => {
+    if (confirm("Tem certeza que deseja desativar este fluxo?")) {
+      deleteMutation.mutate({ id: flowId });
     }
-  }, [deleteFlow]);
+  };
 
-  const handleUseTemplate = useCallback((template: any) => {
-    createFlow.mutate({
-      name: template.name,
-      description: template.description,
-      flowData: { nodes: template.nodes || [], edges: template.edges || [] },
+  const handleToggleActive = (flowId: number, isActive: boolean) => {
+    toggleActiveMutation.mutate({
+      id: flowId,
+      isActive: !isActive,
     });
-  }, [createFlow]);
+  };
 
-  // Loading
+  const handleUseTemplate = (template: FlowTemplate) => {
+    setSelectedTemplate(template);
+    setShowCreateDialog(true);
+  };
+
+  // Loading state
   if (isLoading) {
     return (
-      <FarmaDashboardLayout>
-        <div className="flex items-center justify-center h-full">
-          <ReloadIcon className="w-6 h-6 animate-spin" />
-          <span className="ml-2">Carregando...</span>
-        </div>
-      </FarmaDashboardLayout>
+      <div className="flex items-center justify-center h-64">
+        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Carregando automações...</span>
+      </div>
+    );
+  }
+
+  // Editing flow view
+  if (editingFlow !== null) {
+    const flow = flows.find(f => f.id === editingFlow);
+    if (!flow) return <div>Fluxo não encontrado</div>;
+
+    return (
+      <FlowEditor
+        flow={flow}
+        onSave={(data) => handleUpdateFlow(editingFlow, data)}
+        onClose={() => setEditingFlow(null)}
+        isSaving={updateMutation.isLoading}
+      />
     );
   }
 
   return (
-    <FarmaDashboardLayout>
-      <div className="h-full flex flex-col p-6">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Automações</h1>
-            <p className="text-gray-600">Gerencie fluxos e templates</p>
+    <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <AutomationHeader
+        title="Automações"
+        description="Gerencie fluxos de automação, templates e estatísticas"
+        action={
+          <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            Nova Automação
+          </Button>
+        }
+      />
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="mt-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="all">Todos ({flows.length})</TabsTrigger>
+          <TabsTrigger value="active">Ativos ({activeFlows.length})</TabsTrigger>
+          <TabsTrigger value="templates">Templates ({flowTemplates.length})</TabsTrigger>
+          <TabsTrigger value="stats">Estatísticas</TabsTrigger>
+        </TabsList>
+
+        {/* All Flows Tab */}
+        <TabsContent value="all" className="mt-6">
+          {flows.length === 0 ? (
+            <AutomationEmptyState onCreate={() => setShowCreateDialog(true)} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {flows.map(flow => (
+                <FlowCardPro
+                  key={flow.id}
+                  flow={flow}
+                  onEdit={() => handleEditFlow(flow.id)}
+                  onToggleActive={() => handleToggleActive(flow.id, flow.isActive)}
+                  onDelete={() => handleDeleteFlow(flow.id)}
+                  isToggling={toggleActiveMutation.isLoading}
+                  isDeleting={deleteMutation.isLoading}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Active Flows Tab */}
+        <TabsContent value="active" className="mt-6">
+          {activeFlows.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              Nenhum fluxo ativo no momento.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeFlows.map(flow => (
+                <FlowCardPro
+                  key={flow.id}
+                  flow={flow}
+                  onEdit={() => handleEditFlow(flow.id)}
+                  onToggleActive={() => handleToggleActive(flow.id, flow.isActive)}
+                  onDelete={() => handleDeleteFlow(flow.id)}
+                  isToggling={toggleActiveMutation.isLoading}
+                  isDeleting={deleteMutation.isLoading}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Templates Tab */}
+        <TabsContent value="templates" className="mt-6">
+          <div className="mb-4">
+            <h3 className="text-lg font-medium">Templates Disponíveis</h3>
+            <p className="text-gray-600">Use um template para criar um novo fluxo rapidamente</p>
           </div>
-          <Button onClick={() => setIsCreating(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Criar Fluxo
-          </Button>
-        </div>
-
-        <div className="flex gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Buscar fluxos..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Button variant="outline">Exportar</Button>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <Button
-            variant={activeTab === "all" ? "default" : "outline"}
-            onClick={() => setActiveTab("all")}
-          >
-            Todos ({flows.length})
-          </Button>
-          <Button
-            variant={activeTab === "active" ? "default" : "outline"}
-            onClick={() => setActiveTab("active")}
-          >
-            Ativos ({flows.filter(f => f.isActive).length})
-          </Button>
-          <Button
-            variant={activeTab === "templates" ? "default" : "outline"}
-            onClick={() => setActiveTab("templates")}
-          >
-            <Sparkles className="w-4 h-4 mr-2" />
-            Templates
-          </Button>
-        </div>
-
-        {activeTab === "templates" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {flowTemplates.map(template => (
-              <Card key={template.id} className="p-4">
-                <h3 className="font-semibold mb-2">{template.name}</h3>
-                <p className="text-sm text-gray-600 mb-4">{template.description}</p>
-                <Button onClick={() => handleUseTemplate(template)}>
-                  Usar Template
-                </Button>
-              </Card>
+              <TemplateCard
+                key={template.id}
+                template={template}
+                onUse={() => handleUseTemplate(template)}
+              />
             ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(activeTab === "active" ? flows.filter(f => f.isActive) : flows)
-              .filter(flow => 
-                !searchQuery || 
-                flow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (flow.description && flow.description.toLowerCase().includes(searchQuery.toLowerCase()))
-              )
-              .map(flow => (
-                <Card key={flow.id} className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-semibold">{flow.name}</h3>
-                    <Button
-                      variant={flow.isActive ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleToggleFlow(flow)}
-                    >
-                      {flow.isActive ? "Ativo" : "Inativo"}
-                    </Button>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-2">{flow.description}</p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedFlowId(flow.id)}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleDeleteFlow(flow)}
-                    >
-                      Remover
-                    </Button>
-                  </div>
-                </Card>
-              ))}
-          </div>
-        )}
+        </TabsContent>
 
-        {isCreating && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <Card className="p-6 w-96">
-              <h2 className="text-xl font-bold mb-4">Criar Fluxo</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nome</label>
-                  <Input
-                    value={newFlowName}
-                    onChange={(e) => setNewFlowName(e.target.value)}
-                    placeholder="Nome do fluxo"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Descrição</label>
-                  <Input
-                    value={newFlowDescription}
-                    onChange={(e) => setNewFlowDescription(e.target.value)}
-                    placeholder="Descrição (opcional)"
-                  />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button variant="outline" onClick={() => setIsCreating(false)}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleCreateFlow} disabled={createFlow.isLoading}>
-                    {createFlow.isLoading ? "Criando..." : "Criar"}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-      </div>
-    </FarmaDashboardLayout>
+        {/* Stats Tab */}
+        <TabsContent value="stats" className="mt-6">
+          {statsData ? (
+            <AutomationStats stats={statsData} />
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              Carregando estatísticas...
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Create Dialog */}
+      {showCreateDialog && (
+        <CreateDialog
+          templates={flowTemplates}
+          selectedTemplate={selectedTemplate}
+          onCreate={handleCreateFlow}
+          onClose={() => {
+            setShowCreateDialog(false);
+            setSelectedTemplate(null);
+          }}
+          isCreating={createMutation.isLoading}
+        />
+      )}
+    </div>
   );
 }

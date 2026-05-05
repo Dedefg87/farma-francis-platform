@@ -6564,9 +6564,8 @@ init_schema();
 
 // server/_core/trpc.ts
 var import_server = require("@trpc/server");
-var import_superjson = __toESM(require("superjson"), 1);
 var t = import_server.initTRPC.context().create({
-  transformer: import_superjson.default
+  // transformer: superjson, // DESABILITADO PARA TESTE DE LOGIN
 });
 var router = t.router;
 var isAuthed = t.middleware(({ ctx, next }) => {
@@ -6600,13 +6599,23 @@ init_db();
 init_schema();
 var import_drizzle_orm3 = require("drizzle-orm");
 var authRouter = router({
+  // Teste de autenticação (debug)
+  testAuth: protectedProcedure.query(({ ctx }) => {
+    console.log("[testAuth] ctx.user:", ctx.user);
+    return {
+      autenticado: !!ctx.user,
+      user: ctx.user
+    };
+  }),
   // Login procedure
   login: publicProcedure.input(
     import_zod.z.object({
       username: import_zod.z.string().min(1, "Username \xE9 obrigat\xF3rio"),
       password: import_zod.z.string().min(1, "Senha \xE9 obrigat\xF3ria")
     })
-  ).mutation(async ({ input }) => {
+  ).mutation(async ({ input, ctx }) => {
+    console.log("[LOGIN] INPUT RECEIVED:", input);
+    console.log("[LOGIN] CTX USER:", ctx.user);
     try {
       const { username, password } = input;
       const db = await getDb();
@@ -6617,21 +6626,27 @@ var authRouter = router({
               WHERE name = ${username}
               LIMIT 1`
       );
+      console.log("[LOGIN] DB Result raw:", JSON.stringify(rawResult).substring(0, 200));
       const rows = rawResult.rows ?? rawResult[0] ?? rawResult;
       const usersList = Array.isArray(rows) ? rows : [rows];
       if (usersList.length === 0) {
+        console.log("[LOGIN] User not found:", username);
         throw new Error("Username ou senha inv\xE1lidos");
       }
       const user = usersList[0];
+      console.log("[LOGIN] User found:", user?.name, "| Role:", user?.role);
       const passwordHash = user.passwordHash ?? user.password_hash;
       if (!passwordHash) {
-        console.error("[auth] password_hash missing from user row:", user);
+        console.error("[LOGIN] password_hash missing from user row:", user);
         throw new Error("Username ou senha inv\xE1lidos");
       }
+      console.log("[LOGIN] Comparing password...");
       const valid = await import_bcrypt.default.compare(password, passwordHash);
       if (!valid) {
+        console.log("[LOGIN] Password invalid for:", username);
         throw new Error("Username ou senha inv\xE1lidos");
       }
+      console.log("[LOGIN] Password valid! Updating lastSignedIn...");
       await db.update(users).set({ lastSignedIn: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm3.eq)(users.id, user.id));
       const safeUser = user;
       const userForToken = {
@@ -6643,13 +6658,16 @@ var authRouter = router({
         email: safeUser.email,
         role: safeUser.role
       };
+      console.log("[LOGIN] Signing JWT with JWT_SECRET exists:", !!JWT_SECRET);
       const token = import_jsonwebtoken.default.sign(userForToken, JWT_SECRET, { expiresIn: "7d" });
+      console.log("[LOGIN] Returning success for:", username);
       return {
         success: true,
         user: userForToken,
         token
       };
     } catch (error) {
+      console.log("[LOGIN] ERROR:", error.message);
       throw new Error(error.message || "Falha no login");
     }
   }),
@@ -6665,12 +6683,10 @@ var authRouter = router({
       role: ctx.user.role
     };
   }),
-  // Logout
-  logout: protectedProcedure.mutation(async ({ ctx }) => {
-    return {
-      success: true,
-      message: "Logged out successfully"
-    };
+  // Logout (opcional, frontend limpa localStorage)
+  logout: protectedProcedure.mutation(({ ctx }) => {
+    console.log("[LOGOUT] User logging out:", ctx.user?.username);
+    return { success: true };
   })
 });
 
@@ -7159,6 +7175,42 @@ var customersRouter = router({
   // ========================================
   // CLIENTES (CUSTOMERS)
   // ========================================
+  // Listar todos os clientes
+  list: protectedProcedure.input(import_zod3.z.object({
+    page: import_zod3.z.number().min(1).default(1),
+    pageSize: import_zod3.z.number().min(1).max(100).default(20),
+    search: import_zod3.z.string().optional()
+  }).optional()).query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const page = input?.page ?? 1;
+    const pageSize = input?.pageSize ?? 20;
+    const search = input?.search;
+    const offset = (page - 1) * pageSize;
+    const countResult = await db.select({ count: import_drizzle_orm5.sql`count(*)` }).from(customers);
+    const total = Number(countResult[0]?.count || 0);
+    const totalPages = Math.ceil(total / pageSize);
+    let query = db.select().from(customers);
+    if (search) {
+      query = query.where(
+        (0, import_drizzle_orm5.or)(
+          (0, import_drizzle_orm5.like)(customers.name, `%${search}%`),
+          (0, import_drizzle_orm5.like)(customers.email, `%${search}%`),
+          (0, import_drizzle_orm5.like)(customers.phone, `%${search}%`)
+        )
+      );
+    }
+    const result = await query.limit(pageSize).offset(offset).orderBy((0, import_drizzle_orm5.desc)(customers.id));
+    return {
+      customers: result.map((c) => ({ customer: c })),
+      pagination: {
+        total,
+        totalPages,
+        currentPage: page,
+        pageSize
+      }
+    };
+  }),
   // Buscar cliente por telefone (normalizado)
   getByPhone: publicProcedure.input(import_zod3.z.object({ phone: import_zod3.z.string() })).query(async ({ input }) => {
     const db = await getDb();
@@ -7930,6 +7982,8 @@ var customersRouter = router({
         limit: import_zod3.z.number().min(1).max(100).default(50)
       }).optional()
     ).query(async ({ ctx, input }) => {
+      console.log("[customers.list] ctx.user:", ctx.user?.username, "| role:", ctx.user?.role);
+      console.log("[customers.list] ctx.user:", ctx.user?.username, "| role:", ctx.user?.role);
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       const conditions = [];
@@ -11208,6 +11262,7 @@ var conversationsRouter = router({
    * Lista apenas conversas abertas ou atribuídas (não fechadas) para o agente.
    */
   listActive: protectedProcedure.query(async ({ ctx }) => {
+    console.log("[Conversations] listActive called | ctx.user:", ctx.user?.name, "| role:", ctx.user?.role);
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const conditions = (0, import_drizzle_orm18.inArray)(conversations.status, ["open", "assigned"]);
@@ -14733,34 +14788,39 @@ var appRouter = router({
 // server/_core/trpc/context.ts
 var import_jsonwebtoken2 = __toESM(require("jsonwebtoken"), 1);
 init_env();
+var getHeader = (req, name) => {
+  if (!req?.headers) return void 0;
+  if (typeof req.headers.get === "function") {
+    return req.headers.get(name) || req.headers.get(name.toLowerCase());
+  }
+  const h = req.headers;
+  return h[name] || h[name.toLowerCase()] || h[name.toUpperCase()];
+};
 async function createContext(opts) {
+  console.log("[createContext] Called | has req:", !!opts?.req);
   const req = opts?.req;
   let user = void 0;
   if (req) {
     try {
-      let authHeader = null;
-      if (req.headers && typeof req.headers.get === "function") {
-        authHeader = req.headers.get("authorization");
-      } else if (req.headers && typeof req.headers === "object") {
-        authHeader = req.headers.authorization || req.headers["authorization"];
-      }
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.slice(7);
+      const tokenRaw = getHeader(req, "x-jti") || getHeader(req, "authorization") || getHeader(req, "Authorization");
+      const token = tokenRaw?.startsWith("Bearer ") ? tokenRaw.slice(7) : tokenRaw;
+      if (token) {
         try {
           const decoded = import_jsonwebtoken2.default.verify(token, JWT_SECRET);
           user = decoded;
-        } catch (error) {
-          user = void 0;
+          console.log("[createContext] \u2705 Token v\xE1lido para:", user?.name, "| Role:", user?.role);
+        } catch (e) {
+          console.log("[createContext] \u274C JWT verification failed:", e.message);
         }
+      } else {
+        console.log("[createContext] \u26A0\uFE0F Nenhum token encontrado");
       }
     } catch (error) {
-      user = void 0;
+      console.log("[createContext] General error:", error.message);
     }
   }
-  return {
-    req,
-    user
-  };
+  console.log("[createContext] FINAL CONTEXT:", { hasUser: !!user });
+  return { req, user };
 }
 
 // server/_core/routes/health.ts
@@ -16489,6 +16549,10 @@ async function startServer() {
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   }));
   app.use(import_express6.default.json({ limit: "50mb" }));
+  app.use((req, res, next) => {
+    console.log("[BODY]", req.method, req.url, "| Body:", JSON.stringify(req.body).substring(0, 200));
+    next();
+  });
   app.use(import_express6.default.urlencoded({ limit: "50mb", extended: true }));
   app.use((0, import_cookie_parser.default)());
   const possiblePublicPaths = [
@@ -16522,6 +16586,19 @@ async function startServer() {
   app.use("/api/health/detail", health_default);
   app.get("/api/test", (_, res) => {
     res.json({ ok: true });
+  });
+  app.get("/api/debug/headers", (req, res) => {
+    res.json({
+      headers: req.headers,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  });
+  app.get("/api/debug/env", (req, res) => {
+    res.json({
+      hasJwtSecret: !!process.env.JWT_SECRET,
+      jwtSecretLength: process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0,
+      nodeEnv: process.env.NODE_ENV
+    });
   });
   app.use("/api/trpc", (req, res, next) => {
     console.log("[tRPC]", req.method, req.url);
