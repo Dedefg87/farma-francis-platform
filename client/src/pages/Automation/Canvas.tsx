@@ -67,7 +67,7 @@ const nodeCategories = {
   ],
 };
 
-export default function Canvas() {
+export function Canvas() {
   const [zoom, setZoom] = useState(100);
   const [darkMode, setDarkMode] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
