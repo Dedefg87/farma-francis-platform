@@ -196,10 +196,10 @@ export default function AgentMessages() {
     const connect = () => {
       try {
         // Set JWT token in cookie for SSE authentication
-        const token = localStorage.getItem("authToken");
+        const token = localStorage.getItem("jti");
         if (token) {
           // Use lax for broader compatibility (works on both HTTP and HTTPS)
-          document.cookie = `authToken=${token}; path=/; samesite=lax`;
+          document.cookie = `jti=${token}; path=/; samesite=lax`;
         }
 
         // withCredentials: true sends cookies automatically

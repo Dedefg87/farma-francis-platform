@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Verificar se há token no localStorage ou cookie
-  const hasToken = !!localStorage.getItem("authToken") || document.cookie.includes("session=");
+  const hasToken = !!localStorage.getItem("jti") || document.cookie.includes("session=");
 
   // IMPORTANTE: enabled: hasToken previne a query de rodar antes do login
   const { data: user, isLoading } = trpc.auth.me.useQuery(undefined, {

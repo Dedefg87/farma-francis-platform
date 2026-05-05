@@ -1,8 +1,8 @@
 import { trpc } from "@/lib/trpc";
 
 export function useAuth() {
-  // Verificar se há token
-  const hasToken = !!localStorage.getItem("authToken") || document.cookie.includes("session=");
+  // Verificar se há token (chave correta: "jti")
+  const hasToken = !!localStorage.getItem("jti") || document.cookie.includes("session=");
 
   // Query desabilitada até que haja token
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -11,7 +11,7 @@ export function useAuth() {
 
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
-      localStorage.removeItem("authToken");
+      localStorage.removeItem("jti");
       document.cookie = "session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
       window.location.href = "/login";
     },
