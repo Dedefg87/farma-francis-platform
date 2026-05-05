@@ -13,7 +13,7 @@ import {
   Upload,
   Bot,
   Play,
-  ReloadIcon
+  RotateCw
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -159,7 +159,7 @@ export default function Automation() {
     return (
       <FarmaDashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <ReloadIcon className="w-6 h-6 animate-spin" />
+          <RotateCw className="w-6 h-6 animate-spin" />
           <span className="ml-2">Carregando automações...</span>
         </div>
       </FarmaDashboardLayout>
