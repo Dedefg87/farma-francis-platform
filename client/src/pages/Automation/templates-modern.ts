@@ -457,4 +457,4 @@ return [{
   }
 ];
 
-export default modernTemplates;
+export default flowTemplates;
