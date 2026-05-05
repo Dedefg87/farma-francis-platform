@@ -9236,10 +9236,10 @@ var automationRouter = router({
         createdAt: /* @__PURE__ */ new Date(),
         updatedAt: /* @__PURE__ */ new Date()
       }).returning();
-      return successResponse(
-        { id: newFlow.id, name: newFlow.name },
-        "Automa\xE7\xE3o criada com sucesso"
-      );
+      return {
+        id: newFlow.id,
+        name: newFlow.name
+      };
     } catch (error) {
       console.error("Error creating automation:", error);
       return errorResponse(
@@ -9304,10 +9304,12 @@ var automationRouter = router({
         flowData: item.flowData ? JSON.parse(item.flowData) : null,
         tags: item.tags ? JSON.parse(item.tags) : []
       }));
-      return successResponse(
-        { items: parsedItems, total, limit: input.limit, offset: input.offset },
-        `${total} automa\xE7\xE3o(\xF5es) encontrada(s)`
-      );
+      return {
+        items: parsedItems,
+        total,
+        limit: input.limit,
+        offset: input.offset
+      };
     } catch (error) {
       console.error("Error listing automations:", error);
       return errorResponse(

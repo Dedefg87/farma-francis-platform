@@ -20,6 +20,8 @@ export default function Automation() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingFlow, setEditingFlow] = useState<number | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<FlowTemplate | null>(null);
+  const [newFlowName, setNewFlowName] = useState("");
+  const [newFlowDescription, setNewFlowDescription] = useState("");
 
   // tRPC queries/mutations
   const { data: flowsData, isLoading, refetch } = trpc.automation.list.useQuery(
@@ -54,14 +56,18 @@ export default function Automation() {
   const inactiveFlows = flows.filter(f => !f.isActive);
 
   // Handlers
-  const handleCreateFlow = (name: string, templateType: string, flowData: Record<string, unknown>) => {
+  const handleCreateFlow = () => {
+    if (!newFlowName.trim()) return;
     createMutation.mutate({
-      name,
-      templateType,
-      flowData,
+      name: newFlowName,
+      templateType: selectedTemplate?.id || "custom",
+      flowData: selectedTemplate?.flowData || {},
       isActive: true,
     });
+    setNewFlowName("");
+    setNewFlowDescription("");
     setShowCreateDialog(false);
+    setSelectedTemplate(null);
   };
 
   const handleEditFlow = (flowId: number) => {
@@ -119,14 +125,10 @@ export default function Automation() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <AutomationHeader
-        title="Automações"
-        description="Gerencie fluxos de automação, templates e estatísticas"
-        action={
-          <Button onClick={() => setShowCreateDialog(true)} className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Nova Automação
-          </Button>
-        }
+        onSearch={() => {}}
+        onCreateFlow={() => setShowCreateDialog(true)}
+        totalFlows={flows.length}
+        activeFlows={activeFlows.length}
       />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="mt-6">
@@ -147,11 +149,9 @@ export default function Automation() {
                 <FlowCardPro
                   key={flow.id}
                   flow={flow}
-                  onEdit={() => handleEditFlow(flow.id)}
-                  onToggleActive={() => handleToggleActive(flow.id, flow.isActive)}
+                  onClick={() => handleEditFlow(flow.id)}
+                  onToggle={() => handleToggleActive(flow.id, flow.isActive)}
                   onDelete={() => handleDeleteFlow(flow.id)}
-                  isToggling={toggleActiveMutation.isLoading}
-                  isDeleting={deleteMutation.isLoading}
                 />
               ))}
             </div>
@@ -170,11 +170,9 @@ export default function Automation() {
                 <FlowCardPro
                   key={flow.id}
                   flow={flow}
-                  onEdit={() => handleEditFlow(flow.id)}
-                  onToggleActive={() => handleToggleActive(flow.id, flow.isActive)}
+                  onClick={() => handleEditFlow(flow.id)}
+                  onToggle={() => handleToggleActive(flow.id, flow.isActive)}
                   onDelete={() => handleDeleteFlow(flow.id)}
-                  isToggling={toggleActiveMutation.isLoading}
-                  isDeleting={deleteMutation.isLoading}
                 />
               ))}
             </div>
@@ -211,18 +209,22 @@ export default function Automation() {
       </Tabs>
 
       {/* Create Dialog */}
-      {showCreateDialog && (
-        <CreateDialog
-          templates={flowTemplates}
-          selectedTemplate={selectedTemplate}
-          onCreate={handleCreateFlow}
-          onClose={() => {
-            setShowCreateDialog(false);
+      <CreateDialog
+        open={showCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) {
             setSelectedTemplate(null);
-          }}
-          isCreating={createMutation.isLoading}
-        />
-      )}
+            setNewFlowName("");
+            setNewFlowDescription("");
+          }
+        }}
+        name={newFlowName}
+        description={newFlowDescription}
+        onNameChange={setNewFlowName}
+        onDescriptionChange={setNewFlowDescription}
+        onCreate={handleCreateFlow}
+      />
     </div>
   );
 }
