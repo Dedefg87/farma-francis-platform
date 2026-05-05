@@ -208,10 +208,12 @@ export const automationRouter = router({
           tags: item.tags ? JSON.parse(item.tags as string) : [],
         }));
 
-        return successResponse(
-          { items: parsedItems, total, limit: input.limit, offset: input.offset },
-          `${total} automação(ões) encontrada(s)`
-        );
+        return {
+          items: parsedItems,
+          total,
+          limit: input.limit,
+          offset: input.offset,
+        };
       } catch (error) {
         console.error("Error listing automations:", error);
         return errorResponse(
