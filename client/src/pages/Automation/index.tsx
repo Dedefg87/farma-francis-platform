@@ -1,230 +1,95 @@
 import { useState } from "react";
 import { trpc } from "../../lib/trpc";
-import { flowTemplates } from "./templates-modern";
-import { AutomationHeader } from "./components/AutomationHeader";
-import { FlowCardPro } from "./components/FlowCardPro";
-import { TemplateCard } from "./components/TemplateCard";
-import { AutomationStats } from "./components/AutomationStats";
-import { AutomationEmptyState } from "./components/AutomationEmptyState";
-import { CreateDialog } from "./components/CreateDialog";
-import { FlowEditor } from "./components/FlowEditor";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
-import { Button } from "../../components/ui/button";
-import { Plus, RefreshCw } from "lucide-react";
-import type { FlowTemplate } from "./templates-modern";
-
-type TabType = "all" | "active" | "templates" | "stats";
 
 export default function Automation() {
-  const [activeTab, setActiveTab] = useState<TabType>("all");
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingFlow, setEditingFlow] = useState<number | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<FlowTemplate | null>(null);
-  const [newFlowName, setNewFlowName] = useState("");
-  const [newFlowDescription, setNewFlowDescription] = useState("");
-
-  // tRPC queries/mutations
+  const [activeTab, setActiveTab] = useState<"all" | "active">("all");
   const { data: flowsData, isLoading, refetch } = trpc.automation.list.useQuery(
     { limit: 100, offset: 0 },
     { refetchOnWindowFocus: false }
   );
+  const deleteMutation = trpc.automation.delete.useMutation({ onSuccess: () => refetch() });
+  const updateMutation = trpc.automation.update.useMutation({ onSuccess: () => refetch() });
 
-  const { data: statsData } = trpc.automation.stats.useQuery(
-    { period: "week" },
-    { enabled: activeTab === "stats" }
-  );
-
-  const createMutation = trpc.automation.create.useMutation({
-    onSuccess: () => refetch(),
-  });
-
-  const updateMutation = trpc.automation.update.useMutation({
-    onSuccess: () => refetch(),
-  });
-
-  const deleteMutation = trpc.automation.delete.useMutation({
-    onSuccess: () => refetch(),
-  });
-
-  const toggleActiveMutation = trpc.automation.update.useMutation({
-    onSuccess: () => refetch(),
-  });
-
-  // Derived data
   const flows = flowsData?.items || [];
   const activeFlows = flows.filter(f => f.isActive);
-  const inactiveFlows = flows.filter(f => !f.isActive);
+  const displayedFlows = activeTab === "all" ? flows : activeFlows;
 
-  // Handlers
-  const handleCreateFlow = () => {
-    if (!newFlowName.trim()) return;
-    createMutation.mutate({
-      name: newFlowName,
-      templateType: selectedTemplate?.id || "custom",
-      flowData: selectedTemplate?.flowData || {},
-      isActive: true,
-    });
-    setNewFlowName("");
-    setNewFlowDescription("");
-    setShowCreateDialog(false);
-    setSelectedTemplate(null);
+  const handleToggleActive = (id: number, isActive: boolean) => {
+    updateMutation.mutate({ id, isActive: !isActive });
   };
 
-  const handleEditFlow = (flowId: number) => {
-    setEditingFlow(flowId);
-  };
-
-  const handleUpdateFlow = (flowId: number, data: Parameters<typeof updateMutation.mutate>[0]) => {
-    updateMutation.mutate({ id: flowId, ...data });
-    setEditingFlow(null);
-  };
-
-  const handleDeleteFlow = (flowId: number) => {
-    if (confirm("Tem certeza que deseja desativar este fluxo?")) {
-      deleteMutation.mutate({ id: flowId });
+  const handleDelete = (id: number) => {
+    if (confirm("Desativar este fluxo?")) {
+      deleteMutation.mutate({ id });
     }
   };
 
-  const handleToggleActive = (flowId: number, isActive: boolean) => {
-    toggleActiveMutation.mutate({
-      id: flowId,
-      isActive: !isActive,
-    });
-  };
-
-  const handleUseTemplate = (template: FlowTemplate) => {
-    setSelectedTemplate(template);
-    setShowCreateDialog(true);
-  };
-
-  // Loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-600">Carregando automações...</span>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2">Carregando...</span>
       </div>
     );
   }
 
-  // Editing flow view
-  if (editingFlow !== null) {
-    const flow = flows.find(f => f.id === editingFlow);
-    if (!flow) return <div>Fluxo não encontrado</div>;
-
-    return (
-      <FlowEditor
-        flow={flow}
-        onSave={(data) => handleUpdateFlow(editingFlow, data)}
-        onClose={() => setEditingFlow(null)}
-        isSaving={updateMutation.isLoading}
-      />
-    );
-  }
-
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <AutomationHeader
-        onSearch={() => {}}
-        onCreateFlow={() => setShowCreateDialog(true)}
-        totalFlows={flows.length}
-        activeFlows={activeFlows.length}
-      />
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Automações</h1>
+        <span className="text-gray-600">{flows.length} fluxos</span>
+      </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="mt-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="all">Todos ({flows.length})</TabsTrigger>
-          <TabsTrigger value="active">Ativos ({activeFlows.length})</TabsTrigger>
-          <TabsTrigger value="templates">Templates ({flowTemplates.length})</TabsTrigger>
-          <TabsTrigger value="stats">Estatísticas</TabsTrigger>
-        </TabsList>
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setActiveTab("all")}
+          className={`px-4 py-2 rounded ${activeTab === "all" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
+        >
+          Todos ({flows.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("active")}
+          className={`px-4 py-2 rounded ${activeTab === "active" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
+        >
+          Ativos ({activeFlows.length})
+        </button>
+      </div>
 
-        {/* All Flows Tab */}
-        <TabsContent value="all" className="mt-6">
-          {flows.length === 0 ? (
-            <AutomationEmptyState onCreate={() => setShowCreateDialog(true)} />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {flows.map(flow => (
-                <FlowCardPro
-                  key={flow.id}
-                  flow={flow}
-                  onClick={() => handleEditFlow(flow.id)}
-                  onToggle={() => handleToggleActive(flow.id, flow.isActive)}
-                  onDelete={() => handleDeleteFlow(flow.id)}
-                />
-              ))}
+      {displayedFlows.length === 0 ? (
+        <div className="text-center py-12 text-gray-500">
+          Nenhum fluxo encontrado.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {displayedFlows.map(flow => (
+            <div key={flow.id} className="border rounded-lg p-4 shadow-sm">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="font-medium">{flow.name}</h3>
+                <span className={`px-2 py-1 text-xs rounded ${flow.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
+                  {flow.isActive ? "Ativo" : "Inativo"}
+                </span>
+              </div>
+              {flow.description && (
+                <p className="text-sm text-gray-600 mb-3">{flow.description}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleToggleActive(flow.id, flow.isActive)}
+                  className={`px-3 py-1 text-sm rounded ${flow.isActive ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}
+                >
+                  {flow.isActive ? "Desativar" : "Ativar"}
+                </button>
+                <button
+                  onClick={() => handleDelete(flow.id)}
+                  className="px-3 py-1 text-sm rounded bg-red-100 text-red-800"
+                >
+                  Desativar
+                </button>
+              </div>
             </div>
-          )}
-        </TabsContent>
-
-        {/* Active Flows Tab */}
-        <TabsContent value="active" className="mt-6">
-          {activeFlows.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              Nenhum fluxo ativo no momento.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {activeFlows.map(flow => (
-                <FlowCardPro
-                  key={flow.id}
-                  flow={flow}
-                  onClick={() => handleEditFlow(flow.id)}
-                  onToggle={() => handleToggleActive(flow.id, flow.isActive)}
-                  onDelete={() => handleDeleteFlow(flow.id)}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Templates Tab */}
-        <TabsContent value="templates" className="mt-6">
-          <div className="mb-4">
-            <h3 className="text-lg font-medium">Templates Disponíveis</h3>
-            <p className="text-gray-600">Use um template para criar um novo fluxo rapidamente</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {flowTemplates.map(template => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                onUse={() => handleUseTemplate(template)}
-              />
-            ))}
-          </div>
-        </TabsContent>
-
-        {/* Stats Tab */}
-        <TabsContent value="stats" className="mt-6">
-          {statsData ? (
-            <AutomationStats stats={statsData} />
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              Carregando estatísticas...
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-
-      {/* Create Dialog */}
-      <CreateDialog
-        open={showCreateDialog}
-        onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) {
-            setSelectedTemplate(null);
-            setNewFlowName("");
-            setNewFlowDescription("");
-          }
-        }}
-        name={newFlowName}
-        description={newFlowDescription}
-        onNameChange={setNewFlowName}
-        onDescriptionChange={setNewFlowDescription}
-        onCreate={handleCreateFlow}
-      />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
