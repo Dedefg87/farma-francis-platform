@@ -3,7 +3,7 @@ import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Plus, Search, Sparkles, Play, ReloadIcon } from "lucide-react";
+import { Plus, Search, Sparkles, RotateCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { flowTemplates } from "./templates-modern";
