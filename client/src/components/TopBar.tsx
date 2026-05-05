@@ -37,7 +37,7 @@ export function TopBar() {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       <div className="flex items-center justify-between px-6 py-3">
-        <img src="/logo-farma-francis.jpg" alt="Farma Francis" className="h-32" />
+        <img src="/logo-farma-francis.jpg" alt="Farma Francis" style={{ height: '200px' }} />
         
         <div className="flex items-center gap-2">
           {navigationItems.map(item => {
