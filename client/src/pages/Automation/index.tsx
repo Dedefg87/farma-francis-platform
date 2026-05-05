@@ -43,8 +43,8 @@ export default function Automation() {
   const { state, actions } = useFlowState();
   const { validateBeforeSave, validateFlow } = useFlowValidation();
   
-  const { data: visualFlows, refetch: refetchFlows } = trpc.automation.list.useQuery();
-  const { data: automationFlows } = trpc.automation.list.useQuery();
+  const { data: visualFlows, refetch: refetchFlows } = trpc.automation.list.useQuery({});
+  // const { data: automationFlows } = trpc.automation.list.useQuery({}); // Removido duplicado
   // const { data: uraMenus } = trpc.uraMenus.list.useQuery(); // REMOVIDO: router não existe
   const { data: automationStats } = trpc.automation.stats.useQuery({ period: "today" });
 

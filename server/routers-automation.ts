@@ -155,13 +155,16 @@ export const automationRouter = router({
    * @returns { success: boolean, data: { items: [], total: number }, message?: string }
    */
   list: protectedProcedure
-    .input(AutomationFilterInput)
+    .input(AutomationFilterInput.optional())
     .query(async ({ input }) => {
       try {
         const db = await getDb();
         if (!db) {
           throw new Error("Database não disponível");
         }
+
+        // Use input or default
+        const filter = input || {};
 
         // Build query
         let query = db.select().from(visualFlows);
