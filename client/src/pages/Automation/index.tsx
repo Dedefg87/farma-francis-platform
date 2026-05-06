@@ -10,7 +10,6 @@ import {
   Activity, MessageSquare, Clock, TrendingUp, Smartphone, Globe, Instagram,
   Settings, HelpCircle, Sun, Moon, Bot, MessageCircle, ShoppingCart
 } from "lucide-react";
-import { Canvas } from "./Canvas";
 import { FlowBuilder } from "@/components/flow/FlowBuilder";
 import { DashboardCards } from "./DashboardCards";
 import { TemplatesSection } from "./TemplatesSection";
@@ -282,6 +281,7 @@ export default function Automation() {
               <div className="flex gap-4" style={{ height: "calc(100vh - 300px)" }}>
                 <div className="flex-1">
                   <FlowBuilder 
+                    key={editingFlow?.id || 'novo-' + Date.now()}
                     initialNodes={editingFlow?.flowData?.nodes || []}
                     initialEdges={editingFlow?.flowData?.edges || []}
                     onSave={(nodes, edges) => {
