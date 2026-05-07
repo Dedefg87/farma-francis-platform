@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -11,8 +11,9 @@ import ReactFlow, {
   Node,
   Edge,
   Connection,
-  Handle,
-  Position,
+  NodeChange,
+  EdgeChange,
+  BackgroundProps,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
@@ -28,13 +29,12 @@ import {
 import { 
   NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField 
 } from './node-types';
-import NodeConfigPanel from './NodeConfigPanel';
 
-// Node component for React Flow with proper handles
+// Node component for React Flow
 function WorkflowNodeComponent({ data }: any) {
   const nodeDef = getNodeType(data.nodeType);
   const color = nodeDef?.color || '#6b7280';
-  const Icon = nodeDef?.icon;  
+  const Icon = nodeDef?.icon;
   return (
     <div
       style={{
@@ -46,36 +46,23 @@ function WorkflowNodeComponent({ data }: any) {
         minWidth: '180px',
         fontSize: '14px',
         cursor: 'grab',
-        position: 'relative',
       }}
       onClick={() => data.onClick && data.onClick(data)}
     >
-      {/* Input handles (left side) */}
-      {data.inputs?.map((input: any) => (
-        <Handle
-          key={input.id}
-          type="target"
-          position={Position.Left}
-          id={input.id}
-          style={{ background: '#fff', border: `2px solid ${color}` }}
-        />
-      ))}
-      
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
         {Icon && <Icon size={16} style={{ color }} />}
         <span style={{ fontWeight: 500, color: '#1f2937' }}>{data.label}</span>
       </div>
       <div style={{ fontSize: '11px', color: '#6b7280' }}>{nodeDef?.description}</div>
-      
-      {/* Output handles (right side) */}
+      {/* Handles */}
+      {data.inputs?.map((input: any) => (
+        <div key={input.id} style={{ position: 'absolute', top: '50%', left: '-5px', transform: 'translateY(-50%)' }}>
+          {/* React Flow Handle will be added via React Flow's Handle component, but for simplicity we just show dot */}
+        </div>
+      ))}
       {data.outputs?.map((output: any) => (
-        <Handle
-          key={output.id}
-          type="source"
-          position={Position.Right}
-          id={output.id}
-          style={{ background: '#fff', border: `2px solid ${color}` }}
-        />
+        <div key={output.id} style={{ position: 'absolute', top: '50%', right: '-5px', transform: 'translateY(-50%)' }}>
+        </div>
       ))}
     </div>
   );
@@ -136,12 +123,6 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [darkMode, setDarkMode] = useState(false);
-  
-  // Simulation state
-  const [simulating, setSimulating] = useState(false);
-  const [simulationSteps, setSimulationSteps] = useState<any[]>([]);
-  const [currentStep, setCurrentStep] = useState(0);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#10b981' } }, eds)),
@@ -201,17 +182,6 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleNodeUpdate = useCallback(
-    (nodeId: string, newData: any) => {
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node
-        )
-      );
-    },
-    [setNodes]
-  );
-
   const toggleCategory = (catId: string) => {
     setExpandedCategories(prev => ({ ...prev, [catId]: !prev[catId] }));
   };
@@ -259,72 +229,6 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     };
     reader.readAsText(file);
   };
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+S: Save
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-      // Ctrl+Z: Undo (simplified)
-      if (e.ctrlKey && e.key === 'z') {
-        e.preventDefault();
-        alert('Undo: funcionalidade em desenvolvimento');
-      }
-      // Del: Delete selected nodes
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        // Simplified: would need to track selected nodes
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave]);
-  const handleSimulate = useCallback(() => {
-    if (nodes.length === 0) {
-      alert('Nenhum nó para simular!');
-      return;
-    }
-    
-    setSimulating(true);
-    const steps = nodes.map((node, index) => ({
-      nodeId: node.id,
-      label: node.data.label,
-      status: 'pending', // pending, running, success, error
-      input: {},
-      output: {},
-    }));
-    
-    setSimulationSteps(steps);
-    setCurrentStep(0);
-    
-    // Simple simulation: iterate through nodes
-    const simulateNode = (index: number) => {
-      if (index >= steps.length) {
-        setSimulating(false);
-        return;
-      }
-      
-      // Mark current step as running
-      setSimulationSteps(prev => 
-        prev.map((step, i) => i === index ? { ...step, status: 'running' } : step)
-      );
-      
-      // Simulate work with timeout
-      setTimeout(() => {
-        // Mark as success (simplified)
-        setSimulationSteps(prev => 
-          prev.map((step, i) => i === index ? { ...step, status: 'success' } : step)
-        );
-        
-        // Move to next node
-        simulateNode(index + 1);
-      }, 1000);
-    };
-    
-    simulateNode(0);
-  }, [nodes]);
 
   return (
     <div className="flex h-full w-full">
@@ -411,13 +315,8 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
             <Button variant="outline" size="sm" onClick={handleSave}>
               <Save size={16} className="mr-1" /> Salvar
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleSimulate}
-              disabled={simulating}
-            >
-              <Play size={16} className="mr-1" /> {simulating ? 'Simulando...' : 'Simular'}
+            <Button variant="outline" size="sm" onClick={onSimulate}>
+              <Play size={16} className="mr-1" /> Simular
             </Button>
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download size={16} className="mr-1" /> Exportar
@@ -428,10 +327,6 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
               </Button>
             </label>
             <input id="import-file" type="file" accept=".json" className="hidden" onChange={handleImport} />
-            <Button variant="outline" size="sm" onClick={() => setDarkMode(!darkMode)}>
-              {darkMode ? <Sun size={16} className="mr-1" /> : <Moon size={16} className="mr-1" />}
-              {darkMode ? 'Light' : 'Dark'}
-            </Button>
           </div>
           <div className="text-sm text-gray-600">
             {nodes.length} nós | {edges.length} conexões
@@ -460,50 +355,68 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
             }} />
           </ReactFlow>
         </div>
-        
-        {/* Simulation Panel */}
-        {simulating && (
-          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 max-h-48 overflow-y-auto shadow-lg z-10">
-            <h4 className="text-sm font-medium mb-2">Simulação em Andamento</h4>
-            <div className="space-y-2">
-              {simulationSteps.map((step, index) => (
-                <div 
-                  key={step.nodeId} 
-                  className={`flex items-center gap-2 text-sm ${
-                    index === currentStep ? 'font-bold text-blue-600' : 
-                    step.status === 'success' ? 'text-green-600' : 
-                    step.status === 'error' ? 'text-red-600' : 'text-gray-600'
-                  }`}
-                >
-                  <div className={`w-3 h-3 rounded-full ${
-                    step.status === 'success' ? 'bg-green-500' : 
-                    step.status === 'running' ? 'bg-yellow-500 animate-pulse' : 
-                    step.status === 'error' ? 'bg-red-500' : 'bg-gray-300'
-                  }`} />
-                  <span>{step.label}</span>
-                  <span className="text-xs ml-auto">{step.status}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Right Config Panel */}
       {selectedNode && (
         <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
-          <NodeConfigPanel 
-            node={selectedNode} 
-            onClose={() => setSelectedNode(null)} 
-            onUpdateNode={handleNodeUpdate}
-          />
+          <div className="p-3 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-800 text-sm">Configurar Nó</h3>
+            <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <NodeConfigPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+// Simplified Config Panel - will be expanded later
+function NodeConfigPanel({ node, onClose }: { node: Node; onClose: () => void }) {
+  const nodeDef = getNodeType(node.data?.nodeType);
+  if (!nodeDef) return <div>Nó não encontrado</div>;
 
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Geral</Label>
+        <Input defaultValue={node.data.label} className="mt-1" />
+      </div>
+      <div>
+        <Label>Tipo</Label>
+        <Badge style={{ background: nodeDef.color }}>{nodeDef.label}</Badge>
+      </div>
+      <div>
+        <Label>Configurações</Label>
+        {nodeDef.config?.map((field: ConfigField) => (
+          <div key={field.key} className="mt-2">
+            <Label className="text-xs">{field.label}</Label>
+            {field.type === 'string' || field.type === 'password' ? (
+              <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} defaultValue={field.defaultValue} className="mt-1" />
+            ) : field.type === 'select' ? (
+              <select className="w-full mt-1 p-2 border rounded">
+                {field.options?.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            ) : field.type === 'json' || field.type === 'prompt' ? (
+              <textarea className="w-full mt-1 p-2 border rounded h-24 text-sm" placeholder={field.placeholder} defaultValue={field.defaultValue} />
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div className="pt-4 border-t">
+        <Button size="sm" className="w-full">
+          <TestTube size={16} className="mr-1" /> Testar Nó
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function N8NEditorWrapper(props: N8NEditorProps) {
   return (
