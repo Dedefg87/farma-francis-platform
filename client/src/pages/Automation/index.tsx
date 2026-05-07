@@ -367,7 +367,6 @@ export default function Automation() {
           version="v2.1.0"
           lastUpdate="05/05/2026 16:30"
         />
-      </div>
     </FarmaDashboardLayout>
   );
 }
