@@ -11,9 +11,8 @@ import ReactFlow, {
   Node,
   Edge,
   Connection,
-  NodeChange,
-  EdgeChange,
-  BackgroundProps,
+  Handle,
+  Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
@@ -31,11 +30,11 @@ import {
 } from './node-types';
 import NodeConfigPanel from './NodeConfigPanel';
 
-// Node component for React Flow
+// Node component for React Flow with proper handles
 function WorkflowNodeComponent({ data }: any) {
   const nodeDef = getNodeType(data.nodeType);
   const color = nodeDef?.color || '#6b7280';
-  const Icon = nodeDef?.icon;
+  const Icon = nodeDef?.icon;  
   return (
     <div
       style={{
@@ -47,23 +46,36 @@ function WorkflowNodeComponent({ data }: any) {
         minWidth: '180px',
         fontSize: '14px',
         cursor: 'grab',
+        position: 'relative',
       }}
       onClick={() => data.onClick && data.onClick(data)}
     >
+      {/* Input handles (left side) */}
+      {data.inputs?.map((input: any) => (
+        <Handle
+          key={input.id}
+          type="target"
+          position={Position.Left}
+          id={input.id}
+          style={{ background: '#fff', border: `2px solid ${color}` }}
+        />
+      ))}
+      
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
         {Icon && <Icon size={16} style={{ color }} />}
         <span style={{ fontWeight: 500, color: '#1f2937' }}>{data.label}</span>
       </div>
       <div style={{ fontSize: '11px', color: '#6b7280' }}>{nodeDef?.description}</div>
-      {/* Handles */}
-      {data.inputs?.map((input: any) => (
-        <div key={input.id} style={{ position: 'absolute', top: '50%', left: '-5px', transform: 'translateY(-50%)' }}>
-          {/* React Flow Handle will be added via React Flow's Handle component, but for simplicity we just show dot */}
-        </div>
-      ))}
+      
+      {/* Output handles (right side) */}
       {data.outputs?.map((output: any) => (
-        <div key={output.id} style={{ position: 'absolute', top: '50%', right: '-5px', transform: 'translateY(-50%)' }}>
-        </div>
+        <Handle
+          key={output.id}
+          type="source"
+          position={Position.Right}
+          id={output.id}
+          style={{ background: '#fff', border: `2px solid ${color}` }}
+        />
       ))}
     </div>
   );
@@ -124,6 +136,11 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  
+  // Simulation state
+  const [simulating, setSimulating] = useState(false);
+  const [simulationSteps, setSimulationSteps] = useState<any[]>([]);
+  const [currentStep, setCurrentStep] = useState(0);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#10b981' } }, eds)),
@@ -224,21 +241,51 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     a.click();
   };
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const flowData = JSON.parse(e.target?.result as string);
-        if (flowData.nodes) setNodes(flowData.nodes);
-        if (flowData.edges) setEdges(flowData.edges);
-      } catch (err) {
-        console.error('Invalid JSON file', err);
+  // Simulation function
+  const handleSimulate = useCallback(() => {
+    if (nodes.length === 0) {
+      alert('Nenhum nó para simular!');
+      return;
+    }
+    
+    setSimulating(true);
+    const steps = nodes.map((node, index) => ({
+      nodeId: node.id,
+      label: node.data.label,
+      status: 'pending', // pending, running, success, error
+      input: {},
+      output: {},
+    }));
+    
+    setSimulationSteps(steps);
+    setCurrentStep(0);
+    
+    // Simple simulation: iterate through nodes
+    const simulateNode = (index: number) => {
+      if (index >= steps.length) {
+        setSimulating(false);
+        return;
       }
+      
+      // Mark current step as running
+      setSimulationSteps(prev => 
+        prev.map((step, i) => i === index ? { ...step, status: 'running' } : step)
+      );
+      
+      // Simulate work with timeout
+      setTimeout(() => {
+        // Mark as success (simplified)
+        setSimulationSteps(prev => 
+          prev.map((step, i) => i === index ? { ...step, status: 'success' } : step)
+        );
+        
+        // Move to next node
+        simulateNode(index + 1);
+      }, 1000);
     };
-    reader.readAsText(file);
-  };
+    
+    simulateNode(0);
+  }, [nodes]);
 
   return (
     <div className="flex h-full w-full">
@@ -325,8 +372,13 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
             <Button variant="outline" size="sm" onClick={handleSave}>
               <Save size={16} className="mr-1" /> Salvar
             </Button>
-            <Button variant="outline" size="sm" onClick={onSimulate}>
-              <Play size={16} className="mr-1" /> Simular
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSimulate}
+              disabled={simulating}
+            >
+              <Play size={16} className="mr-1" /> {simulating ? 'Simulando...' : 'Simular'}
             </Button>
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download size={16} className="mr-1" /> Exportar
@@ -365,6 +417,33 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
             }} />
           </ReactFlow>
         </div>
+        
+        {/* Simulation Panel */}
+        {simulating && (
+          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 max-h-48 overflow-y-auto shadow-lg z-10">
+            <h4 className="text-sm font-medium mb-2">Simulação em Andamento</h4>
+            <div className="space-y-2">
+              {simulationSteps.map((step, index) => (
+                <div 
+                  key={step.nodeId} 
+                  className={`flex items-center gap-2 text-sm ${
+                    index === currentStep ? 'font-bold text-blue-600' : 
+                    step.status === 'success' ? 'text-green-600' : 
+                    step.status === 'error' ? 'text-red-600' : 'text-gray-600'
+                  }`}
+                >
+                  <div className={`w-3 h-3 rounded-full ${
+                    step.status === 'success' ? 'bg-green-500' : 
+                    step.status === 'running' ? 'bg-yellow-500 animate-pulse' : 
+                    step.status === 'error' ? 'bg-red-500' : 'bg-gray-300'
+                  }`} />
+                  <span>{step.label}</span>
+                  <span className="text-xs ml-auto">{step.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Right Config Panel */}
