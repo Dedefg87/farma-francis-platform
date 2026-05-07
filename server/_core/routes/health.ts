@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getDb } from "../../db";
-import { checkRedisHealth } from "./redis";
+import { checkRedisHealth } from "../redis";
 
 const router = Router();
 
