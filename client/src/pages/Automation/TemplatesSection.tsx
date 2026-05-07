@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   MessageCircle, Search, FileText, ShoppingCart, Zap, 
-  ArrowRight, CheckCircle, Clock 
+  ArrowRight, CheckCircle, Clock,
+  AlertTriangle, Shield, Package, BarChart, Bot
 } from "lucide-react";
 
 interface Template {
@@ -18,6 +19,117 @@ interface Template {
 }
 
 const templates: Template[] = [
+  // ===== TEMPLATE 1: Recepcionista Digital =====
+  {
+    id: "receptionist-ia",
+    title: "🤖 Boas-Vindas Omnichannel com IA",
+    description: "Recepcionista digital que envia boas-vindas personalizadas, cria contatos e atribui agentes automaticamente",
+    icon: <MessageCircle className="w-6 h-6 text-blue-700" />,
+    category: "Atendimento",
+    steps: ["Nova mensagem (WA/IG)", "Verifica se é novo contato", "Envia boas-vindas", "Cria contato no sistema", "Atribui agente disponível"],
+    conversionRate: "85%",
+    avgTime: "0.5min"
+  },
+  // ===== TEMPLATE 2: Triage de Receita =====
+  {
+    id: "receipt-triage",
+    title: "💊 Detector de Receita com IA",
+    description: "Classifica receitas médicas, valida documentos e encaminha para farmacêuticos",
+    icon: <FileText className="w-6 h-6 text-green-700" />,
+    category: "Prescrição",
+    steps: ["Documento anexado", "IA classifica tipo", "Valida regras de negócio", "Cria tarefa para farmacêutico", "Responde cliente"],
+    conversionRate: "92%",
+    avgTime: "2.5min"
+  },
+  // ===== TEMPLATE 3: Urgência Médica =====
+  {
+    id: "urgency-detector",
+    title: "🚨 Alerta de Urgência Médica",
+    description: "Detecta palavras de urgência, prioriza atendimento e notifica agentes instantaneamente",
+    icon: <AlertTriangle className="w-6 h-6 text-red-700" />,
+    category: "Emergência",
+    steps: ["Mensagem recebida", "IA detecta urgência", "Prioriza URGENTE", "Notifica todos agentes", "Responde imediatamente"],
+    conversionRate: "98%",
+    avgTime: "0.25min"
+  },
+  // ===== TEMPLATE 4: Lembrete Inteligente =====
+  {
+    id: "recall-automation",
+    title: "🔔 Recall Automático de Clientes",
+    description: "Envia lembretes personalizados para clientes inativos com base no histórico de compras",
+    icon: <Clock className="w-6 h-6 text-yellow-700" />,
+    category: "Retenção",
+    steps: ["Agendado diário", "Filtra clientes elegíveis", "IA personaliza mensagem", "Envia lembrete", "Atualiza etiqueta"],
+    conversionRate: "45%",
+    avgTime: "1.0min"
+  },
+  // ===== TEMPLATE 5: Roteamento Inteligente =====
+  {
+    id: "smart-routing",
+    title: "👤 Roteamento por Especialidade",
+    description: "Roteia atendimentos para o departamento correto baseado em palavras-chave",
+    icon: <MessageCircle className="w-6 h-6 text-purple-700" />,
+    category: "Atendimento",
+    steps: ["Nova mensagem", "IA analisa intent", "Roteia para agente", "Informa cliente", "Notifica agente designado"],
+    conversionRate: "78%",
+    avgTime: "0.8min"
+  },
+  // ===== TEMPLATE 6: Follow-up Pós-Venda =====
+  {
+    id: "post-sale-followup",
+    title: "📋 Follow-up Pós-Venda",
+    description: "Envia pesquisa NPS automática e recomenda produtos após atendimento",
+    icon: <CheckCircle className="w-6 h-6 text-orange-700" />,
+    category: "Satisfação",
+    steps: ["Atendimento finalizado", "Aguarda 30min", "Envia NPS", "Analisa resposta", "Recomenda produtos"],
+    conversionRate: "65%",
+    avgTime: "1.5min"
+  },
+  // ===== TEMPLATE 7: Anti-Fraude =====
+  {
+    id: "anti-fraud",
+    title: "🛡️ Validador de Documentos",
+    description: "Valida documentos com IA e detecta possíveis fraudes em cadastros",
+    icon: <Shield className="w-6 h-6 text-teal-700" />,
+    category: "Segurança",
+    steps: ["Documento anexado", "IA analisa documento", "Valida CPF/validade", "Calcula score de risco", "Decide aprovação/manual"],
+    conversionRate: "95%",
+    avgTime: "3.0min"
+  },
+  // ===== TEMPLATE 8: Notificação de Estoque =====
+  {
+    id: "stock-notification",
+    title: "📦 Alerta de Estoque",
+    description: "Notifica clientes na fila de espera quando medicamento chega no estoque",
+    icon: <Package className="w-6 h-6 text-cyan-700" />,
+    category: "Estoque",
+    steps: ["Webhook estoque", "Busca fila de espera", "Notifica clientes", "Gerencia reservas", "Atualiza estoque"],
+    conversionRate: "70%",
+    avgTime: "0.5min"
+  },
+  // ===== TEMPLATE 9: Auditoria =====
+  {
+    id: "audit-compliance",
+    title: "📝 Log de Auditoria",
+    description: "Registra todas as ações do sistema para conformidade e detecção de anomalias",
+    icon: <FileText className="w-6 h-6 text-gray-700" />,
+    category: "Compliance",
+    steps: ["Ação no sistema", "Captura metadados", "Estrutura JSON", "Armazena log", "Analisa anomalias"],
+    conversionRate: "99%",
+    avgTime: "0.1min"
+  },
+  // ===== TEMPLATE 10: Dashboard de Desempenho =====
+  {
+    id: "performance-dashboard",
+    title: "📊 Dashboard de Desempenho",
+    description: "Coleta métricas de automação e gera relatórios em tempo real",
+    icon: <BarChart className="w-6 h-6 text-indigo-700" />,
+    category: "BI",
+    steps: ["Agendado horário", "Coleta métricas", "Calcula KPIs", "Gera relatório", "Notifica admin"],
+    conversionRate: "88%",
+    avgTime: "0.3min"
+  },
+  // ===== Templates Originais =====
   {
     id: "initial-care",
     title: "Atendimento Inicial",
