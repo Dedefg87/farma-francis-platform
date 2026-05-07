@@ -109,9 +109,7 @@ export const automationRouter = router({
           throw new Error("Database não disponível");
         }
 
-        const [newFlow] = await db
-          .insert(visualFlows)
-          .values({
+        await db.insert(visualFlows).values({
             name: input.name,
             description: input.description,
             templateType: input.templateType,
@@ -120,9 +118,23 @@ export const automationRouter = router({
             tags: input.tags ? JSON.stringify(input.tags) : null,
             createdAt: new Date(),
             updatedAt: new Date(),
-          })
-          .returning();
-
+          });
+          
+          // SQLite: get last insert ID
+          const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
+          const lastId = (lastIdResult as any)?.id;
+          
+          if (!lastId) {
+            throw new Error("Failed to get inserted ID");
+          }
+          
+          // Fetch the newly created flow
+          const [newFlow] = await db
+            .select()
+            .from(visualFlows)
+            .where(eq(visualFlows.id, lastId))
+            .limit(1);
+        
         return {
           id: newFlow.id,
           name: newFlow.name,
@@ -587,16 +599,28 @@ export const automationRouter = router({
           .where(eq(visualFlows.id, input.flowId));
 
         // Create test execution
+        await db.insert(flowExecutions).values({
+          flowId: input.flowId,
+          status: "running",
+          trigger: "manual_test",
+          startedAt: new Date(),
+          input: JSON.stringify({ testMessage: input.testMessage || "Teste manual" }),
+        });
+        
+        // Get last insert ID (SQLite)
+        const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
+        const lastId = (lastIdResult as any)?.id;
+        
+        if (!lastId) {
+          throw new Error("Failed to get execution ID");
+        }
+        
+        // Fetch the created execution
         const [execution] = await db
-          .insert(flowExecutions)
-          .values({
-            flowId: input.flowId,
-            status: "running",
-            trigger: "manual_test",
-            startedAt: new Date(),
-            input: JSON.stringify({ testMessage: input.testMessage || "Teste manual" }),
-          })
-          .returning();
+          .select()
+          .from(flowExecutions)
+          .where(eq(flowExecutions.id, lastId))
+          .limit(1);
 
         return successResponse(
           {
