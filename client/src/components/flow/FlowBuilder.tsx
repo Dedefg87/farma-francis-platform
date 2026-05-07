@@ -11,15 +11,14 @@ import ReactFlow, {
   useEdgesState,
   BackgroundVariant,
   Panel,
-  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Play, 
-  Save, 
-  Download, 
+import {
+  Play,
+  Save,
+  Download,
   Upload,
   Plus,
   Trash2,
@@ -180,34 +179,34 @@ export function FlowBuilder({
   onImport,
   readOnly = false,
 }: FlowBuilderProps) {
-  const reactFlowInstance = useReactFlow();
-  const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const reactFlowInstanceRef = useRef<any>(null);
+
+  // Capturar instância do ReactFlow via onInit
+  const onInit = useCallback((instance: any) => {
+    reactFlowInstanceRef.current = instance;
+    if (initialNodes.length > 0) {
+      setTimeout(() => instance.fitView({ padding: 0.2 }), 100);
+    }
+  }, [initialNodes.length]);
 
   // Ajustar view quando container redimensiona
   useEffect(() => {
-    if (!containerRef.current || !reactFlowInstance) return;
-
+    if (!containerRef.current) return;
+    
     const observer = new ResizeObserver(() => {
-      reactFlowInstance.fitView({ padding: 0.2 });
+      if (reactFlowInstanceRef.current) {
+        reactFlowInstanceRef.current.fitView({ padding: 0.2 });
+      }
     });
     
     observer.observe(containerRef.current);
-    
     return () => observer.disconnect();
-  }, [reactFlowInstance]);
-
-  // Fit view inicial
-  useEffect(() => {
-    if (reactFlowInstance && nodes.length > 0) {
-      setTimeout(() => {
-        reactFlowInstance.fitView({ padding: 0.2 });
-      }, 100);
-    }
-  }, [reactFlowInstance, nodes.length]);
+  }, []);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -281,7 +280,7 @@ export function FlowBuilder({
 
   const handleAddNode = (type: keyof typeof nodeColors) => {
     if (readOnly) return;
-    
+
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
       type,
@@ -300,13 +299,13 @@ export function FlowBuilder({
         fontWeight: '500',
       },
     };
-    
+
     setNodes((nds) => [...nds, newNode]);
   };
 
   const handleDeleteSelected = () => {
     if (readOnly || !selectedNode) return;
-    
+
     setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
     setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
     setSelectedNode(null);
@@ -337,6 +336,7 @@ export function FlowBuilder({
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView={nodes.length > 0}
+        onInit={onInit}
         attributionPosition="bottom-left"
         style={{ width: '100%', height: '100%' }}
       >
@@ -349,7 +349,7 @@ export function FlowBuilder({
           }}
           maskColor="rgba(0, 0, 0, 0.1)"
         />
-        
+
         {/* Painel de Ferramentas */}
         <Panel position="top-left" className="bg-white rounded-lg shadow-lg p-3 space-y-2">
           <div className="flex items-center gap-2 mb-3">
