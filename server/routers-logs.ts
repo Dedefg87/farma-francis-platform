@@ -66,7 +66,7 @@ export const logsRouter = router({
       try {
         const db = await getDb();
         
-        await db.insert(flowExecutionLogs).values({
+        const [result] = await db.insert(flowExecutionLogs).values({
           executionId: input.executionId,
           nodeId: input.nodeId,
           nodeName: input.nodeName,
@@ -78,9 +78,8 @@ export const logsRouter = router({
           duration: input.duration,
         });
       
-        // SQLite: get last insert ID
-        const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
-        const lastId = (lastIdResult as any)?.id;
+        // MySQL: get insert ID from result
+        const lastId = (result as any).insertId || (result as any).$mysqlInsertId();
         
         if (!lastId) {
           throw new Error('Failed to get log ID');

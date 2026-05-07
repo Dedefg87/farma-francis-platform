@@ -109,7 +109,7 @@ export const automationRouter = router({
           throw new Error("Database não disponível");
         }
 
-        await db.insert(visualFlows).values({
+        const [result] = await db.insert(visualFlows).values({
             name: input.name,
             description: input.description,
             templateType: input.templateType,
@@ -120,9 +120,8 @@ export const automationRouter = router({
             updatedAt: new Date(),
           });
           
-          // SQLite: get last insert ID
-          const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
-          const lastId = (lastIdResult as any)?.id;
+          // MySQL: get last insert ID
+          const lastId = (result as any).insertId || (result as any).$mysqlInsertId();
           
           if (!lastId) {
             throw new Error("Failed to get inserted ID");

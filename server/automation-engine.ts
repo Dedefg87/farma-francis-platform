@@ -269,7 +269,7 @@ export class AutomationEngine {
     if (this.context.conversationId) {
       const db = await getDb();
       if (db) {
-        await db
+        const [result] = await db
           .insert(conversationMessages)
           .values({
             conversationId: this.context.conversationId,
@@ -279,9 +279,8 @@ export class AutomationEngine {
             createdAt: new Date(),
           });
         
-        // SQLite: get last insert ID
-        const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
-        const insertId = (lastIdResult as any)?.id;
+        // MySQL: get insert ID from result
+        const insertId = (result as any).insertId || (result as any).$mysqlInsertId();
 
         // Emit SSE event for real-time frontend update
         sseManager.emitToUser(String(this.context.customerId), {

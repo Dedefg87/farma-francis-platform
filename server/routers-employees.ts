@@ -190,7 +190,7 @@ export const employeesRouter = router({
       const passwordHash = await bcrypt.hash(input.password, 10);
       const openId = `local:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      await db.insert(dbUsers).values({
+      const [result] = await db.insert(dbUsers).values({
         openId,
         name: input.username,
         displayName: input.displayName,
@@ -200,9 +200,8 @@ export const employeesRouter = router({
         role: input.role,
       });
       
-      // SQLite: get last insert ID
-      const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
-      const lastId = (lastIdResult as any)?.id;
+      // MySQL: get insert ID from result
+      const lastId = (result as any).insertId || (result as any).$mysqlInsertId();
       
       if (!lastId) throw new Error('Falha ao criar funcionário');
       
