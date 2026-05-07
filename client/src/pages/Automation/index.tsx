@@ -181,7 +181,7 @@ export default function Automation() {
         </div>
 
         {/* Main Content */}
-        <div className="p-6">
+        <div className="flex-1 flex flex-col p-6 overflow-auto">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full">
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="dashboard" className="text-xs">
