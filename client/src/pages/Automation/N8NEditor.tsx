@@ -410,6 +410,10 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
               </Button>
             </label>
             <input id="import-file" type="file" accept=".json" className="hidden" onChange={handleImport} />
+            <Button variant="outline" size="sm" onClick={() => setDarkMode(!darkMode)}>
+              {darkMode ? <Sun size={16} className="mr-1" /> : <Moon size={16} className="mr-1" />}
+              {darkMode ? 'Light' : 'Dark'}
+            </Button>
           </div>
           <div className="text-sm text-gray-600">
             {nodes.length} nós | {edges.length} conexões
