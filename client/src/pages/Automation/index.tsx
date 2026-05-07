@@ -11,10 +11,9 @@ import {
   Settings, HelpCircle, Sun, Moon, Bot, MessageCircle, ShoppingCart
 } from "lucide-react";
 import { Canvas } from "./Canvas";
-import { FlowBuilder } from "@/components/flow/FlowBuilder";
 import { DashboardCards } from "./DashboardCards";
 import { TemplatesSection } from "./TemplatesSection";
-import { PropertySidebar } from "./PropertySidebar";
+import N8NEditorWrapper from "./N8NEditor";
 import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
 import { Footer } from "./Footer";
@@ -279,65 +278,33 @@ export default function Automation() {
               </Card>
             </TabsContent>
 
-            {/* Editor Visual */}
-            <TabsContent value="editor" className="space-y-6">
-              <div className="flex gap-4" style={{ height: "calc(100vh - 300px)" }}>
-                <div className="flex-1">
-                  <FlowBuilder 
-                    key={editingFlow?.id || 'novo-' + Date.now()}
-                    initialNodes={editingFlow?.flowData?.nodes || []}
-                    initialEdges={editingFlow?.flowData?.edges || []}
-                    onSave={(nodes, edges) => {
-                      const flowData = { nodes, edges };
-                      if (editingFlow) {
-                        // Atualiza flow existente
-                        updateMutation.mutate({ 
-                          id: editingFlow.id, 
-                          flowData 
-                        });
-                      } else {
-                        // Cria novo flow com os nodes/edges
-                        createMutation.mutate({
-                          name: "Novo Fluxo",
-                          templateType: "custom",
-                          flowData,
-                          isActive: false,
-                        });
-                      }
-                    }}
-                    onExport={(nodes, edges) => {
-                      const flowData = { nodes, edges };
-                      const blob = new Blob([JSON.stringify(flowData, null, 2)], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `flow-${editingFlow?.id || 'novo'}-${Date.now()}.json`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    onImport={(file) => {
-                      const reader = new FileReader();
-                      reader.onload = (e) => {
-                        try {
-                          const flowData = JSON.parse(e.target?.result as string);
-                          if (flowData.nodes && flowData.edges) {
-                            // Atualiza o FlowBuilder via props (vai precisar de key pra resetar)
-                            setEditingFlow({
-                              id: editingFlow?.id || 0,
-                              name: editingFlow?.name || 'Importado',
-                              flowData
-                            });
-                          }
-                        } catch (err) {
-                          console.error('Erro ao importar:', err);
-                          alert('Arquivo inválido!');
-                        }
-                      };
-                      reader.readAsText(file);
-                    }}
-                  />
-                </div>
-                {/* PropertySidebar pode ser adaptada depois */}
+            {/* Editor Visual - N8N Style */}
+            <TabsContent value="editor" className="flex-1 h-full">
+              <div className="h-full">
+                <N8NEditorWrapper 
+                  key={editingFlow?.id || 'novo-' + Date.now()}
+                  initialNodes={editingFlow?.flowData?.nodes || []}
+                  initialEdges={editingFlow?.flowData?.edges || []}
+                  onSave={(nodes, edges) => {
+                    const flowData = { nodes, edges };
+                    if (editingFlow) {
+                      updateMutation.mutate({ 
+                        id: editingFlow.id, 
+                        flowData 
+                      });
+                    } else {
+                      createMutation.mutate({
+                        name: "Novo Fluxo",
+                        templateType: "custom",
+                        flowData,
+                        isActive: false,
+                      });
+                    }
+                  }}
+                  onSimulate={() => {
+                    alert('Simulação de fluxo em desenvolvimento');
+                  }}
+                />
               </div>
             </TabsContent>
 
