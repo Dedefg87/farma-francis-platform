@@ -2,8 +2,7 @@ import {
   MessageSquare, Webhook, Clock, GitBranch, Filter, GitMerge, Repeat, 
   Send, Mail, Smartphone, Bell, Bot, Brain, GitCompare, 
   Database, Globe, Code, ArrowRight, AlertTriangle, 
-  Pause, UserCheck, CreditCard, Package, Phone, Instagram,
-  FileText
+  Pause, UserCheck, CreditCard, Package, Phone, Instagram, FileText
 } from "lucide-react";
 
 // ==================== TYPES ====================
