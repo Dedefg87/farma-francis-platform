@@ -18,6 +18,7 @@ import { PropertySidebar } from "./PropertySidebar";
 import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
 import { Footer } from "./Footer";
+import { flowTemplates } from "./templates";
 
 type TabType = "dashboard" | "editor" | "templates" | "config" | "docs";
 
@@ -97,10 +98,12 @@ export default function Automation() {
   };
 
   const handleSelectTemplate = (templateId: string) => {
+    const template = flowTemplates.find(t => t.id === templateId);
+    if (!template) return;
     createMutation.mutate({
-      name: `Fluxo - ${templateId}`,
+      name: `Fluxo - ${template.name}`,
       templateType: templateId,
-      flowData: { nodes: [], edges: [] },
+      flowData: { nodes: template.nodes, edges: template.edges },
       isActive: false,
     });
     setActiveTab("editor");
@@ -108,7 +111,6 @@ export default function Automation() {
 
   return (
     <FarmaDashboardLayout>
-      <div className={`min-h-screen ${darkMode ? "dark bg-gray-900" : "bg-gray-50"}`}>
         {/* Header com botões de ação */}
         <div className={`border-b px-6 py-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -282,6 +284,7 @@ export default function Automation() {
               <div className="flex gap-4" style={{ height: "calc(100vh - 300px)" }}>
                 <div className="flex-1">
                   <FlowBuilder 
+                    key={editingFlow?.id || 'novo-' + Date.now()}
                     initialNodes={editingFlow?.flowData?.nodes || []}
                     initialEdges={editingFlow?.flowData?.edges || []}
                     onSave={(nodes, edges) => {
@@ -343,7 +346,6 @@ export default function Automation() {
               <TemplatesSection 
                 darkMode={darkMode}
                 onSelectTemplate={handleSelectTemplate}
-                onCreateFlow={handleCreateFlow}
               />
             </TabsContent>
 
