@@ -108,7 +108,6 @@ export default function Automation() {
 
   return (
     <FarmaDashboardLayout>
-      <div className={`min-h-screen ${darkMode ? "dark bg-gray-900" : "bg-gray-50"}`}>
         {/* Header com botões de ação */}
         <div className={`border-b px-6 py-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -178,8 +177,7 @@ export default function Automation() {
               </Button>
             </div>
           </div>
-        </div>
-
+        
         {/* Main Content */}
         <div className="flex-1 flex flex-col p-6 overflow-auto">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full flex-1 flex flex-col">
