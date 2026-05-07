@@ -297,7 +297,7 @@ export default function Automation() {
 
             {/* Editor Visual */}
             <TabsContent value="editor" className="space-y-6">
-              <div className="flex gap-4" style={{ height: "calc(100vh - 300px)" }}>
+              <div className="flex gap-4" style={{ height: '600px' }}>
                 <div className="flex-1">
                   <FlowBuilder 
                     key={editingFlow?.id || 'novo-' + Date.now()}
@@ -305,16 +305,16 @@ export default function Automation() {
                     initialEdges={editingFlow?.flowData?.edges || []}
                     onSave={(nodes, edges) => {
                       const flowData = { nodes, edges };
-                      if (editingFlow) {
-                        // Atualiza flow existente
+                      if (editingFlow && editingFlow.id > 0) {
+                        // Atualiza flow existente (ID do banco)
                         updateMutation.mutate({ 
                           id: editingFlow.id, 
                           flowData 
                         });
                       } else {
-                        // Cria novo flow com os nodes/edges
+                        // Cria novo flow (ID temporário do estado)
                         createMutation.mutate({
-                          name: "Novo Fluxo",
+                          name: editingFlow?.name || "Novo Fluxo",
                           templateType: "custom",
                           flowData,
                           isActive: false,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  Save
+  Save,
+  MessageSquare,
+  Bot,
+  Send
 } from 'lucide-react';
 import { Node, Edge } from 'reactflow';
 import { CONTEXT_VARIABLES } from '@/lib/variables';
@@ -47,15 +50,28 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
     'cliente.email': 'joao@email.com',
     'cliente.telefone': '+55 11 98765-4321',
     'ticket.id': '12345',
-    'mensagem.texto': 'Olá, preciso de ajuda',
+    'mensagem.texto': 'Olá, preciso de ajuda com minha receita',
+    'canal': 'WhatsApp',
   });
   const [highlightedNode, setHighlightedNode] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<Array<{from: 'client' | 'bot', text: string}>>([]);
+
+  // Reset chat when simulation starts
+  useEffect(() => {
+    if (simulationSteps.length > 0) {
+      const initialMessage = chatMessages.find(m => m.from === 'client');
+      if (!initialMessage) {
+        setChatMessages([{ from: 'client', text: testContext['mensagem.texto'] || 'Iniciando simulação...' }]);
+      }
+    }
+  }, [simulationSteps]);
 
   const startSimulation = () => {
     setIsRunning(true);
     setIsPaused(false);
     setCurrentStep(0);
     setSimulationSteps([]);
+    setChatMessages([{ from: 'client', text: testContext['mensagem.texto'] || 'Iniciando simulação...' }]);
     
     // Iniciar simulação passo a passo
     simulateFlow();
@@ -78,21 +94,33 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
     setCurrentStep(0);
     setSimulationSteps([]);
     setHighlightedNode(null);
+    setChatMessages([]);
   };
 
   const simulateFlow = async () => {
-    // Encontrar nó inicial
-    const startNode = nodes.find(n => n.type === 'start' || !edges.some(e => e.target === n.id));
-    if (!startNode) return;
+    // Encontrar nó inicial (trigger ou default)
+    const startNode = nodes.find(n => 
+      n.type === 'trigger' || 
+      n.type === 'default' || 
+      (n.data.label && n.data.label.toLowerCase().includes('gatilho')) ||
+      !edges.some(e => e.target === n.id)
+    );
+    
+    if (!startNode) {
+      alert('Nenhum nó inicial encontrado (Trigger)');
+      setIsRunning(false);
+      return;
+    }
 
     const steps: SimulationStep[] = [];
-    let currentNodeId = startNode.id;
     let context = { ...testContext };
-
-    // Simular execução sequencial
-    while (currentNodeId) {
-      const node = nodes.find(n => n.id === currentNodeId);
-      if (!node) break;
+    
+    // Função recursiva para suportar branches
+    const processNode = async (nodeId: string, depth: number = 0): Promise<void> => {
+      if (depth > 50 || isPaused) return; // Segurança
+      
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
 
       const step: SimulationStep = {
         nodeId: node.id,
@@ -101,69 +129,134 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
         status: 'running',
         input: { ...context },
         output: {},
-        duration: Math.random() * 1000 + 500, // Simular duração aleatória
+        duration: Math.random() * 500 + 200,
         timestamp: new Date(),
       };
 
-      // Simular processamento do nó
-      await new Promise(resolve => setTimeout(resolve, 100));
+      setCurrentStep(steps.length);
+      setHighlightedNode(node.id);
+      
+      // Simular processamento
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      // Simular output baseado no tipo de nó
-      switch (node.type) {
-        case 'aiAgent':
-          step.output = {
-            ...context,
-            'agente.resposta': 'Resposta simulada do agente IA',
-          };
-          step.status = 'completed';
-          break;
-
-        case 'condition':
-          // Simular avaliação de condição
-          const conditionResult = Math.random() > 0.5;
-          step.output = {
-            ...context,
-            'condicao.resultado': conditionResult,
-          };
-          step.status = 'completed';
-          break;
-
-        case 'sendMessage':
-          step.output = {
-            ...context,
-            'mensagem.enviada': true,
-          };
-          step.status = 'completed';
-          break;
-
-        case 'http':
-          // Simular requisição HTTP
-          if (Math.random() > 0.2) {
-            step.output = {
-              ...context,
-              'http.status': 200,
-              'http.resposta': { success: true },
+      // Lógica profissional baseada no tipo e config
+      const config = node.data.config || {};
+      
+      try {
+        switch (node.type || 'default') {
+          case 'trigger':
+            step.output = { 
+              ...context, 
+              'evento': config.event || 'message_received',
+              'timestamp': new Date().toISOString() 
             };
             step.status = 'completed';
-          } else {
-            step.error = 'Timeout na requisição HTTP';
-            step.status = 'failed';
-          }
-          break;
-
-        default:
-          step.output = { ...context };
-          step.status = 'completed';
+            break;
+            
+          case 'condition':
+            // Simular avaliação de condição baseada em config
+            let result = false;
+            const condition = config.condition || '';
+            
+            if (condition.includes('working_hours')) {
+              const hour = new Date().getHours();
+              const start = parseInt(config.schedule?.start?.split(':')[0] || '8');
+              const end = parseInt(config.schedule?.end?.split(':')[0] || '18');
+              result = hour >= start && hour < end;
+              step.output = { ...context, 'horário_comercial': result };
+            } else if (condition.includes('is_new_contact')) {
+              result = true; // Simulado
+              step.output = { ...context, 'novo_contato': result };
+            } else {
+              result = Math.random() > 0.5;
+              step.output = { ...context, 'condição_resultado': result };
+            }
+            
+            step.status = 'completed';
+            
+            // Seguir branch correta
+            const trueEdge = edges.find(e => e.source === nodeId && e.label === 'Sim');
+            const falseEdge = edges.find(e => e.source === nodeId && e.label === 'Não');
+            
+            steps.push(step);
+            setSimulationSteps([...steps]);
+            
+            if (result && trueEdge) {
+              await processNode(trueEdge.target, depth + 1);
+              return;
+            } else if (!result && falseEdge) {
+              await processNode(falseEdge.target, depth + 1);
+              return;
+            }
+            break;
+            
+          case 'message':
+          case 'default':
+            // Simular envio de mensagem baseada em config.message
+            let message = config.message || 'Mensagem padrão';
+            
+            // Substituir variáveis (ex: {{nome}})
+            message = message.replace(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
+              return context[key] || match;
+            });
+            
+            step.output = { 
+              ...context, 
+              'mensagem_enviada': true,
+              'conteudo': message 
+            };
+            step.status = 'completed';
+            
+            // Adicionar ao chat preview
+            setChatMessages(prev => [...prev, { from: 'bot', text: message }]);
+            break;
+            
+          case 'ai':
+            // Simular resposta da IA
+            const aiResponse = `Resposta da IA para: ${context['mensagem.texto'] || 'consulta'}`;
+            step.output = { 
+              ...context, 
+              'ai_resposta': aiResponse,
+              'confianca': (Math.random() * 0.5 + 0.5).toFixed(2)
+            };
+            step.status = 'completed';
+            
+            setChatMessages(prev => [...prev, { from: 'bot', text: aiResponse }]);
+            break;
+            
+          case 'action':
+            // Simular ação (criar contato, atribuir, etc.)
+            const action = config.action || '';
+            step.output = { 
+              ...context, 
+              [action]: 'executado_com_sucesso',
+              'detalhes': `Ação ${action} realizada no sistema`
+            };
+            step.status = 'completed';
+            break;
+            
+          default:
+            step.output = { ...context, 'processado': true };
+            step.status = 'completed';
+        }
+      } catch (error) {
+        step.status = 'failed';
+        step.error = (error as Error).message;
       }
 
-      context = { ...context, ...step.output };
       steps.push(step);
+      setSimulationSteps([...steps]);
+      context = { ...context, ...step.output };
+      
+      // Próximo nó (primeira conexão)
+      const nextEdge = edges.find(e => e.source === nodeId);
+      if (nextEdge && !step.error) {
+        await processNode(nextEdge.target, depth + 1);
+      }
+    };
 
-      // Encontrar próximo nó
-      const nextEdge = edges.find(e => e.source === currentNodeId);
-      currentNodeId = nextEdge?.target || '';
-    }
-
+    await processNode(startNode.id);
+    
     setSimulationSteps(steps);
     setIsRunning(false);
   };
@@ -171,15 +264,16 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
   const saveTestCase = () => {
     // Implementar salvamento de caso de teste
     console.log('Save test case:', { context: testContext, steps: simulationSteps });
+    alert('Caso de teste salvo no console!');
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-4 border-b bg-white">
         <div className="flex items-center gap-2">
           <Play className="h-5 w-5 text-primary" />
-          <h3 className="font-semibold text-foreground">Simulador de Fluxo</h3>
+          <h3 className="font-semibold text-foreground">Simulador de Fluxo Profissional</h3>
           {isRunning && (
             <Badge variant="secondary" className="animate-pulse">
               Executando...
@@ -189,7 +283,7 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
 
         <div className="flex items-center gap-2">
           {!isRunning && simulationSteps.length === 0 && (
-            <Button onClick={startSimulation} size="sm">
+            <Button onClick={startSimulation} size="sm" className="bg-green-600 hover:bg-green-700">
               <Play className="h-4 w-4 mr-1" />
               Iniciar Simulação
             </Button>
@@ -204,7 +298,7 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
 
           {simulationSteps.length > 0 && (
             <>
-              <Button onClick={stepForward} size="sm" variant="outline">
+              <Button onClick={stepForward} size="sm" variant="outline" disabled={isRunning}>
                 <SkipForward className="h-4 w-4 mr-1" />
                 Próximo Passo
               </Button>
@@ -216,7 +310,7 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
 
               <Button onClick={saveTestCase} size="sm" variant="outline">
                 <Save className="h-4 w-4 mr-1" />
-                Salvar Caso de Teste
+                Salvar Teste
               </Button>
             </>
           )}
@@ -227,10 +321,13 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-hidden">
+      <div className="flex-1 grid grid-cols-3 gap-4 p-4 overflow-hidden">
         {/* Painel de Contexto */}
         <Card className="p-4 flex flex-col">
-          <h4 className="font-semibold text-foreground mb-3">Contexto de Teste</h4>
+          <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Bot className="h-4 w-4" />
+            Contexto de Teste
+          </h4>
           
           <ScrollArea className="flex-1">
             <div className="space-y-3">
@@ -247,6 +344,7 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
                       });
                     }}
                     disabled={isRunning}
+                    className="text-xs"
                   />
                 </div>
               ))}
@@ -254,9 +352,49 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
           </ScrollArea>
         </Card>
 
+        {/* Chat Preview */}
+        <Card className="p-4 flex flex-col bg-gray-900 text-white">
+          <h4 className="font-semibold mb-3 flex items-center gap-2 text-white">
+            <MessageSquare className="h-4 w-4" />
+            Pré-visualização Chat
+          </h4>
+          
+          <ScrollArea className="flex-1">
+            <div className="space-y-3">
+              {chatMessages.map((msg, idx) => (
+                <div 
+                  key={idx} 
+                  className={`flex ${msg.from === 'client' ? 'justify-start' : 'justify-end'}`}
+                >
+                  <div 
+                    className={`max-w-[80%] p-3 rounded-lg text-sm ${
+                      msg.from === 'client' 
+                        ? 'bg-gray-700 text-white' 
+                        : 'bg-green-600 text-white'
+                    }`}
+                  >
+                    {msg.from === 'bot' && <Send className="h-3 w-3 inline mr-1" />}
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {isRunning && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-700 text-white p-3 rounded-lg text-sm animate-pulse">
+                    Digitando...
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </Card>
+
         {/* Timeline de Execução */}
         <Card className="p-4 flex flex-col">
-          <h4 className="font-semibold text-foreground mb-3">Timeline de Execução</h4>
+          <h4 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Timeline de Execução
+          </h4>
           
           <ScrollArea className="flex-1">
             {simulationSteps.length === 0 ? (
@@ -277,7 +415,7 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
                         : index < currentStep 
                         ? 'opacity-60' 
                         : 'opacity-40'
-                    }`}
+                    } ${highlightedNode === step.nodeId ? 'border-primary' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -324,13 +462,13 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
                             <div className="mt-2 space-y-2">
                               <div>
                                 <span className="font-semibold">Input:</span>
-                                <pre className="bg-muted p-2 rounded mt-1 overflow-auto">
+                                <pre className="bg-muted p-2 rounded mt-1 overflow-auto text-xs">
                                   {JSON.stringify(step.input, null, 2)}
                                 </pre>
                               </div>
                               <div>
                                 <span className="font-semibold">Output:</span>
-                                <pre className="bg-muted p-2 rounded mt-1 overflow-auto">
+                                <pre className="bg-muted p-2 rounded mt-1 overflow-auto text-xs">
                                   {JSON.stringify(step.output, null, 2)}
                                 </pre>
                               </div>
@@ -349,7 +487,7 @@ export function FlowSimulator({ nodes, edges, onClose }: FlowSimulatorProps) {
 
       {/* Footer com estatísticas */}
       {simulationSteps.length > 0 && (
-        <div className="border-t p-4">
+        <div className="border-t p-4 bg-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-6 text-sm">
               <span>
