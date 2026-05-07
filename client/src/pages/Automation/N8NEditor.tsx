@@ -230,6 +230,24 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     reader.readAsText(file);
   };
 
+  const handleDeleteNode = useCallback(() => {
+    if (!selectedNode) return;
+    setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
+    setEdges((eds) => eds.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id));
+    setSelectedNode(null);
+  }, [selectedNode, setNodes, setEdges]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
+        e.preventDefault();
+        handleDeleteNode();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, handleDeleteNode]);
+
   return (
     <div className="flex h-full w-full">
       {/* Left Sidebar */}
@@ -349,10 +367,14 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
           >
             <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#e5e7eb" />
             <Controls />
-            <MiniMap nodeColor={(node) => {
-              const nodeDef = getNodeType(node.data?.nodeType);
-              return nodeDef?.color || '#6b7280';
-            }} />
+            <MiniMap 
+              nodeColor={(node) => {
+                const nodeDef = getNodeType(node.data?.nodeType);
+                return nodeDef?.color || '#6b7280';
+              }}
+              style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+              nodeStrokeWidth={2}
+            />
           </ReactFlow>
         </div>
       </div>
@@ -362,9 +384,14 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
         <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
           <div className="p-3 border-b border-gray-200 flex items-center justify-between">
             <h3 className="font-semibold text-gray-800 text-sm">Configurar Nó</h3>
-            <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
-              <X size={16} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button onClick={handleDeleteNode} className="p-1 hover:bg-red-100 rounded text-red-600" title="Excluir nó">
+                <Trash2 size={16} />
+              </button>
+              <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
+                <X size={16} />
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             <NodeConfigPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
