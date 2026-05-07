@@ -179,20 +179,35 @@ export function FlowBuilder({
   onImport,
   readOnly = false,
 }: FlowBuilderProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const reactFlowInstanceRef = useRef<any>(null);
 
+  // Sincronizar props com estado interno (corrige o problema de editor vazio)
+  useEffect(() => {
+    if (initialNodes.length > 0 || initialEdges.length > 0) {
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+      
+      // Ajustar view após carregar nós
+      setTimeout(() => {
+        if (reactFlowInstanceRef.current) {
+          reactFlowInstanceRef.current.fitView({ padding: 0.2 });
+        }
+      }, 100);
+    }
+  }, [initialNodes, initialEdges]);
+
   // Capturar instância do ReactFlow via onInit
-  const onInit = useCallback((instance: any) => {
+  const handleInit = (instance: any) => {
     reactFlowInstanceRef.current = instance;
     if (initialNodes.length > 0) {
       setTimeout(() => instance.fitView({ padding: 0.2 }), 100);
     }
-  }, [initialNodes.length]);
+  };
 
   // Ajustar view quando container redimensiona
   useEffect(() => {
@@ -335,8 +350,8 @@ export function FlowBuilder({
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
-        fitView={nodes.length > 0}
-        onInit={onInit}
+        fitView={false}
+        onInit={handleInit}
         attributionPosition="bottom-left"
         style={{ width: '100%', height: '100%' }}
       >
