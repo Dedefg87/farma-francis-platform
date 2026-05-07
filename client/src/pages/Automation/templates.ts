@@ -6,9 +6,439 @@ import {
   UserCheck,
   Calendar,
   Star,
+  AlertTriangle,
+  Shield,
+  Package,
+  FileText,
+  BarChart,
+  Bot,
+  Clock,
+  Bell,
+  Activity,
 } from "lucide-react";
 
 export const flowTemplates: FlowTemplate[] = [
+  // ===== TEMPLATE 1: Recepcionista Digital Inteligente =====
+  {
+    id: "receptionist-ia",
+    name: "🤖 Boas-Vindas Omnichannel com IA",
+    description: "Recepcionista digital que envia boas-vindas personalizadas, cria contatos e atribui agentes",
+    icon: Bot,
+    color: "bg-blue-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "📩 Nova Mensagem (WA/IG)", config: { event: "message_received", channels: ["whatsapp", "instagram"] } },
+      },
+      {
+        id: "condition-new-contact",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "É Novo Contato?", config: { condition: "is_new_contact" } },
+      },
+      {
+        id: "condition-working-hours",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Horário Comercial?", config: { condition: "working_hours", schedule: { start: "08:00", end: "18:00" } } },
+      },
+      {
+        id: "message-welcome",
+        type: "default",
+        position: { x: 700, y: 50 },
+        data: {
+          label: "Enviar Boas-Vindas",
+          config: {
+            message: "Olá {{nome}}, aqui é da Farma Francis 💊\nEm que posso ajudar?\n1️⃣ Comprar medicamento\n2️⃣ Falar com farmacêutico\n3️⃣ Consultar pedido",
+            buttons: ["1", "2", "3"],
+          },
+        },
+      },
+      {
+        id: "action-create-contact",
+        type: "default",
+        position: { x: 700, y: 150 },
+        data: { label: "Criar Contato", config: { action: "create_contact", tags: ["Novo Cliente"], origin: "{{channel}}" } },
+      },
+      {
+        id: "action-assign-agent",
+        type: "default",
+        position: { x: 900, y: 100 },
+        data: { label: "Atribuir Agente", config: { action: "assign_agent", queue: "general", fallback: "plantao" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "condition-new-contact" },
+      { id: "e2-3", source: "condition-new-contact", target: "condition-working-hours", label: "Sim" },
+      { id: "e3-4", source: "condition-working-hours", target: "message-welcome", label: "Sim" },
+      { id: "e3-5", source: "condition-working-hours", target: "action-assign-agent", label: "Não (Plantão)" },
+      { id: "e4-5", source: "message-welcome", target: "action-create-contact" },
+      { id: "e5-6", source: "action-create-contact", target: "action-assign-agent" },
+    ],
+  },
+
+  // ===== TEMPLATE 2: Triage de Receita Médica =====
+  {
+    id: "receipt-triage",
+    name: "💊 Detector de Receita com IA",
+    description: "Classifica receitas médicas, valida documentos e encaminha para farmacêuticos",
+    icon: FileText,
+    color: "bg-green-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "📎 Documento Anexado", config: { event: "document_received", types: ["pdf", "image"] } },
+      },
+      {
+        id: "ai-classify",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "IA Classifica Documento", config: { action: "ai_classify", types: ["receita", "exame", "rg", "comprovante"] } },
+      },
+      {
+        id: "condition-controlled",
+        type: "default",
+        position: { x: 500, y: 50 },
+        data: { label: "Receita Controlada?", config: { condition: "receipt_type == 'controlled'" } },
+      },
+      {
+        id: "action-create-task",
+        type: "default",
+        position: { x: 700, y: 50 },
+        data: { label: "Criar Tarefa Urgente", config: { action: "create_task", priority: "high", assignee: "pharmacist_1", title: "📋 Validar receita de {{nome}}" } },
+      },
+      {
+        id: "action-notify",
+        type: "default",
+        position: { x: 700, y: 150 },
+        data: { label: "Notificar Admin", config: { action: "notify_admin", sound: true } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "ai-classify" },
+      { id: "e2-3", source: "ai-classify", target: "condition-controlled" },
+      { id: "e3-4", source: "condition-controlled", target: "action-create-task", label: "Sim" },
+      { id: "e3-5", source: "condition-controlled", target: "action-notify", label: "Sim" },
+    ],
+  },
+
+  // ===== TEMPLATE 3: Urgência Médica Detector =====
+  {
+    id: "urgency-detector",
+    name: "🚨 Alerta de Urgência Médica",
+    description: "Detecta palavras de urgência, prioriza atendimento e notifica agentes",
+    icon: AlertTriangle,
+    color: "bg-red-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "📩 Mensagem Recebida", config: { event: "message_received" } },
+      },
+      {
+        id: "ai-urgency",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "IA Detecta Urgência", config: { action: "detect_urgency", keywords: ["urgência", "emergência", "dor forte", "sangrando"] } },
+      },
+      {
+        id: "action-prioritize",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Priorizar URGENTE", config: { action: "add_tag", tag: "🚨 URGENTE", color: "#e74c3c" } },
+      },
+      {
+        id: "action-notify-agents",
+        type: "default",
+        position: { x: 700, y: 100 },
+        data: { label: "Notificar Agentes", config: { action: "notify_all_agents", alert: "🔴 URGÊNCIA — {{nome}}", repeat: 30 },
+        },
+      },
+      {
+        id: "message-urgency",
+        type: "default",
+        position: { x: 900, y: 100 },
+        data: { label: "Responder Urgência", config: { message: "🔴 Estamos vendo sua mensagem com URGÊNCIA.\nUm farmacêutico vai te responder INSTANTANEAMENTE.\nSe for emergência médica, ligue 192." } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "ai-urgency" },
+      { id: "e2-3", source: "ai-urgency", target: "action-prioritize", label: "Sim" },
+      { id: "e3-4", source: "action-prioritize", target: "action-notify-agents" },
+      { id: "e4-5", source: "action-notify-agents", target: "message-urgency" },
+    ],
+  },
+
+  // ===== TEMPLATE 4: Lembrete Inteligente de Retorno =====
+  {
+    id: "recall-automation",
+    name: "🔔 Recall Automático de Clientes",
+    description: "Envia lembretes personalizados para clientes inativos com base no histórico",
+    icon: Clock,
+    color: "bg-yellow-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "⏰ Agendado (Diário)", config: { schedule: "0 9 * * *", timezone: "America/Sao_Paulo" } },
+      },
+      {
+        id: "filter-contacts",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "Filtrar Clientes", config: { filter: "status: finalizado, last_interaction >= 7d, has_purchased: true" } },
+      },
+      {
+        id: "ai-personalize",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "IA Personaliza Mensagem", config: { action: "personalize_message", history: true } },
+      },
+      {
+        id: "message-recall",
+        type: "default",
+        position: { x: 700, y: 100 },
+        data: { label: "Enviar Lembrete", config: { message: "Olá {{nome}}! Passando pra saber como você está.\n{{personalized_message}}", rate_limit: "30s" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "filter-contacts" },
+      { id: "e2-3", source: "filter-contacts", target: "ai-personalize" },
+      { id: "e3-4", source: "ai-personalize", target: "message-recall" },
+    ],
+  },
+
+  // ===== TEMPLATE 5: Roteamento Inteligente =====
+  {
+    id: "smart-routing",
+    name: "👤 Roteamento por Especialidade",
+    description: "Roteia atendimentos para o departamento correto baseado em palavras-chave",
+    icon: Activity,
+    color: "bg-purple-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "📩 Nova Mensagem", config: { event: "message_received" } },
+      },
+      {
+        id: "ai-intent",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "IA Analisa Intent", config: { action: "detect_intent", keywords: { pharmacist: ["receita", "farmácia"], support: ["troca", "cancelar"], sales: ["preço", "orçamento"], admin: ["gerente", "reclamar"] } } },
+      },
+      {
+        id: "action-route",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Roteear para Agente", config: { action: "assign_agent", fallback: "anderson" } },
+      },
+      {
+        id: "message-routing",
+        type: "default",
+        position: { x: 700, y: 100 },
+        data: { label: "Informar Cliente", config: { message: "Vou transferir você para o {{agente}} 🧑‍⚕️\nTempo estimado: {{tempo_fila}}" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "ai-intent" },
+      { id: "e2-3", source: "ai-intent", target: "action-route" },
+      { id: "e3-4", source: "action-route", target: "message-routing" },
+    ],
+  },
+
+  // ===== TEMPLATE 6: Follow-up Pós-Venda =====
+  {
+    id: "post-sale-followup",
+    name: "📋 Follow-up Pós-Venda",
+    description: "Envia pesquisa NPS automática e recomenda produtos após atendimento",
+    icon: Star,
+    color: "bg-orange-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "🔄 Atendimento Finalizado", config: { event: "ticket_closed", duration: ">2min" } },
+      },
+      {
+        id: "delay-1",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "Aguardar 30min", config: { delay: 1800 } },
+      },
+      {
+        id: "message-nps",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Enviar NPS", config: { message: "👋 {{nome}}, como foi seu atendimento?\nDe 0 a 10, quanto você recomendaria a gente?", buttons: ["😁", "😐", "🙁"] } },
+      },
+      {
+        id: "ai-analyze",
+        type: "default",
+        position: { x: 700, y: 100 },
+        data: { label: "Analisar Resposta", config: { action: "analyze_nps", tags: { promoter: "Cliente Promotor", neutral: "Cliente Neutro", detractor: "Cliente Detrator" } } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "delay-1" },
+      { id: "e2-3", source: "delay-1", target: "message-nps" },
+      { id: "e3-4", source: "message-nps", target: "ai-analyze" },
+    ],
+  },
+
+  // ===== TEMPLATE 7: Anti-Fraude =====
+  {
+    id: "anti-fraud",
+    name: "🛡️ Validador de Documentos",
+    description: "Valida documentos com IA e detecta possíveis fraudes",
+    icon: Shield,
+    color: "bg-teal-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "📎 Documento Anexado", config: { event: "document_received", types: ["image/jpeg", "image/png"] } },
+      },
+      {
+        id: "ai-vision",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "IA Analisa Documento", config: { action: "vision_analyze", extract: ["nome", "CPF", "data_nascimento"] } },
+      },
+      {
+        id: "condition-fraud",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Score de Risco", config: { condition: "fraud_score > 60" } },
+      },
+      {
+        id: "action-block",
+        type: "default",
+        position: { x: 700, y: 50 },
+        data: { label: "Bloquear Cadastro", config: { action: "block_account", notify: "anderson" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "ai-vision" },
+      { id: "e2-3", source: "ai-vision", target: "condition-fraud" },
+      { id: "e3-4", source: "condition-fraud", target: "action-block", label: "Alto Risco" },
+    ],
+  },
+
+  // ===== TEMPLATE 8: Notificação de Estoque =====
+  {
+    id: "stock-notification",
+    name: "📦 Alerta de Estoque",
+    description: "Notifica clientes na fila de espera quando medicamento chega",
+    icon: Package,
+    color: "bg-cyan-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "📡 Webhook Estoque", config: { event: "stock_updated", medicine: "{{medicine}}" } },
+      },
+      {
+        id: "filter-waitlist",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "Buscar Fila de Espera", config: { filter: "waiting_for: {{medicine}}", limit: 10 } },
+      },
+      {
+        id: "message-stock",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Notificar Cliente", config: { message: "🎉 {{nome}}, a {{medicine}} chegou!\n📦 {{quantity}} unidades disponíveis.\nQuer reservar o seu? Responda SIM! 👇" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "filter-waitlist" },
+      { id: "e2-3", source: "filter-waitlist", target: "message-stock" },
+    ],
+  },
+
+  // ===== TEMPLATE 9: Auditoria e Compliance =====
+  {
+    id: "audit-compliance",
+    name: "📝 Log de Auditoria",
+    description: "Registra todas as ações do sistema para conformidade e detecção de anomalias",
+    icon: FileText,
+    color: "bg-gray-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "🎯 Ação no Sistema", config: { event: "any_action", log: true } },
+      },
+      {
+        id: "action-capture",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "Capturar Metadados", config: { action: "capture_metadata", fields: ["timestamp", "agent", "action", "ip"] } },
+      },
+      {
+        id: "action-store",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Armazenar Log", config: { action: "store_log", table: "log_auditoria", retention: "90d" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "action-capture" },
+      { id: "e2-3", source: "action-capture", target: "action-store" },
+    ],
+  },
+
+  // ===== TEMPLATE 10: Dashboard de Desempenho =====
+  {
+    id: "performance-dashboard",
+    name: "📊 Dashboard de Desempenho",
+    description: "Coleta métricas de automação e gera relatórios em tempo real",
+    icon: BarChart,
+    color: "bg-indigo-700",
+    nodes: [
+      {
+        id: "trigger-1",
+        type: "default",
+        position: { x: 100, y: 100 },
+        data: { label: "⏰ Agendado (Hora)", config: { schedule: "0 * * * *", timezone: "America/Sao_Paulo" } },
+      },
+      {
+        id: "action-collect",
+        type: "default",
+        position: { x: 300, y: 100 },
+        data: { label: "Coletar Métricas", config: { action: "collect_metrics", types: ["automations", "messages", "documents"] } },
+      },
+      {
+        id: "action-calculate",
+        type: "default",
+        position: { x: 500, y: 100 },
+        data: { label: "Calcular KPIs", config: { action: "calculate_kpis", metrics: ["taxa_automacao", "roi", "precisao_ia"] } },
+      },
+      {
+        id: "action-notify-admin",
+        type: "default",
+        position: { x: 700, y: 100 },
+        data: { label: "Notificar Admin", config: { action: "send_report", channel: "telegram", target: "anderson" } },
+      },
+    ],
+    edges: [
+      { id: "e1-2", source: "trigger-1", target: "action-collect" },
+      { id: "e2-3", source: "action-collect", target: "action-calculate" },
+      { id: "e3-4", source: "action-calculate", target: "action-notify-admin" },
+    ],
+  },
   {
     id: "welcome",
     name: "Boas-vindas Automáticas",
