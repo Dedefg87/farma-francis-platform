@@ -198,10 +198,26 @@ export const employeesRouter = router({
         passwordHash,
         loginMethod: 'local',
         role: input.role,
-      }).returning();
-
+      await db.insert(users).values({
+        name: input.username,
+        displayName: input.displayName,
+        email: null,
+        passwordHash,
+        loginMethod: 'local',
+        role: input.role,
+      });
+      
+      // SQLite: get last insert ID
+      const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
+      const lastId = (lastIdResult as any)?.id;
+      
+      if (!lastId) throw new Error('Falha ao criar funcionário');
+      
+      // Fetch the new user
+      const [newUser] = await db.select().from(users).where(eq(users.id, lastId)).limit(1);
+      
       if (!newUser) throw new Error('Falha ao criar funcionário');
-
+      
       return { success: true, userId: newUser.id, message: 'Funcionário criado com sucesso' };
     }),
 

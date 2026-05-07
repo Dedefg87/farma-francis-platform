@@ -79,9 +79,24 @@ export const logsRouter = router({
             error: input.error,
             duration: input.duration,
           })
-          .returning();
-
-        return log[0];
+          });
+        
+        // SQLite: get last insert ID
+        const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
+        const lastId = (lastIdResult as any)?.id;
+        
+        if (!lastId) {
+          throw new Error('Failed to get log ID');
+        }
+        
+        // Fetch the created log
+        const [log] = await db
+          .select()
+          .from(flowExecutionLogs)
+          .where(eq(flowExecutionLogs.id, lastId))
+          .limit(1);
+        
+        return log;
       } catch (error) {
         console.error("Error creating log:", error);
         throw error;

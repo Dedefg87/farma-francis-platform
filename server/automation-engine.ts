@@ -269,7 +269,7 @@ export class AutomationEngine {
     if (this.context.conversationId) {
       const db = await getDb();
       if (db) {
-        const [msg] = await db
+        await db
           .insert(conversationMessages)
           .values({
             conversationId: this.context.conversationId,
@@ -277,8 +277,11 @@ export class AutomationEngine {
             senderType: "agent", // Changed from 'customer' to 'agent' since this is automation
             content: message,
             createdAt: new Date(),
-          })
-          .returning();
+          });
+        
+        // SQLite: get last insert ID
+        const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
+        const insertId = (lastIdResult as any)?.id;
 
         // Emit SSE event for real-time frontend update
         sseManager.emitToUser(String(this.context.customerId), {
@@ -286,7 +289,7 @@ export class AutomationEngine {
           data: {
             conversationId: this.context.conversationId,
             message: {
-              id: msg.insertId,
+              id: insertId,
               content: message,
               senderType: "agent",
               createdAt: new Date().toISOString(),
