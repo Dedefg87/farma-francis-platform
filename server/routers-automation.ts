@@ -163,8 +163,11 @@ export const automationRouter = router({
           throw new Error("Database não disponível");
         }
 
-        // Build query
+        // Build query for items
         let query = db.select().from(visualFlows);
+
+        // Build count query (separate to avoid clone issues)
+        let countQuery = db.select({ count: sql`count(*)` }).from(visualFlows);
 
         // Apply filters
         const conditions: unknown[] = [];
@@ -190,10 +193,11 @@ export const automationRouter = router({
 
         if (conditions.length > 0) {
           query = query.where(and(...conditions));
+          countQuery = countQuery.where(and(...conditions));
         }
 
         // Get total count
-        const countResult = await query.clone().limit(1).count();
+        const countResult = await countQuery;
         const total = Number(countResult[0].count);
 
         // Apply pagination
