@@ -108,6 +108,7 @@ export default function Automation() {
 
   return (
     <FarmaDashboardLayout>
+      <div className={`min-h-screen ${darkMode ? "dark bg-gray-900" : "bg-gray-50"}`}>
         {/* Header com botões de ação */}
         <div className={`border-b px-6 py-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -177,10 +178,11 @@ export default function Automation() {
               </Button>
             </div>
           </div>
-        
+        </div>
+
         {/* Main Content */}
-        <div className="flex-1 flex flex-col p-6 overflow-auto">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full flex-1 flex flex-col">
+        <div className="p-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full">
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="dashboard" className="text-xs">
                 <Activity className="w-3 h-3 mr-1" />
@@ -276,8 +278,8 @@ export default function Automation() {
             </TabsContent>
 
             {/* Editor Visual */}
-            <TabsContent value="editor" className="flex-1 min-h-0">
-              <div className="flex gap-4 h-full">
+            <TabsContent value="editor" className="space-y-6">
+              <div className="flex gap-4" style={{ height: "calc(100vh - 300px)" }}>
                 <div className="flex-1">
                   <FlowBuilder 
                     initialNodes={editingFlow?.flowData?.nodes || []}

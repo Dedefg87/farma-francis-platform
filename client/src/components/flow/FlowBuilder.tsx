@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -15,10 +15,10 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Play,
-  Save,
-  Download,
+import { 
+  Play, 
+  Save, 
+  Download, 
   Upload,
   Plus,
   Trash2,
@@ -37,8 +37,7 @@ interface FlowBuilderProps {
   readOnly?: boolean;
 }
 
-const nodeColors: Record<string, { color: string; label: string }> = {
-  // Básicos
+const nodeColors = {
   trigger: { color: '#10b981', label: 'Gatilho' },
   condition: { color: '#f59e0b', label: 'Condição' },
   message: { color: '#3b82f6', label: 'Mensagem' },
@@ -48,64 +47,9 @@ const nodeColors: Record<string, { color: string; label: string }> = {
   api: { color: '#06b6d4', label: 'API' },
   delay: { color: '#64748b', label: 'Delay' },
   transfer: { color: '#f97316', label: 'Transferir' },
-  // n8n Triggers
-  http_trigger: { color: '#0ea5e9', label: 'HTTP Trigger' },
-  webhook_trigger: { color: '#8b5cf6', label: 'Webhook' },
-  cron_trigger: { color: '#f59e0b', label: 'Cron' },
-  interval_trigger: { color: '#f97316', label: 'Interval' },
-  // n8n Processing
-  function: { color: '#10b981', label: 'Function' },
-  function_item: { color: '#34d399', label: 'Function Item' },
-  if: { color: '#ef4444', label: 'IF' },
-  switch: { color: '#f59e0b', label: 'Switch' },
-  set: { color: '#3b82f6', label: 'Set' },
-  merge: { color: '#8b5cf6', label: 'Merge' },
-  split_in_batches: { color: '#06b6d4', label: 'Split' },
-  code: { color: '#ec4899', label: 'Code' },
-  // n8n Integrations
-  http_request: { color: '#0ea5e9', label: 'HTTP Request' },
-  webhook_response: { color: '#8b5cf6', label: 'Webhook Resp.' },
-  graphql: { color: '#ff79c6', label: 'GraphQL' },
-  // n8n Databases
-  mysql: { color: '#00758f', label: 'MySQL' },
-  postgresql: { color: '#336791', label: 'PostgreSQL' },
-  sqlite: { color: '#003b57', label: 'SQLite' },
-  mongodb: { color: '#4db33d', label: 'MongoDB' },
-  // Communication
-  email_send: { color: '#ea4335', label: 'Email Send' },
-  imap_trigger: { color: '#4285f4', label: 'IMAP/POP3' },
-  whatsapp: { color: '#25d366', label: 'WhatsApp' },
-  telegram: { color: '#0088cc', label: 'Telegram' },
-  slack: { color: '#4a154b', label: 'Slack' },
-  discord: { color: '#5865f2', label: 'Discord' },
-  // Cloud Storage
-  google_drive: { color: '#4285f4', label: 'Google Drive' },
-  s3: { color: '#ff9900', label: 'S3/MinIO' },
-  dropbox: { color: '#0061ff', label: 'Dropbox' },
-  // Document Handling
-  read_binary: { color: '#fbbf24', label: 'Read Binary' },
-  write_binary: { color: '#f59e0b', label: 'Write Binary' },
-  convert_binary: { color: '#84cc16', label: 'Convert Binary' },
-  // Advanced Logic
-  regex: { color: '#ec4899', label: 'Regex' },
-  date_time: { color: '#0ea5e9', label: 'Date & Time' },
-  math: { color: '#10b981', label: 'Math' },
-  // Security
-  api_key_vault: { color: '#dc2626', label: 'API Key Vault' },
-  credentials: { color: '#f59e0b', label: 'Credentials' },
-  // Monitoring
-  execution_history: { color: '#8b5cf6', label: 'Execution History' },
-  executions_control: { color: '#06b6d4', label: 'Executions Control' },
-  // Orchestration
-  sub_workflow: { color: '#3b82f6', label: 'Sub-Workflow' },
-  error_workflow: { color: '#ef4444', label: 'Error Workflow' },
-  // AI
-  openai: { color: '#10b981', label: 'OpenAI' },
-  huggingface: { color: '#ff9d00', label: 'HuggingFace' },
 };
 
 const nodeTypes = {
-  // Básicos
   trigger: CustomNode,
   condition: CustomNode,
   message: CustomNode,
@@ -114,61 +58,9 @@ const nodeTypes = {
   wait: CustomNode,
   api: CustomNode,
   delay: CustomNode,
-  transfer: CustomNode,
-  // n8n Triggers
-  http_trigger: CustomNode,
-  webhook_trigger: CustomNode,
-  cron_trigger: CustomNode,
-  interval_trigger: CustomNode,
-  // n8n Processing
   function: CustomNode,
-  function_item: CustomNode,
-  if: CustomNode,
-  switch: CustomNode,
   set: CustomNode,
-  merge: CustomNode,
-  split_in_batches: CustomNode,
-  code: CustomNode,
-  // n8n Integrations
-  http_request: CustomNode,
-  webhook_response: CustomNode,
-  graphql: CustomNode,
-  // n8n Databases
-  mysql: CustomNode,
-  postgresql: CustomNode,
-  sqlite: CustomNode,
-  mongodb: CustomNode,
-  // Communication
-  email_send: CustomNode,
-  imap_trigger: CustomNode,
-  whatsapp: CustomNode,
-  telegram: CustomNode,
-  slack: CustomNode,
-  discord: CustomNode,
-  // Cloud Storage
-  google_drive: CustomNode,
-  s3: CustomNode,
-  dropbox: CustomNode,
-  // Document Handling
-  read_binary: CustomNode,
-  write_binary: CustomNode,
-  convert_binary: CustomNode,
-  // Advanced Logic
-  regex: CustomNode,
-  date_time: CustomNode,
-  math: CustomNode,
-  // Security
-  api_key_vault: CustomNode,
-  credentials: CustomNode,
-  // Monitoring
-  execution_history: CustomNode,
-  executions_control: CustomNode,
-  // Orchestration
-  sub_workflow: CustomNode,
-  error_workflow: CustomNode,
-  // AI
-  openai: CustomNode,
-  huggingface: CustomNode,
+  transfer: CustomNode,
 };
 
 export function FlowBuilder({
@@ -179,49 +71,10 @@ export function FlowBuilder({
   onImport,
   readOnly = false,
 }: FlowBuilderProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const reactFlowInstanceRef = useRef<any>(null);
-
-  // Sincronizar props com estado interno (corrige o problema de editor vazio)
-  useEffect(() => {
-    if (initialNodes.length > 0 || initialEdges.length > 0) {
-      setNodes(initialNodes);
-      setEdges(initialEdges);
-      
-      // Ajustar view após carregar nós
-      setTimeout(() => {
-        if (reactFlowInstanceRef.current) {
-          reactFlowInstanceRef.current.fitView({ padding: 0.2 });
-        }
-      }, 100);
-    }
-  }, [initialNodes, initialEdges]);
-
-  // Capturar instância do ReactFlow via onInit
-  const handleInit = (instance: any) => {
-    reactFlowInstanceRef.current = instance;
-    if (initialNodes.length > 0) {
-      setTimeout(() => instance.fitView({ padding: 0.2 }), 100);
-    }
-  };
-
-  // Ajustar view quando container redimensiona
-  useEffect(() => {
-    if (!containerRef.current) return;
-    
-    const observer = new ResizeObserver(() => {
-      if (reactFlowInstanceRef.current) {
-        reactFlowInstanceRef.current.fitView({ padding: 0.2 });
-      }
-    });
-    
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -295,7 +148,7 @@ export function FlowBuilder({
 
   const handleAddNode = (type: keyof typeof nodeColors) => {
     if (readOnly) return;
-
+    
     const newNode: Node = {
       id: `${type}-${Date.now()}`,
       type,
@@ -314,13 +167,13 @@ export function FlowBuilder({
         fontWeight: '500',
       },
     };
-
+    
     setNodes((nds) => [...nds, newNode]);
   };
 
   const handleDeleteSelected = () => {
     if (readOnly || !selectedNode) return;
-
+    
     setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
     setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
     setSelectedNode(null);
@@ -341,7 +194,7 @@ export function FlowBuilder({
   }
 
   return (
-    <div className="h-full w-full relative" ref={containerRef}>
+    <div className="h-full w-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -350,8 +203,7 @@ export function FlowBuilder({
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
-        fitView={false}
-        onInit={handleInit}
+        fitView
         attributionPosition="bottom-left"
         style={{ width: '100%', height: '100%' }}
       >
@@ -364,7 +216,7 @@ export function FlowBuilder({
           }}
           maskColor="rgba(0, 0, 0, 0.1)"
         />
-
+        
         {/* Painel de Ferramentas */}
         <Panel position="top-left" className="bg-white rounded-lg shadow-lg p-3 space-y-2">
           <div className="flex items-center gap-2 mb-3">
