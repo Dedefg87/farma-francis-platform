@@ -190,15 +190,8 @@ export const employeesRouter = router({
       const passwordHash = await bcrypt.hash(input.password, 10);
       const openId = `local:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      const [newUser] = await db.insert(dbUsers).values({
-        openId,
-        name: input.username,
-        displayName: input.displayName,
-        email: null,
-        passwordHash,
-        loginMethod: 'local',
-        role: input.role,
       await db.insert(users).values({
+        openId,
         name: input.username,
         displayName: input.displayName,
         email: null,
