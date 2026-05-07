@@ -25,7 +25,7 @@ export interface FlowConfig {
 
 export interface FlowStep {
   id: string;
-  type: 'message' | 'ai' | 'condition' | 'action' | 'wait' | 'transfer' | 'notification';
+  type: 'message' | 'ai' | 'condition' | 'action' | 'wait' | 'transfer' | 'notification' | 'http_request' | 'if' | 'set' | 'function' | 'code' | 'mysql' | 'postgresql' | 'graphql' | 'switch' | 'merge' | 'split_in_batches' | 'webhook_response';
   name: string;
   config: Record<string, unknown>;
   next?: string;
@@ -63,7 +63,7 @@ export interface AutomationCondition {
 }
 
 export interface AutomationAction {
-  type: 'send_message' | 'update_status' | 'add_tag' | 'notify_agent' | 'schedule_followup' | 'transfer' | 'create_task' | 'update_score';
+  type: 'send_message' | 'update_status' | 'add_tag' | 'notify_agent' | 'schedule_followup' | 'transfer' | 'create_task' | 'http_request' | 'set' | 'function' | 'mysql_query' | 'postgresql_query' | 'graphql_query' | 'if' | 'switch' | 'update_score';
   config: Record<string, unknown>;
 }
 
