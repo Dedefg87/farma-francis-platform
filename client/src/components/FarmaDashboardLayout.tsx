@@ -3,7 +3,6 @@ import { getLoginUrl } from "@/const";
 import { Button } from "./ui/button";
 import { TopBar } from "./TopBar";
 import { cn } from "@/lib/utils";
-import { useLayoutEffect, useRef, useState } from "react";
 
 export function FarmaDashboardLayout({
   children,
@@ -11,17 +10,6 @@ export function FarmaDashboardLayout({
   children: React.ReactNode;
 }) {
   const { loading, isAuthenticated } = useAuth();
-  const topBarRef = useRef<HTMLDivElement>(null);
-  const [topBarHeight, setTopBarHeight] = useState(80); // fallback 80px
-
-  useLayoutEffect(() => {
-    if (topBarRef.current) {
-      const height = topBarRef.current.offsetHeight;
-      setTopBarHeight(height);
-      // Opcional: setar como variável CSS global para outros componentes usarem
-      document.documentElement.style.setProperty('--topbar-height', `${height}px`);
-    }
-  }, []);
 
   if (loading) {
     return (
@@ -62,13 +50,11 @@ export function FarmaDashboardLayout({
 
   return (
     <div className="min-h-screen bg-background">
-      <div ref={topBarRef}>
-        <TopBar />
-      </div>
+      <TopBar />
       {/* Flex container to fill remaining height */}
       <main 
         className="flex-1 flex flex-col px-4 md:px-6 py-4 md:py-6"
-        style={{ paddingTop: `${topBarHeight}px` }}
+        style={{ paddingTop: 'var(--topbar-height, 80px)' }}
       >
         {children}
       </main>
