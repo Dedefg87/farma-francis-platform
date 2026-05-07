@@ -124,3 +124,85 @@ O sistema opera com três pilares:
 ---
 
 **Nota:** Todas as funcionalidades listadas estão implementadas e prontas para uso na plataforma Farma Francis. O sistema utiliza React Flow para o editor visual e um motor de execução customizado no backend.
+
+## 📧 5. EMAIL & COMUNICAÇÃO
+### 5.1 Email Send
+- SMTP (Gmail, Outlook, etc.)
+- Anexos, templates HTML.
+
+### 5.2 IMAP/POP3 Email Trigger
+- Lê caixas de entrada, processa anexos.
+
+## 💬 6. MENSAGERIA & REDES SOCIAIS
+### 6.1 WhatsApp Node
+- Envio de mensagens, consulta status, webhooks.
+
+### 6.2 Telegram Node
+- Bots, comandos, mensagens.
+
+### 6.3 Slack Node
+- Notificações, upload de arquivos.
+
+### 6.4 Discord Node
+- Bots, alertas.
+
+## ☁️ 7. NUVEM & ARMAZENAMENTO
+### 7.1 Google Drive Node
+- Pastas, upload, listagem.
+
+### 7.2 Amazon S3 / MinIO
+- Buckets, arquivos.
+
+### 7.3 Dropbox Node
+- Uploads, backup.
+
+## 📎 8. GESTÃO DOCUMENTAL
+### 8.1 Read/Write Binary File
+- PDFs, imagens, planilhas.
+
+### 8.2 Convert Binary to JSON
+- Conversão de planilhas, PDFs.
+
+## 🧮 9. LÓGICA AVANÇADA
+### 9.1 Regex Node
+- Extração de padrões.
+
+### 9.2 Date & Time Node
+- Manipulação de datas.
+
+### 9.3 Math Node
+- Operações matemáticas.
+
+## 🔐 10. SEGURANÇA
+### 10.1 API Key Vault
+- Armazena tokens, chaves.
+
+### 10.2 Credentials
+- Autenticação: Basic, OAuth2, Token.
+
+## 📊 11. MONITORAMENTO & LOGS
+### 11.1 Execution History
+- Log completo: inputs, outputs, erros, tempo.
+
+### 11.2 Executions Control
+- Repetir, pausar, reexecutar.
+
+## 🎛 12. ORQUESTRAÇÃO DE PROCESSOS
+### 12.1 Sub-Workflows
+- Automações reutilizáveis.
+
+### 12.2 Error Workflow
+- Fluxos para tratar erros.
+
+## 🧠 13. INTELIGÊNCIA ARTIFICIAL
+### 13.1 OpenAI Node
+- GPT para resumos, classificação, geração.
+
+### 13.2 HuggingFace Node
+- Modelos de IA: visão, sentimento.
+
+## ✨ 14. EXEMPLOS PRONTOS
+- Capturar leads do Instagram → CRM.
+- Pedidos via WhatsApp → Sistema.
+- Backup diário em S3.
+- Sincronização de bancos via API.
