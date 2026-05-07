@@ -29,6 +29,7 @@ import {
 import { 
   NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField 
 } from './node-types';
+import NodeConfigPanel from './NodeConfigPanel';
 
 // Node component for React Flow
 function WorkflowNodeComponent({ data }: any) {
@@ -181,6 +182,17 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     event.dataTransfer.setData('application/reactflow-nodeid', nodeDef.id);
     event.dataTransfer.effectAllowed = 'move';
   };
+
+  const handleNodeUpdate = useCallback(
+    (nodeId: string, newData: any) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId ? { ...node, data: { ...node.data, ...newData } } : node
+        )
+      );
+    },
+    [setNodes]
+  );
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories(prev => ({ ...prev, [catId]: !prev[catId] }));
@@ -358,63 +370,18 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
       {/* Right Config Panel */}
       {selectedNode && (
         <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
-          <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800 text-sm">Configurar Nó</h3>
-            <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            <NodeConfigPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
-          </div>
+          <NodeConfigPanel 
+            node={selectedNode} 
+            onClose={() => setSelectedNode(null)} 
+            onUpdateNode={handleNodeUpdate}
+          />
         </div>
       )}
     </div>
   );
 }
 
-// Simplified Config Panel - will be expanded later
-function NodeConfigPanel({ node, onClose }: { node: Node; onClose: () => void }) {
-  const nodeDef = getNodeType(node.data?.nodeType);
-  if (!nodeDef) return <div>Nó não encontrado</div>;
 
-  return (
-    <div className="space-y-4">
-      <div>
-        <Label>Geral</Label>
-        <Input defaultValue={node.data.label} className="mt-1" />
-      </div>
-      <div>
-        <Label>Tipo</Label>
-        <Badge style={{ background: nodeDef.color }}>{nodeDef.label}</Badge>
-      </div>
-      <div>
-        <Label>Configurações</Label>
-        {nodeDef.config?.map((field: ConfigField) => (
-          <div key={field.key} className="mt-2">
-            <Label className="text-xs">{field.label}</Label>
-            {field.type === 'string' || field.type === 'password' ? (
-              <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} defaultValue={field.defaultValue} className="mt-1" />
-            ) : field.type === 'select' ? (
-              <select className="w-full mt-1 p-2 border rounded">
-                {field.options?.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            ) : field.type === 'json' || field.type === 'prompt' ? (
-              <textarea className="w-full mt-1 p-2 border rounded h-24 text-sm" placeholder={field.placeholder} defaultValue={field.defaultValue} />
-            ) : null}
-          </div>
-        ))}
-      </div>
-      <div className="pt-4 border-t">
-        <Button size="sm" className="w-full">
-          <TestTube size={16} className="mr-1" /> Testar Nó
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 export default function N8NEditorWrapper(props: N8NEditorProps) {
   return (
