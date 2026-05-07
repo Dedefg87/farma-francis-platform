@@ -242,6 +242,24 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     a.click();
   };
 
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const flowData = JSON.parse(e.target?.result as string);
+        if (flowData.nodes) setNodes(flowData.nodes);
+        if (flowData.edges) setEdges(flowData.edges);
+      } catch (err) {
+        console.error('Invalid JSON file', err);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
