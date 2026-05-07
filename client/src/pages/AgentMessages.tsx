@@ -1133,7 +1133,7 @@ export default function AgentMessages() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 md:gap-2">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1342,7 +1342,7 @@ export default function AgentMessages() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 md:gap-2">
                   <input
                     type="file"
                     id="file-upload-agent"
@@ -1746,3 +1746,5 @@ export default function AgentMessages() {
 // Deploy refresh Mon Mar 2 08:05:00 -03 2026
 // Force rebuild Wed Mar  4 10:56:06 -03 2026
 // Build timestamp: 20260318-191559
+
+/* Mobile adjustments applied */
