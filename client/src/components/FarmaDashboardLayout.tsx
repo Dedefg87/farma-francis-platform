@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "./ui/button";
 import { TopBar } from "./TopBar";
+import { cn } from "@/lib/utils";
 
 export function FarmaDashboardLayout({
   children,
@@ -50,8 +51,8 @@ export function FarmaDashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <TopBar />
-      {/* Padding top to account for fixed topbar height (single row = ~64px) */}
-      <main className="pt-20 px-6 py-6">
+      {/* Padding top for fixed topbar height + responsive padding */}
+      <main className="pt-20 px-4 md:px-6 py-4 md:py-6">
         {children}
       </main>
     </div>

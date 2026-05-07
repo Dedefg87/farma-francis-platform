@@ -1,10 +1,11 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, Settings, LogOut, Award, Gift, HardDrive } from "lucide-react";
+import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, Settings, LogOut, Award, Gift, HardDrive, Menu } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
+import { useState } from "react";
 
 const navigationItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
@@ -24,6 +25,7 @@ export function TopBar() {
   const [location, setLocation] = useLocation();
   const { user } = useAuth();
   const logoutMutation = trpc.auth.logout.useMutation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     await logoutMutation.mutateAsync();
@@ -36,10 +38,21 @@ export function TopBar() {
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between px-6 py-3">
-        <img src="/logo-farma-francis.jpg?v=2" alt="Farma Francis" className="h-12" />
+      <div className="flex items-center justify-between px-4 md:px-6 py-3">
+        <img src="/logo-farma-francis.jpg?v=2" alt="Farma Francis" className="h-8 md:h-12" />
         
-        <div className="flex items-center gap-2">
+        {/* Mobile menu button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden h-10 w-10 rounded-full"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
+        {/* Desktop navigation */}
+        <div className="hidden md:flex items-center gap-2">
           {navigationItems.map(item => {
             const Icon = item.icon;
             const isActive = location === item.path;
@@ -61,6 +74,34 @@ export function TopBar() {
             );
           })}
         </div>
+
+        {/* Mobile menu dropdown (simulated) */}
+        {mobileMenuOpen && (
+          <div className="absolute top-full left-0 right-0 bg-white border-b border-gray-200 shadow-md md:hidden">
+            <div className="flex flex-col p-2 gap-1">
+              {navigationItems.map(item => {
+                const Icon = item.icon;
+                const isActive = location === item.path;
+                return (
+                  <Button
+                    key={item.path}
+                    variant="ghost"
+                    className={`justify-start gap-2 ${
+                      isActive ? "bg-[#3FA9D4] text-white" : "text-gray-600"
+                    }`}
+                    onClick={() => {
+                      setLocation(item.path);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
           <DropdownMenu>
