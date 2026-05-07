@@ -20,7 +20,7 @@ const CreateAutomationInput = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(255, "Nome muito longo"),
   description: z.string().max(1000, "Descrição muito longa").optional(),
   templateType: z.string().default("pharma"),
-  flowData: z.record(z.any()).default({}),
+  flowData: z.any().optional(),
   isActive: z.boolean().default(true),
   tags: z.array(z.string()).optional(),
 });
