@@ -52,7 +52,7 @@ export default function Automation() {
       isActive: false,
     });
     // Após criar, o refetch vai atualizar a lista. Vamos para o editor.
-    setEditingFlow(null); // Limpa edição anterior
+    setEditingFlow(null);
     setActiveTab("editor");
   };
 
@@ -126,20 +126,21 @@ export default function Automation() {
 
   return (
     <FarmaDashboardLayout>
-      <div className={`min-h-screen ${darkMode ? "dark bg-gray-900" : "bg-gray-50"}`}>
+      {/* Container principal: flex-column que ocupa toda a altura disponível */}
+      <div className="flex flex-col h-full">
         {/* Header com botões de ação */}
-        <div className={`border-b px-6 py-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className={`text-2xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
-                Configuração da Automação de Atendimento
-              </h1>
-              <p className={`text-sm mt-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                Gerencie fluxos inteligentes para WhatsApp, Chat Online e Redes Sociais
-              </p>
-            </div>
+        <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+          <div>
+            <h1 className={`text-2xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
+              Configuração da Automação de Atendimento
+            </h1>
+            <p className={`text-sm mt-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+              Gerencie fluxos inteligentes para WhatsApp, Chat Online e Redes Sociais
+            </p>
+          </div>
 
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            {!isActive && (
               <Button variant="outline" size="sm" onClick={() => {
                 if (editingFlow) {
                   // Dispara import via FlowBuilder (vamos usar ref depois)
@@ -151,57 +152,58 @@ export default function Automation() {
                 <Upload className="w-4 h-4 mr-2" />
                 Importar
               </Button>
-              <Button variant="outline" size="sm" onClick={() => {
-                if (editingFlow) {
-                  // Dispara export via FlowBuilder
-                  alert('Use o botão Exportar dentro do editor visual!');
-                } else {
-                  // Exporta todos os fluxos como JSON
-                  const allFlows = flows.map(f => ({
-                    id: f.id,
-                    name: f.name,
-                    flowData: typeof f.flowData === 'string' ? JSON.parse(f.flowData) : f.flowData
-                  }));
-                  const blob = new Blob([JSON.stringify(allFlows, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `todos-fluxos-${Date.now()}.json`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }
-              }}>
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              <Button size="sm" onClick={handleCreateFlow} className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Fluxo
-              </Button>
-              <Button 
-                size="sm" 
-                onClick={handlePublish} 
-                className={`${isActive ? "bg-green-600 hover:bg-green-700" : "bg-gray-400"}`}
-                disabled={isActive}
-              >
-                <Send className="w-4 h-4 mr-2" />
-                {isActive ? "Publicado" : "Publicar"}
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setDarkMode(!darkMode)}
-              >
-                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </Button>
-            </div>
+            )}
+
+            <Button variant="outline" size="sm" onClick={() => {
+              if (editingFlow) {
+                // Dispara export via FlowBuilder
+                alert('Use o botão Exportar dentro do editor visual!');
+              } else {
+                // Exporta todos os fluxos como JSON
+                const allFlows = flows.map(f => ({
+                  id: f.id,
+                  name: f.name,
+                  flowData: typeof f.flowData === 'string' ? JSON.parse(f.flowData) : f.flowData
+                }));
+                const blob = new Blob([JSON.stringify(allFlows, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `todos-fluxos-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            }}>
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+            <Button size="sm" onClick={handleCreateFlow} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="w-4 h-4 mr-2" />
+              Criar Fluxo
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={handlePublish} 
+              className={`${isActive ? "bg-green-600 hover:bg-green-700" : "bg-gray-400"}`}
+              disabled={isActive}
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {isActive ? "Publicado" : "Publicar"}
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setDarkMode(!darkMode)}
+            >
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </Button>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="p-6 flex-1 h-full">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full h-full flex flex-col">
-            <TabsList className="grid w-full grid-cols-5 mb-6">
+        {/* Main Content - fills remaining height */}
+        <div className="flex-1 flex flex-col min-h-0 p-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="flex-1 flex flex-col h-full">
+            <TabsList className="grid w-full grid-cols-5 mb-6 flex-shrink-0">
               <TabsTrigger value="dashboard" className="text-xs">
                 <Activity className="w-3 h-3 mr-1" />
                 Dashboard
@@ -225,7 +227,7 @@ export default function Automation() {
             </TabsList>
 
             {/* Dashboard */}
-            <TabsContent value="dashboard" className="flex-1 h-full overflow-auto">
+            <TabsContent value="dashboard" className="flex-1 overflow-auto">
               <DashboardCards darkMode={darkMode} />
               
               {/* Lista de Fluxos Ativos */}
@@ -296,9 +298,9 @@ export default function Automation() {
             </TabsContent>
 
             {/* Editor Visual */}
-            <TabsContent value="editor" className="flex-1 h-full">
-              <div className="flex gap-4 flex-1 min-h-[600px]">
-                <div className="flex-1">
+            <TabsContent value="editor" className="flex-1 flex flex-col min-h-0">
+              <div className="flex gap-4 flex-1 min-h-0">
+                <div className="flex-1 min-w-0 min-h-0">
                   <FlowBuilder 
                     key={editingFlow?.id || 'novo-' + Date.now()}
                     initialNodes={editingFlow?.flowData?.nodes || []}
@@ -337,7 +339,6 @@ export default function Automation() {
                         try {
                           const flowData = JSON.parse(e.target?.result as string);
                           if (flowData.nodes && flowData.edges) {
-                            // Atualiza o FlowBuilder via props (vai precisar de key pra resetar)
                             setEditingFlow({
                               id: editingFlow?.id || 0,
                               name: editingFlow?.name || 'Importado',
@@ -353,37 +354,38 @@ export default function Automation() {
                     }}
                   />
                 </div>
-                {/* PropertySidebar pode ser adaptada depois */}
+                {showSidebar && (
+                  <PropertySidebar 
+                    selectedNode={selectedNode}
+                    onTest={handleTest}
+                    onClose={() => setShowSidebar(false)}
+                  />
+                )}
               </div>
             </TabsContent>
 
             {/* Templates */}
-            <TabsContent value="templates" className="flex-1 h-full overflow-auto">
+            <TabsContent value="templates" className="flex-1 overflow-auto">
               <TemplatesSection 
-                darkMode={darkMode}
-                onSelectTemplate={handleSelectTemplate}
-                onCreateFlow={handleCreateFlow}
+                darkMode={darkMode} 
+                onSelectTemplate={handleSelectTemplate} 
               />
             </TabsContent>
 
             {/* Configurações */}
-            <TabsContent value="config" className="flex-1 h-full overflow-auto">
+            <TabsContent value="config" className="flex-1 overflow-auto">
               <ConfigSettings darkMode={darkMode} />
             </TabsContent>
 
             {/* Documentação */}
-            <TabsContent value="docs" className="flex-1 h-full overflow-auto">
-              <DocumentationSection darkMode={darkMode} />
+            <TabsContent value="docs" className="flex-1 overflow-auto">
+              <DocumentationSection />
             </TabsContent>
           </Tabs>
         </div>
 
         {/* Footer */}
-        <Footer 
-          darkMode={darkMode}
-          version="v2.1.0"
-          lastUpdate="05/05/2026 16:30"
-        />
+        <Footer />
       </div>
     </FarmaDashboardLayout>
   );
