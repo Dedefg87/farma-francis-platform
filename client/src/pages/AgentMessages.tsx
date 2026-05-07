@@ -911,9 +911,9 @@ export default function AgentMessages() {
       />
 
       <AgentTopBar />
-      <div className="h-[calc(100vh-64px)] bg-gray-50 flex">
+      <div className="h-[calc(100vh-64px)] bg-gray-50 flex flex-col md:flex-row">
         {/* Lista de Conversas */}
-        <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+        <div className="w-full md:w-96 bg-white border-r border-gray-200 flex flex-col">
           <div className="p-4 border-b border-gray-200 space-y-3">
             <div>
               <div>

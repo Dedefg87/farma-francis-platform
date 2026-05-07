@@ -702,8 +702,8 @@ function AgentPerformanceContent() {
               )}
 
             {recentConversations && recentConversations.length > 0 && (
-              <div className="max-h-80 overflow-auto rounded border">
-                <table className="w-full text-sm">
+              <div className="max-h-80 overflow-x-auto rounded border">
+                <table className="w-full text-sm min-w-[500px]">
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left p-2">Cliente</th>
