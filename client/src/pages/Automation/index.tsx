@@ -199,8 +199,8 @@ export default function Automation() {
         </div>
 
         {/* Main Content */}
-        <div className="p-6">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full">
+        <div className="p-6 flex-1 h-full">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full h-full flex flex-col">
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="dashboard" className="text-xs">
                 <Activity className="w-3 h-3 mr-1" />
@@ -225,7 +225,7 @@ export default function Automation() {
             </TabsList>
 
             {/* Dashboard */}
-            <TabsContent value="dashboard" className="space-y-6">
+            <TabsContent value="dashboard" className="flex-1 h-full overflow-auto">
               <DashboardCards darkMode={darkMode} />
               
               {/* Lista de Fluxos Ativos */}
@@ -296,7 +296,7 @@ export default function Automation() {
             </TabsContent>
 
             {/* Editor Visual */}
-            <TabsContent value="editor" className="space-y-6">
+            <TabsContent value="editor" className="flex-1 h-full">
               <div className="flex gap-4 flex-1 min-h-[600px]">
                 <div className="flex-1">
                   <FlowBuilder 
@@ -358,7 +358,7 @@ export default function Automation() {
             </TabsContent>
 
             {/* Templates */}
-            <TabsContent value="templates" className="space-y-6">
+            <TabsContent value="templates" className="flex-1 h-full overflow-auto">
               <TemplatesSection 
                 darkMode={darkMode}
                 onSelectTemplate={handleSelectTemplate}
@@ -367,12 +367,12 @@ export default function Automation() {
             </TabsContent>
 
             {/* Configurações */}
-            <TabsContent value="config" className="space-y-6">
+            <TabsContent value="config" className="flex-1 h-full overflow-auto">
               <ConfigSettings darkMode={darkMode} />
             </TabsContent>
 
             {/* Documentação */}
-            <TabsContent value="docs" className="space-y-6">
+            <TabsContent value="docs" className="flex-1 h-full overflow-auto">
               <DocumentationSection darkMode={darkMode} />
             </TabsContent>
           </Tabs>
