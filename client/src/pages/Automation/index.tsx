@@ -13,6 +13,7 @@ import {
 import { FlowBuilder } from "@/components/flow/FlowBuilder";
 import { DashboardCards } from "./DashboardCards";
 import { TemplatesSection } from "./TemplatesSection";
+import { flowTemplates } from "./templates";
 import { PropertySidebar } from "./PropertySidebar";
 import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
@@ -96,12 +97,30 @@ export default function Automation() {
   };
 
   const handleSelectTemplate = (templateId: string) => {
+    // Busca o template completo no flowTemplates (templates.ts)
+    const template = flowTemplates.find(t => t.id === templateId);
+    
+    const flowData = template ? {
+      nodes: template.nodes || [],
+      edges: template.edges || []
+    } : { nodes: [], edges: [] };
+    
     createMutation.mutate({
-      name: `Fluxo - ${templateId}`,
+      name: template?.name || `Fluxo - ${templateId}`,
       templateType: templateId,
-      flowData: { nodes: [], edges: [] },
+      flowData: flowData,
       isActive: false,
     });
+    
+    // Define o flow para edição (carrega no editor)
+    if (template) {
+      setEditingFlow({
+        id: Date.now(), // Temporário até o backend retornar o ID
+        name: template.name,
+        flowData: flowData
+      });
+    }
+    
     setActiveTab("editor");
   };
 
