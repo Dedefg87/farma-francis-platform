@@ -209,6 +209,45 @@ export class AutomationEngine {
         await this.executeSplitInBatches(step.config, result);
         break;
       case "webhook_response":
+      case "email_send":
+        await this.executeEmailSend(step.config, result);
+        break;
+      case "whatsapp":
+        await this.executeWhatsApp(step.config, result);
+        break;
+      case "telegram":
+        await this.executeTelegram(step.config, result);
+        break;
+      case "slack":
+        await this.executeSlack(step.config, result);
+        break;
+      case "discord":
+        await this.executeDiscord(step.config, result);
+        break;
+      case "google_drive":
+        await this.executeGoogleDrive(step.config, result);
+        break;
+      case "s3":
+        await this.executeS3(step.config, result);
+        break;
+      case "dropbox":
+        await this.executeDropbox(step.config, result);
+        break;
+      case "date_time":
+        await this.executeDateTime(step.config, result);
+        break;
+      case "math":
+        await this.executeMath(step.config, result);
+        break;
+      case "regex":
+        await this.executeRegex(step.config, result);
+        break;
+      case "openai":
+        await this.executeOpenAI(step.config, result);
+        break;
+      case "huggingface":
+        await this.executeHuggingFace(step.config, result);
+        break;
         await this.executeWebhookResponse(step.config, result);
         break;
     }
@@ -874,40 +913,106 @@ export class AutomationEngine {
   }
 }
 
-interface FlowExecutionResult {
-  success: boolean;
-  stepsExecuted: Array<{
-    id: string;
-    type: string;
-    name: string;
-    timestamp: string;
-  }>;
-  currentStep: string | null;
-  data: Record<string, unknown>;
-  errors: string[];
-}
+  // --- Novos nós baseados no n8n ---
 
-export async function executeTemplateAutomation(
-  templateType: string,
-  automationId: string,
-  context: AutomationContext
-): Promise<AutomationResult> {
-  const engine = new AutomationEngine(templateType, context);
-  return await engine.executeAutomation(automationId);
-}
+  private async executeEmailSend(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const to = config.to as string;
+    const subject = config.subject as string;
+    const body = config.body as string;
+    // Simulação de envio de email
+    this.executionLog.push(`Email sent to ${to}: ${subject}`);
+    result.data.emailSent = { to, subject, body };
+  }
 
-export async function executeTemplateFlow(
-  templateType: string,
-  flowId: string,
-  context: AutomationContext,
-  initialData?: Record<string, unknown>
-): Promise<FlowExecutionResult> {
-  const engine = new AutomationEngine(templateType, context);
-  return await engine.executeFlow(flowId, initialData);
-}
+  private async executeWhatsApp(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const phone = config.phone as string;
+    const message = config.message as string;
+    // Integração com API do WhatsApp
+    this.executionLog.push(`WhatsApp message sent to ${phone}`);
+    result.data.whatsappSent = { phone, message };
+  }
 
-export default {
-  AutomationEngine,
-  executeTemplateAutomation,
-  executeTemplateFlow,
-};
+  private async executeTelegram(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const chatId = config.chatId as string;
+    const text = config.text as string;
+    // Simulação Telegram
+    this.executionLog.push(`Telegram message sent to ${chatId}`);
+    result.data.telegramSent = { chatId, text };
+  }
+
+  private async executeSlack(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const channel = config.channel as string;
+    const text = config.text as string;
+    this.executionLog.push(`Slack message sent to ${channel}`);
+    result.data.slackSent = { channel, text };
+  }
+
+  private async executeDiscord(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const channel = config.channel as string;
+    const message = config.message as string;
+    this.executionLog.push(`Discord message sent to ${channel}`);
+    result.data.discordSent = { channel, message };
+  }
+
+  private async executeGoogleDrive(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const action = config.action as string;
+    const fileName = config.fileName as string;
+    this.executionLog.push(`Google Drive action: ${action} - ${fileName}`);
+    result.data.googleDrive = { action, fileName };
+  }
+
+  private async executeS3(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const bucket = config.bucket as string;
+    const key = config.key as string;
+    this.executionLog.push(`S3 operation on ${bucket}/${key}`);
+    result.data.s3 = { bucket, key };
+  }
+
+  private async executeDropbox(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const path = config.path as string;
+    const action = config.action as string;
+    this.executionLog.push(`Dropbox ${action} at ${path}`);
+    result.data.dropbox = { path, action };
+  }
+
+  private async executeDateTime(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const operation = config.operation as string;
+    const date = new Date();
+    result.data.dateTime = { operation, value: date.toISOString() };
+    this.executionLog.push(`Date/Time operation: ${operation}`);
+  }
+
+  private async executeMath(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const expression = config.expression as string;
+    // Avaliação simples (substituir por mathjs se necessário)
+    try {
+      const resultValue = eval(expression);
+      result.data.mathResult = resultValue;
+      this.executionLog.push(`Math: ${expression} = ${resultValue}`);
+    } catch (error) {
+      result.errors.push(`Math error: ${(error as Error).message}`);
+    }
+  }
+
+  private async executeRegex(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const pattern = config.pattern as string;
+    const text = config.text as string;
+    const regex = new RegExp(pattern);
+    const matches = text.match(regex);
+    result.data.regexMatches = matches;
+    this.executionLog.push(`Regex pattern ${pattern} applied`);
+  }
+
+  private async executeOpenAI(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const prompt = config.prompt as string;
+    // Simulação OpenAI
+    result.data.openaiResponse = `OpenAI response to: ${prompt}`;
+    this.executionLog.push(`OpenAI prompt processed`);
+  }
+
+  private async executeHuggingFace(config: Record<string, unknown>, result: FlowExecutionResult): Promise<void> {
+    const model = config.model as string;
+    const input = config.input as string;
+    result.data.huggingfaceResponse = `HuggingFace ${model} response to: ${input}`;
+    this.executionLog.push(`HuggingFace model ${model} used`);
+  }

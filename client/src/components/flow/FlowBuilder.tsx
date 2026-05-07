@@ -70,6 +70,38 @@ const nodeColors: Record<string, { color: string; label: string }> = {
   mysql: { color: '#00758f', label: 'MySQL' },
   postgresql: { color: '#336791', label: 'PostgreSQL' },
   sqlite: { color: '#003b57', label: 'SQLite' },
+  mongodb: { color: '#4db33d', label: 'MongoDB' },
+  // Communication
+  email_send: { color: '#ea4335', label: 'Email Send' },
+  imap_trigger: { color: '#4285f4', label: 'IMAP/POP3' },
+  whatsapp: { color: '#25d366', label: 'WhatsApp' },
+  telegram: { color: '#0088cc', label: 'Telegram' },
+  slack: { color: '#4a154b', label: 'Slack' },
+  discord: { color: '#5865f2', label: 'Discord' },
+  // Cloud Storage
+  google_drive: { color: '#4285f4', label: 'Google Drive' },
+  s3: { color: '#ff9900', label: 'S3/MinIO' },
+  dropbox: { color: '#0061ff', label: 'Dropbox' },
+  // Document Handling
+  read_binary: { color: '#fbbf24', label: 'Read Binary' },
+  write_binary: { color: '#f59e0b', label: 'Write Binary' },
+  convert_binary: { color: '#84cc16', label: 'Convert Binary' },
+  // Advanced Logic
+  regex: { color: '#ec4899', label: 'Regex' },
+  date_time: { color: '#0ea5e9', label: 'Date & Time' },
+  math: { color: '#10b981', label: 'Math' },
+  // Security
+  api_key_vault: { color: '#dc2626', label: 'API Key Vault' },
+  credentials: { color: '#f59e0b', label: 'Credentials' },
+  // Monitoring
+  execution_history: { color: '#8b5cf6', label: 'Execution History' },
+  executions_control: { color: '#06b6d4', label: 'Executions Control' },
+  // Orchestration
+  sub_workflow: { color: '#3b82f6', label: 'Sub-Workflow' },
+  error_workflow: { color: '#ef4444', label: 'Error Workflow' },
+  // AI
+  openai: { color: '#10b981', label: 'OpenAI' },
+  huggingface: { color: '#ff9d00', label: 'HuggingFace' },
 };
 
 const nodeTypes = {
@@ -105,6 +137,38 @@ const nodeTypes = {
   mysql: CustomNode,
   postgresql: CustomNode,
   sqlite: CustomNode,
+  mongodb: CustomNode,
+  // Communication
+  email_send: CustomNode,
+  imap_trigger: CustomNode,
+  whatsapp: CustomNode,
+  telegram: CustomNode,
+  slack: CustomNode,
+  discord: CustomNode,
+  // Cloud Storage
+  google_drive: CustomNode,
+  s3: CustomNode,
+  dropbox: CustomNode,
+  // Document Handling
+  read_binary: CustomNode,
+  write_binary: CustomNode,
+  convert_binary: CustomNode,
+  // Advanced Logic
+  regex: CustomNode,
+  date_time: CustomNode,
+  math: CustomNode,
+  // Security
+  api_key_vault: CustomNode,
+  credentials: CustomNode,
+  // Monitoring
+  execution_history: CustomNode,
+  executions_control: CustomNode,
+  // Orchestration
+  sub_workflow: CustomNode,
+  error_workflow: CustomNode,
+  // AI
+  openai: CustomNode,
+  huggingface: CustomNode,
 };
 
 export function FlowBuilder({
