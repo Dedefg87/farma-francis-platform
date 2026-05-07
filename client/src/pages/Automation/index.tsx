@@ -199,8 +199,8 @@ export default function Automation() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-6 overflow-auto">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full h-full flex flex-col">
+        <div className="flex-1 flex flex-col p-6 overflow-auto">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full flex-1 flex flex-col">
             <TabsList className="grid w-full grid-cols-5 mb-6">
               <TabsTrigger value="dashboard" className="text-xs">
                 <Activity className="w-3 h-3 mr-1" />
@@ -297,6 +297,7 @@ export default function Automation() {
 
             {/* Editor Visual */}
             <TabsContent value="editor" className="flex-1 min-h-0">
+              <div className="flex gap-4 h-full">
               <div className="flex gap-4 h-full">
                 <div className="flex-1">
                   <FlowBuilder 
