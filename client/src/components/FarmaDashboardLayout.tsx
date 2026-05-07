@@ -51,8 +51,8 @@ export function FarmaDashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <TopBar />
-      {/* Padding top for fixed topbar height + responsive padding */}
-      <main className="pt-20 px-4 md:px-6 py-4 md:py-6">
+      {/* Flex container to fill remaining height */}
+      <main className="flex-1 flex flex-col pt-20 px-4 md:px-6 py-4 md:py-6">
         {children}
       </main>
     </div>
