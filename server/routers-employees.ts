@@ -190,7 +190,7 @@ export const employeesRouter = router({
       const passwordHash = await bcrypt.hash(input.password, 10);
       const openId = `local:${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      await db.insert(users).values({
+      await db.insert(dbUsers).values({
         openId,
         name: input.username,
         displayName: input.displayName,
@@ -207,7 +207,7 @@ export const employeesRouter = router({
       if (!lastId) throw new Error('Falha ao criar funcionário');
       
       // Fetch the new user
-      const [newUser] = await db.select().from(users).where(eq(users.id, lastId)).limit(1);
+      const [newUser] = await db.select().from(dbUsers).where(eq(dbUsers.id, lastId)).limit(1);
       
       if (!newUser) throw new Error('Falha ao criar funcionário');
       

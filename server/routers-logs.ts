@@ -2,7 +2,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { z } from "zod";
 import { getDb } from "./db";
 import { flowExecutionLogs } from "../drizzle/schema_logs";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 export const logsRouter = router({
   // Get logs for an execution
@@ -66,21 +66,18 @@ export const logsRouter = router({
       try {
         const db = await getDb();
         
-        const log = await db
-          .insert(flowExecutionLogs)
-          .values({
-            executionId: input.executionId,
-            nodeId: input.nodeId,
-            nodeName: input.nodeName,
-            nodeType: input.nodeType,
-            status: input.status,
-            input: input.input,
-            output: input.output,
-            error: input.error,
-            duration: input.duration,
-          })
-          });
-        
+        await db.insert(flowExecutionLogs).values({
+          executionId: input.executionId,
+          nodeId: input.nodeId,
+          nodeName: input.nodeName,
+          nodeType: input.nodeType,
+          status: input.status,
+          input: input.input,
+          output: input.output,
+          error: input.error,
+          duration: input.duration,
+        });
+      
         // SQLite: get last insert ID
         const lastIdResult = await db.get(sql`SELECT last_insert_rowid() as id`);
         const lastId = (lastIdResult as any)?.id;
