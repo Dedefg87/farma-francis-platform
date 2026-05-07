@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -11,6 +11,7 @@ import ReactFlow, {
   useEdgesState,
   BackgroundVariant,
   Panel,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
@@ -179,10 +180,34 @@ export function FlowBuilder({
   onImport,
   readOnly = false,
 }: FlowBuilderProps) {
+  const reactFlowInstance = useReactFlow();
+  const containerRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [showSimulator, setShowSimulator] = useState(false);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+
+  // Ajustar view quando container redimensiona
+  useEffect(() => {
+    if (!containerRef.current || !reactFlowInstance) return;
+
+    const observer = new ResizeObserver(() => {
+      reactFlowInstance.fitView({ padding: 0.2 });
+    });
+    
+    observer.observe(containerRef.current);
+    
+    return () => observer.disconnect();
+  }, [reactFlowInstance]);
+
+  // Fit view inicial
+  useEffect(() => {
+    if (reactFlowInstance && nodes.length > 0) {
+      setTimeout(() => {
+        reactFlowInstance.fitView({ padding: 0.2 });
+      }, 100);
+    }
+  }, [reactFlowInstance, nodes.length]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -302,7 +327,7 @@ export function FlowBuilder({
   }
 
   return (
-    <div className="h-full w-full relative">
+    <div className="h-full w-full relative" ref={containerRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -311,7 +336,7 @@ export function FlowBuilder({
         onConnect={onConnect}
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
-        fitView
+        fitView={nodes.length > 0}
         attributionPosition="bottom-left"
         style={{ width: '100%', height: '100%' }}
       >
