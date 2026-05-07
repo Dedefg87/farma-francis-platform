@@ -37,7 +37,8 @@ interface FlowBuilderProps {
   readOnly?: boolean;
 }
 
-const nodeColors = {
+const nodeColors: Record<string, { color: string; label: string }> = {
+  // Básicos
   trigger: { color: '#10b981', label: 'Gatilho' },
   condition: { color: '#f59e0b', label: 'Condição' },
   message: { color: '#3b82f6', label: 'Mensagem' },
@@ -47,9 +48,32 @@ const nodeColors = {
   api: { color: '#06b6d4', label: 'API' },
   delay: { color: '#64748b', label: 'Delay' },
   transfer: { color: '#f97316', label: 'Transferir' },
+  // n8n Triggers
+  http_trigger: { color: '#0ea5e9', label: 'HTTP Trigger' },
+  webhook_trigger: { color: '#8b5cf6', label: 'Webhook' },
+  cron_trigger: { color: '#f59e0b', label: 'Cron' },
+  interval_trigger: { color: '#f97316', label: 'Interval' },
+  // n8n Processing
+  function: { color: '#10b981', label: 'Function' },
+  function_item: { color: '#34d399', label: 'Function Item' },
+  if: { color: '#ef4444', label: 'IF' },
+  switch: { color: '#f59e0b', label: 'Switch' },
+  set: { color: '#3b82f6', label: 'Set' },
+  merge: { color: '#8b5cf6', label: 'Merge' },
+  split_in_batches: { color: '#06b6d4', label: 'Split' },
+  code: { color: '#ec4899', label: 'Code' },
+  // n8n Integrations
+  http_request: { color: '#0ea5e9', label: 'HTTP Request' },
+  webhook_response: { color: '#8b5cf6', label: 'Webhook Resp.' },
+  graphql: { color: '#ff79c6', label: 'GraphQL' },
+  // n8n Databases
+  mysql: { color: '#00758f', label: 'MySQL' },
+  postgresql: { color: '#336791', label: 'PostgreSQL' },
+  sqlite: { color: '#003b57', label: 'SQLite' },
 };
 
 const nodeTypes = {
+  // Básicos
   trigger: CustomNode,
   condition: CustomNode,
   message: CustomNode,
@@ -58,9 +82,29 @@ const nodeTypes = {
   wait: CustomNode,
   api: CustomNode,
   delay: CustomNode,
-  function: CustomNode,
-  set: CustomNode,
   transfer: CustomNode,
+  // n8n Triggers
+  http_trigger: CustomNode,
+  webhook_trigger: CustomNode,
+  cron_trigger: CustomNode,
+  interval_trigger: CustomNode,
+  // n8n Processing
+  function: CustomNode,
+  function_item: CustomNode,
+  if: CustomNode,
+  switch: CustomNode,
+  set: CustomNode,
+  merge: CustomNode,
+  split_in_batches: CustomNode,
+  code: CustomNode,
+  // n8n Integrations
+  http_request: CustomNode,
+  webhook_response: CustomNode,
+  graphql: CustomNode,
+  // n8n Databases
+  mysql: CustomNode,
+  postgresql: CustomNode,
+  sqlite: CustomNode,
 };
 
 export function FlowBuilder({

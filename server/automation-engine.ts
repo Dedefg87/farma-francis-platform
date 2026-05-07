@@ -176,6 +176,41 @@ export class AutomationEngine {
       case "action":
         await this.executeCustomAction(step.config, result);
         break;
+      // Novos tipos n8n
+      case "http_request":
+        await this.executeHttpRequest(step.config, result);
+        break;
+      case "if":
+        await this.executeIf(step, flow, result);
+        return;
+      case "set":
+        await this.executeSet(step.config, result);
+        break;
+      case "function":
+      case "code":
+        await this.executeFunction(step.config, result);
+        break;
+      case "mysql":
+        await this.executeMySqlQuery(step.config, result);
+        break;
+      case "postgresql":
+        await this.executePostgreSqlQuery(step.config, result);
+        break;
+      case "graphql":
+        await this.executeGraphQLQuery(step.config, result);
+        break;
+      case "switch":
+        await this.executeSwitch(step, flow, result);
+        return;
+      case "merge":
+        await this.executeMerge(step.config, result);
+        break;
+      case "split_in_batches":
+        await this.executeSplitInBatches(step.config, result);
+        break;
+      case "webhook_response":
+        await this.executeWebhookResponse(step.config, result);
+        break;
     }
 
     if (step.next) {
@@ -654,8 +689,188 @@ export class AutomationEngine {
     return appointmentId;
   }
 
-  private async checkPendingRefills(): Promise<string[]> {
-    return ["Omeprazol 20mg", "Losartana 50mg"];
+  private async executeSplitInBatches(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const batchSize = (config.batchSize as number) || 10;
+    const items = result.data.items as unknown[] || [];
+    result.data.batches = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      (result.data.batches as unknown[]).push(batch);
+    }
+    this.executionLog.push(`Split into ${result.data.batches.length} batches`);
+  }
+
+  private async executeWebhookResponse(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const statusCode = (config.statusCode as number) || 200;
+    const body = config.body as string || JSON.stringify(result.data);
+    result.data.webhookResponse = { statusCode, body };
+    this.executionLog.push(`Webhook response: ${statusCode}`);
+  }
+
+  private async executeHttpRequest(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const url = config.url as string;
+    const method = (config.method as string) || "GET";
+    const body = config.body as Record<string, unknown>;
+    const headers = (config.headers as Record<string, string>) || {};
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json", ...headers },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await response.json();
+      result.data.httpResponse = { status: response.status, data };
+      this.executionLog.push(`HTTP ${method} ${url}: ${response.status}`);
+    } catch (error) {
+      result.errors.push(`HTTP Request failed: ${(error as Error).message}`);
+    }
+  }
+
+  private async executeIf(
+    step: unknown,
+    flow: FlowConfig,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const condition = step.config;
+    const fieldValue = this.getNestedValue(result.data, condition.field);
+    let conditionMet = false;
+    switch (condition.operator) {
+      case "equals":
+        conditionMet = fieldValue === condition.value;
+        break;
+      case "greater":
+        conditionMet = (fieldValue as number) > (condition.value as number);
+        break;
+      case "less":
+        conditionMet = (fieldValue as number) < (condition.value as number);
+        break;
+      case "contains":
+        conditionMet = String(fieldValue).includes(String(condition.value));
+        break;
+    }
+    const nextStepId = conditionMet ? condition.trueStep : condition.falseStep;
+    const nextStep = flow.steps.find(s => s.id === nextStepId);
+    this.executionLog.push(`IF ${condition.field} ${condition.operator} ${condition.value}: ${conditionMet}`);
+    await this.executeStep(nextStep, flow, result);
+  }
+
+  private async executeSet(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const key = config.key as string;
+    const value = config.value;
+    result.data[key] = value;
+    this.executionLog.push(`Set ${key} = ${value}`);
+  }
+
+  private async executeFunction(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const code = config.code as string;
+    try {
+      const fn = new Function("data", "require", code);
+      const output = fn(result.data, require);
+      result.data.functionResult = output;
+      this.executionLog.push(`Function executed`);
+    } catch (error) {
+      result.errors.push(`Function error: ${(error as Error).message}`);
+    }
+  }
+
+  private async executeMySqlQuery(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const query = config.query as string;
+    try {
+      const db = await getDb();
+      if (!db) throw new Error("No DB");
+      const data = await db.execute(query);
+      result.data.mysqlResult = data;
+      this.executionLog.push(`MySQL query executed`);
+    } catch (error) {
+      result.errors.push(`MySQL error: ${(error as Error).message}`);
+    }
+  }
+
+  private async executePostgreSqlQuery(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const query = config.query as string;
+    try {
+      const db = await getDb();
+      if (!db) throw new Error("No DB");
+      const data = await db.execute(query);
+      result.data.pgResult = data;
+      this.executionLog.push(`PostgreSQL query executed`);
+    } catch (error) {
+      result.errors.push(`PostgreSQL error: ${(error as Error).message}`);
+    }
+  }
+
+  private async executeGraphQLQuery(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const url = config.url as string;
+    const query = config.query as string;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await response.json();
+      result.data.graphqlResponse = data;
+      this.executionLog.push(`GraphQL query executed`);
+    } catch (error) {
+      result.errors.push(`GraphQL error: ${(error as Error).message}`);
+    }
+  }
+
+  private async executeSwitch(
+    step: unknown,
+    flow: FlowConfig,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const rules = step.config.rules as Array<{ value: unknown; nextStep: string }>;
+    const fieldValue = this.getNestedValue(result.data, step.config.field);
+    for (const rule of rules) {
+      if (fieldValue === rule.value) {
+        const nextStep = flow.steps.find(s => s.id === rule.nextStep);
+        this.executionLog.push(`Switch matched: ${rule.value}`);
+        await this.executeStep(nextStep, flow, result);
+        return;
+      }
+    }
+    // Default
+    const defaultStep = flow.steps.find(s => s.id === step.config.defaultStep);
+    if (defaultStep) {
+      await this.executeStep(defaultStep, flow, result);
+    }
+  }
+
+  private async executeMerge(
+    config: Record<string, unknown>,
+    result: FlowExecutionResult
+  ): Promise<void> {
+    const source1 = config.source1 as string;
+    const source2 = config.source2 as string;
+    result.data.merged = [...(result.data[source1] || []), ...(result.data[source2] || [])];
+    this.executionLog.push(`Merge ${source1} and ${source2}`);
   }
 }
 
