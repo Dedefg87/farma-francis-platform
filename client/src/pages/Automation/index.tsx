@@ -297,7 +297,7 @@ export default function Automation() {
 
             {/* Editor Visual */}
             <TabsContent value="editor" className="space-y-6">
-              <div className="flex gap-4" style={{ height: '600px' }}>
+              <div className="flex gap-4 flex-1 min-h-[600px]">
                 <div className="flex-1">
                   <FlowBuilder 
                     key={editingFlow?.id || 'novo-' + Date.now()}
