@@ -844,6 +844,67 @@ export const automationRouter = router({
         );
       }
     }),
+
+  // -------------------- EXECUTE FLOW BY ID (WEBHOOK) --------------------
+  /**
+   * Execute a specific flow by ID (triggered by webhook)
+   * POST /api/automation/execute-flow/:id
+   *
+   * @param id - Flow ID (from URL)
+   * @param context - Optional context data
+   *
+   * @returns { success: boolean, data: { executionId, status }, message?: string }
+   */
+  executeFlowById: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      context: z.record(z.string(), z.any()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const db = await getDb();
+        if (!db) {
+          throw new Error("Database não disponível");
+        }
+
+        // Fetch the flow
+        const [flow] = await db
+          .select()
+          .from(visualFlows)
+          .where(eq(visualFlows.id, input.id))
+          .limit(1);
+
+        if (!flow) {
+          return errorResponse("Fluxo não encontrado", "NOT_FOUND");
+        }
+
+        // Parse flow data
+        const flowData = flow.flowData ? JSON.parse(flow.flowData as string) : { nodes: [], edges: [] };
+
+        // Execute the flow (reuse existing execution logic)
+        const result = await executeAutomationWithSSE({
+          automationId: flow.id.toString(),
+          templateType: flow.templateType || 'pharma',
+          customerId: 0, // Webhook might not have customer
+          context: input.context || {},
+        });
+
+        return successResponse(
+          {
+            executionId: (result as any).executionId || null,
+            status: (result as any).status || 'started',
+            flowName: flow.name,
+          },
+          "Fluxo executado com sucesso"
+        );
+      } catch (error) {
+        console.error("Error executing flow by ID:", error);
+        return errorResponse(
+          "Falha ao executar fluxo",
+          (error as Error).message
+        );
+      }
+    }),
 });
 
 /**
