@@ -23,12 +23,13 @@ const metrics = {
  */
 function createRedisClient() {
   if (!process.env.REDIS_URL) {
-
+    console.warn("[Redis] ⚠️ REDIS_URL not found — using in-memory fallback");
     return null;
   }
 
   try {
     const isRailway = process.env.REDIS_URL.includes("proxy.rlwy.net");
+    console.log(`[Redis] 🔄 Connecting to ${isRailway ? 'Railway Redis' : 'External Redis'}...`);
 
     const client = new Redis(process.env.REDIS_URL, {
       maxRetriesPerRequest: 3,
@@ -48,27 +49,26 @@ function createRedisClient() {
       redisDown = false;
       reconnectAttempts = 0;
       metrics.reconnects++;
-
+      console.log('[Redis] ✅ Connected successfully');
     });
 
     client.on("error", (err) => {
       redisDown = true;
       reconnectAttempts++;
       metrics.errors++;
+      console.error("[Redis] ❌ Erro de conexão:", err.message);
 
       if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
         console.error(
           "[Redis] ❌ Máximo de tentativas atingido — desativando"
         );
         redisClient = null;
-      } else {
-        console.error("[Redis] ❌ Erro de conexão:", err.message);
       }
     });
 
     client.on("end", () => {
       redisDown = true;
-
+      console.warn('[Redis] ⚠️ Connection closed');
     });
 
     return client;
@@ -84,7 +84,10 @@ redisClient = createRedisClient();
  * Retorna o cliente Redis ou null (fallback)
  */
 export function getRedis() {
-  if (redisDown) return null;
+  if (redisDown) {
+    console.warn('[Redis] ⚠️ Redis is down, using fallback');
+    return null;
+  }
   return redisClient;
 }
 
@@ -93,15 +96,30 @@ export function getRedis() {
  */
 export async function checkRedisHealth() {
   const redis = getRedis();
-  if (!redis) return false;
+  if (!redis) {
+    return { 
+      status: 'unavailable', 
+      message: 'Redis not configured or down', 
+      fallback: 'in-memory',
+      metrics 
+    };
+  }
 
   try {
     await redis.ping();
     metrics.lastHealthCheck = new Date();
-    return true;
+    return { 
+      status: 'ok', 
+      message: 'Redis is running', 
+      metrics 
+    };
   } catch (err) {
     console.error("[Redis] ❌ Health check falhou:", err);
-    return false;
+    return { 
+      status: 'error', 
+      message: String(err), 
+      metrics 
+    };
   }
 }
 
@@ -109,7 +127,7 @@ export async function checkRedisHealth() {
  * Valida chaves para evitar injeção
  */
 function validateKey(key: string): boolean {
-  return /^[a-zA-Z0-9_-]+$/.test(key);
+  return /^[a-zA-Z0-9_:-]+$/.test(key);
 }
 
 /**
@@ -188,7 +206,7 @@ export async function closeRedis() {
   if (redisClient) {
     try {
       await redisClient.quit();
-
+      console.log('[Redis] ✅ Disconnected gracefully');
     } catch (err) {
       console.error("[Redis] ❌ Erro ao desconectar:", err);
       redisClient.disconnect();
@@ -200,13 +218,11 @@ export async function closeRedis() {
  * Graceful shutdown
  */
 process.on("SIGTERM", async () => {
-
   await closeRedis();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
-
   await closeRedis();
   process.exit(0);
 });
