@@ -10,10 +10,10 @@ import {
   Activity, MessageSquare, Clock, TrendingUp, Smartphone, Globe, Instagram,
   Settings, HelpCircle, Sun, Moon, Bot, MessageCircle, ShoppingCart
 } from "lucide-react";
+import { Canvas } from "./Canvas";
 import { FlowBuilder } from "@/components/flow/FlowBuilder";
 import { DashboardCards } from "./DashboardCards";
 import { TemplatesSection } from "./TemplatesSection";
-import { flowTemplates } from "./templates";
 import { PropertySidebar } from "./PropertySidebar";
 import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
@@ -97,30 +97,12 @@ export default function Automation() {
   };
 
   const handleSelectTemplate = (templateId: string) => {
-    // Busca o template completo no flowTemplates (templates.ts)
-    const template = flowTemplates.find(t => t.id === templateId);
-    
-    const flowData = template ? {
-      nodes: template.nodes || [],
-      edges: template.edges || []
-    } : { nodes: [], edges: [] };
-    
     createMutation.mutate({
-      name: template?.name || `Fluxo - ${templateId}`,
+      name: `Fluxo - ${templateId}`,
       templateType: templateId,
-      flowData: flowData,
+      flowData: { nodes: [], edges: [] },
       isActive: false,
     });
-    
-    // Define o flow para edição (carrega no editor)
-    if (template) {
-      setEditingFlow({
-        id: Date.now(), // Temporário até o backend retornar o ID
-        name: template.name,
-        flowData: flowData
-      });
-    }
-    
     setActiveTab("editor");
   };
 
@@ -298,10 +280,8 @@ export default function Automation() {
             {/* Editor Visual */}
             <TabsContent value="editor" className="flex-1 min-h-0">
               <div className="flex gap-4 h-full">
-              <div className="flex gap-4 h-full">
                 <div className="flex-1">
                   <FlowBuilder 
-                    key={editingFlow?.id || 'novo-' + Date.now()}
                     initialNodes={editingFlow?.flowData?.nodes || []}
                     initialEdges={editingFlow?.flowData?.edges || []}
                     onSave={(nodes, edges) => {
