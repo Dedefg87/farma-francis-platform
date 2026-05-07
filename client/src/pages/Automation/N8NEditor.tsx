@@ -136,6 +136,7 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [darkMode, setDarkMode] = useState(false);
   
   // Simulation state
   const [simulating, setSimulating] = useState(false);
@@ -241,7 +242,27 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     a.click();
   };
 
-  // Simulation function
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S: Save
+      if (e.ctrlKey && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+      // Ctrl+Z: Undo (simplified)
+      if (e.ctrlKey && e.key === 'z') {
+        e.preventDefault();
+        alert('Undo: funcionalidade em desenvolvimento');
+      }
+      // Del: Delete selected nodes
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // Simplified: would need to track selected nodes
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleSave]);
   const handleSimulate = useCallback(() => {
     if (nodes.length === 0) {
       alert('Nenhum nó para simular!');
