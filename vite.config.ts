@@ -18,7 +18,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'react-vendor': ['react', 'react-dom'],
           'ui-vendor': ['recharts', 'emoji-picker-react', 'lucide-react'],
           'utils-vendor': ['date-fns', 'clsx', 'sonner', 'zod'],
           'trpc-vendor': ['@trpc/client', '@trpc/server', 'superjson'],

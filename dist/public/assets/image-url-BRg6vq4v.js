@@ -1,0 +1,1 @@
+function s(t,r){if(!t)return"";if(t.startsWith("data:")||t.startsWith("http"))return t;const e="https://pub-33c481f0a9e94adb8870472308f49471.r2.dev",a=t.replace(/^\//,"");return`${e.replace(/\/$/,"")}/${a}`}export{s as g};
