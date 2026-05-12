@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { Node } from 'reactflow';
-import { isFeatureEnabled } from './features';
+import { isFeatureEnabled } from '../features';
 
 interface NodeInteractionConfig {
   onSingleClick?: (node: Node) => void;

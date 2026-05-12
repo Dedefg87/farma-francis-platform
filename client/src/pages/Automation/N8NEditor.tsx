@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -24,46 +24,60 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Play, Save, Download, Upload, Plus, Trash2, Settings, Eye, 
   GripVertical, Search, ChevronDown, ChevronRight, X, TestTube,
-  MessageSquare, Webhook, Clock, GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package, Phone, Instagram, Mail, Bell, Database, GitCompare, Repeat, AlertTriangle, UserCheck, CreditCard, FileText, Bot, GitMerge
+  MessageSquare, Webhook, Clock, GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package, Phone, Instagram, Mail, Bell, Database, GitCompare, Repeat, AlertTriangle, UserCheck, CreditCard, FileText, Bot, GitMerge, Copy, CheckCircle
 } from 'lucide-react';
 import { 
   NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField 
 } from './node-types';
+import { usePersistentEditorState } from './hooks/usePersistentEditorState';
+import { useNodeInteractionHandler } from './hooks/useNodeInteractionHandler';
+import { NodeErrorBadge, getNodeErrorClasses } from './components/NodeErrorBadge';
+import { FloatingPanel } from './components/FloatingPanel';
+import { InlineNodeEditor } from './components/InlineNodeEditor';
+import { isFeatureEnabled } from './features';
 
 // Node component for React Flow
-function WorkflowNodeComponent({ data }: any) {
+function WorkflowNodeComponent({ data, id }: any) {
   const nodeDef = getNodeType(data.nodeType);
   const color = nodeDef?.color || '#6b7280';
   const Icon = nodeDef?.icon;
+  const hasErrors = nodeDef?.errors?.some((e: any) => e.severity === 'error');
+  const hasWarnings = nodeDef?.errors?.some((e: any) => e.severity === 'warning');
+
+  const borderColor = hasErrors ? '#ef4444' : hasWarnings ? '#f59e0b' : color;
+  const errorRingClass = hasErrors ? 'ring-2 ring-red-400 ring-offset-1' : hasWarnings ? 'ring-2 ring-amber-400 ring-offset-1' : '';
+
   return (
     <div
+      className={errorRingClass}
       style={{
         padding: '10px 14px',
         borderRadius: '8px',
         background: 'white',
-        borderLeft: `4px solid ${color}`,
+        borderLeft: `4px solid ${borderColor}`,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
         minWidth: '180px',
         fontSize: '14px',
         cursor: 'grab',
+        position: 'relative',
       }}
-      onClick={() => data.onClick && data.onClick(data)}
     >
+      {/* Error/Warning Badge */}
+      {isFeatureEnabled('ERROR_INDICATOR') && nodeDef?.errors && nodeDef.errors.length > 0 && (
+        <div
+          className={`absolute -top-2 -right-2 z-10 flex items-center justify-center w-5 h-5 rounded-full border-2 border-white text-white text-[10px] font-bold shadow-sm ${
+            hasErrors ? 'bg-red-500' : 'bg-amber-500'
+          }`}
+          title={nodeDef.errors.map((e: any) => e.message).join('\n')}
+        >
+          {nodeDef.errors.length > 1 ? nodeDef.errors.length : '!'}
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
         {Icon && <Icon size={16} style={{ color }} />}
         <span style={{ fontWeight: 500, color: '#1f2937' }}>{data.label}</span>
       </div>
       <div style={{ fontSize: '11px', color: '#6b7280' }}>{nodeDef?.description}</div>
-      {/* Handles */}
-      {data.inputs?.map((input: any) => (
-        <div key={input.id} style={{ position: 'absolute', top: '50%', left: '-5px', transform: 'translateY(-50%)' }}>
-          {/* React Flow Handle will be added via React Flow's Handle component, but for simplicity we just show dot */}
-        </div>
-      ))}
-      {data.outputs?.map((output: any) => (
-        <div key={output.id} style={{ position: 'absolute', top: '50%', right: '-5px', transform: 'translateY(-50%)' }}>
-        </div>
-      ))}
     </div>
   );
 }
@@ -117,12 +131,30 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(
-    CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
-  );
+  const [floatingPanelNode, setFloatingPanelNode] = useState<Node | null>(null);
+  const [inlineEditNode, setInlineEditNode] = useState<Node | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // Estado persistente da UI
+  const persistentState = usePersistentEditorState();
+
+  // Handlers centralizados de interação
+  const interactionHandlers = useNodeInteractionHandler({
+    onSingleClick: (node) => {
+      if (isFeatureEnabled('FLOATING_PANEL')) {
+        setFloatingPanelNode(node);
+      } else {
+        setSelectedNode(node);
+      }
+    },
+    onDoubleClick: (node) => {
+      if (isFeatureEnabled('INLINE_EDIT')) {
+        setInlineEditNode(node);
+      } else {
+        setSelectedNode(node);
+      }
+    },
+  });
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#10b981' } }, eds)),
@@ -230,12 +262,46 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     reader.readAsText(file);
   };
 
-  const handleDeleteNode = useCallback(() => {
-    if (!selectedNode) return;
-    setNodes((nds) => nds.filter((node) => node.id !== selectedNode.id));
-    setEdges((eds) => eds.filter((edge) => edge.source !== selectedNode.id && edge.target !== selectedNode.id));
+  const handleDeleteNode = useCallback((nodeToDelete?: Node) => {
+    const target = nodeToDelete || selectedNode;
+    if (!target) return;
+    setNodes((nds) => nds.filter((node) => node.id !== target.id));
+    setEdges((eds) => eds.filter((edge) => edge.source !== target.id && edge.target !== target.id));
     setSelectedNode(null);
+    setFloatingPanelNode(null);
   }, [selectedNode, setNodes, setEdges]);
+
+  const handleDuplicateNode = useCallback((node: Node) => {
+    const newNode: Node = {
+      ...node,
+      id: `${node.data?.nodeType}-${Date.now()}`,
+      position: {
+        x: node.position.x + 200,
+        y: node.position.y,
+      },
+      data: {
+        ...node.data,
+      },
+    };
+    setNodes((nds) => [...nds, newNode]);
+    setFloatingPanelNode(null);
+  }, [setNodes]);
+
+  const handleInlineEditSave = useCallback((nodeId: string, newLabel: string) => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === nodeId
+          ? { ...n, data: { ...n.data, label: newLabel } }
+          : n
+      )
+    );
+    setInlineEditNode(null);
+  }, [setNodes]);
+
+  const handleEditFromFloating = useCallback((node: Node) => {
+    setFloatingPanelNode(null);
+    setSelectedNode(node);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -361,6 +427,10 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
             onConnect={onConnect}
             onDrop={onDrop}
             onDragOver={onDragOver}
+            onNodeClick={interactionHandlers.onNodeClick}
+            onNodeDoubleClick={interactionHandlers.onNodeDoubleClick}
+            onNodeMouseEnter={interactionHandlers.onNodeMouseEnter}
+            onNodeMouseLeave={interactionHandlers.onNodeMouseLeave}
             nodeTypes={nodeTypes}
             fitView
             className="bg-gray-50"
@@ -376,6 +446,30 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
               nodeStrokeWidth={2}
             />
           </ReactFlow>
+
+          {/* Floating Panel */}
+          {floatingPanelNode && (
+            <FloatingPanel
+              node={floatingPanelNode}
+              position={{
+                x: floatingPanelNode.position.x + 90,
+                y: floatingPanelNode.position.y,
+              }}
+              onEdit={handleEditFromFloating}
+              onDuplicate={handleDuplicateNode}
+              onDelete={handleDeleteNode}
+              onClose={() => setFloatingPanelNode(null)}
+            />
+          )}
+
+          {/* Inline Editor */}
+          {inlineEditNode && (
+            <InlineNodeEditor
+              node={inlineEditNode}
+              onSave={handleInlineEditSave}
+              onCancel={() => setInlineEditNode(null)}
+            />
+          )}
         </div>
       </div>
 
@@ -402,13 +496,37 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
   );
 }
 
-// Simplified Config Panel - will be expanded later
+// Config Panel com suporte a erros
 function NodeConfigPanel({ node, onClose }: { node: Node; onClose: () => void }) {
   const nodeDef = getNodeType(node.data?.nodeType);
   if (!nodeDef) return <div>Nó não encontrado</div>;
 
+  const errors = nodeDef?.errors || [];
+  const hasErrors = errors.length > 0;
+
   return (
     <div className="space-y-4">
+      {/* Error Summary */}
+      {isFeatureEnabled('ERROR_INDICATOR') && hasErrors && (
+        <div className={`p-3 rounded-lg border ${
+          errors.some((e: any) => e.severity === 'error')
+            ? 'bg-red-50 border-red-200'
+            : 'bg-amber-50 border-amber-200'
+        }`}>
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle size={14} className={errors.some((e: any) => e.severity === 'error') ? 'text-red-500' : 'text-amber-500'} />
+            <span className="text-sm font-medium">
+              {errors.length} {errors.length === 1 ? 'problema encontrado' : 'problemas encontrados'}
+            </span>
+          </div>
+          <ul className="text-xs text-gray-600 space-y-1 ml-5 list-disc">
+            {errors.map((err: any, i: number) => (
+              <li key={i}>{err.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div>
         <Label>Geral</Label>
         <Input defaultValue={node.data.label} className="mt-1" />
