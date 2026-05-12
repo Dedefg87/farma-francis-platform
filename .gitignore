@@ -3,9 +3,10 @@
 .pnpm-store/
 
 # Build outputs
-# Build artifacts - COMENTADO PARA PERMITIR DEPLOY NO RAILWAY
-# dist/
-# build/
+# Railway builds via Dockerfile, no need to commit dist/
+dist/
+client/dist/
+build/
 *.dist
 
 # Environment variables
