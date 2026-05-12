@@ -8,6 +8,12 @@ import {
 
 // ==================== TYPES ====================
 
+export interface NodeError {
+  field: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
 export interface WorkflowNode {
   id: string;
   type: string;
@@ -19,6 +25,7 @@ export interface WorkflowNode {
   inputs?: NodePort[];
   outputs?: NodePort[];
   config?: ConfigField[];
+  errors?: NodeError[];
 }
 
 export interface NodePort {
