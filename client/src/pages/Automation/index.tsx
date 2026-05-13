@@ -20,6 +20,7 @@ import { Footer } from "./Footer";
 import { flowTemplates } from "./templates";
 import { useFullCanvasView } from "./hooks/useFullCanvasView";
 import { FullCanvasToggle } from "./components/FullCanvasToggle/FullCanvasToggle";
+// Fase 2: Hover Preview + Autoscroll + Minimap + Full Canvas
 
 type TabType = "dashboard" | "editor" | "templates" | "config" | "docs";
 

@@ -129,6 +129,7 @@ interface N8NEditorProps {
 }
 
 export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimulate, isFullCanvas = false }: N8NEditorProps) {
+  console.log('[N8NEditor] Render called, isFullCanvas:', isFullCanvas);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
