@@ -21,6 +21,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 1: Recepcionista Digital Inteligente =====
   {
     id: "receptionist-ia",
+        nodeType: "action",
     name: "🤖 Boas-Vindas Omnichannel com IA",
     description: "Recepcionista digital que envia boas-vindas personalizadas, cria contatos e atribui agentes",
     icon: Bot,
@@ -28,25 +29,29 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "📩 Nova Mensagem (WA/IG)", config: { event: "message_received", channels: ["whatsapp", "instagram"] } },
       },
       {
         id: "condition-new-contact",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "É Novo Contato?", config: { condition: "is_new_contact" } },
       },
       {
         id: "condition-working-hours",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Horário Comercial?", config: { condition: "working_hours", schedule: { start: "08:00", end: "18:00" } } },
       },
       {
         id: "message-welcome",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 50 },
         data: {
           label: "Enviar Boas-Vindas",
@@ -58,13 +63,15 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "action-create-contact",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 150 },
         data: { label: "Criar Contato", config: { action: "create_contact", tags: ["Novo Cliente"], origin: "{{channel}}" } },
       },
       {
         id: "action-assign-agent",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 900, y: 100 },
         data: { label: "Atribuir Agente", config: { action: "assign_agent", queue: "general", fallback: "plantao" } },
       },
@@ -82,6 +89,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 2: Triage de Receita Médica =====
   {
     id: "receipt-triage",
+        nodeType: "action",
     name: "💊 Detector de Receita com IA",
     description: "Classifica receitas médicas, valida documentos e encaminha para farmacêuticos",
     icon: FileText,
@@ -89,31 +97,36 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "📎 Documento Anexado", config: { event: "document_received", types: ["pdf", "image"] } },
       },
       {
         id: "ai-classify",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "IA Classifica Documento", config: { action: "ai_classify", types: ["receita", "exame", "rg", "comprovante"] } },
       },
       {
         id: "condition-controlled",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 50 },
         data: { label: "Receita Controlada?", config: { condition: "receipt_type == 'controlled'" } },
       },
       {
         id: "action-create-task",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 50 },
         data: { label: "Criar Tarefa Urgente", config: { action: "create_task", priority: "high", assignee: "pharmacist_1", title: "📋 Validar receita de {{nome}}" } },
       },
       {
         id: "action-notify",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 150 },
         data: { label: "Notificar Admin", config: { action: "notify_admin", sound: true } },
       },
@@ -129,6 +142,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 3: Urgência Médica Detector =====
   {
     id: "urgency-detector",
+        nodeType: "action",
     name: "🚨 Alerta de Urgência Médica",
     description: "Detecta palavras de urgência, prioriza atendimento e notifica agentes",
     icon: AlertTriangle,
@@ -136,32 +150,37 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "📩 Mensagem Recebida", config: { event: "message_received" } },
       },
       {
         id: "ai-urgency",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "IA Detecta Urgência", config: { action: "detect_urgency", keywords: ["urgência", "emergência", "dor forte", "sangrando"] } },
       },
       {
         id: "action-prioritize",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Priorizar URGENTE", config: { action: "add_tag", tag: "🚨 URGENTE", color: "#e74c3c" } },
       },
       {
         id: "action-notify-agents",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 100 },
         data: { label: "Notificar Agentes", config: { action: "notify_all_agents", alert: "🔴 URGÊNCIA — {{nome}}", repeat: 30 },
         },
       },
       {
         id: "message-urgency",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 900, y: 100 },
         data: { label: "Responder Urgência", config: { message: "🔴 Estamos vendo sua mensagem com URGÊNCIA.\nUm farmacêutico vai te responder INSTANTANEAMENTE.\nSe for emergência médica, ligue 192." } },
       },
@@ -177,6 +196,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 4: Lembrete Inteligente de Retorno =====
   {
     id: "recall-automation",
+        nodeType: "action",
     name: "🔔 Recall Automático de Clientes",
     description: "Envia lembretes personalizados para clientes inativos com base no histórico",
     icon: Clock,
@@ -184,25 +204,29 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "⏰ Agendado (Diário)", config: { schedule: "0 9 * * *", timezone: "America/Sao_Paulo" } },
       },
       {
         id: "filter-contacts",
-        type: "default",
+        nodeType: "filter",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Filtrar Clientes", config: { filter: "status: finalizado, last_interaction >= 7d, has_purchased: true" } },
       },
       {
         id: "ai-personalize",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "IA Personaliza Mensagem", config: { action: "personalize_message", history: true } },
       },
       {
         id: "message-recall",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 100 },
         data: { label: "Enviar Lembrete", config: { message: "Olá {{nome}}! Passando pra saber como você está.\n{{personalized_message}}", rate_limit: "30s" } },
       },
@@ -217,6 +241,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 5: Roteamento Inteligente =====
   {
     id: "smart-routing",
+        nodeType: "action",
     name: "👤 Roteamento por Especialidade",
     description: "Roteia atendimentos para o departamento correto baseado em palavras-chave",
     icon: Activity,
@@ -224,25 +249,29 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "📩 Nova Mensagem", config: { event: "message_received" } },
       },
       {
         id: "ai-intent",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "IA Analisa Intent", config: { action: "detect_intent", keywords: { pharmacist: ["receita", "farmácia"], support: ["troca", "cancelar"], sales: ["preço", "orçamento"], admin: ["gerente", "reclamar"] } } },
       },
       {
         id: "action-route",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Roteear para Agente", config: { action: "assign_agent", fallback: "anderson" } },
       },
       {
         id: "message-routing",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 100 },
         data: { label: "Informar Cliente", config: { message: "Vou transferir você para o {{agente}} 🧑‍⚕️\nTempo estimado: {{tempo_fila}}" } },
       },
@@ -257,6 +286,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 6: Follow-up Pós-Venda =====
   {
     id: "post-sale-followup",
+        nodeType: "action",
     name: "📋 Follow-up Pós-Venda",
     description: "Envia pesquisa NPS automática e recomenda produtos após atendimento",
     icon: Star,
@@ -264,25 +294,29 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "🔄 Atendimento Finalizado", config: { event: "ticket_closed", duration: ">2min" } },
       },
       {
         id: "delay-1",
-        type: "default",
+        nodeType: "wait",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Aguardar 30min", config: { delay: 1800 } },
       },
       {
         id: "message-nps",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Enviar NPS", config: { message: "👋 {{nome}}, como foi seu atendimento?\nDe 0 a 10, quanto você recomendaria a gente?", buttons: ["😁", "😐", "🙁"] } },
       },
       {
         id: "ai-analyze",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 100 },
         data: { label: "Analisar Resposta", config: { action: "analyze_nps", tags: { promoter: "Cliente Promotor", neutral: "Cliente Neutro", detractor: "Cliente Detrator" } } },
       },
@@ -297,6 +331,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 7: Anti-Fraude =====
   {
     id: "anti-fraud",
+        nodeType: "action",
     name: "🛡️ Validador de Documentos",
     description: "Valida documentos com IA e detecta possíveis fraudes",
     icon: Shield,
@@ -304,25 +339,29 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "📎 Documento Anexado", config: { event: "document_received", types: ["image/jpeg", "image/png"] } },
       },
       {
         id: "ai-vision",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "IA Analisa Documento", config: { action: "vision_analyze", extract: ["nome", "CPF", "data_nascimento"] } },
       },
       {
         id: "condition-fraud",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Score de Risco", config: { condition: "fraud_score > 60" } },
       },
       {
         id: "action-block",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 50 },
         data: { label: "Bloquear Cadastro", config: { action: "block_account", notify: "anderson" } },
       },
@@ -337,6 +376,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 8: Notificação de Estoque =====
   {
     id: "stock-notification",
+        nodeType: "action",
     name: "📦 Alerta de Estoque",
     description: "Notifica clientes na fila de espera quando medicamento chega",
     icon: Package,
@@ -344,19 +384,22 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "📡 Webhook Estoque", config: { event: "stock_updated", medicine: "{{medicine}}" } },
       },
       {
         id: "filter-waitlist",
-        type: "default",
+        nodeType: "filter",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Buscar Fila de Espera", config: { filter: "waiting_for: {{medicine}}", limit: 10 } },
       },
       {
         id: "message-stock",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Notificar Cliente", config: { message: "🎉 {{nome}}, a {{medicine}} chegou!\n📦 {{quantity}} unidades disponíveis.\nQuer reservar o seu? Responda SIM! 👇" } },
       },
@@ -370,6 +413,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 9: Auditoria e Compliance =====
   {
     id: "audit-compliance",
+        nodeType: "action",
     name: "📝 Log de Auditoria",
     description: "Registra todas as ações do sistema para conformidade e detecção de anomalias",
     icon: FileText,
@@ -377,19 +421,22 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "🎯 Ação no Sistema", config: { event: "any_action", log: true } },
       },
       {
         id: "action-capture",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Capturar Metadados", config: { action: "capture_metadata", fields: ["timestamp", "agent", "action", "ip"] } },
       },
       {
         id: "action-store",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Armazenar Log", config: { action: "store_log", table: "log_auditoria", retention: "90d" } },
       },
@@ -403,6 +450,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ===== TEMPLATE 10: Dashboard de Desempenho =====
   {
     id: "performance-dashboard",
+        nodeType: "action",
     name: "📊 Dashboard de Desempenho",
     description: "Coleta métricas de automação e gera relatórios em tempo real",
     icon: BarChart,
@@ -410,25 +458,29 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "⏰ Agendado (Hora)", config: { schedule: "0 * * * *", timezone: "America/Sao_Paulo" } },
       },
       {
         id: "action-collect",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Coletar Métricas", config: { action: "collect_metrics", types: ["automations", "messages", "documents"] } },
       },
       {
         id: "action-calculate",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 100 },
         data: { label: "Calcular KPIs", config: { action: "calculate_kpis", metrics: ["taxa_automacao", "roi", "precisao_ia"] } },
       },
       {
         id: "action-notify-admin",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 100 },
         data: { label: "Notificar Admin", config: { action: "send_report", channel: "telegram", target: "anderson" } },
       },
@@ -441,6 +493,7 @@ export const flowTemplates: FlowTemplate[] = [
   },
   {
     id: "welcome",
+        nodeType: "action",
     name: "Boas-vindas Automáticas",
     description: "Mensagem de boas-vindas personalizada para novos contatos",
     icon: MessageSquare,
@@ -448,19 +501,22 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "Novo Contato", config: { event: "new_contact" } },
       },
       {
         id: "condition-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Horário Comercial?", config: { condition: "working_hours" } },
       },
       {
         id: "message-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 50 },
         data: {
           label: "Boas-vindas Imediato",
@@ -469,7 +525,8 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "message-2",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 150 },
         data: {
           label: "Boas-vindas Fora de Horário",
@@ -478,7 +535,8 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "tag-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 50 },
         data: { label: "Adicionar Tag", config: { action: "add_tag", tag: "novo_cliente" } },
       },
@@ -492,6 +550,7 @@ export const flowTemplates: FlowTemplate[] = [
   },
   {
     id: "faq",
+        nodeType: "action",
     name: "FAQ com IA",
     description: "Responde perguntas frequentes usando inteligência artificial",
     icon: Sparkles,
@@ -499,19 +558,22 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 100 },
         data: { label: "Mensagem Recebida", config: { event: "message_received" } },
       },
       {
         id: "condition-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 100 },
         data: { label: "Contém Pergunta?", config: { condition: "contains_question" } },
       },
       {
         id: "ai-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 50 },
         data: {
           label: "Consultar IA",
@@ -523,19 +585,22 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "message-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 50 },
         data: { label: "Enviar Resposta IA", config: { message: "{{ai_response}}" } },
       },
       {
         id: "human-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 150 },
         data: { label: "Transferir Humano", config: { action: "transfer_to_human" } },
       },
       {
         id: "log-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 900, y: 50 },
         data: { label: "Registrar Interação", config: { action: "log", category: "faq_ia" } },
       },
@@ -550,6 +615,7 @@ export const flowTemplates: FlowTemplate[] = [
   },
   {
     id: "qualification",
+        nodeType: "action",
     name: "Qualificação de Leads",
     description: "Qualifica leads automaticamente com perguntas",
     icon: UserCheck,
@@ -557,13 +623,15 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 150 },
         data: { label: "Novo Lead", config: { event: "new_lead" } },
       },
       {
         id: "message-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 150 },
         data: {
           label: "Pergunta 1: Interesse",
@@ -572,13 +640,15 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "wait-1",
-        type: "default",
+        nodeType: "wait",
+        type: "customNode",
         position: { x: 500, y: 150 },
         data: { label: "Aguardar Resposta", config: { timeout: 300 } },
       },
       {
         id: "message-2",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 700, y: 150 },
         data: {
           label: "Pergunta 2: Urgência",
@@ -587,19 +657,22 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "condition-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 900, y: 100 },
         data: { label: "Lead Qualificado?", config: { condition: "score >= 7" } },
       },
       {
         id: "crm-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1100, y: 50 },
         data: { label: "Adicionar ao CRM (Quente)", config: { action: "add_to_crm", status: "hot" } },
       },
       {
         id: "crm-2",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1100, y: 150 },
         data: { label: "Adicionar ao CRM (Frio)", config: { action: "add_to_crm", status: "cold" } },
       },
@@ -615,6 +688,7 @@ export const flowTemplates: FlowTemplate[] = [
   },
   {
     id: "scheduling",
+        nodeType: "action",
     name: "Agendamento de Consultas",
     description: "Permite agendamento automático de consultas",
     icon: Calendar,
@@ -622,43 +696,50 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 150 },
         data: { label: "Solicitar Agendamento", config: { keyword: "agendar" } },
       },
       {
         id: "api-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 300, y: 150 },
         data: { label: "Verificar Disponibilidade", config: { endpoint: "/api/availability", method: "GET" } },
       },
       {
         id: "message-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 150 },
         data: { label: "Mostrar Horários", config: { message: "Horários disponíveis:\n{{available_slots}}" } },
       },
       {
         id: "wait-1",
-        type: "default",
+        nodeType: "wait",
+        type: "customNode",
         position: { x: 700, y: 150 },
         data: { label: "Aguardar Escolha", config: { timeout: 600 } },
       },
       {
         id: "api-2",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 900, y: 150 },
         data: { label: "Confirmar Agendamento", config: { endpoint: "/api/appointments", method: "POST" } },
       },
       {
         id: "message-2",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1100, y: 100 },
         data: { label: "Confirmação", config: { message: "✅ Agendamento confirmado para {{date}} às {{time}}!" } },
       },
       {
         id: "notification-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1100, y: 200 },
         data: { label: "Enviar Lembrete", config: { action: "schedule_reminder", time: "-1 day" } },
       },
@@ -674,6 +755,7 @@ export const flowTemplates: FlowTemplate[] = [
   },
   {
     id: "satisfaction",
+        nodeType: "action",
     name: "Pesquisa de Satisfação",
     description: "Coleta feedback dos clientes após atendimento",
     icon: Star,
@@ -681,19 +763,22 @@ export const flowTemplates: FlowTemplate[] = [
     nodes: [
       {
         id: "trigger-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 100, y: 150 },
         data: { label: "Atendimento Finalizado", config: { event: "ticket_closed" } },
       },
       {
         id: "delay-1",
-        type: "default",
+        nodeType: "wait",
+        type: "customNode",
         position: { x: 300, y: 150 },
         data: { label: "Aguardar 5min", config: { delay: 300 } },
       },
       {
         id: "message-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 500, y: 150 },
         data: {
           label: "Solicitar Avaliação",
@@ -704,31 +789,36 @@ export const flowTemplates: FlowTemplate[] = [
       },
       {
         id: "wait-1",
-        type: "default",
+        nodeType: "wait",
+        type: "customNode",
         position: { x: 700, y: 150 },
         data: { label: "Aguardar Resposta", config: { timeout: 600 } },
       },
       {
         id: "condition-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 900, y: 100 },
         data: { label: "Nota >= 4?", config: { condition: "rating >= 4" } },
       },
       {
         id: "message-2",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1100, y: 50 },
         data: { label: "Agradecer", config: { message: "🙏 Obrigado pelo feedback positivo!" } },
       },
       {
         id: "message-3",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1100, y: 150 },
         data: { label: "Pedir Detalhes", config: { message: "Sentimos muito. Pode nos contar o que aconteceu?" } },
       },
       {
         id: "database-1",
-        type: "default",
+        nodeType: "action",
+        type: "customNode",
         position: { x: 1300, y: 100 },
         data: { label: "Salvar Feedback", config: { action: "save_to_database", table: "feedback" } },
       },
@@ -746,26 +836,27 @@ export const flowTemplates: FlowTemplate[] = [
   },
   {
     id: "chatbot-atendimento",
+        nodeType: "action",
     name: "Chatbot de Atendimento",
     description: "Fluxo inteligente: Horário → Ligação → Finalização → Saudação",
     icon: MessageSquare,
     color: "bg-indigo-600",
     nodes: [
-      { id: "trigger-1", type: "default", position: { x: 50, y: 200 }, data: { label: "📩 Nova Mensagem", config: { event: "message_received" } } },
-      { id: "condition-horario", type: "default", position: { x: 250, y: 200 }, data: { label: "🕐 Horário Comercial?", config: { condition: "working_hours", schedule: { mon_sat: { start: "08:00", end: "19:40" }, sun_holiday: { start: "08:00", end: "11:40" } } } } },
-      { id: "message-fora-horario", type: "default", position: { x: 450, y: 100 }, data: { label: "⛔ Fora de Horário", config: { message: "Nosso horário de atendimento é de 08h as 20h de Segunda a Sábado\nAos Domingos e Feriados de 8h ás 12h\nRetornaremos no próximo horário disponível." } } },
-      { id: "condition-ligacao", type: "default", position: { x: 450, y: 200 }, data: { label: "📞 É Ligação?", config: { condition: 'message_type == "call" || message_type == "video"' } } },
-      { id: "message-ligacao", type: "default", position: { x: 650, y: 100 }, data: { label: "❌ Recusar Ligação", config: { message: "Não atendemos ligações de áudio ou vídeo pelo WhatsApp, por favor envie *UMA MENSAGEM* ou ligue pelo no número de telefone 3180-0030 e 3180-0033." } } },
-      { id: "condition-venda", type: "default", position: { x: 650, y: 200 }, data: { label: "💰 Fechou Venda?", config: { condition: 'close_reason == "venda"' } } },
-      { id: "message-venda", type: "default", position: { x: 850, y: 150 }, data: { label: "⭐ Pesquisa Venda", config: { message: "Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\nDigite 5️⃣ Muito satisfeito 😍\nDigite 4️⃣ Satisfeito 😀\nDigite 3️⃣ Indiferente 😐\nDigite 2️⃣ Insatisfeito ☹️\nDigite 1️⃣ Muito insatisfeito 😞" } } },
-      { id: "condition-orcamento", type: "default", position: { x: 850, y: 250 }, data: { label: "📋 Foi Orçamento?", config: { condition: 'close_reason == "orcamento"' } } },
-      { id: "message-orcamento", type: "default", position: { x: 1050, y: 200 }, data: { label: "✅ Agradecer Orçamento", config: { message: "Agradecemos seu contato, e estaremos sempre à disposição.😉" } } },
-      { id: "condition-silencio", type: "default", position: { x: 1050, y: 300 }, data: { label: "🤫 Silêncio?", config: { condition: 'close_reason == "conversa_anterior" || close_reason == "engano"' } } },
-      { id: "action-silencio", type: "default", position: { x: 1250, y: 250 }, data: { label: "🔇 Não Responder", config: { action: "no_response" } } },
-      { id: "condition-logado", type: "default", position: { x: 1250, y: 350 }, data: { label: "👤 Agente Logado?", config: { condition: "agent_logged_in" } } },
-      { id: "function-saudacao", type: "default", position: { x: 1450, y: 300 }, data: { label: "🌅 Gerar Saudação", config: { function: "get_greeting", variables: { saudacao: "{{greeting}}", nome: "{{agent_name}}" } } } },
-      { id: "message-logado", type: "default", position: { x: 1650, y: 300 }, data: { label: "💬 Saudação Personalizada", config: { message: "{{greeting}} eu sou {{agent_name}}, como posso te ajudar?" } } },
-      { id: "message-nao-logado", type: "default", position: { x: 1450, y: 400 }, data: { label: "💬 Saudação Genérica", config: { message: "{{greeting}} um momento que já já vamos te atender!" } } },
+      { id: "trigger-1", type: "customNode", position: { x: 50, y: 200 }, data: { label: "📩 Nova Mensagem", config: { event: "message_received" } } },
+      { id: "condition-horario", type: "customNode", position: { x: 250, y: 200 }, data: { label: "🕐 Horário Comercial?", config: { condition: "working_hours", schedule: { mon_sat: { start: "08:00", end: "19:40" }, sun_holiday: { start: "08:00", end: "11:40" } } } } },
+      { id: "message-fora-horario", type: "customNode", position: { x: 450, y: 100 }, data: { label: "⛔ Fora de Horário", config: { message: "Nosso horário de atendimento é de 08h as 20h de Segunda a Sábado\nAos Domingos e Feriados de 8h ás 12h\nRetornaremos no próximo horário disponível." } } },
+      { id: "condition-ligacao", type: "customNode", position: { x: 450, y: 200 }, data: { label: "📞 É Ligação?", config: { condition: 'message_type == "call" || message_type == "video"' } } },
+      { id: "message-ligacao", type: "customNode", position: { x: 650, y: 100 }, data: { label: "❌ Recusar Ligação", config: { message: "Não atendemos ligações de áudio ou vídeo pelo WhatsApp, por favor envie *UMA MENSAGEM* ou ligue pelo no número de telefone 3180-0030 e 3180-0033." } } },
+      { id: "condition-venda", type: "customNode", position: { x: 650, y: 200 }, data: { label: "💰 Fechou Venda?", config: { condition: 'close_reason == "venda"' } } },
+      { id: "message-venda", type: "customNode", position: { x: 850, y: 150 }, data: { label: "⭐ Pesquisa Venda", config: { message: "Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\nDigite 5️⃣ Muito satisfeito 😍\nDigite 4️⃣ Satisfeito 😀\nDigite 3️⃣ Indiferente 😐\nDigite 2️⃣ Insatisfeito ☹️\nDigite 1️⃣ Muito insatisfeito 😞" } } },
+      { id: "condition-orcamento", type: "customNode", position: { x: 850, y: 250 }, data: { label: "📋 Foi Orçamento?", config: { condition: 'close_reason == "orcamento"' } } },
+      { id: "message-orcamento", type: "customNode", position: { x: 1050, y: 200 }, data: { label: "✅ Agradecer Orçamento", config: { message: "Agradecemos seu contato, e estaremos sempre à disposição.😉" } } },
+      { id: "condition-silencio", type: "customNode", position: { x: 1050, y: 300 }, data: { label: "🤫 Silêncio?", config: { condition: 'close_reason == "conversa_anterior" || close_reason == "engano"' } } },
+      { id: "action-silencio", type: "customNode", position: { x: 1250, y: 250 }, data: { label: "🔇 Não Responder", config: { action: "no_response" } } },
+      { id: "condition-logado", type: "customNode", position: { x: 1250, y: 350 }, data: { label: "👤 Agente Logado?", config: { condition: "agent_logged_in" } } },
+      { id: "function-saudacao", type: "customNode", position: { x: 1450, y: 300 }, data: { label: "🌅 Gerar Saudação", config: { function: "get_greeting", variables: { saudacao: "{{greeting}}", nome: "{{agent_name}}" } } } },
+      { id: "message-logado", type: "customNode", position: { x: 1650, y: 300 }, data: { label: "💬 Saudação Personalizada", config: { message: "{{greeting}} eu sou {{agent_name}}, como posso te ajudar?" } } },
+      { id: "message-nao-logado", type: "customNode", position: { x: 1450, y: 400 }, data: { label: "💬 Saudação Genérica", config: { message: "{{greeting}} um momento que já já vamos te atender!" } } },
     ],
     edges: [
       { id: "e1-horario", source: "trigger-1", target: "condition-horario" },
