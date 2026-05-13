@@ -18,7 +18,7 @@ import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
 import { Footer } from "./Footer";
 import { flowTemplates } from "./templates";
-// Fase 2: Hover Preview + Autoscroll + Minimap + Full Canvas
+// Fase 2: Hover Preview + Autoscroll + Minimap + Full Canvas + Exclusão de nós e fluxos
 
 type TabType = "dashboard" | "editor" | "templates" | "config" | "docs";
 
