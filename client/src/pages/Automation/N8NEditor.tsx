@@ -31,6 +31,7 @@ import {
 } from './node-types';
 import CustomNode from './components/CustomNode/CustomNode';
 import CustomEdge from './components/CustomEdge/CustomEdge';
+import { SimulationModal } from './components/SimulationModal/SimulationModal';
 
 // ==================== ICON MAPS ====================
 
@@ -104,6 +105,7 @@ export function N8NEditor({
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
+  const [showSimulation, setShowSimulation] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { zoomIn, zoomOut, fitView } = useReactFlow();
 
@@ -232,6 +234,10 @@ export function N8NEditor({
 
   // ==================== IMPORT / EXPORT ====================
 
+  const handleSimulate = () => {
+    setShowSimulation(true);
+  };
+
   const handleExport = () => {
     const flowData = { nodes, edges };
     const blob = new Blob([JSON.stringify(flowData, null, 2)], { type: 'application/json' });
@@ -285,6 +291,7 @@ export function N8NEditor({
   // ==================== RENDER ====================
 
   return (
+    <>
     <div className="flex h-full w-full bg-gray-50">
       {/* ============ LEFT SIDEBAR ============ */}
       <div
@@ -409,7 +416,7 @@ export function N8NEditor({
               <Button variant="ghost" size="sm" onClick={() => onSave?.(nodes, edges)} className="h-7 text-xs">
                 <Save className="w-3.5 h-3.5 mr-1" /> Salvar
               </Button>
-              <Button variant="ghost" size="sm" onClick={onSimulate} className="h-7 text-xs">
+              <Button variant="ghost" size="sm" onClick={handleSimulate} className="h-7 text-xs">
                 <Play className="w-3.5 h-3.5 mr-1" /> Simular
               </Button>
               <div className="w-px h-5 bg-gray-200 mx-1" />
@@ -551,6 +558,15 @@ export function N8NEditor({
         </div>
       )}
     </div>
+
+    {/* Simulation Modal */}
+    <SimulationModal
+      isOpen={showSimulation}
+      onClose={() => setShowSimulation(false)}
+      nodes={nodes}
+      edges={edges}
+    />
+    </>
   );
 }
 
