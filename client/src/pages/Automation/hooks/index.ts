@@ -6,3 +6,5 @@ export { usePersistentEditorState } from "./usePersistentEditorState";
 export type { PersistentEditorState, PersistentEditorActions } from "./usePersistentEditorState";
 export { useAutoscroll } from "./useAutoscroll";
 export type { UseAutoscrollActions } from "./useAutoscroll";
+export { useFullCanvasView } from "./useFullCanvasView";
+export type { FullCanvasViewState } from "./useFullCanvasView";

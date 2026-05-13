@@ -18,6 +18,8 @@ import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
 import { Footer } from "./Footer";
 import { flowTemplates } from "./templates";
+import { useFullCanvasView } from "./hooks/useFullCanvasView";
+import { FullCanvasToggle } from "./components/FullCanvasToggle/FullCanvasToggle";
 
 type TabType = "dashboard" | "editor" | "templates" | "config" | "docs";
 
@@ -27,6 +29,7 @@ export default function Automation() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [editingFlow, setEditingFlow] = useState<{ id: number; name: string; flowData: any } | null>(null);
+  const fullCanvas = useFullCanvasView();
 
   // tRPC queries/mutations
   const { data: flowsData, isLoading, refetch } = trpc.automation.list.useQuery(
@@ -110,8 +113,13 @@ export default function Automation() {
 
   return (
     <FarmaDashboardLayout>
-        {/* Header com botões de ação */}
-        <div className={`border-b px-6 py-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
+        <FullCanvasToggle
+          isFullCanvas={fullCanvas.isFullCanvas}
+          onToggle={fullCanvas.toggle}
+        />
+
+        {/* Header com botões de ação — escondido em full canvas */}
+        <div className={`border-b px-6 py-4 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"} ${fullCanvas.isFullCanvas ? "hidden" : ""}`}>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className={`text-2xl font-bold ${darkMode ? "text-white" : "text-gray-900"}`}>
@@ -182,9 +190,9 @@ export default function Automation() {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col p-6 overflow-auto min-h-0">
+        <div className={`flex-1 flex flex-col overflow-auto min-h-0 ${fullCanvas.isFullCanvas ? "p-0" : "p-6"}`}>
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="w-full flex flex-col flex-1 min-h-0">
-            <TabsList className="grid w-full grid-cols-5 mb-6">
+            <TabsList className={`grid w-full grid-cols-5 mb-6 ${fullCanvas.isFullCanvas ? "hidden" : ""}`}>
               <TabsTrigger value="dashboard" className="text-xs">
                 <Activity className="w-3 h-3 mr-1" />
                 Dashboard
@@ -279,8 +287,8 @@ export default function Automation() {
             </TabsContent>
 
             {/* Editor Visual - N8N Style */}
-            <TabsContent value="editor" className="flex-1 min-h-0">
-              <div className="h-full" style={{ minHeight: '500px' }}>
+            <TabsContent value="editor" className={`flex-1 min-h-0 ${fullCanvas.isFullCanvas ? "fixed inset-0 z-40 bg-white" : ""}`}>
+              <div className="h-full" style={{ minHeight: fullCanvas.isFullCanvas ? '100vh' : '500px' }}>
                 <N8NEditorWrapper 
                   key={editingFlow?.id || 'novo-' + Date.now()}
                   initialNodes={editingFlow?.flowData?.nodes || []}
@@ -328,12 +336,14 @@ export default function Automation() {
           </Tabs>
         </div>
 
-        {/* Footer */}
-        <Footer 
-          darkMode={darkMode}
-          version="v2.1.0"
-          lastUpdate="05/05/2026 16:30"
-        />
+        {/* Footer — escondido em full canvas */}
+        {!fullCanvas.isFullCanvas && (
+          <Footer 
+            darkMode={darkMode}
+            version="v2.1.0"
+            lastUpdate="05/05/2026 16:30"
+          />
+        )}
     </FarmaDashboardLayout>
   );
 }
