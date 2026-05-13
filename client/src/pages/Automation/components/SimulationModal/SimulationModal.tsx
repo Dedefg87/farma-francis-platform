@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Node, Edge } from 'reactflow';
 import { getNodeType } from '../../node-types';
+import { Button } from '@/components/ui/button';
 import {
   X, Play, CheckCircle2, XCircle, AlertTriangle, Clock,
   Loader2, ChevronRight, Zap, MessageSquare, GitBranch, Brain,
