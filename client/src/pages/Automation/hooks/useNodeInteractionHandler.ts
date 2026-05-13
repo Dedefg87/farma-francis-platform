@@ -1,89 +1,135 @@
-import { useCallback, useRef } from 'react';
-import { Node } from 'reactflow';
-import { isFeatureEnabled } from '../features';
+import { useCallback, useRef } from "react";
+import { Node, useReactFlow } from "reactflow";
 
-interface NodeInteractionConfig {
-  onSingleClick?: (node: Node) => void;
-  onDoubleClick?: (node: Node) => void;
-  onHoverStart?: (node: Node) => void;
-  onHoverEnd?: (node: Node) => void;
+export interface NodeInteractionState {
+  hoveredNode: Node | null;
+  selectedNode: Node | null;
+  previewNode: Node | null;
 }
 
-/**
- * Hook centralizador de interações com nós.
- * Evita conflito entre click, duplo clique, hover e drag.
- *
- * Uso:
- * const handlers = useNodeInteractionHandler({
- *   onSingleClick: (node) => openFloatingPanel(node),
- *   onDoubleClick: (node) => openFullPanel(node),
- *   onHoverStart: (node) => showPreview(node),
- * });
- * <ReactFlow onNodeClick={handlers.onNodeClick} ... />
- */
-export function useNodeInteractionHandler(config: NodeInteractionConfig) {
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastHoveredNode = useRef<string | null>(null);
+export interface NodeInteractionActions {
+  handleNodeClick: (event: React.MouseEvent, node: Node) => void;
+  handleNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
+  handleNodeMouseEnter: (event: React.MouseEvent, node: Node) => void;
+  handleNodeMouseLeave: (event: React.MouseEvent, node: Node) => void;
+  handlePaneClick: () => void;
+  setSelectedNode: (node: Node | null) => void;
+  clearHoveredNode: () => void;
+}
 
-  // Distingue click simples de duplo clique
-  const onNodeClick = useCallback(
+export function useNodeInteractionHandler(
+  onNodeSelect?: (node: Node | null) => void,
+  onNodeDoubleClick?: (node: Node) => void,
+  hoverDelayMs = 300
+): NodeInteractionActions {
+  const { getNode } = useReactFlow();
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastClickTimeRef = useRef(0);
+  const pendingClickNodeRef = useRef<Node | null>(null);
+
+  const clearTimers = useCallback(() => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
+
+  const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      if (isFeatureEnabled('FLOATING_PANEL')) {
-        // Delay para esperar possível duplo clique
-        clickTimer.current = setTimeout(() => {
-          config.onSingleClick?.(node);
-        }, 200);
-      } else {
-        config.onSingleClick?.(node);
+      const now = Date.now();
+      if (now - lastClickTimeRef.current < 350) {
+        return;
       }
-    },
-    [config.onSingleClick]
-  );
 
-  const onNodeDoubleClick = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
-      // Cancela o timer do click simples
-      if (clickTimer.current) {
-        clearTimeout(clickTimer.current);
-        clickTimer.current = null;
-      }
-      config.onDoubleClick?.(node);
-    },
-    [config.onDoubleClick]
-  );
+      pendingClickNodeRef.current = node;
 
-  // Hover com delay para não atrapalhar drag
-  const onNodeMouseEnter = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
-      if (!isFeatureEnabled('HOVER_PREVIEW')) return;
-
-      lastHoveredNode.current = node.id;
-      hoverTimer.current = setTimeout(() => {
-        if (lastHoveredNode.current === node.id) {
-          config.onHoverStart?.(node);
+      clickTimerRef.current = setTimeout(() => {
+        const freshNode = getNode(node.id);
+        if (freshNode) {
+          onNodeSelect?.(freshNode);
         }
-      }, 300);
+        clickTimerRef.current = null;
+        pendingClickNodeRef.current = null;
+      }, 250);
     },
-    [config.onHoverStart]
+    [getNode, onNodeSelect]
   );
 
-  const onNodeMouseLeave = useCallback(
+  const handleNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      lastHoveredNode.current = null;
-      if (hoverTimer.current) {
-        clearTimeout(hoverTimer.current);
-        hoverTimer.current = null;
+      lastClickTimeRef.current = Date.now();
+
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
       }
-      config.onHoverEnd?.(node);
+      pendingClickNodeRef.current = null;
+
+      const freshNode = getNode(node.id);
+      if (freshNode) {
+        onNodeDoubleClick?.(freshNode);
+      }
     },
-    [config.onHoverEnd]
+    [getNode, onNodeDoubleClick]
   );
+
+  const handleNodeMouseEnter = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      hoverTimerRef.current = setTimeout(() => {
+        const freshNode = getNode(node.id);
+        if (freshNode) {
+          onNodeSelect?.(freshNode);
+        }
+      }, hoverDelayMs);
+    },
+    [getNode, onNodeSelect, hoverDelayMs]
+  );
+
+  const handleNodeMouseLeave = useCallback(
+    (_event: React.MouseEvent, _node: Node) => {
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+    },
+    []
+  );
+
+  const handlePaneClick = useCallback(() => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    pendingClickNodeRef.current = null;
+    onNodeSelect?.(null);
+  }, [onNodeSelect]);
+
+  const setSelectedNode = useCallback(
+    (node: Node | null) => {
+      onNodeSelect?.(node);
+    },
+    [onNodeSelect]
+  );
+
+  const clearHoveredNode = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+  }, []);
 
   return {
-    onNodeClick,
-    onNodeDoubleClick,
-    onNodeMouseEnter,
-    onNodeMouseLeave,
+    handleNodeClick,
+    handleNodeDoubleClick,
+    handleNodeMouseEnter,
+    handleNodeMouseLeave,
+    handlePaneClick,
+    setSelectedNode,
+    clearHoveredNode,
   };
 }

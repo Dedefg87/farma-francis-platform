@@ -1,109 +1,158 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { isFeatureEnabled } from '../features';
+import { useCallback, useEffect, useRef } from "react";
+import { Node, Edge, Viewport } from "reactflow";
 
-export interface EditorUIState {
-  sidebarOpen: boolean;
+const STORAGE_PREFIX = "n8n-editor";
+
+function getStorageKey(flowId: string | number, key: string): string {
+  return `${STORAGE_PREFIX}:flow-${flowId}:${key}`;
+}
+
+function safeParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export interface PersistentEditorState {
+  nodes: Node[];
+  edges: Edge[];
+  viewport: Viewport;
   selectedNodeId: string | null;
-  expandedCategories: Record<string, boolean>;
-  searchTerm: string;
-  configPanelOpen: boolean;
-  activeConfigTab: string;
+  lastModified: number;
 }
 
-const DEFAULT_STATE: EditorUIState = {
-  sidebarOpen: true,
-  selectedNodeId: null,
-  expandedCategories: {},
-  searchTerm: '',
-  configPanelOpen: false,
-  activeConfigTab: 'geral',
-};
-
-const STORAGE_KEY = 'farma-francing-editor-ui-state';
-
-function loadState(): EditorUIState {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      return { ...DEFAULT_STATE, ...JSON.parse(saved) };
-    }
-  } catch {
-    // ignore parse errors
-  }
-  return DEFAULT_STATE;
+export interface PersistentEditorActions {
+  saveNodes: (flowId: string | number, nodes: Node[]) => void;
+  saveEdges: (flowId: string | number, edges: Edge[]) => void;
+  saveViewport: (flowId: string | number, viewport: Viewport) => void;
+  saveSelectedNode: (flowId: string | number, nodeId: string | null) => void;
+  loadState: (
+    flowId: string | number
+  ) => Pick<PersistentEditorState, "nodes" | "edges" | "viewport" | "selectedNodeId"> | null;
+  clearState: (flowId: string | number) => void;
 }
 
-function saveState(state: EditorUIState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // ignore storage errors
-  }
-}
+export function usePersistentEditorState(
+  debounceMs = 500
+): PersistentEditorActions {
+  const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-/**
- * Hook que mantém o estado da UI do editor persistente entre trocas de nó.
- * Controlado pela feature flag PERSISTENT_STATE.
- */
-export function usePersistentEditorState() {
-  const [state, setState] = useState<EditorUIState>(loadState);
-  const isPersistent = isFeatureEnabled('PERSISTENT_STATE');
+  const debouncedSave = useCallback(
+    (key: string, value: unknown) => {
+      const existing = timersRef.current[key];
+      if (existing) clearTimeout(existing);
 
-  // Salva no localStorage sempre que muda (só se feature ativa)
+      timersRef.current[key] = setTimeout(() => {
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch {
+          // Storage full or unavailable — silent fail
+        }
+        delete timersRef.current[key];
+      }, debounceMs);
+    },
+    [debounceMs]
+  );
+
+  const saveNodes = useCallback(
+    (flowId: string | number, nodes: Node[]) => {
+      debouncedSave(getStorageKey(flowId, "nodes"), nodes);
+    },
+    [debouncedSave]
+  );
+
+  const saveEdges = useCallback(
+    (flowId: string | number, edges: Edge[]) => {
+      debouncedSave(getStorageKey(flowId, "edges"), edges);
+    },
+    [debouncedSave]
+  );
+
+  const saveViewport = useCallback(
+    (flowId: string | number, viewport: Viewport) => {
+      debouncedSave(getStorageKey(flowId, "viewport"), viewport);
+    },
+    [debouncedSave]
+  );
+
+  const saveSelectedNode = useCallback(
+    (flowId: string | number, nodeId: string | null) => {
+      try {
+        const key = getStorageKey(flowId, "selectedNode");
+        if (nodeId) {
+          localStorage.setItem(key, JSON.stringify(nodeId));
+        } else {
+          localStorage.removeItem(key);
+        }
+      } catch {
+        // silent
+      }
+    },
+    []
+  );
+
+  const loadState = useCallback(
+    (
+      flowId: string | number
+    ): Pick<
+      PersistentEditorState,
+      "nodes" | "edges" | "viewport" | "selectedNodeId"
+    > | null => {
+      try {
+        const nodes = safeParse<Node[]>(
+          localStorage.getItem(getStorageKey(flowId, "nodes")),
+          []
+        );
+        const edges = safeParse<Edge[]>(
+          localStorage.getItem(getStorageKey(flowId, "edges")),
+          []
+        );
+        const viewport = safeParse<Viewport>(
+          localStorage.getItem(getStorageKey(flowId, "viewport")),
+          { x: 0, y: 0, zoom: 1 }
+        );
+        const selectedNodeId = safeParse<string | null>(
+          localStorage.getItem(getStorageKey(flowId, "selectedNode")),
+          null
+        );
+
+        if (nodes.length === 0 && edges.length === 0) return null;
+
+        return { nodes, edges, viewport, selectedNodeId };
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
+  const clearState = useCallback((flowId: string | number) => {
+    const keys = ["nodes", "edges", "viewport", "selectedNode"];
+    keys.forEach((k) => {
+      try {
+        localStorage.removeItem(getStorageKey(flowId, k));
+      } catch {
+        // silent
+      }
+    });
+  }, []);
+
   useEffect(() => {
-    if (isPersistent) {
-      saveState(state);
-    }
-  }, [state, isPersistent]);
-
-  const setSidebarOpen = useCallback((open: boolean) => {
-    setState(prev => ({ ...prev, sidebarOpen: open }));
-  }, []);
-
-  const setSelectedNodeId = useCallback((id: string | null) => {
-    setState(prev => ({
-      ...prev,
-      selectedNodeId: id,
-      configPanelOpen: id !== null,
-    }));
-  }, []);
-
-  const toggleCategory = useCallback((catId: string) => {
-    setState(prev => ({
-      ...prev,
-      expandedCategories: {
-        ...prev.expandedCategories,
-        [catId]: !prev.expandedCategories[catId],
-      },
-    }));
-  }, []);
-
-  const setSearchTerm = useCallback((term: string) => {
-    setState(prev => ({ ...prev, searchTerm: term }));
-  }, []);
-
-  const setConfigPanelOpen = useCallback((open: boolean) => {
-    setState(prev => ({ ...prev, configPanelOpen: open }));
-  }, []);
-
-  const setActiveConfigTab = useCallback((tab: string) => {
-    setState(prev => ({ ...prev, activeConfigTab: tab }));
-  }, []);
-
-  const resetState = useCallback(() => {
-    setState(DEFAULT_STATE);
-    localStorage.removeItem(STORAGE_KEY);
+    const timers = timersRef.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
   }, []);
 
   return {
-    ...state,
-    isPersistent,
-    setSidebarOpen,
-    setSelectedNodeId,
-    toggleCategory,
-    setSearchTerm,
-    setConfigPanelOpen,
-    setActiveConfigTab,
-    resetState,
+    saveNodes,
+    saveEdges,
+    saveViewport,
+    saveSelectedNode,
+    loadState,
+    clearState,
   };
 }
