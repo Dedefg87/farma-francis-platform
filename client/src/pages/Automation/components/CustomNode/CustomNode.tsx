@@ -1,37 +1,35 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { getNodeType, WorkflowNode } from '../../node-types';
+import { getNodeType } from '../../node-types';
 import {
   Zap, MessageSquare, Bot, GitBranch, Users, Clock, Globe, Database,
   Settings, Phone, FileText, Filter, Send, Brain, Code, Pause, ArrowRight,
-  Package, AlertTriangle, CheckCircle2, XCircle, Loader2
+  Package, AlertTriangle, CheckCircle2, XCircle, Loader2,
 } from 'lucide-react';
 
-// Mapa de ícones por tipo de nó
 const iconMap: Record<string, React.ReactNode> = {
-  trigger: <Zap className="w-4 h-4" />,
-  message: <MessageSquare className="w-4 h-4" />,
-  ai: <Bot className="w-4 h-4" />,
-  condition: <GitBranch className="w-4 h-4" />,
-  transfer: <Users className="w-4 h-4" />,
-  wait: <Clock className="w-4 h-4" />,
-  api: <Globe className="w-4 h-4" />,
-  function: <Settings className="w-4 h-4" />,
-  set: <Database className="w-4 h-4" />,
-  delay: <Clock className="w-4 h-4" />,
-  action: <Settings className="w-4 h-4" />,
-  uraMenu: <Phone className="w-4 h-4" />,
-  createTicket: <FileText className="w-4 h-4" />,
-  filter: <Filter className="w-4 h-4" />,
-  send: <Send className="w-4 h-4" />,
-  brain: <Brain className="w-4 h-4" />,
-  code: <Code className="w-4 h-4" />,
-  pause: <Pause className="w-4 h-4" />,
-  arrowRight: <ArrowRight className="w-4 h-4" />,
-  package: <Package className="w-4 h-4" />,
+  trigger: <Zap className="w-3 h-3" />,
+  message: <MessageSquare className="w-3 h-3" />,
+  ai: <Bot className="w-3 h-3" />,
+  condition: <GitBranch className="w-3 h-3" />,
+  transfer: <Users className="w-3 h-3" />,
+  wait: <Clock className="w-3 h-3" />,
+  api: <Globe className="w-3 h-3" />,
+  function: <Settings className="w-3 h-3" />,
+  set: <Database className="w-3 h-3" />,
+  delay: <Clock className="w-3 h-3" />,
+  action: <Settings className="w-3 h-3" />,
+  uraMenu: <Phone className="w-3 h-3" />,
+  createTicket: <FileText className="w-3 h-3" />,
+  filter: <Filter className="w-3 h-3" />,
+  send: <Send className="w-3 h-3" />,
+  brain: <Brain className="w-3 h-3" />,
+  code: <Code className="w-3 h-3" />,
+  pause: <Pause className="w-3 h-3" />,
+  arrowRight: <ArrowRight className="w-3 h-3" />,
+  package: <Package className="w-3 h-3" />,
 };
 
-// Cores por categoria
 const categoryColors: Record<string, { bg: string; border: string; text: string; handle: string }> = {
   triggers:     { bg: '#fff7ed', border: '#f97316', text: '#9a3412', handle: '#f97316' },
   logic:        { bg: '#fefce8', border: '#eab308', text: '#854d0e', handle: '#eab308' },
@@ -63,21 +61,20 @@ function CustomNode({ data, selected }: NodeProps<CustomNodeData>) {
   const icon = iconMap[nodeType] || iconMap.action;
   const status: NodeStatus = data.status || 'idle';
 
-  // Status styles
-  const statusBorder = {
-    idle: selected ? 'ring-2 ring-blue-400 ring-offset-1' : '',
-    running: 'ring-2 ring-blue-400 ring-offset-1 animate-pulse',
-    success: 'ring-2 ring-green-400 ring-offset-1',
-    error: 'ring-2 ring-red-400 ring-offset-1',
-    warning: 'ring-2 ring-amber-400 ring-offset-1',
+  const ringClass = {
+    idle: selected ? 'ring-2 ring-blue-400' : '',
+    running: 'ring-2 ring-blue-400 animate-pulse',
+    success: 'ring-2 ring-green-400',
+    error: 'ring-2 ring-red-400',
+    warning: 'ring-2 ring-amber-400',
   }[status];
 
   const statusIcon = {
     idle: null,
-    running: <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />,
-    success: <CheckCircle2 className="w-3 h-3 text-green-500" />,
-    error: <XCircle className="w-3 h-3 text-red-500" />,
-    warning: <AlertTriangle className="w-3 h-3 text-amber-500" />,
+    running: <Loader2 className="w-2.5 h-2.5 text-blue-500 animate-spin" />,
+    success: <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />,
+    error: <XCircle className="w-2.5 h-2.5 text-red-500" />,
+    warning: <AlertTriangle className="w-2.5 h-2.5 text-amber-500" />,
   }[status];
 
   const inputs = data.inputs || nodeDef?.inputs || [];
@@ -85,72 +82,65 @@ function CustomNode({ data, selected }: NodeProps<CustomNodeData>) {
 
   return (
     <div
-      className={`relative rounded-lg border-2 shadow-sm transition-all ${statusBorder}`}
+      className={`relative rounded-md border shadow-sm transition-all cursor-pointer ${ringClass}`}
       style={{
         backgroundColor: colors.bg,
         borderColor: colors.border,
-        minWidth: '140px',
-        maxWidth: '180px',
+        width: '90px',
+        height: '44px',
       }}
     >
-      {/* Input Handles */}
+      {/* Input Handles — small dots on top edge */}
       {inputs.map((input, idx) => (
         <Handle
           key={input.id}
           type="target"
           position={Position.Top}
           id={input.id}
-          className="!w-3 !h-3 !border-2 !border-white !shadow-sm"
+          className="!w-2 !h-2 !border !border-white !shadow-sm"
           style={{
             backgroundColor: colors.handle,
-            top: -6,
-            left: inputs.length === 1 ? '50%' : `${20 + (idx * 60) / Math.max(inputs.length - 1, 1)}%`,
+            top: -4,
+            left: inputs.length === 1 ? '50%' : `${25 + (idx * 50) / Math.max(inputs.length - 1, 1)}%`,
             transform: 'translateX(-50%)',
           }}
         />
       ))}
 
-      {/* Node Content */}
-      <div className="px-3 py-2">
-        <div className="flex items-center gap-2">
-          <div
-            className="flex items-center justify-center w-6 h-6 rounded flex-shrink-0"
-            style={{ backgroundColor: colors.border, color: 'white' }}
-          >
-            {icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div
-              className="text-xs font-semibold leading-tight truncate"
-              style={{ color: colors.text }}
-              title={data.label}
-            >
-              {data.label}
-            </div>
-            {nodeDef?.description && (
-              <div className="text-[10px] text-gray-500 leading-tight truncate mt-0.5">
-                {nodeDef.description}
-              </div>
-            )}
-          </div>
-          {statusIcon && (
-            <div className="flex-shrink-0">{statusIcon}</div>
-          )}
+      {/* Node Content — compact */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5 h-full">
+        <div
+          className="flex items-center justify-center w-5 h-5 rounded flex-shrink-0"
+          style={{ backgroundColor: colors.border, color: 'white' }}
+        >
+          {icon}
         </div>
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-[10px] font-semibold leading-none truncate"
+            style={{ color: colors.text }}
+            title={data.label}
+          >
+            {data.label}
+          </div>
+        </div>
+        {statusIcon && (
+          <div className="flex-shrink-0">{statusIcon}</div>
+        )}
       </div>
 
-      {/* Output Handles */}
+      {/* Output Handles — small dots on bottom edge */}
       {outputs.map((output, idx) => (
         <Handle
           key={output.id}
           type="source"
           position={Position.Bottom}
           id={output.id}
-          className="!w-3 !h-3 !border-2 !border-white !shadow-sm"
+          className="!w-2 !h-2 !border !border-white !shadow-sm"
           style={{
             backgroundColor: colors.handle,
-            bottom: -6,
-            left: outputs.length === 1 ? '50%' : `${20 + (idx * 60) / Math.max(outputs.length - 1, 1)}%`,
+            bottom: -4,
+            left: outputs.length === 1 ? '50%' : `${25 + (idx * 50) / Math.max(outputs.length - 1, 1)}%`,
             transform: 'translateX(-50%)',
           }}
         />

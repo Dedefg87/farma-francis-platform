@@ -146,8 +146,8 @@ export function N8NEditor({
       if (!bounds) return;
 
       const position = {
-        x: event.clientX - bounds.left - 70,
-        y: event.clientY - bounds.top - 16,
+        x: event.clientX - bounds.left - 45,
+        y: event.clientY - bounds.top - 22,
       };
 
       const newNode: Node = {
@@ -490,7 +490,7 @@ export function N8NEditor({
 
       {/* ============ RIGHT CONFIG PANEL ============ */}
       {selectedNode && (
-        <div className="w-[320px] bg-white border-l border-gray-200 flex flex-col flex-shrink-0 animate-in slide-in-from-right duration-200">
+        <div className="w-[280px] bg-white border-l border-gray-200 flex flex-col flex-shrink-0 animate-in slide-in-from-right duration-200">
           {/* Panel Header */}
           <div className="p-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
