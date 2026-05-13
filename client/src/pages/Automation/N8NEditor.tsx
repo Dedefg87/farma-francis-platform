@@ -1,111 +1,58 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
-  addEdge,
   Background,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
-  BackgroundVariant,
+  addEdge,
+  Connection,
   Node,
   Edge,
-  Connection,
-  NodeChange,
-  EdgeChange,
-  BackgroundProps,
+  BackgroundVariant,
+  Panel,
+  useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Play, Save, Download, Upload, Plus, Trash2, Settings, Eye, 
-  GripVertical, Search, ChevronDown, ChevronRight, X, TestTube,
-  MessageSquare, Webhook, Clock, GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package, Phone, Instagram, Mail, Bell, Database, GitCompare, Repeat, AlertTriangle, UserCheck, CreditCard, FileText, Bot, GitMerge, Copy, CheckCircle
+import {
+  Play, Save, Download, Upload, Trash2, X, Search,
+  ChevronDown, ChevronRight, GripVertical, ZoomIn, ZoomOut, Maximize2,
+  GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package,
+  Phone, Mail, Bot, UserCheck, FileText, CreditCard, Clock, Database,
+  Settings, MessageSquare, Zap, AlertTriangle, TestTube, Copy, Undo2, Redo2,
 } from 'lucide-react';
-import { 
-  NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField 
+import {
+  NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField,
 } from './node-types';
-import { usePersistentEditorState } from './hooks/usePersistentEditorState';
-import { useNodeInteractionHandler } from './hooks/useNodeInteractionHandler';
-import { NodeErrorBadge, getNodeErrorClasses } from './components/NodeErrorBadge';
-import { FloatingPanel } from './components/FloatingPanel';
-import { InlineNodeEditor } from './components/InlineNodeEditor';
-import { isFeatureEnabled } from './features';
+import CustomNode from './components/CustomNode/CustomNode';
+import CustomEdge from './components/CustomEdge/CustomEdge';
 
-// Node component for React Flow
-function WorkflowNodeComponent({ data, id }: any) {
-  const nodeDef = getNodeType(data.nodeType);
-  const color = nodeDef?.color || '#6b7280';
-  const Icon = nodeDef?.icon;
-  const hasErrors = nodeDef?.errors?.some((e: any) => e.severity === 'error');
-  const hasWarnings = nodeDef?.errors?.some((e: any) => e.severity === 'warning');
+// ==================== ICON MAPS ====================
 
-  const borderColor = hasErrors ? '#ef4444' : hasWarnings ? '#f59e0b' : color;
-  const errorRingClass = hasErrors ? 'ring-2 ring-red-400 ring-offset-1' : hasWarnings ? 'ring-2 ring-amber-400 ring-offset-1' : '';
-
-  return (
-    <div
-      className={errorRingClass}
-      style={{
-        padding: '10px 14px',
-        borderRadius: '8px',
-        background: 'white',
-        borderLeft: `4px solid ${borderColor}`,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        minWidth: '180px',
-        fontSize: '14px',
-        cursor: 'grab',
-        position: 'relative',
-      }}
-    >
-      {/* Error/Warning Badge */}
-      {isFeatureEnabled('ERROR_INDICATOR') && nodeDef?.errors && nodeDef.errors.length > 0 && (
-        <div
-          className={`absolute -top-2 -right-2 z-10 flex items-center justify-center w-5 h-5 rounded-full border-2 border-white text-white text-[10px] font-bold shadow-sm ${
-            hasErrors ? 'bg-red-500' : 'bg-amber-500'
-          }`}
-          title={nodeDef.errors.map((e: any) => e.message).join('\n')}
-        >
-          {nodeDef.errors.length > 1 ? nodeDef.errors.length : '!'}
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-        {Icon && <Icon size={16} style={{ color }} />}
-        <span style={{ fontWeight: 500, color: '#1f2937' }}>{data.label}</span>
-      </div>
-      <div style={{ fontSize: '11px', color: '#6b7280' }}>{nodeDef?.description}</div>
-    </div>
-  );
-}
-
-const nodeTypes = {
-  workflowNode: WorkflowNodeComponent,
+const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  triggers: GitBranch,
+  logic: Filter,
+  messages: Send,
+  ai: Brain,
+  actions: Code,
+  wait: Pause,
+  integrations: Globe,
+  flow: ArrowRight,
+  pharmacy: Package,
 };
 
-// Map category id to icon
-const categoryIcons: Record<string, React.ComponentType> = {
-  'triggers': GitBranch,
-  'logic': Filter,
-  'messages': Send,
-  'ai': Brain,
-  'actions': Code,
-  'wait': Pause,
-  'integrations': Globe,
-  'flow': ArrowRight,
-  'pharmacy': Package,
-};
-
-const nodeIconMap: Record<string, React.ComponentType> = {
+const nodeIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   'whatsapp-incoming': Phone,
-  'instagram-dm': Instagram,
+  'instagram-dm': Phone,
   'webhook-trigger': Globe,
   'schedule-trigger': Clock,
   'if-else': GitBranch,
-  'switch': GitCompare,
+  'switch': GitBranch,
   'filter': Filter,
   'whatsapp-send': Phone,
   'email-send': Mail,
@@ -120,6 +67,18 @@ const nodeIconMap: Record<string, React.ComponentType> = {
   'attendance-create': Phone,
 };
 
+// ==================== NODE TYPES ====================
+
+const nodeTypes = {
+  customNode: CustomNode,
+};
+
+const edgeTypes = {
+  custom: CustomEdge,
+};
+
+// ==================== PROPS ====================
+
 interface N8NEditorProps {
   initialNodes?: Node[];
   initialEdges?: Edge[];
@@ -128,36 +87,45 @@ interface N8NEditorProps {
   isFullCanvas?: boolean;
 }
 
-export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimulate, isFullCanvas = false }: N8NEditorProps) {
-  console.log('[N8NEditor] Render called, isFullCanvas:', isFullCanvas);
+// ==================== MAIN COMPONENT ====================
+
+export function N8NEditor({
+  initialNodes = [],
+  initialEdges = [],
+  onSave,
+  onSimulate,
+  isFullCanvas = false,
+}: N8NEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [floatingPanelNode, setFloatingPanelNode] = useState<Node | null>(null);
-  const [inlineEditNode, setInlineEditNode] = useState<Node | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { zoomIn, zoomOut, fitView } = useReactFlow();
 
-  // Handlers centralizados de interação
-  const interactionHandlers = useNodeInteractionHandler(
-    (node) => {
-      setSelectedNode(node);
-      setFloatingPanelNode(node);
-    },
-    (node) => {
-      setInlineEditNode(node);
-    },
-    300
-  );
+  // ==================== CONNECTIONS ====================
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#10b981' } }, eds)),
+    (params: Connection) =>
+      setEdges((eds) =>
+        addEdge(
+          {
+            ...params,
+            type: 'custom',
+            animated: false,
+            style: { stroke: '#94a3b8', strokeWidth: 2 },
+          },
+          eds
+        )
+      ),
     [setEdges]
   );
+
+  // ==================== DRAG & DROP ====================
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -174,17 +142,17 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
       const nodeDef = getNodeType(nodeId);
       if (!nodeDef) return;
 
-      // screenToFlowPosition requires reactflow instance; we'll use clientX/clientY relative to wrapper
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!bounds) return;
+
       const position = {
-        x: event.clientX - bounds.left - 90, // adjust for node width
-        y: event.clientY - bounds.top - 20,
+        x: event.clientX - bounds.left - 70,
+        y: event.clientY - bounds.top - 16,
       };
 
       const newNode: Node = {
         id: `${nodeId}-${Date.now()}`,
-        type: 'workflowNode',
+        type: 'customNode',
         position,
         data: {
           label: nodeDef.label,
@@ -192,7 +160,6 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
           inputs: nodeDef.inputs,
           outputs: nodeDef.outputs,
           config: nodeDef.config,
-          onClick: handleNodeClick,
         },
       };
 
@@ -201,36 +168,69 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     [setNodes]
   );
 
-  const handleNodeClick = (nodeData: any) => {
-    const node = nodes.find(n => n.data === nodeData);
-    setSelectedNode(node || null);
-  };
-
   const handleDragStart = (event: React.DragEvent, nodeDef: WorkflowNode) => {
-    event.dataTransfer.setData('application/reactflow-type', 'workflowNode');
+    event.dataTransfer.setData('application/reactflow-type', 'customNode');
     event.dataTransfer.setData('application/reactflow-nodeid', nodeDef.id);
     event.dataTransfer.effectAllowed = 'move';
   };
 
-  const toggleCategory = (catId: string) => {
-    setExpandedCategories(prev => ({ ...prev, [catId]: !prev[catId] }));
-  };
+  // ==================== NODE ACTIONS ====================
 
-  const filteredNodes = NODE_TYPES.filter(node => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return node.label.toLowerCase().includes(term) || node.description.toLowerCase().includes(term);
-  });
+  const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    setSelectedNode(node);
+  }, []);
 
-  const nodesByCategory = filteredNodes.reduce((acc, node) => {
-    if (!acc[node.category]) acc[node.category] = [];
-    acc[node.category].push(node);
-    return acc;
-  }, {} as Record<string, WorkflowNode[]>);
+  const handleDeleteNode = useCallback(
+    (nodeToDelete?: Node) => {
+      const target = nodeToDelete || selectedNode;
+      if (!target) return;
+      setNodes((nds) => nds.filter((n) => n.id !== target.id));
+      setEdges((eds) => eds.filter((e) => e.source !== target.id && e.target !== target.id));
+      setSelectedNode(null);
+    },
+    [selectedNode, setNodes, setEdges]
+  );
 
-  const handleSave = () => {
-    if (onSave) onSave(nodes, edges);
-  };
+  const handleDuplicateNode = useCallback(
+    (node: Node) => {
+      const newNode: Node = {
+        ...node,
+        id: `${node.data?.nodeType}-${Date.now()}`,
+        position: { x: node.position.x + 160, y: node.position.y },
+        data: { ...node.data },
+      };
+      setNodes((nds) => [...nds, newNode]);
+    },
+    [setNodes]
+  );
+
+  // ==================== KEYBOARD SHORTCUTS ====================
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in inputs
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
+        e.preventDefault();
+        handleDeleteNode();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd' && selectedNode) {
+        e.preventDefault();
+        handleDuplicateNode(selectedNode);
+      }
+      if (e.key === 'Escape') {
+        setSelectedNode(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNode, handleDeleteNode, handleDuplicateNode]);
+
+  // ==================== IMPORT / EXPORT ====================
 
   const handleExport = () => {
     const flowData = { nodes, edges };
@@ -238,8 +238,9 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'automation-flow.json';
+    a.download = `flow-${Date.now()}.json`;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,121 +261,131 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
     reader.readAsText(file);
   };
 
-  const handleDeleteNode = useCallback((nodeToDelete?: Node) => {
-    const target = nodeToDelete || selectedNode;
-    if (!target) return;
-    setNodes((nds) => nds.filter((node) => node.id !== target.id));
-    setEdges((eds) => eds.filter((edge) => edge.source !== target.id && edge.target !== target.id));
-    setSelectedNode(null);
-    setFloatingPanelNode(null);
-  }, [selectedNode, setNodes, setEdges]);
+  // ==================== FILTERED NODES ====================
 
-  const handleDuplicateNode = useCallback((node: Node) => {
-    const newNode: Node = {
-      ...node,
-      id: `${node.data?.nodeType}-${Date.now()}`,
-      position: {
-        x: node.position.x + 200,
-        y: node.position.y,
-      },
-      data: {
-        ...node.data,
-      },
-    };
-    setNodes((nds) => [...nds, newNode]);
-    setFloatingPanelNode(null);
-  }, [setNodes]);
-
-  const handleInlineEditSave = useCallback((nodeId: string, newLabel: string) => {
-    setNodes((nds) =>
-      nds.map((n) =>
-        n.id === nodeId
-          ? { ...n, data: { ...n.data, label: newLabel } }
-          : n
-      )
+  const filteredNodes = NODE_TYPES.filter((node) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      node.label.toLowerCase().includes(term) ||
+      node.description.toLowerCase().includes(term)
     );
-    setInlineEditNode(null);
-  }, [setNodes]);
+  });
 
-  const handleEditFromFloating = useCallback((node: Node) => {
-    setFloatingPanelNode(null);
-    setSelectedNode(node);
-  }, []);
+  const nodesByCategory = filteredNodes.reduce((acc, node) => {
+    if (!acc[node.category]) acc[node.category] = [];
+    acc[node.category].push(node);
+    return acc;
+  }, {} as Record<string, WorkflowNode[]>);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
-        e.preventDefault();
-        handleDeleteNode();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, handleDeleteNode]);
+  const toggleCategory = (catId: string) => {
+    setExpandedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }));
+  };
+
+  // ==================== RENDER ====================
 
   return (
-    <div className="flex h-full w-full">
-      {/* Left Sidebar */}
-      <div className={`bg-white border-r border-gray-200 transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-12'} flex flex-col`}>
-        <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-          {sidebarOpen && <h3 className="font-semibold text-gray-800 text-sm">Adicionar Nó</h3>}
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-gray-100 rounded">
-            {sidebarOpen ? <ChevronRight size={16} /> : <ChevronRight size={16} className="rotate-180" />}
+    <div className="flex h-full w-full bg-gray-50">
+      {/* ============ LEFT SIDEBAR ============ */}
+      <div
+        className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-200 flex-shrink-0 ${
+          sidebarOpen ? 'w-[280px]' : 'w-12'
+        }`}
+      >
+        {/* Sidebar Header */}
+        <div className="p-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          {sidebarOpen && (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center">
+                <Zap className="w-3 h-3 text-white" />
+              </div>
+              <span className="font-semibold text-sm text-gray-800">Nós</span>
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1 hover:bg-gray-100 rounded transition-colors"
+            title={sidebarOpen ? 'Recolher' : 'Expandir'}
+          >
+            {sidebarOpen ? (
+              <ChevronRight className="w-4 h-4 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-gray-500 rotate-180" />
+            )}
           </button>
         </div>
+
         {sidebarOpen && (
           <>
-            <div className="p-3 border-b border-gray-200">
+            {/* Search */}
+            <div className="p-3 border-b border-gray-100 flex-shrink-0">
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
                 <Input
                   type="text"
                   placeholder="Buscar nó..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-2 py-2 text-sm"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs h-8"
                 />
               </div>
-              <div className="mt-2 text-xs text-gray-500">
-                {filteredNodes.length} nós encontrados
+              <div className="mt-1.5 text-[10px] text-gray-400">
+                {filteredNodes.length} nós em {CATEGORIES.length} categorias
               </div>
             </div>
+
+            {/* Node Categories */}
             <div className="flex-1 overflow-y-auto">
-              {CATEGORIES.map(category => {
-                const nodes = nodesByCategory[category.id] || [];
-                if (nodes.length === 0) return null;
+              {CATEGORIES.map((category) => {
+                const catNodes = nodesByCategory[category.id] || [];
+                if (catNodes.length === 0) return null;
                 const isExpanded = expandedCategories[category.id];
                 const CategoryIcon = categoryIcons[category.id] || GitBranch;
+
                 return (
-                  <div key={category.id} className="border-b border-gray-100">
+                  <div key={category.id} className="border-b border-gray-50">
                     <button
                       onClick={() => toggleCategory(category.id)}
-                      className="w-full flex items-center justify-between p-3 hover:bg-gray-50"
+                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <CategoryIcon size={16} className="text-gray-600" />
-                        <span className="text-sm font-medium text-gray-700">{category.label}</span>
-                        <span className="text-xs text-gray-400">({nodes.length})</span>
+                        <CategoryIcon className="w-3.5 h-3.5 text-gray-500" />
+                        <span className="text-xs font-medium text-gray-700">
+                          {category.label}
+                        </span>
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                          {catNodes.length}
+                        </span>
                       </div>
-                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                      )}
                     </button>
+
                     {isExpanded && (
-                      <div className="pb-2">
-                        {nodes.map(node => {
-                          const NodeIcon = nodeIconMap[node.id] || GitBranch;
+                      <div className="px-2 pb-2 space-y-0.5">
+                        {catNodes.map((node) => {
+                          const NodeIcon = nodeIconMap[node.id] || Settings;
                           return (
                             <div
                               key={node.id}
                               draggable
                               onDragStart={(e) => handleDragStart(e, node)}
-                              className="flex items-center gap-2 p-2 mx-2 mb-1 rounded-md cursor-grab hover:bg-gray-100 border border-transparent hover:border-gray-200 transition-colors"
-                              style={{ borderLeft: `4px solid ${node.color}` }}
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab hover:bg-gray-100 border border-transparent hover:border-gray-200 transition-all group"
                             >
-                              <GripVertical size={14} className="text-gray-400" />
-                              <NodeIcon size={16} style={{ color: node.color }} />
+                              <GripVertical className="w-3 h-3 text-gray-300 group-hover:text-gray-400 flex-shrink-0" />
+                              <div
+                                className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                                style={{ backgroundColor: node.color }}
+                              >
+                                <NodeIcon className="w-3 h-3 text-white" />
+                              </div>
                               <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-gray-800 truncate">{node.label}</div>
-                                <div className="text-xs text-gray-500 truncate">{node.description}</div>
+                                <div className="text-xs font-medium text-gray-700 truncate leading-tight">
+                                  {node.label}
+                                </div>
                               </div>
                             </div>
                           );
@@ -389,33 +400,41 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
         )}
       </div>
 
-      {/* Main Canvas */}
-      <div className="flex-1 flex flex-col">
-        {/* Toolbar — escondido em full canvas */}
-        <div className={`bg-white border-b border-gray-200 p-3 flex items-center justify-between ${isFullCanvas ? "hidden" : ""}`}>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleSave}>
-              <Save size={16} className="mr-1" /> Salvar
-            </Button>
-            <Button variant="outline" size="sm" onClick={onSimulate}>
-              <Play size={16} className="mr-1" /> Simular
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download size={16} className="mr-1" /> Exportar
-            </Button>
-            <label htmlFor="import-file">
-              <Button variant="outline" size="sm" asChild>
-                <span><Upload size={16} className="mr-1" /> Importar</span>
+      {/* ============ MAIN CANVAS ============ */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Toolbar */}
+        {!isFullCanvas && (
+          <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-1.5">
+              <Button variant="ghost" size="sm" onClick={() => onSave?.(nodes, edges)} className="h-7 text-xs">
+                <Save className="w-3.5 h-3.5 mr-1" /> Salvar
               </Button>
-            </label>
-            <input id="import-file" type="file" accept=".json" className="hidden" onChange={handleImport} />
-          </div>
-          <div className="text-sm text-gray-600">
-            {nodes.length} nós | {edges.length} conexões
-          </div>
-        </div>
+              <Button variant="ghost" size="sm" onClick={onSimulate} className="h-7 text-xs">
+                <Play className="w-3.5 h-3.5 mr-1" /> Simular
+              </Button>
+              <div className="w-px h-5 bg-gray-200 mx-1" />
+              <Button variant="ghost" size="sm" onClick={handleExport} className="h-7 text-xs">
+                <Download className="w-3.5 h-3.5 mr-1" /> Exportar
+              </Button>
+              <label htmlFor="import-file">
+                <Button variant="ghost" size="sm" asChild className="h-7 text-xs cursor-pointer">
+                  <span>
+                    <Upload className="w-3.5 h-3.5 mr-1" /> Importar
+                  </span>
+                </Button>
+              </label>
+              <input id="import-file" type="file" accept=".json" className="hidden" onChange={handleImport} />
+            </div>
 
-        {/* React Flow Canvas */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-gray-400">
+                {nodes.length} nós · {edges.length} conexões
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* ReactFlow Canvas */}
         <div className="flex-1" ref={reactFlowWrapper}>
           <ReactFlow
             nodes={nodes}
@@ -425,68 +444,109 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
             onConnect={onConnect}
             onDrop={onDrop}
             onDragOver={onDragOver}
-            onNodeClick={interactionHandlers.onNodeClick}
-            onNodeDoubleClick={interactionHandlers.onNodeDoubleClick}
-            onNodeMouseEnter={interactionHandlers.onNodeMouseEnter}
-            onNodeMouseLeave={interactionHandlers.onNodeMouseLeave}
+            onNodeClick={handleNodeClick}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             className="bg-gray-50"
+            proOptions={{ hideAttribution: true }}
+            connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
+            defaultEdgeOptions={{
+              type: 'custom',
+              animated: false,
+              style: { stroke: '#94a3b8', strokeWidth: 2 },
+            }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#e5e7eb" />
-            <Controls />
-            <MiniMap 
+            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />
+            <Controls
+              className="!bg-white !border !border-gray-200 !rounded-lg !shadow-sm"
+              showInteractive={false}
+            />
+            <MiniMap
+              className="!bg-white !border !border-gray-200 !rounded-lg !shadow-sm"
               nodeColor={(node) => {
-                const nodeDef = getNodeType(node.data?.nodeType);
-                return nodeDef?.color || '#6b7280';
+                const def = getNodeType(node.data?.nodeType);
+                return def?.color || '#6b7280';
               }}
-              style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-              nodeStrokeWidth={2}
+              maskColor="rgba(0,0,0,0.05)"
+              position="bottom-right"
             />
+
+            {/* Canvas Controls Panel */}
+            <Panel position="top-right" className="flex gap-1 !m-0">
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoomIn()} title="Zoom in">
+                <ZoomIn className="w-3.5 h-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoomOut()} title="Zoom out">
+                <ZoomOut className="w-3.5 h-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => fitView()} title="Fit view">
+                <Maximize2 className="w-3.5 h-3.5" />
+              </Button>
+            </Panel>
           </ReactFlow>
-
-          {/* Floating Panel */}
-          {floatingPanelNode && (
-            <FloatingPanel
-              node={floatingPanelNode}
-              position={{
-                x: floatingPanelNode.position.x + 90,
-                y: floatingPanelNode.position.y,
-              }}
-              onEdit={handleEditFromFloating}
-              onDuplicate={handleDuplicateNode}
-              onDelete={handleDeleteNode}
-              onClose={() => setFloatingPanelNode(null)}
-            />
-          )}
-
-          {/* Inline Editor */}
-          {inlineEditNode && (
-            <InlineNodeEditor
-              node={inlineEditNode}
-              onSave={handleInlineEditSave}
-              onCancel={() => setInlineEditNode(null)}
-            />
-          )}
         </div>
       </div>
 
-      {/* Right Config Panel */}
+      {/* ============ RIGHT CONFIG PANEL ============ */}
       {selectedNode && (
-        <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
-          <div className="p-3 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-semibold text-gray-800 text-sm">Configurar Nó</h3>
-            <div className="flex items-center gap-1">
-              <button onClick={handleDeleteNode} className="p-1 hover:bg-red-100 rounded text-red-600" title="Excluir nó">
-                <Trash2 size={16} />
+        <div className="w-[320px] bg-white border-l border-gray-200 flex flex-col flex-shrink-0 animate-in slide-in-from-right duration-200">
+          {/* Panel Header */}
+          <div className="p-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: getNodeType(selectedNode.data?.nodeType)?.color || '#6b7280' }}
+              >
+                {React.createElement(
+                  nodeIconMap[selectedNode.data?.nodeType] || Settings,
+                  { className: 'w-3.5 h-3.5 text-white' }
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-gray-800 truncate">
+                  {selectedNode.data.label}
+                </div>
+                <div className="text-[10px] text-gray-400">
+                  {getNodeType(selectedNode.data?.nodeType)?.category || 'action'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={() => handleDuplicateNode(selectedNode)}
+                className="p-1.5 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                title="Duplicar (Ctrl+D)"
+              >
+                <Copy className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-gray-100 rounded">
-                <X size={16} />
+              <button
+                onClick={() => handleDeleteNode()}
+                className="p-1.5 hover:bg-red-50 rounded text-red-500 transition-colors"
+                title="Excluir (Delete)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setSelectedNode(null)}
+                className="p-1.5 hover:bg-gray-100 rounded text-gray-500 transition-colors"
+                title="Fechar (Esc)"
+              >
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
+
+          {/* Panel Content */}
           <div className="flex-1 overflow-y-auto p-4">
-            <NodeConfigPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+            <NodeConfigPanel node={selectedNode} />
+          </div>
+
+          {/* Panel Footer */}
+          <div className="p-3 border-t border-gray-100 flex-shrink-0">
+            <Button size="sm" className="w-full h-8 text-xs">
+              <TestTube className="w-3.5 h-3.5 mr-1.5" /> Testar Nó
+            </Button>
           </div>
         </div>
       )}
@@ -494,72 +554,97 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
   );
 }
 
-// Config Panel com suporte a erros
-function NodeConfigPanel({ node, onClose }: { node: Node; onClose: () => void }) {
-  const nodeDef = getNodeType(node.data?.nodeType);
-  if (!nodeDef) return <div>Nó não encontrado</div>;
+// ==================== CONFIG PANEL ====================
 
-  const errors = nodeDef?.errors || [];
-  const hasErrors = errors.length > 0;
+function NodeConfigPanel({ node }: { node: Node }) {
+  const nodeDef = getNodeType(node.data?.nodeType);
+  if (!nodeDef) return <div className="text-sm text-gray-500">Nó não encontrado</div>;
 
   return (
     <div className="space-y-4">
-      {/* Error Summary */}
-      {isFeatureEnabled('ERROR_INDICATOR') && hasErrors && (
-        <div className={`p-3 rounded-lg border ${
-          errors.some((e: any) => e.severity === 'error')
-            ? 'bg-red-50 border-red-200'
-            : 'bg-amber-50 border-amber-200'
-        }`}>
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle size={14} className={errors.some((e: any) => e.severity === 'error') ? 'text-red-500' : 'text-amber-500'} />
-            <span className="text-sm font-medium">
-              {errors.length} {errors.length === 1 ? 'problema encontrado' : 'problemas encontrados'}
-            </span>
+      {/* Node Info */}
+      <div className="bg-gray-50 rounded-lg p-3">
+        <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Tipo</div>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-4 h-4 rounded"
+            style={{ backgroundColor: nodeDef.color }}
+          />
+          <span className="text-sm font-medium text-gray-800">{nodeDef.label}</span>
+        </div>
+        {nodeDef.description && (
+          <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{nodeDef.description}</p>
+        )}
+      </div>
+
+      {/* Label */}
+      <div>
+        <Label className="text-xs text-gray-500 mb-1.5 block">Nome</Label>
+        <Input defaultValue={node.data.label} className="h-8 text-sm" />
+      </div>
+
+      {/* Ports Info */}
+      {(nodeDef.inputs?.length || nodeDef.outputs?.length) && (
+        <div>
+          <Label className="text-xs text-gray-500 mb-1.5 block">Conexões</Label>
+          <div className="space-y-1.5">
+            {nodeDef.inputs && nodeDef.inputs.length > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <div className="w-2 h-2 rounded-full bg-blue-400" />
+                <span className="text-gray-600">{nodeDef.inputs.length} entrada(s)</span>
+              </div>
+            )}
+            {nodeDef.outputs && nodeDef.outputs.length > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <div className="w-2 h-2 rounded-full bg-green-400" />
+                <span className="text-gray-600">{nodeDef.outputs.length} saída(s)</span>
+              </div>
+            )}
           </div>
-          <ul className="text-xs text-gray-600 space-y-1 ml-5 list-disc">
-            {errors.map((err: any, i: number) => (
-              <li key={i}>{err.message}</li>
-            ))}
-          </ul>
         </div>
       )}
 
-      <div>
-        <Label>Geral</Label>
-        <Input defaultValue={node.data.label} className="mt-1" />
-      </div>
-      <div>
-        <Label>Tipo</Label>
-        <Badge style={{ background: nodeDef.color }}>{nodeDef.label}</Badge>
-      </div>
-      <div>
-        <Label>Configurações</Label>
-        {nodeDef.config?.map((field: ConfigField) => (
-          <div key={field.key} className="mt-2">
-            <Label className="text-xs">{field.label}</Label>
-            {field.type === 'string' || field.type === 'password' ? (
-              <Input type={field.type === 'password' ? 'password' : 'text'} placeholder={field.placeholder} defaultValue={field.defaultValue} className="mt-1" />
-            ) : field.type === 'select' ? (
-              <select className="w-full mt-1 p-2 border rounded">
-                {field.options?.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            ) : field.type === 'json' || field.type === 'prompt' ? (
-              <textarea className="w-full mt-1 p-2 border rounded h-24 text-sm" placeholder={field.placeholder} defaultValue={field.defaultValue} />
-            ) : null}
+      {/* Config Fields */}
+      {nodeDef.config && nodeDef.config.length > 0 && (
+        <div>
+          <Label className="text-xs text-gray-500 mb-2 block">Configurações</Label>
+          <div className="space-y-3">
+            {nodeDef.config.map((field: ConfigField) => (
+              <div key={field.key}>
+                <Label className="text-xs text-gray-600 mb-1 block">{field.label}</Label>
+                {field.type === 'string' || field.type === 'password' ? (
+                  <Input
+                    type={field.type === 'password' ? 'password' : 'text'}
+                    placeholder={field.placeholder}
+                    defaultValue={field.defaultValue}
+                    className="h-8 text-sm"
+                  />
+                ) : field.type === 'select' ? (
+                  <select className="w-full h-8 text-sm border rounded px-2 bg-white">
+                    <option value="">Selecionar...</option>
+                    {field.options?.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : field.type === 'json' || field.type === 'prompt' ? (
+                  <textarea
+                    className="w-full text-sm border rounded p-2 min-h-[80px] resize-y"
+                    placeholder={field.placeholder}
+                    defaultValue={field.defaultValue}
+                  />
+                ) : null}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="pt-4 border-t">
-        <Button size="sm" className="w-full">
-          <TestTube size={16} className="mr-1" /> Testar Nó
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// ==================== WRAPPER ====================
 
 export default function N8NEditorWrapper(props: N8NEditorProps) {
   return (
