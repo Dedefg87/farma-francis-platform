@@ -206,6 +206,26 @@ export function N8NEditor({
     [setNodes]
   );
 
+  // ==================== CLEAR FLOW ====================
+
+  const handleClearFlow = useCallback(() => {
+    if (nodes.length === 0) return;
+    const confirmed = window.confirm(
+      `Tem certeza que deseja limpar todo o fluxo?\n\nIsso irá remover ${nodes.length} nós e ${edges.length} conexões. Essa ação não pode ser desfeita.`
+    );
+    if (confirmed) {
+      setNodes([]);
+      setEdges([]);
+      setSelectedNode(null);
+    }
+  }, [nodes, edges, setNodes, setEdges]);
+
+  const handleDeleteSelectedNode = useCallback(() => {
+    if (selectedNode) {
+      handleDeleteNode(selectedNode);
+    }
+  }, [selectedNode, handleDeleteNode]);
+
   // ==================== KEYBOARD SHORTCUTS ====================
 
   useEffect(() => {
@@ -420,6 +440,27 @@ export function N8NEditor({
                 <Play className="w-3.5 h-3.5 mr-1" /> Simular
               </Button>
               <div className="w-px h-5 bg-gray-200 mx-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteSelectedNode}
+                disabled={!selectedNode}
+                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-red-600"
+                title="Excluir nó selecionado (Delete)"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFlow}
+                disabled={nodes.length === 0}
+                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-red-600"
+                title="Limpar todo o fluxo"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Limpar
+              </Button>
+              <div className="w-px h-5 bg-gray-200 mx-1" />
               <Button variant="ghost" size="sm" onClick={handleExport} className="h-7 text-xs">
                 <Download className="w-3.5 h-3.5 mr-1" /> Exportar
               </Button>
@@ -528,16 +569,16 @@ export function N8NEditor({
                 <Copy className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => handleDeleteNode()}
+                onClick={() => confirm('Excluir este nó?') && handleDeleteNode()}
                 className="p-1.5 hover:bg-red-50 rounded text-red-500 transition-colors"
-                title="Excluir (Delete)"
+                title="Excluir nó (Delete)"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setSelectedNode(null)}
                 className="p-1.5 hover:bg-gray-100 rounded text-gray-500 transition-colors"
-                title="Fechar (Esc)"
+                title="Fechar painel (Esc)"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
