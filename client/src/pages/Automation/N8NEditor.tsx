@@ -133,28 +133,24 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [floatingPanelNode, setFloatingPanelNode] = useState<Node | null>(null);
   const [inlineEditNode, setInlineEditNode] = useState<Node | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(
+    CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
+  );
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
-  // Estado persistente da UI
-  const persistentState = usePersistentEditorState();
-
   // Handlers centralizados de interação
-  const interactionHandlers = useNodeInteractionHandler({
-    onSingleClick: (node) => {
-      if (isFeatureEnabled('FLOATING_PANEL')) {
-        setFloatingPanelNode(node);
-      } else {
-        setSelectedNode(node);
-      }
+  const interactionHandlers = useNodeInteractionHandler(
+    (node) => {
+      setSelectedNode(node);
+      setFloatingPanelNode(node);
     },
-    onDoubleClick: (node) => {
-      if (isFeatureEnabled('INLINE_EDIT')) {
-        setInlineEditNode(node);
-      } else {
-        setSelectedNode(node);
-      }
+    (node) => {
+      setInlineEditNode(node);
     },
-  });
+    300
+  );
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#10b981' } }, eds)),
