@@ -111,3 +111,4 @@ temp/
 # Drizzle generated
 drizzle/meta/
 drizzle/*.sql
+dist/
