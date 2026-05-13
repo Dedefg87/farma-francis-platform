@@ -14,6 +14,7 @@ import ReactFlow, {
   useReactFlow,
 } from "reactflow";
 import { useAutoscroll } from "@/pages/Automation/hooks/useAutoscroll";
+import { EnhancedMinimap } from "@/pages/Automation/components/EnhancedMinimap/EnhancedMinimap";
 import "reactflow/dist/style.css";
 import N8NNode from "./N8NNode";
 import CustomEdge from "./CustomEdge";
@@ -288,27 +289,14 @@ export default function N8NFlowEditor({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls />
-        <MiniMap
-          nodeColor={node => {
-            const colorMap: Record<string, string> = {
-              trigger: "#f59e0b",
-              message: "#3b82f6",
-              ai: "#a855f7",
-              condition: "#f97316",
-              transfer: "#10b981",
-              wait: "#ef4444",
-              api: "#2563eb",
-              function: "#6366f1",
-              set: "#ec4899",
-              delay: "#f56565",
-              action: "#818cf8",
-              uraMenu: "#14b8a6",
-              createTicket: "#eab308",
-            };
-            return colorMap[node.type || "action"] || "#818cf8";
-          }}
-          className="!bg-white !border-2 !border-gray-200"
-        />
+        <Panel position="bottom-left" className="!m-3">
+          <EnhancedMinimap
+            nodes={nodes}
+            selectedNodeId={undefined}
+            width={200}
+            height={150}
+          />
+        </Panel>
         <Panel
           position="top-right"
           className="flex gap-2 bg-white p-2 rounded-lg shadow-lg border"
