@@ -11,7 +11,9 @@ import ReactFlow, {
   Connection,
   BackgroundVariant,
   Panel,
+  useReactFlow,
 } from "reactflow";
+import { useAutoscroll } from "@/pages/Automation/hooks/useAutoscroll";
 import "reactflow/dist/style.css";
 import N8NNode from "./N8NNode";
 import CustomEdge from "./CustomEdge";
@@ -75,6 +77,7 @@ export default function N8NFlowEditor({
   const [edgeToEdit, setEdgeToEdit] = useState<Edge | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const { scrollToNode } = useAutoscroll({ enabled: true });
 
   // Sync with initialNodes/initialEdges when they change (e.g., when flow data is refreshed)
   useEffect(() => {
@@ -222,6 +225,13 @@ export default function N8NFlowEditor({
     }
   };
 
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      scrollToNode(node);
+    },
+    [scrollToNode]
+  );
+
   const handleNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       if (onNodeDoubleClick) {
@@ -230,6 +240,15 @@ export default function N8NFlowEditor({
     },
     [onNodeDoubleClick]
   );
+
+  // Dispatch drag events for autoscroll to respect manual drag
+  const handleNodeDragStart = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("nodeDragStart"));
+  }, []);
+
+  const handleNodeDragStop = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("nodeDragEnd"));
+  }, []);
 
   // Handle edge deletion from custom event
   useEffect(() => {
@@ -256,7 +275,10 @@ export default function N8NFlowEditor({
         onInit={setReactFlowInstance}
         onDrop={onDrop}
         onDragOver={onDragOver}
+        onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDragStop={handleNodeDragStop}
         onEdgeClick={handleEdgeClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
