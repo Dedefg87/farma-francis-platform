@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
-  Zap, Play, Pause, Plus, Upload, Download, Send,
+  Zap, Play, Pause, Plus, Upload, Download, Send, Trash2,
   Activity, MessageSquare, Clock, TrendingUp, Smartphone, Globe, Instagram,
   Settings, HelpCircle, Sun, Moon, Bot, MessageCircle, ShoppingCart
 } from "lucide-react";
@@ -88,8 +88,15 @@ export default function Automation() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm("Tem certeza que deseja desativar este fluxo?")) {
+    if (confirm("Tem certeza que deseja excluir este fluxo?\n\nEsta ação não pode ser desfeita.")) {
       deleteMutation.mutate({ id });
+    }
+  };
+
+  const handleClearAllFlows = () => {
+    if (flows.length === 0) return;
+    if (confirm(`Tem certeza que deseja excluir TODOS os fluxos?\n\nIsso irá remover ${flows.length} fluxo(s) permanentemente. Esta ação não pode ser desfeita.`)) {
+      flows.forEach(f => deleteMutation.mutate({ id: f.id }));
     }
   };
 
@@ -218,9 +225,21 @@ export default function Automation() {
                 <CardHeader>
                   <CardTitle className="text-base flex items-center justify-between">
                     <span>Fluxos Cadastrados ({flows.length})</span>
-                    <Badge variant={isActive ? "default" : "secondary"}>
-                      {isActive ? "Ativo" : "Inativo"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {flows.length > 0 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={handleClearAllFlows}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs h-7"
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" /> Limpar Todos
+                        </Button>
+                      )}
+                      <Badge variant={isActive ? "default" : "secondary"}>
+                        {isActive ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -265,11 +284,13 @@ export default function Automation() {
                               {flow.isActive ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
                             </Button>
                             <Button 
-                              variant="destructive" 
+                              variant="outline" 
                               size="sm"
                               onClick={() => handleDelete(flow.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                              title="Excluir fluxo"
                             >
-                              Desativar
+                              <Trash2 className="w-3 h-3" />
                             </Button>
                           </div>
                         </div>
