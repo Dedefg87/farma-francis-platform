@@ -293,6 +293,7 @@ export default function Automation() {
                   key={editingFlow?.id || 'novo-' + Date.now()}
                   initialNodes={editingFlow?.flowData?.nodes || []}
                   initialEdges={editingFlow?.flowData?.edges || []}
+                  isFullCanvas={fullCanvas.isFullCanvas}
                   onSave={(nodes, edges) => {
                     const flowData = { nodes, edges };
                     if (editingFlow) {

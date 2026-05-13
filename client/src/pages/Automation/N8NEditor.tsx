@@ -125,9 +125,10 @@ interface N8NEditorProps {
   initialEdges?: Edge[];
   onSave?: (nodes: Node[], edges: Edge[]) => void;
   onSimulate?: () => void;
+  isFullCanvas?: boolean;
 }
 
-export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimulate }: N8NEditorProps) {
+export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimulate, isFullCanvas = false }: N8NEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -389,8 +390,8 @@ export function N8NEditor({ initialNodes = [], initialEdges = [], onSave, onSimu
 
       {/* Main Canvas */}
       <div className="flex-1 flex flex-col">
-        {/* Toolbar */}
-        <div className="bg-white border-b border-gray-200 p-3 flex items-center justify-between">
+        {/* Toolbar — escondido em full canvas */}
+        <div className={`bg-white border-b border-gray-200 p-3 flex items-center justify-between ${isFullCanvas ? "hidden" : ""}`}>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleSave}>
               <Save size={16} className="mr-1" /> Salvar
