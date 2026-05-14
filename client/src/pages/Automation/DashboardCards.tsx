@@ -5,6 +5,7 @@ import {
   Instagram, MessageCircle, Zap
 } from "lucide-react";
 import { trpc } from "../../lib/trpc";
+import { DashboardSkeleton } from "./DashboardSkeleton";
 
 interface DashboardCardsProps {
   darkMode: boolean;
@@ -19,6 +20,10 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
     { limit: 100, offset: 0 },
     { refetchInterval: 30000 }
   );
+
+  if (statsLoading) {
+    return <DashboardSkeleton darkMode={darkMode} />;
+  }
 
   const flows = flowsData?.items || [];
   const activeFlows = flows.filter(f => f.isActive);
