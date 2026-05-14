@@ -11,10 +11,10 @@ interface DashboardCardsProps {
 }
 
 export function DashboardCards({ darkMode }: DashboardCardsProps) {
-  const { data: stats, isLoading: statsLoading } = trpc.automation.stats?.useQuery?.(
+  const { data: stats, isLoading: statsLoading } = trpc.automation.stats.useQuery(
     { period: "today" },
     { refetchInterval: 30000 }
-  ) || { data: null, isLoading: false };
+  );
   const { data: flowsData } = trpc.automation.list.useQuery(
     { limit: 100, offset: 0 },
     { refetchInterval: 30000 }

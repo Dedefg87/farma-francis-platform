@@ -2,8 +2,23 @@ import { describe, it, expect } from "vitest";
 import { flowTemplates } from "../templates";
 
 describe("flowTemplates", () => {
-  it("deve ter 6 templates", () => {
-    expect(flowTemplates).toHaveLength(6);
+  it("deve ter pelo menos 6 templates", () => {
+    expect(flowTemplates.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("deve ter templates de todas as categorias", () => {
+    const categories = new Set(flowTemplates.map(t => t.id));
+    // Pharmacy
+    expect(categories.has("receptionist-ia")).toBe(true);
+    expect(categories.has("receipt-triage")).toBe(true);
+    // Communication
+    expect(categories.has("welcome")).toBe(true);
+    expect(categories.has("faq")).toBe(true);
+    // Scheduling
+    expect(categories.has("scheduling")).toBe(true);
+    expect(categories.has("satisfaction")).toBe(true);
+    // Operations
+    expect(categories.has("chatbot-atendimento")).toBe(true);
   });
 
   it("cada template deve ter propriedades obrigatórias", () => {

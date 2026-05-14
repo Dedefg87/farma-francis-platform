@@ -29,6 +29,7 @@ import { ConfigSettings } from "./ConfigSettings";
 import { DocumentationSection } from "./DocumentationSection";
 import { Footer } from "./Footer";
 import { flowTemplates } from "./templates";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 type TabType = "dashboard" | "editor" | "templates" | "config" | "docs";
 
@@ -177,6 +178,7 @@ export default function Automation() {
   const editorKey = editingFlow ? `edit-${editingFlow.id}` : 'new';
 
   return (
+    <ErrorBoundary>
     <FarmaDashboardLayout>
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -435,5 +437,6 @@ export default function Automation() {
         lastUpdate={new Date().toLocaleDateString('pt-BR')}
       />
     </FarmaDashboardLayout>
+    </ErrorBoundary>
   );
 }
