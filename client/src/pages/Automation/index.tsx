@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
 import { trpc } from "../../lib/trpc";
 import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,28 +13,17 @@ import {
 import { toast } from "sonner";
 import {
   Zap, Play, Pause, Plus, Upload, Download, Send, Trash2,
-  Activity, MessageSquare, Settings, HelpCircle, Sun, Moon, Bot, Loader2
+  Activity, MessageSquare, Settings, HelpCircle, Sun, Moon, Bot
 } from "lucide-react";
 import { DashboardCards } from "./DashboardCards";
 import { DashboardSkeleton } from "./DashboardSkeleton";
+import { TemplatesSection } from "./TemplatesSection";
+import N8NEditorWrapper from "./N8NEditor";
+import { ConfigSettings } from "./ConfigSettings";
+import { DocumentationSection } from "./DocumentationSection";
+import { Footer } from "./Footer";
 import { flowTemplates } from "./templates";
 import ErrorBoundary from "@/components/ErrorBoundary";
-
-// Code splitting: lazy load heavy tab components
-const N8NEditorWrapper = lazy(() => import("./N8NEditor").then(m => ({ default: m.default })));
-const TemplatesSection = lazy(() => import("./TemplatesSection"));
-const ConfigSettings = lazy(() => import("./ConfigSettings"));
-const DocumentationSection = lazy(() => import("./DocumentationSection"));
-const Footer = lazy(() => import("./Footer"));
-
-function TabFallback() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-      <span className="ml-2 text-sm text-gray-500">Carregando...</span>
-    </div>
-  );
-}
 
 type TabType = "dashboard" | "editor" | "templates" | "config" | "docs";
 
@@ -389,7 +378,6 @@ export default function Automation() {
           {/* Editor Visual - N8N Style */}
           <TabsContent value="editor" className="flex-1 min-h-0">
             <div className="h-full" style={{ minHeight: '500px' }}>
-              <Suspense fallback={<TabFallback />}>
               <N8NEditorWrapper
                 key={editorKey}
                 initialNodes={editingFlow?.flowData?.nodes || []}
@@ -414,44 +402,35 @@ export default function Automation() {
                   toast.info("Simulação de fluxo em desenvolvimento");
                 }}
               />
-              </Suspense>
             </div>
           </TabsContent>
 
           {/* Templates */}
           <TabsContent value="templates" className="space-y-6">
-            <Suspense fallback={<TabFallback />}>
             <TemplatesSection
               darkMode={darkMode}
               onSelectTemplate={handleSelectTemplate}
             />
-            </Suspense>
           </TabsContent>
 
           {/* Configurações */}
           <TabsContent value="config" className="space-y-6">
-            <Suspense fallback={<TabFallback />}>
             <ConfigSettings darkMode={darkMode} />
-            </Suspense>
           </TabsContent>
 
           {/* Documentação */}
           <TabsContent value="docs" className="space-y-6">
-            <Suspense fallback={<TabFallback />}>
             <DocumentationSection darkMode={darkMode} />
-            </Suspense>
           </TabsContent>
         </Tabs>
       </div>
 
       {/* Footer */}
-      <Suspense fallback={null}>
       <Footer
         darkMode={darkMode}
         version="v2.2.0"
         lastUpdate={new Date().toLocaleDateString('pt-BR')}
       />
-      </Suspense>
     </FarmaDashboardLayout>
     </ErrorBoundary>
   );
