@@ -3,7 +3,7 @@ import { FlowTemplate } from "./types";
 import { Clock, UserCheck, Calendar } from "lucide-react";
 
 export const schedulingTemplates: FlowTemplate[] = [
-  // ===== TEMPLATE 4: Lembrete Inteligente de Retorno =====
+  // ===== TEMPLATE: Lembrete Inteligente de Retorno =====
   {
     id: "recall-automation",
     nodeType: "action",
@@ -12,34 +12,10 @@ export const schedulingTemplates: FlowTemplate[] = [
     icon: Clock,
     color: "bg-yellow-700",
     nodes: [
-      {
-        id: "trigger-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 100, y: 100 },
-        data: { label: "⏰ Agendado (Diário)", config: { schedule: "0 9 * * *", timezone: "America/Sao_Paulo" } },
-      },
-      {
-        id: "filter-contacts",
-        nodeType: "filter",
-        type: "customNode",
-        position: { x: 300, y: 100 },
-        data: { label: "Filtrar Clientes", config: { filter: "status: finalizado, last_interaction >= 7d, has_purchased: true" } },
-      },
-      {
-        id: "ai-personalize",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 500, y: 100 },
-        data: { label: "IA Personaliza Mensagem", config: { action: "personalize_message", history: true } },
-      },
-      {
-        id: "message-recall",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 700, y: 100 },
-        data: { label: "Enviar Lembrete", config: { message: "Olá {{nome}}! Passando pra saber como você está.\n{{personalized_message}}", rate_limit: "30s" } },
-      },
+      { id: "trigger-1", nodeType: "trigger", type: "trigger", position: { x: 100, y: 100 }, data: { label: "⏰ Agendado (Diário)", config: { event: "schedule", schedule: "0 9 * * *", timezone: "America/Sao_Paulo" } } },
+      { id: "filter-contacts", nodeType: "action", type: "setVariable", position: { x: 300, y: 100 }, data: { label: "Filtrar Clientes", config: { variableName: "filter", variableValue: "status:finalizado,last_interaction>=7d" } } },
+      { id: "ai-personalize", nodeType: "ai", type: "aiAssistant", position: { x: 500, y: 100 }, data: { label: "IA Personaliza Mensagem", config: { systemPrompt: "Personalize uma mensagem de recall para um cliente da farmácia que não compra há 7 dias. Use o nome {{customer.name}} e histórico de compras.", userPrompt: "Crie mensagem personalizada" } } },
+      { id: "message-recall", nodeType: "message", type: "message", position: { x: 700, y: 100 }, data: { label: "Enviar Lembrete", config: { message: "Olá {{nome}}! Passando pra saber como você está.\n{{personalized_message}}" } } },
     ],
     edges: [
       { id: "e1-2", source: "trigger-1", target: "filter-contacts" },
@@ -57,55 +33,13 @@ export const schedulingTemplates: FlowTemplate[] = [
     icon: Calendar,
     color: "bg-purple-600",
     nodes: [
-      {
-        id: "trigger-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 100, y: 150 },
-        data: { label: "Solicitar Agendamento", config: { keyword: "agendar" } },
-      },
-      {
-        id: "api-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 300, y: 150 },
-        data: { label: "Verificar Disponibilidade", config: { endpoint: "/api/availability", method: "GET" } },
-      },
-      {
-        id: "message-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 500, y: 150 },
-        data: { label: "Mostrar Horários", config: { message: "Horários disponíveis:\n{{available_slots}}" } },
-      },
-      {
-        id: "wait-1",
-        nodeType: "wait",
-        type: "customNode",
-        position: { x: 700, y: 150 },
-        data: { label: "Aguardar Escolha", config: { timeout: 600 } },
-      },
-      {
-        id: "api-2",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 900, y: 150 },
-        data: { label: "Confirmar Agendamento", config: { endpoint: "/api/appointments", method: "POST" } },
-      },
-      {
-        id: "message-2",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 1100, y: 100 },
-        data: { label: "Confirmação", config: { message: "✅ Agendamento confirmado para {{date}} às {{time}}!" } },
-      },
-      {
-        id: "notification-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 1100, y: 200 },
-        data: { label: "Enviar Lembrete", config: { action: "schedule_reminder", time: "-1 day" } },
-      },
+      { id: "trigger-1", nodeType: "trigger", type: "trigger", position: { x: 100, y: 150 }, data: { label: "Solicitar Agendamento", config: { event: "message_received" } } },
+      { id: "api-1", nodeType: "action", type: "httpRequest", position: { x: 300, y: 150 }, data: { label: "Verificar Disponibilidade", config: { method: "GET", url: "https://api.farmafrancis.com/availability" } } },
+      { id: "message-1", nodeType: "message", type: "message", position: { x: 500, y: 150 }, data: { label: "Mostrar Horários", config: { message: "Horários disponíveis:\n{{httpResponse.slots}}" } } },
+      { id: "wait-1", nodeType: "wait", type: "wait", position: { x: 700, y: 150 }, data: { label: "Aguardar Escolha", config: { delay: 600 } } },
+      { id: "api-2", nodeType: "action", type: "httpRequest", position: { x: 900, y: 150 }, data: { label: "Confirmar Agendamento", config: { method: "POST", url: "https://api.farmafrancis.com/appointments", body: "{\"slot\": \"{{selected_slot}}\"}" } } },
+      { id: "message-2", nodeType: "message", type: "message", position: { x: 1100, y: 100 }, data: { label: "Confirmação", config: { message: "✅ Agendamento confirmado para {{date}} às {{time}}!" } } },
+      { id: "notification-1", nodeType: "action", type: "notify", position: { x: 1100, y: 200 }, data: { label: "Enviar Lembrete", config: { alert: "Lembrete de agendamento: {{date}} {{time}}" } } },
     ],
     edges: [
       { id: "e1-2", source: "trigger-1", target: "api-1" },
@@ -126,61 +60,13 @@ export const schedulingTemplates: FlowTemplate[] = [
     icon: UserCheck,
     color: "bg-green-600",
     nodes: [
-      {
-        id: "trigger-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 100, y: 150 },
-        data: { label: "Novo Lead", config: { event: "new_lead" } },
-      },
-      {
-        id: "message-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 300, y: 150 },
-        data: {
-          label: "Pergunta 1: Interesse",
-          config: { message: "Qual tipo de produto você procura?\n1️⃣ Medicamentos\n2️⃣ Cosméticos\n3️⃣ Suplementos" },
-        },
-      },
-      {
-        id: "wait-1",
-        nodeType: "wait",
-        type: "customNode",
-        position: { x: 500, y: 150 },
-        data: { label: "Aguardar Resposta", config: { timeout: 300 } },
-      },
-      {
-        id: "message-2",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 700, y: 150 },
-        data: {
-          label: "Pergunta 2: Urgência",
-          config: { message: "Quando você precisa?\n1️⃣ Hoje\n2️⃣ Esta semana\n3️⃣ Sem pressa" },
-        },
-      },
-      {
-        id: "condition-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 900, y: 100 },
-        data: { label: "Lead Qualificado?", config: { condition: "score >= 7" } },
-      },
-      {
-        id: "crm-1",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 1100, y: 50 },
-        data: { label: "Adicionar ao CRM (Quente)", config: { action: "add_to_crm", status: "hot" } },
-      },
-      {
-        id: "crm-2",
-        nodeType: "action",
-        type: "customNode",
-        position: { x: 1100, y: 150 },
-        data: { label: "Adicionar ao CRM (Frio)", config: { action: "add_to_crm", status: "cold" } },
-      },
+      { id: "trigger-1", nodeType: "trigger", type: "trigger", position: { x: 100, y: 150 }, data: { label: "Novo Lead", config: { event: "new_lead" } } },
+      { id: "message-1", nodeType: "message", type: "message", position: { x: 300, y: 150 }, data: { label: "Pergunta 1: Interesse", config: { message: "Qual tipo de produto você procura?\n1️⃣ Medicamentos\n2️⃣ Cosméticos\n3️⃣ Suplementos" } } },
+      { id: "wait-1", nodeType: "wait", type: "wait", position: { x: 500, y: 150 }, data: { label: "Aguardar Resposta", config: { delay: 300 } } },
+      { id: "message-2", nodeType: "message", type: "message", position: { x: 700, y: 150 }, data: { label: "Pergunta 2: Urgência", config: { message: "Quando você precisa?\n1️⃣ Hoje\n2️⃣ Esta semana\n3️⃣ Sem pressa" } } },
+      { id: "condition-1", nodeType: "condition", type: "condition", position: { x: 900, y: 100 }, data: { label: "Lead Qualificado?", config: { condition: "score >= 7" } } },
+      { id: "crm-1", nodeType: "action", type: "createTicket", position: { x: 1100, y: 50 }, data: { label: "Adicionar ao CRM (Quente)", config: { subject: "Lead Quente: {{customer.name}}", priority: "high" } } },
+      { id: "crm-2", nodeType: "action", type: "createTicket", position: { x: 1100, y: 150 }, data: { label: "Adicionar ao CRM (Frio)", config: { subject: "Lead Frio: {{customer.name}}", priority: "low" } } },
     ],
     edges: [
       { id: "e1-2", source: "trigger-1", target: "message-1" },

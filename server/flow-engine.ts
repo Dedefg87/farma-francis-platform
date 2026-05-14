@@ -410,8 +410,10 @@ async function executeNodeWithEdges(
       break;
 
     case "condition":
+    case "filter":
+    case "switch":
+    case "if-else":
       conditionResult = evaluateConditionNode(config, context);
-
       break;
 
     case "message":
@@ -483,8 +485,59 @@ async function executeNodeWithEdges(
       await executeURAMenuNode(config, context, message);
       return;
 
-    default:
+    // ===== PHARMACY-SPECIFIC NODES =====
+    case "check-prescription":
+      await executeCheckPrescriptionNode(config, context, message);
+      break;
 
+    case "pix-confirmation":
+      await executePixConfirmationNode(config, context, message);
+      break;
+    case "attendance-create":
+      await executeAttendanceCreateNode(config, context, message);
+      break;
+
+    // ===== ACTION NODES =====
+    case "notify":
+      await executeNotifyNode(config, context, message);
+      break;
+
+    case "add_tag":
+      await executeAddTagNode(config, context, message);
+      break;
+
+    case "assign_agent":
+      await executeAssignAgentNode(config, context, message);
+      break;
+
+    case "create_contact":
+      await executeCreateContactNode(config, context, message);
+      break;
+
+    case "create_task":
+      await executeCreateTaskNode(config, context, message);
+      break;
+
+    case "http-request":
+      await executeHttpRequestNode(config, context);
+      break;
+
+    case "email-send":
+      // Email sending — log for now, implement with email provider
+      console.log(`[Flow Engine] Email to: ${config.to}, subject: ${config.subject}`);
+      break;
+
+    case "whatsapp-send":
+      const waBody = replaceVariables(config.body || config.message || "", context);
+      if (message.provider === "whatsapp") {
+        await sendWhatsAppMessage({ to: message.fromNumber, message: waBody });
+      } else if (message.provider === "instagram") {
+        await sendInstagramMessage({ to: message.fromNumber, message: waBody });
+      }
+      break;
+
+    default:
+      console.warn(`[Flow Engine] Unknown node type: ${node.type} — skipping`);
   }
 
   const outgoingEdges = edges.filter((e: unknown) => e.source === node.id);
@@ -858,6 +911,245 @@ async function executeURAMenuNode(config: unknown, context: unknown, message: un
       message: menuMessage,
     });
   }
+}
+
+/**
+ * Execute Check Prescription node (pharmacy-specific)
+ */
+async function executeCheckPrescriptionNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const fileUrl = replaceVariables(config.fileUrl || "", context);
+  const aiModel = config.aiModel || "gpt-4";
+
+  console.log(`[Flow Engine] Check Prescription: ${fileUrl}, model: ${aiModel}`);
+
+  // Use AI to analyze prescription
+  try {
+    const response = await invokeLLM({
+      messages: [
+        {
+          role: "system" as const,
+          content: "Você é um farmacêutico especializado. Analise a receita médica e retorne: válida ou inválida, nome do medicamento, dosagem, e observações.",
+        },
+          role: "user" as const,
+          content: `Analise esta receita: ${fileUrl}. Mensagem do cliente: ${message.messageText || ""}`,
+        },
+      ],
+    });
+
+    const result = typeof response.choices[0].message.content === "string"
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+
+    context.variables.prescriptionResult = result;
+    context.variables.prescriptionValid = result.toLowerCase().includes("válida");
+
+    // Send result to customer
+    const reply = `📋 *Análise da Receita*\n\n${result}\n\nUm farmacêutico irá validar em breve.`;
+    if (message.provider === "whatsapp") {
+      await sendWhatsAppMessage({ to: message.fromNumber, message: reply });
+    } else if (message.provider === "instagram") {
+      await sendInstagramMessage({ to: message.fromNumber, message: reply });
+    }
+  } catch (error) {
+    console.error("[Flow Engine] Check Prescription error:", error);
+  }
+}
+
+/**
+ * Execute Pix Confirmation node (pharmacy-specific)
+ */
+async function executePixConfirmationNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const pixKey = config.pixKey || "";
+  const expectedAmount = config.expectedAmount || 0;
+
+  console.log(`[Flow Engine] Pix Confirmation: key=${pixKey}, amount=${expectedAmount}`);
+
+  context.variables.pixKey = pixKey;
+  context.variables.pixAmount = expectedAmount;
+
+  const reply = `💳 *Pagamento via Pix*\n\nChave: ${pixKey}\nValor: R$ ${expectedAmount}\n\nEnvie o comprovante após o pagamento.`;
+  if (message.provider === "whatsapp") {
+    await sendWhatsAppMessage({ to: message.fromNumber, message: reply });
+  } else if (message.provider === "instagram") {
+    await sendInstagramMessage({ to: message.fromNumber, message: reply });
+  }
+}
+
+/**
+ * Execute Attendance Create node (pharmacy-specific)
+ */
+async function executeAttendanceCreateNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const priority = config.priority || "medium";
+  const channel = config.channel || message.provider;
+
+  const ticketNumber = `TK-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
+
+  const ticketData = {
+    ticketNumber,
+    customerId: context.customer?.id,
+    subject: `Atendimento ${channel}: ${message.fromNumber}`,
+    description: message.messageText || "",
+    status: "open" as const,
+    priority: priority as any,
+    channel: channel as any,
+  };
+
+  const inserted = await db.insert(tickets).values(ticketData).$returningId();
+  const ticketId = inserted?.[0]?.id;
+
+  context.variables.attendanceTicket = { id: ticketId, ...ticketData };
+
+  console.log(`[Flow Engine] Attendance created: ${ticketNumber}`);
+}
+
+/**
+ * Execute Notify node
+ */
+async function executeNotifyNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const alert = replaceVariables(config.alert || "", context);
+  console.log(`[Flow Engine] NOTIFICATION: ${alert}`);
+  // TODO: Implement actual notification (push, email, etc.)
+}
+
+/**
+ * Execute Add Tag node
+ */
+async function executeAddTagNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const tag = config.tag || "";
+  const customerId = context.customer?.id;
+
+  if (customerId && tag) {
+    try {
+      // Get current tags
+      const [customer] = await db.select().from(customers).where(eq(customers.id, customerId)).limit(1);
+      if (customer) {
+        const currentTags = customer.tags ? JSON.parse(customer.tags as string) : [];
+        if (!currentTags.includes(tag)) {
+          currentTags.push(tag);
+          await db.update(customers).set({ tags: JSON.stringify(currentTags) }).where(eq(customers.id, customerId));
+        }
+      }
+    } catch (error) {
+      console.error("[Flow Engine] Add Tag error:", error);
+    }
+  }
+
+  context.variables[`tag_${tag.replace(/[^a-zA-Z0-9]/g, "_")}`] = true;
+}
+
+/**
+ * Execute Assign Agent node
+ */
+async function executeAssignAgentNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  const queue = config.queue || "general";
+  const fallback = config.fallback || "";
+
+  // Find available agent
+  try {
+    const agents = await db.select().from(users).where(and(eq(users.role, "agent"), eq(users.status, "active"))).limit(5);
+
+    if (agents.length > 0) {
+      const assignedAgent = agents[Math.floor(Math.random() * agents.length)];
+      context.assignedTo = assignedAgent.id;
+      context.agent_name = assignedAgent.name;
+
+      // Update conversation assignment
+      const [conv] = await db.select().from(conversations).where(and(eq(conversations.customerId, context.customer?.id), eq(conversations.status, "open"))).orderBy(desc(conversations.lastMessageAt)).limit(1);
+
+      if (conv) {
+        await db.update(conversations).set({ assignedTo: assignedAgent.id, status: "assigned" }).where(eq(conversations.id, conv.id));
+      }
+
+      console.log(`[Flow Engine] Agent assigned: ${assignedAgent.name} (queue: ${queue})`);
+    } else if (fallback) {
+      console.log(`[Flow Engine] No agents available, using fallback: ${fallback}`);
+      context.agent_name = fallback;
+    }
+  } catch (error) {
+    console.error("[Flow Engine] Assign Agent error:", error);
+  }
+}
+
+/**
+ * Execute Create Contact node
+ */
+async function executeCreateContactNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const db = await getDb();
+  if (!db) return;
+
+  try {
+    const existing = await db.select().from(customers).where(eq(customers.phone, message.fromNumber)).limit(1);
+
+    if (existing.length === 0) {
+      const tags = config.tags ? JSON.stringify(config.tags) : "[]";
+      await db.insert(customers).values({
+        name: message.fromName || "Cliente",
+        phone: message.fromNumber,
+        tags,
+        createdAt: new Date(),
+      });
+      console.log(`[Flow Engine] Contact created: ${message.fromNumber}`);
+    } else {
+      console.log(`[Flow Engine] Contact already exists: ${message.fromNumber}`);
+    }
+  } catch (error) {
+    console.error("[Flow Engine] Create Contact error:", error);
+  }
+}
+
+/**
+ * Execute Create Task node
+ */
+async function executeCreateTaskNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const title = replaceVariables(config.title || "Nova tarefa", context);
+  const description = replaceVariables(config.description || "", context);
+  const priority = config.priority || "medium";
+  const assignTo = config.assignTo || config.assignee || null;
+
+  console.log(`[Flow Engine] Task created: ${title} (priority: ${priority}, assignTo: ${assignTo})`);
+
+  context.variables.lastTask = { title, description, priority, assignTo };
 }
 
 /**
