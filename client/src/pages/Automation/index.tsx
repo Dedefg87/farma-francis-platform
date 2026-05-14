@@ -49,8 +49,18 @@ export default function Automation() {
     onError: (err) => { toast.error(`Erro ao criar fluxo: ${err.message}`); }
   });
   const deleteMutation = trpc.automation.delete.useMutation({
-    onSuccess: () => { refetch(); toast.success("Fluxo excluído"); },
+    onSuccess: async () => {
+      await refetch();
+      toast.success("Fluxo excluído com sucesso");
+    },
     onError: (err) => { toast.error(`Erro ao excluir: ${err.message}`); }
+  });
+  const cleanupMutation = trpc.automation.cleanup.useMutation({
+    onSuccess: async () => {
+      await refetch();
+      toast.success("Fluxos obsoletos removidos");
+    },
+    onError: (err) => { toast.error(`Erro ao limpar: ${err.message}`); }
   });
   const updateMutation = trpc.automation.update.useMutation({
     onSuccess: () => { refetch(); toast.success("Fluxo atualizado"); },
@@ -62,7 +72,8 @@ export default function Automation() {
   );
 
   const allFlows = flowsData?.items || [];
-  const flows = allFlows.filter((f: any) => f.isActive !== false);
+  const flows = allFlows.filter((f: any) => f.isActive === true);
+  const obsoleteCount = allFlows.filter((f: any) => f.isActive === false).length;
   const isActive = flows.some(f => f.isActive);
 
   const handleCreateFlow = () => {
@@ -298,6 +309,17 @@ export default function Automation() {
                 <CardTitle className="text-base flex items-center justify-between">
                   <span>Fluxos Cadastrados ({flows.length})</span>
                   <div className="flex items-center gap-2">
+                    {obsoleteCount > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => cleanupMutation.mutate()}
+                        disabled={cleanupMutation.isPending}
+                        className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200 text-xs h-7"
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" /> Limpar Obsoletos ({obsoleteCount})
+                      </Button>
+                    )}
                     {flows.length > 0 && (
                       <Button
                         variant="outline"

@@ -399,20 +399,10 @@ export const automationRouter = router({
           return errorResponse("Automação não encontrada", "NOT_FOUND");
         }
 
-        // Check if already deleted
-        if (existing[0].isActive === false) {
-          return errorResponse("Automação já foi excluída", "ALREADY_DELETED");
-        }
-
-        // Soft delete (set isActive to false)
-        const result = await db
-          .update(visualFlows)
-          .set({ isActive: false, updatedAt: new Date() })
+        // Hard delete — remove from database completely
+        await db
+          .delete(visualFlows)
           .where(eq(visualFlows.id, input.id));
-
-        if (!result) {
-          return errorResponse("Falha ao excluir automação", "DELETE_FAILED");
-        }
 
         return successResponse(
           { id: input.id },
@@ -910,6 +900,37 @@ export const automationRouter = router({
         console.error("Error executing flow by ID:", error);
         return errorResponse(
           "Falha ao executar fluxo",
+          (error as Error).message
+        );
+      }
+    }),
+
+  // -------------------- CLEANUP OBSOLETE FLOWS --------------------
+  /**
+   * Delete all inactive/obsolete flows
+   * DELETE /api/automation/cleanup
+   */
+  cleanup: protectedProcedure
+    .mutation(async () => {
+      try {
+        const db = await getDb();
+        if (!db) {
+          throw new Error("Database não disponível");
+        }
+
+        // Delete all inactive flows
+        const result = await db
+          .delete(visualFlows)
+          .where(eq(visualFlows.isActive, false));
+
+        return successResponse(
+          { deleted: true },
+          "Fluxos obsoletos removidos com sucesso"
+        );
+      } catch (error) {
+        console.error("Error cleaning up flows:", error);
+        return errorResponse(
+          "Falha ao limpar fluxos obsoletos",
           (error as Error).message
         );
       }

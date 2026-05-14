@@ -9482,13 +9482,7 @@ var automationRouter = router({
       if (existing.length === 0) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
       }
-      if (existing[0].isActive === false) {
-        return errorResponse("Automa\xE7\xE3o j\xE1 foi exclu\xEDda", "ALREADY_DELETED");
-      }
-      const result = await db.update(visualFlows).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id));
-      if (!result) {
-        return errorResponse("Falha ao excluir automa\xE7\xE3o", "DELETE_FAILED");
-      }
+      await db.delete(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id));
       return successResponse(
         { id: input.id },
         "Automa\xE7\xE3o exclu\xEDda com sucesso"
@@ -9876,6 +9870,30 @@ var automationRouter = router({
       console.error("Error executing flow by ID:", error);
       return errorResponse(
         "Falha ao executar fluxo",
+        error.message
+      );
+    }
+  }),
+  // -------------------- CLEANUP OBSOLETE FLOWS --------------------
+  /**
+   * Delete all inactive/obsolete flows
+   * DELETE /api/automation/cleanup
+   */
+  cleanup: protectedProcedure.mutation(async () => {
+    try {
+      const db = await getDb();
+      if (!db) {
+        throw new Error("Database n\xE3o dispon\xEDvel");
+      }
+      const result = await db.delete(visualFlows).where((0, import_drizzle_orm8.eq)(visualFlows.isActive, false));
+      return successResponse(
+        { deleted: true },
+        "Fluxos obsoletos removidos com sucesso"
+      );
+    } catch (error) {
+      console.error("Error cleaning up flows:", error);
+      return errorResponse(
+        "Falha ao limpar fluxos obsoletos",
         error.message
       );
     }
