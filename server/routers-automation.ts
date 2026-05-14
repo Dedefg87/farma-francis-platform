@@ -399,15 +399,24 @@ export const automationRouter = router({
           return errorResponse("Automação não encontrada", "NOT_FOUND");
         }
 
+        // Check if already deleted
+        if (existing[0].isActive === false) {
+          return errorResponse("Automação já foi excluída", "ALREADY_DELETED");
+        }
+
         // Soft delete (set isActive to false)
-        await db
+        const result = await db
           .update(visualFlows)
           .set({ isActive: false, updatedAt: new Date() })
           .where(eq(visualFlows.id, input.id));
 
+        if (!result) {
+          return errorResponse("Falha ao excluir automação", "DELETE_FAILED");
+        }
+
         return successResponse(
           { id: input.id },
-          "Automação desativada com sucesso"
+          "Automação excluída com sucesso"
         );
       } catch (error) {
         console.error("Error deleting automation:", error);

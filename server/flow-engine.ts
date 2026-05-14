@@ -391,6 +391,72 @@ async function executeFlowFromTrigger(
 /**
  * Execute a single node and follow its outgoing edges
  */
+// ==================== VALID NODE TYPES ====================
+// Only these node types are recognized by the flow engine.
+// Any other type will be skipped with a warning.
+const VALID_NODE_TYPES = new Set([
+  "trigger",
+  "condition",
+  "filter",
+  "switch",
+  "if-else",
+  "message",
+  "aiAssistant",
+  "transferHuman",
+  "transfer",
+  "createTicket",
+  "wait",
+  "setVariable",
+  "httpRequest",
+  "http-request",
+  "uraMenu",
+  "function",
+  "notify",
+  "add_tag",
+  "assign_agent",
+  "create_contact",
+  "create_task",
+  "check-prescription",
+  "pix-confirmation",
+  "attendance-create",
+  "email-send",
+  "whatsapp-send",
+  "customNode",
+]);
+
+function sanitizeNodeType(nodeType: string): string {
+  if (VALID_NODE_TYPES.has(nodeType)) return nodeType;
+  // Try to map common variations
+  const mappings: Record<string, string> = {
+    "http_request": "httpRequest",
+    "http-request": "httpRequest",
+    "set_variable": "setVariable",
+    "set-variable": "setVariable",
+    "create_ticket": "createTicket",
+    "create-ticket": "createTicket",
+    "transfer_human": "transferHuman",
+    "transfer-human": "transferHuman",
+    "ai_assistant": "aiAssistant",
+    "ai-assistant": "aiAssistant",
+    "ura_menu": "uraMenu",
+    "ura-menu": "uraMenu",
+    "add_tag": "add_tag",
+    "add-tag": "add_tag",
+    "assign_agent": "assign_agent",
+    "assign-agent": "assign_agent",
+    "create_contact": "create_contact",
+    "create-contact": "create_contact",
+    "create_task": "create_task",
+    "create-task": "create_task",
+    "whatsapp_send": "whatsapp-send",
+    "email_send": "email-send",
+    "pix_confirmation": "pix-confirmation",
+    "check_prescription": "check-prescription",
+    "attendance_create": "attendance-create",
+  };
+  return mappings[nodeType] || nodeType;
+}
+
 async function executeNodeWithEdges(
   node: unknown,
   nodes: unknown[],
@@ -398,6 +464,24 @@ async function executeNodeWithEdges(
   context: unknown,
   message: unknown
 ): Promise<void> {
+  // Sanitize node type
+  const rawType = (node.type as string) || "customNode";
+  node.type = sanitizeNodeType(rawType);
+
+  if (!VALID_NODE_TYPES.has(node.type)) {
+    console.warn(
+      `[Flow Engine] SKIPPING unknown node type: "${rawType}" (label: ${node.data?.label || node.id}). ` +
+      `Valid types: ${Array.from(VALID_NODE_TYPES).join(", ")}`
+    );
+    // Still try to follow edges so the flow doesn't break
+    const outgoingEdges = edges.filter((e: unknown) => e.source === node.id);
+    for (const edge of outgoingEdges) {
+      const nextNode = nodes.find((n: unknown) => n.id === edge.target);
+      if (nextNode) await executeNodeWithEdges(nextNode, nodes, edges, context, message);
+    }
+    return;
+  }
+
   console.log(
     `[Chatbot Flow] Executing node: ${node.data?.label || node.id} (${node.type})`
   );

@@ -67,7 +67,8 @@ export default function Automation() {
     { enabled: activeTab === "dashboard" }
   );
 
-  const flows = flowsData?.items || [];
+  const allFlows = flowsData?.items || [];
+  const flows = allFlows.filter(f => f.isActive === true);
   const isActive = flows.some(f => f.isActive);
 
   const handleCreateFlow = () => {

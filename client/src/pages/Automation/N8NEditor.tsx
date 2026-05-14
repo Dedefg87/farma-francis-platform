@@ -90,6 +90,51 @@ interface N8NEditorProps {
 
 // ==================== MAIN COMPONENT ====================
 
+// ==================== NODE TYPE VALIDATION ====================
+// Valid node types that the flow engine understands
+const VALID_NODE_TYPES = new Set([
+  "trigger", "condition", "filter", "switch", "if-else",
+  "message", "aiAssistant", "transferHuman", "transfer",
+  "createTicket", "wait", "setVariable", "httpRequest", "http-request",
+  "uraMenu", "function", "notify", "add_tag", "assign_agent",
+  "create_contact", "create_task", "check-prescription",
+  "pix-confirmation", "attendance-create", "email-send", "whatsapp-send",
+  "customNode",
+]);
+
+const NODE_TYPE_MAPPINGS: Record<string, string> = {
+  "http_request": "httpRequest",
+  "http-request": "httpRequest",
+  "set_variable": "setVariable",
+  "create_ticket": "createTicket",
+  "transfer_human": "transferHuman",
+  "ai_assistant": "aiAssistant",
+  "ura_menu": "uraMenu",
+  "add_tag": "add_tag",
+  "assign_agent": "assign_agent",
+  "create_contact": "create_contact",
+  "create_task": "create_task",
+  "whatsapp_send": "whatsapp-send",
+  "email_send": "email-send",
+  "pix_confirmation": "pix-confirmation",
+  "check_prescription": "check-prescription",
+  "attendance_create": "attendance-create",
+};
+
+function sanitizeNodes(nodes: Node[]): Node[] {
+  return nodes.map(node => {
+    const rawType = (node.type as string) || "customNode";
+    if (VALID_NODE_TYPES.has(rawType)) return node;
+    const mapped = NODE_TYPE_MAPPINGS[rawType];
+    if (mapped) {
+      console.warn(`[N8NEditor] Mapped node type "${rawType}" → "${mapped}" for node "${node.data?.label || node.id}"`);
+      return { ...node, type: mapped };
+    }
+    console.warn(`[N8NEditor] Unknown node type "${rawType}" for node "${node.data?.label || node.id}" — setting to customNode`);
+    return { ...node, type: "customNode" as any };
+  });
+}
+
 export function N8NEditor({
   initialNodes = [],
   initialEdges = [],
@@ -97,7 +142,8 @@ export function N8NEditor({
   onSimulate,
   isFullCanvas = false,
 }: N8NEditorProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const sanitizedNodes = sanitizeNodes(initialNodes);
+  const [nodes, setNodes, onNodesChange] = useNodesState(sanitizedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);

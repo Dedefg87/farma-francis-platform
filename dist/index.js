@@ -9482,10 +9482,16 @@ var automationRouter = router({
       if (existing.length === 0) {
         return errorResponse("Automa\xE7\xE3o n\xE3o encontrada", "NOT_FOUND");
       }
-      await db.update(visualFlows).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id));
+      if (existing[0].isActive === false) {
+        return errorResponse("Automa\xE7\xE3o j\xE1 foi exclu\xEDda", "ALREADY_DELETED");
+      }
+      const result = await db.update(visualFlows).set({ isActive: false, updatedAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm8.eq)(visualFlows.id, input.id));
+      if (!result) {
+        return errorResponse("Falha ao excluir automa\xE7\xE3o", "DELETE_FAILED");
+      }
       return successResponse(
         { id: input.id },
-        "Automa\xE7\xE3o desativada com sucesso"
+        "Automa\xE7\xE3o exclu\xEDda com sucesso"
       );
     } catch (error) {
       console.error("Error deleting automation:", error);
