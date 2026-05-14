@@ -22,7 +22,7 @@ export function Footer({ darkMode, version, lastUpdate }: FooterProps) {
           </div>
           <div className="flex items-center gap-1">
             <FileText className="w-3 h-3" />
-            <span>Última atualização: {lastUpdate}</span>
+            <span>Atualizado: {lastUpdate}</span>
           </div>
         </div>
 
@@ -35,7 +35,7 @@ export function Footer({ darkMode, version, lastUpdate }: FooterProps) {
           </Button>
           <Button variant="link" size="sm" className="text-xs h-auto p-0">
             <Shield className="w-3 h-3 mr-1" />
-            Política de Privacidade
+            Privacidade
           </Button>
           <Button variant="link" size="sm" className="text-xs h-auto p-0">
             <Github className="w-3 h-3 mr-1" />
@@ -46,7 +46,7 @@ export function Footer({ darkMode, version, lastUpdate }: FooterProps) {
         {/* Right - Status */}
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-xs text-gray-500">Sistema Operacional</span>
+          <span className="text-xs text-gray-500">Sistema Online</span>
         </div>
       </div>
     </footer>

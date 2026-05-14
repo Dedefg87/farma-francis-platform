@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   Background,
@@ -100,7 +100,6 @@ export function N8NEditor({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
@@ -108,6 +107,24 @@ export function N8NEditor({
   const [showSimulation, setShowSimulation] = useState(false);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { zoomIn, zoomOut, fitView } = useReactFlow();
+
+  // Node config local state — synced with selected node
+  const [nodeConfigState, setNodeConfigState] = useState<Record<string, any>>({});
+
+  // Sync config state when selected node changes
+  useEffect(() => {
+    if (selectedNode) {
+      setNodeConfigState(selectedNode.data?.config || {});
+    }
+  }, [selectedNode?.id, selectedNode?.data?.config]);
+
+  // Debounced search
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 150);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // ==================== CONNECTIONS ====================
 
@@ -210,14 +227,9 @@ export function N8NEditor({
 
   const handleClearFlow = useCallback(() => {
     if (nodes.length === 0) return;
-    const confirmed = window.confirm(
-      `Tem certeza que deseja limpar todo o fluxo?\n\nIsso irá remover ${nodes.length} nós e ${edges.length} conexões. Essa ação não pode ser desfeita.`
-    );
-    if (confirmed) {
-      setNodes([]);
-      setEdges([]);
-      setSelectedNode(null);
-    }
+    setNodes([]);
+    setEdges([]);
+    setSelectedNode(null);
   }, [nodes, edges, setNodes, setEdges]);
 
   const handleDeleteSelectedNode = useCallback(() => {
@@ -289,14 +301,15 @@ export function N8NEditor({
 
   // ==================== FILTERED NODES ====================
 
-  const filteredNodes = NODE_TYPES.filter((node) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      node.label.toLowerCase().includes(term) ||
-      node.description.toLowerCase().includes(term)
+  const filteredNodes = useMemo(() => {
+    if (!debouncedSearch) return NODE_TYPES;
+    const term = debouncedSearch.toLowerCase();
+    return NODE_TYPES.filter(
+      (node) =>
+        node.label.toLowerCase().includes(term) ||
+        node.description.toLowerCase().includes(term)
     );
-  });
+  }, [debouncedSearch]);
 
   const nodesByCategory = filteredNodes.reduce((acc, node) => {
     if (!acc[node.category]) acc[node.category] = [];
@@ -351,8 +364,8 @@ export function N8NEditor({
                 <Input
                   type="text"
                   placeholder="Buscar nó..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 text-xs h-8"
                 />
               </div>
@@ -569,7 +582,7 @@ export function N8NEditor({
                 <Copy className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => confirm('Excluir este nó?') && handleDeleteNode()}
+                onClick={() => handleDeleteNode()}
                 className="p-1.5 hover:bg-red-50 rounded text-red-500 transition-colors"
                 title="Excluir nó (Delete)"
               >
@@ -587,7 +600,30 @@ export function N8NEditor({
 
           {/* Panel Content */}
           <div className="flex-1 overflow-y-auto p-4">
-            <NodeConfigPanel node={selectedNode} />
+            <NodeConfigPanel
+              node={selectedNode}
+              configState={nodeConfigState}
+              onConfigChange={(key, value) => {
+                setNodeConfigState(prev => ({ ...prev, [key]: value }));
+                // Persist to node data
+                setNodes((nds) =>
+                  nds.map((n) =>
+                    n.id === selectedNode.id
+                      ? { ...n, data: { ...n.data, config: { ...n.data.config, [key]: value } } }
+                      : n
+                  )
+                );
+              }}
+              onLabelChange={(newLabel) => {
+                setNodes((nds) =>
+                  nds.map((n) =>
+                    n.id === selectedNode.id
+                      ? { ...n, data: { ...n.data, label: newLabel } }
+                      : n
+                  )
+                );
+              }}
+            />
           </div>
 
           {/* Panel Footer */}
@@ -613,9 +649,21 @@ export function N8NEditor({
 
 // ==================== CONFIG PANEL ====================
 
-function NodeConfigPanel({ node }: { node: Node }) {
+function NodeConfigPanel({
+  node,
+  configState,
+  onConfigChange,
+  onLabelChange,
+}: {
+  node: Node;
+  configState: Record<string, any>;
+  onConfigChange: (key: string, value: any) => void;
+  onLabelChange: (label: string) => void;
+}) {
   const nodeDef = getNodeType(node.data?.nodeType);
   if (!nodeDef) return <div className="text-sm text-gray-500">Nó não encontrado</div>;
+
+  const currentConfig = node.data?.config || {};
 
   return (
     <div className="space-y-4">
@@ -637,7 +685,11 @@ function NodeConfigPanel({ node }: { node: Node }) {
       {/* Label */}
       <div>
         <Label className="text-xs text-gray-500 mb-1.5 block">Nome</Label>
-        <Input defaultValue={node.data.label} className="h-8 text-sm" />
+        <Input
+          value={node.data.label || ''}
+          onChange={(e) => onLabelChange(e.target.value)}
+          className="h-8 text-sm"
+        />
       </div>
 
       {/* Ports Info */}
@@ -661,7 +713,7 @@ function NodeConfigPanel({ node }: { node: Node }) {
         </div>
       )}
 
-      {/* Config Fields */}
+      {/* Config Fields — with live state */}
       {nodeDef.config && nodeDef.config.length > 0 && (
         <div>
           <Label className="text-xs text-gray-500 mb-2 block">Configurações</Label>
@@ -673,11 +725,16 @@ function NodeConfigPanel({ node }: { node: Node }) {
                   <Input
                     type={field.type === 'password' ? 'password' : 'text'}
                     placeholder={field.placeholder}
-                    defaultValue={field.defaultValue}
+                    value={currentConfig[field.key] ?? field.defaultValue ?? ''}
+                    onChange={(e) => onConfigChange(field.key, e.target.value)}
                     className="h-8 text-sm"
                   />
                 ) : field.type === 'select' ? (
-                  <select className="w-full h-8 text-sm border rounded px-2 bg-white">
+                  <select
+                    className="w-full h-8 text-sm border rounded px-2 bg-white"
+                    value={currentConfig[field.key] ?? ''}
+                    onChange={(e) => onConfigChange(field.key, e.target.value)}
+                  >
                     <option value="">Selecionar...</option>
                     {field.options?.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -689,8 +746,29 @@ function NodeConfigPanel({ node }: { node: Node }) {
                   <textarea
                     className="w-full text-sm border rounded p-2 min-h-[80px] resize-y"
                     placeholder={field.placeholder}
-                    defaultValue={field.defaultValue}
+                    value={currentConfig[field.key] ?? field.defaultValue ?? ''}
+                    onChange={(e) => onConfigChange(field.key, e.target.value)}
                   />
+                ) : field.type === 'number' ? (
+                  <Input
+                    type="number"
+                    placeholder={field.placeholder}
+                    value={currentConfig[field.key] ?? field.defaultValue ?? ''}
+                    onChange={(e) => onConfigChange(field.key, e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                ) : field.type === 'boolean' ? (
+                  <div className="flex items-center gap-2 h-8">
+                    <input
+                      type="checkbox"
+                      checked={!!currentConfig[field.key]}
+                      onChange={(e) => onConfigChange(field.key, e.target.checked)}
+                      className="rounded"
+                    />
+                    <span className="text-xs text-gray-500">
+                      {currentConfig[field.key] ? 'Ativado' : 'Desativado'}
+                    </span>
+                  </div>
                 ) : null}
               </div>
             ))}

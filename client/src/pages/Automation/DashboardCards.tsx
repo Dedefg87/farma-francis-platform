@@ -1,48 +1,72 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { 
   Activity, MessageSquare, Clock, TrendingUp, Smartphone, Globe, 
-  Instagram, MessageCircle, Zap, Download, Upload, Send
+  Instagram, MessageCircle, Zap
 } from "lucide-react";
+import { trpc } from "../../lib/trpc";
 
 interface DashboardCardsProps {
   darkMode: boolean;
 }
 
 export function DashboardCards({ darkMode }: DashboardCardsProps) {
+  const { data: stats, isLoading: statsLoading } = trpc.automation.stats?.useQuery?.(
+    { period: "today" },
+    { refetchInterval: 30000 }
+  ) || { data: null, isLoading: false };
+  const { data: flowsData } = trpc.automation.list.useQuery(
+    { limit: 100, offset: 0 },
+    { refetchInterval: 30000 }
+  );
+
+  const flows = flowsData?.items || [];
+  const activeFlows = flows.filter(f => f.isActive);
+  const totalFlows = flows.length;
+
+  // Dados reais do backend com fallback
+  const automationActive = activeFlows.length > 0;
+  const todayCount = stats?.totalExecutions ?? 0;
+  const avgResponseTime = stats?.avgResponseTime ? `${(stats.avgResponseTime / 1000).toFixed(1)}s` : "—";
+  const conversionCount = stats?.conversions ?? 0;
+  const conversionRate = stats?.totalExecutions && stats.totalExecutions > 0
+    ? `${((stats.conversions / stats.totalExecutions) * 100).toFixed(1)}%`
+    : "—";
+
   const cards = [
     {
       title: "Status da Automação",
-      value: "Ativa",
-      icon: <Activity className="w-5 h-5 text-green-600" />,
-      badge: "Online",
-      badgeColor: "bg-green-100 text-green-800",
-      subtext: "Última atividade: há 2 min"
+      value: automationActive ? "Ativa" : "Inativa",
+      icon: <Activity className={`w-5 h-5 ${automationActive ? "text-green-600" : "text-gray-400"}`} />,
+      badge: automationActive ? "Online" : "Offline",
+      badgeColor: automationActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600",
+      subtext: totalFlows > 0
+        ? `${activeFlows.length} de ${totalFlows} fluxos ativos`
+        : "Nenhum fluxo criado ainda"
     },
     {
-      title: "Atendimentos Automatizados Hoje",
-      value: "127",
+      title: "Execuções Hoje",
+      value: statsLoading ? "…" : String(todayCount),
       icon: <MessageSquare className="w-5 h-5 text-blue-600" />,
-      badge: "+23%",
+      badge: stats?.executionsChange ? `${stats.executionsChange > 0 ? "+" : ""}${stats.executionsChange}%` : "—",
       badgeColor: "bg-blue-100 text-blue-800",
-      subtext: "Média: 5.3/min"
+      subtext: stats?.avgPerMinute ? `Média: ${stats.avgPerMinute}/min` : "Dados em tempo real"
     },
     {
       title: "Tempo Médio de Resposta",
-      value: "1.2s",
+      value: statsLoading ? "…" : avgResponseTime,
       icon: <Clock className="w-5 h-5 text-purple-600" />,
-      badge: "-0.3s",
+      badge: "Meta: <2s",
       badgeColor: "bg-purple-100 text-purple-800",
-      subtext: "Meta: < 2.0s"
+      subtext: stats?.avgResponseTime && stats.avgResponseTime < 2000 ? "Dentro da meta ✓" : "Monitorando"
     },
     {
-      title: "Conversões (Pedidos)",
-      value: "43",
+      title: "Conversões",
+      value: statsLoading ? "…" : String(conversionCount),
       icon: <TrendingUp className="w-5 h-5 text-emerald-600" />,
-      badge: "33.8%",
+      badge: conversionRate,
       badgeColor: "bg-emerald-100 text-emerald-800",
-      subtext: "Conversão sobre atendimentos"
+      subtext: "Pedidos convertidos via automação"
     }
   ];
 
