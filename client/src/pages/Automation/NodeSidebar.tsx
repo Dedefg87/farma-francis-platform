@@ -1,47 +1,29 @@
 import React, { useState, useMemo } from 'react';
-import { 
+import {
   Search, ChevronDown, ChevronRight, GripVertical,
-  GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package, Phone, Instagram, Mail, Clock, MessageSquare, Smartphone, Bell, Database, GitCompare, Repeat, AlertTriangle, UserCheck, CreditCard, Webhook, Bot, GitMerge, FileText
+  FileCheck, Brain, Heart, Package, MessageSquare, ShieldCheck,
+  Calendar, Tag, DollarSign, Truck, UserPlus, Award, ScanLine, Thermometer,
+  Stethoscope, Pill, AlertTriangle
 } from 'lucide-react';
-import { 
-  CATEGORIES, NODE_TYPES, getNodesByCategory 
+import {
+  CATEGORIES, NODE_TYPES, getNodesByCategory
 } from './node-types';
 import { WorkflowNode } from './node-types';
 
 // Map category id to icon component
 const categoryIcons: Record<string, React.ComponentType> = {
-  'triggers': GitBranch,
-  'logic': Filter,
-  'messages': Send,
-  'ai': Brain,
-  'actions': Code,
-  'wait': Pause,
-  'integrations': Globe,
-  'flow': ArrowRight,
-  'pharmacy': Package,
-};
-
-// Map node id to icon component (simplified)
-const nodeIconMap: Record<string, React.ComponentType> = {
-  'whatsapp-incoming': Phone,
-  'instagram-dm': Instagram,
-  'webhook-trigger': Globe,
-  'schedule-trigger': Clock,
-  'if-else': GitBranch,
-  'switch': GitCompare,
-  'filter': Filter,
-  'whatsapp-send': Phone,
-  'email-send': Mail,
-  'openai-gpt': Brain,
-  'claude-anthropic': Bot,
-  'create-task': Code,
-  'http-request': Globe,
-  'wait': Pause,
-  'human-approval': UserCheck,
-  'check-prescription': FileText,
-  'pix-confirmation': CreditCard,
-  'attendance-create': Phone,
-  // Add more as needed
+  'entrada': FileCheck,
+  'ia': Brain,
+  'saude': Heart,
+  'erp': Package,
+  'comunicacao': MessageSquare,
+  'compliance': ShieldCheck,
+  'agenda': Calendar,
+  'marketing': Tag,
+  'financeiro': DollarSign,
+  'logistica': Truck,
+  'crm': UserPlus,
+  'iot': Thermometer,
 };
 
 interface NodeSidebarProps {
@@ -58,13 +40,13 @@ export default function NodeSidebar({ onDragStart, isOpen, onToggle }: NodeSideb
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories(prev => ({ ...prev, [catId]: !prev[catId] }));
-  };
+  });
 
   const filteredNodes = useMemo(() => {
     if (!searchTerm) return NODE_TYPES;
     const term = searchTerm.toLowerCase();
-    return NODE_TYPES.filter(node => 
-      node.label.toLowerCase().includes(term) || 
+    return NODE_TYPES.filter(node =>
+      node.label.toLowerCase().includes(term) ||
       node.description.toLowerCase().includes(term) ||
       node.category.toLowerCase().includes(term)
     );
@@ -104,7 +86,7 @@ export default function NodeSidebar({ onDragStart, isOpen, onToggle }: NodeSideb
               />
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              {filteredNodes.length} nós encontrados
+              {filteredNodes.length} nós em {CATEGORIES.length} categorias
             </div>
           </div>
 
@@ -114,7 +96,7 @@ export default function NodeSidebar({ onDragStart, isOpen, onToggle }: NodeSideb
               const nodes = nodesByCategory[category.id] || [];
               if (nodes.length === 0) return null;
               const isExpanded = expandedCategories[category.id];
-              const CategoryIcon = categoryIcons[category.id] || GitBranch;
+              const CategoryIcon = categoryIcons[category.id] || FileCheck;
               return (
                 <div key={category.id} className="border-b border-gray-100">
                   <button
@@ -131,7 +113,7 @@ export default function NodeSidebar({ onDragStart, isOpen, onToggle }: NodeSideb
                   {isExpanded && (
                     <div className="pb-2">
                       {nodes.map(node => {
-                        const NodeIcon = nodeIconMap[node.id] || GitBranch;
+                        const NodeIcon = node.icon;
                         return (
                           <div
                             key={node.id}
