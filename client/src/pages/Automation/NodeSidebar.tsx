@@ -41,6 +41,10 @@ const categoryIcons: Record<string, React.ComponentType> = {
   'analytics': BarChart,
   'pagamentos': DollarIcon,
   'ia_compliance': Eye,
+  'core_triggers': Zap,
+  'core_logic': GitBranch,
+  'core_actions': Code,
+  'core_data': Database,
 };
 
 interface NodeSidebarProps {

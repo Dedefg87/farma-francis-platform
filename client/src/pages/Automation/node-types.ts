@@ -10,7 +10,8 @@ import {
   FileX, CreditCard as CreditCardIcon, Store, Video, ShoppingBag,
   Calculator, Send as SendIcon, Shield, FileSearch, BarChart, DollarSign as DollarIcon,
   Link2, ClipboardCheck, AlertCircle, TrendingDown, UserCheck, FileSpreadsheet,
-  Receipt as ReceiptIcon, Smartphone, Megaphone, Clipboard, Eye
+  Receipt as ReceiptIcon, Smartphone, Megaphone, Clipboard, Eye,
+  Code, Layers, Archive, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -30,9 +31,13 @@ export interface WorkflowNode {
   color: string;
   category: string;
   inputs?: NodePort[];
-  outputs?: NodePort[];
-  config?: ConfigField[];
-  errors?: NodeError[];
+
+outputs?: NodePort[];
+
+config?: ConfigField[];
+
+errors?: NodeError[];
+
 }
 
 export interface NodePort {
@@ -46,7 +51,8 @@ export interface ConfigField {
   label: string;
   type: 'string' | 'number' | 'boolean' | 'select' | 'json' | 'prompt' | 'password' | 'file' | 'multiselect';
   options?: { value: string; label: string }[];
-  defaultValue?: any;
+
+defaultValue?: any;
   placeholder?: string;
   multiline?: boolean;
 }
@@ -81,6 +87,10 @@ export const CATEGORIES = [
   { id: 'analytics', label: 'BI / Analytics', color: 'bg-rose-100 text-rose-800', icon: BarChart },
   { id: 'pagamentos', label: 'Pagamentos / Financeiro', color: 'bg-teal-100 text-teal-800', icon: DollarIcon },
   { id: 'ia_compliance', label: 'IA / Compliance', color: 'bg-purple-100 text-purple-800', icon: Eye },
+  { id: 'core_triggers', label: 'Core / Triggers', color: 'bg-green-100 text-green-800', icon: Zap },
+  { id: 'core_logic', label: 'Core / Lógica', color: 'bg-yellow-100 text-yellow-800', icon: GitBranch },
+  { id: 'core_actions', label: 'Core / Ações', color: 'bg-blue-100 text-blue-800', icon: Code },
+  { id: 'core_data', label: 'Core / Dados', color: 'bg-indigo-100 text-indigo-800', icon: Database },
 ];
 
 // ==================== NODE DEFINITIONS ====================
@@ -967,6 +977,596 @@ export const NODE_TYPES: WorkflowNode[] = [
       { key: 'operationRiskScore', label: 'Score risco operação', type: 'boolean', defaultValue: true },
       { key: 'erpIntegration', label: 'Integração ERP', type: 'boolean', defaultValue: false },
       { key: 'complianceExport', label: 'Exportação compliance', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+
+  // ===== CORE / TRIGGERS =====
+
+  {
+    id: 'webhook-trigger',
+    type: 'trigger',
+    label: '🌐 Webhook',
+    description: 'Recebe chamadas HTTP POST/GET para iniciar workflow',
+    icon: Globe,
+    color: '#10B981',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Payload recebido', type: 'data' }],
+    config: [
+      { key: 'httpMethod', label: 'Método HTTP', type: 'select', options: [
+        { value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }, { value: 'DELETE', label: 'DELETE' }, { value: 'ALL', label: 'Todos' },
+      ], defaultValue: 'POST' },
+      { key: 'path', label: 'Caminho', type: 'string', placeholder: '/webhook/meu-endpoint', defaultValue: '/webhook' },
+      { key: 'responseMode', label: 'Modo resposta', type: 'select', options: [
+        { value: 'onReceived', label: 'Ao receber' }, { value: 'lastNode', label: 'Último nó' },
+      ], defaultValue: 'onReceived' },
+      { key: 'responseData', label: 'Dados resposta', type: 'select', options: [
+        { value: 'firstEntryJson', label: 'Primeiro item JSON' }, { value: 'noData', label: 'Sem dados' },
+      ], defaultValue: 'firstEntryJson' },
+    ]
+  },
+
+  {
+    id: 'schedule-trigger',
+    type: 'trigger',
+    label: '📅 Schedule (CRON)',
+    description: 'Executa workflow em intervalos agendados',
+    icon: Clock,
+    color: '#059669',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Execução agendada', type: 'data' }],
+    config: [
+      { key: 'triggerInterval', label: 'Intervalo', type: 'select', options: [
+        { value: 'seconds', label: 'Segundos' }, { value: 'minutes', label: 'Minutos' }, { value: 'hours', label: 'Horas' }, { value: 'days', label: 'Dias' }, { value: 'weeks', label: 'Semanas' }, { value: 'months', label: 'Meses' }, { value: 'cron', label: 'Custom (CRON)' },
+      ], defaultValue: 'hours' },
+      { key: 'intervalValue', label: 'Valor do intervalo', type: 'number', defaultValue: 1 },
+      { key: 'cronExpression', label: 'Expressão CRON', type: 'string', placeholder: '0 * * * *' },
+      { key: 'timezone', label: 'Timezone', type: 'select', options: [
+        { value: 'America/Sao_Paulo', label: 'Brasília (GMT-3)' }, { value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'New York (EST)' },
+      ], defaultValue: 'America/Sao_Paulo' },
+    ]
+  },
+
+  {
+    id: 'email-trigger-imap',
+    type: 'trigger',
+    label: '📧 Email Trigger (IMAP)',
+    description: 'Dispara workflow ao receber email',
+    icon: Mail,
+    color: '#3B82F6',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Email recebido', type: 'data' }],
+    config: [
+      { key: 'mailbox', label: 'Caixa de entrada', type: 'string', placeholder: 'INBOX' },
+      { key: 'host', label: 'Servidor IMAP', type: 'string', placeholder: 'imap.gmail.com' },
+      { key: 'port', label: 'Porta', type: 'number', defaultValue: 993 },
+      { key: 'user', label: 'Usuário', type: 'string', placeholder: 'email@gmail.com' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'criteria', label: 'Critério', type: 'select', options: [
+        { value: 'ALL', label: 'Todos' }, { value: 'UNSEEN', label: 'Não lidos' }, { value: 'SEEN', label: 'Lidos' },
+      ], defaultValue: 'UNSEEN' },
+    ]
+  },
+
+  {
+    id: 'form-trigger',
+    type: 'trigger',
+    label: '📝 Form Trigger',
+    description: 'Dispara workflow ao enviar formulário',
+    icon: FileText,
+    color: '#8B5CF6',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Dados do formulário', type: 'data' }],
+    config: [
+      { key: 'formTitle', label: 'Título do formulário', type: 'string', placeholder: 'Meu Formulário' },
+      { key: 'formDescription', label: 'Descrição', type: 'string', placeholder: 'Preencha os campos abaixo' },
+      { key: 'responseTitle', label: 'Título de resposta', type: 'string', placeholder: 'Obrigado!' },
+      { key: 'responseDescription', label: 'Mensagem de resposta', type: 'string', placeholder: 'Seu envio foi recebido.' },
+    ]
+  },
+
+  {
+    id: 'file-trigger',
+    type: 'trigger',
+    label: '📁 File Trigger',
+    description: 'Dispara ao criar/modificar arquivo',
+    icon: HardDrive,
+    color: '#6366F1',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Arquivo detectado', type: 'data' }],
+    config: [
+      { key: 'eventType', label: 'Evento', type: 'select', options: [
+        { value: 'create', label: 'Criação' }, { value: 'change', label: 'Modificação' }, { value: 'delete', label: 'Exclusão' },
+      ], defaultValue: 'create' },
+      { key: 'path', label: 'Caminho monitorado', type: 'string', placeholder: '/data/uploads' },
+      { key: 'recursive', label: 'Monitorar subpastas', type: 'boolean', defaultValue: false },
+    ]
+  },
+
+  {
+    id: 'rss-trigger',
+    type: 'trigger',
+    label: '📡 RSS Feed Trigger',
+    description: 'Dispara ao atualizar feed RSS',
+    icon: Activity,
+    color: '#F59E0B',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Novo item RSS', type: 'data' }],
+    config: [
+      { key: 'feedUrl', label: 'URL do Feed RSS', type: 'string', placeholder: 'https://exemplo.com/feed.xml' },
+      { key: 'pollInterval', label: 'Intervalo de verificação (min)', type: 'number', defaultValue: 15 },
+    ]
+  },
+
+  // ===== CORE / LÓGICA =====
+
+  {
+    id: 'if-node',
+    type: 'logic',
+    label: '🔀 IF',
+    description: 'Condicional verdadeiro/falso',
+    icon: GitBranch,
+    color: '#EAB308',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [
+      { id: 'true', label: 'Verdadeiro', type: 'success' },
+      { id: 'false', label: 'Falso', type: 'data' },
+    ],
+    config: [
+      { key: 'conditions', label: 'Condições (JSON)', type: 'json', placeholder: '{"conditions": [{"leftValue": "{{$json.status}}", "rightValue": "approved", "operator": "equals"}]}' },
+    ]
+  },
+
+  {
+    id: 'switch-node',
+    type: 'logic',
+    label: '🔀 Switch',
+    description: 'Multi-ramificação por valor',
+    icon: GitCompare,
+    color: '#F59E0B',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [
+      { id: '0', label: 'Caso 1', type: 'success' },
+      { id: '1', label: 'Caso 2', type: 'success' },
+      { id: '2', label: 'Caso 3', type: 'success' },
+      { id: 'default', label: 'Padrão', type: 'data' },
+    ],
+    config: [
+      { key: 'dataType', label: 'Tipo de dado', type: 'select', options: [
+        { value: 'string', label: 'Texto' }, { value: 'number', label: 'Número' }, { value: 'boolean', label: 'Booleano' },
+      ], defaultValue: 'string' },
+      { key: 'outputKey', label: 'Campo de comparação', type: 'string', placeholder: '{{$json.status}}' },
+      { key: 'fallbackOutput', label: 'Saída padrão', type: 'select', options: [
+        { value: 'none', label: 'Nenhuma' }, { value: 'extra', label: 'Saída extra' },
+      ], defaultValue: 'extra' },
+    ]
+  },
+
+  {
+    id: 'filter-node',
+    type: 'logic',
+    label: '🔍 Filter',
+    description: 'Filtra dados por condições',
+    icon: Filter,
+    color: '#8B5CF6',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [
+      { id: 'pass', label: 'Passou', type: 'success' },
+      { id: 'fail', label: 'Não passou', type: 'data' },
+    ],
+    config: [
+      { key: 'conditions', label: 'Condições (JSON)', type: 'json', placeholder: '{"conditions": [{"value1": "{{$json.amount}}", "operation": "largerEqual", "value2": 100}]}' },
+      { key: 'combineConditions', label: 'Combinar condições', type: 'select', options: [
+        { value: 'AND', label: 'E (AND)' }, { value: 'OR', label: 'Ou (OR)' },
+      ], defaultValue: 'AND' },
+    ]
+  },
+
+  {
+    id: 'merge-node',
+    type: 'logic',
+    label: '🔗 Merge',
+    description: 'Junta fluxos paralelos',
+    icon: GitMerge,
+    color: '#06B6D4',
+    category: 'core_logic',
+    inputs: [{ id: 'in1', label: 'Entrada 1', type: 'data' }, { id: 'in2', label: 'Entrada 2', type: 'data' }],
+    outputs: [{ id: 'merged', label: 'Dados mesclados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'append', label: 'Anexar' }, { value: 'merge', label: 'Mesclar por chave' }, { value: 'multiplex', label: 'Multiplexar' },
+      ], defaultValue: 'append' },
+      { key: 'join', label: 'Junção', type: 'select', options: [
+        { value: 'inner', label: 'Inner Join' }, { value: 'left', label: 'Left Join' }, { value: 'outer', label: 'Outer Join' },
+      ], defaultValue: 'inner' },
+    ]
+  },
+
+  {
+    id: 'wait-node',
+    type: 'logic',
+    label: '⏳ Wait',
+    description: 'Pausa o fluxo por tempo definido',
+    icon: Clock,
+    color: '#64748B',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'out', label: 'Dados de saída', type: 'success' }],
+    config: [
+      { key: 'amount', label: 'Quantidade', type: 'number', defaultValue: 1 },
+      { key: 'unit', label: 'Unidade', type: 'select', options: [
+        { value: 'seconds', label: 'Segundos' }, { value: 'minutes', label: 'Minutos' }, { value: 'hours', label: 'Horas' }, { value: 'days', label: 'Dias' },
+      ], defaultValue: 'seconds' },
+    ]
+  },
+
+  {
+    id: 'error-handler-node',
+    type: 'logic',
+    label: '⚠️ Error Handler',
+    description: 'Captura e trata erros do fluxo',
+    icon: AlertTriangle,
+    color: '#EF4444',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Erro recebido', type: 'error' }],
+    outputs: [
+      { id: 'handled', label: 'Tratado', type: 'success' },
+      { id: 'fallback', label: 'Fallback', type: 'data' },
+    ],
+    config: [
+      { key: 'action', label: 'Ação', type: 'select', options: [
+        { value: 'continue', label: 'Continuar' }, { value: 'stop', label: 'Parar workflow' }, { value: 'retry', label: 'Tentar novamente' },
+      ], defaultValue: 'continue' },
+      { key: 'maxRetries', label: 'Máx tentativas', type: 'number', defaultValue: 3 },
+    ]
+  },
+
+  {
+    id: 'stop-error-node',
+    type: 'logic',
+    label: '🛑 Stop And Error',
+    description: 'Para o workflow com erro',
+    icon: AlertCircle,
+    color: '#DC2626',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [],
+    config: [
+      { key: 'errorMessage', label: 'Mensagem de erro', type: 'string', placeholder: 'Erro no workflow' },
+    ]
+  },
+
+  // ===== CORE / AÇÕES =====
+
+  {
+    id: 'http-request-node',
+    type: 'action',
+    label: '🔗 HTTP Request',
+    description: 'Faz requisições HTTP (GET/POST/PUT/DELETE)',
+    icon: Globe,
+    color: '#2563EB',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'method', label: 'Método', type: 'select', options: [
+        { value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }, { value: 'PATCH', label: 'PATCH' }, { value: 'DELETE', label: 'DELETE' },
+      ], defaultValue: 'GET' },
+      { key: 'url', label: 'URL', type: 'string', placeholder: 'https://api.exemplo.com/endpoint' },
+      { key: 'headers', label: 'Headers (JSON)', type: 'json', placeholder: '{"Content-Type": "application/json"}' },
+      { key: 'body', label: 'Body (JSON)', type: 'json', placeholder: '{"key": "value"}' },
+      { key: 'authType', label: 'Autenticação', type: 'select', options: [
+        { value: 'none', label: 'Nenhuma' }, { value: 'basicAuth', label: 'Basic Auth' }, { value: 'headerAuth', label: 'Header Auth' }, { value: 'bearer', label: 'Bearer Token' },
+      ], defaultValue: 'none' },
+      { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 30000 },
+      { key: 'followRedirects', label: 'Seguir redirects', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'code-node',
+    type: 'action',
+    label: '💻 Code',
+    description: 'Executa JavaScript/Python customizado',
+    icon: Code,
+    color: '#7C3AED',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado', type: 'success' }],
+    config: [
+      { key: 'language', label: 'Linguagem', type: 'select', options: [
+        { value: 'javascript', label: 'JavaScript' }, { value: 'python', label: 'Python' },
+      ], defaultValue: 'javascript' },
+      { key: 'code', label: 'Código', type: 'prompt', multiline: true, placeholder: 'return items.map(item => ({ json: { ...item.json, processed: true } }));' },
+    ]
+  },
+
+  {
+    id: 'set-node',
+    type: 'action',
+    label: '📦 Set',
+    description: 'Define/manipula valores de dados',
+    icon: Settings,
+    color: '#0891B2',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados modificados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'manual', label: 'Manual' }, { value: 'expression', label: 'Expressão' },
+      ], defaultValue: 'manual' },
+      { key: 'fields', label: 'Campos (JSON)', type: 'json', placeholder: '{"nome": "valor", "timestamp": "{{$now}}"}' },
+    ]
+  },
+
+  {
+    id: 'email-send-node',
+    type: 'action',
+    label: '📧 Email Send',
+    description: 'Envia email via SMTP',
+    icon: SendIcon,
+    color: '#3B82F6',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados do email', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Enviado', type: 'success' }],
+    config: [
+      { key: 'from', label: 'De', type: 'string', placeholder: 'remetente@email.com' },
+      { key: 'to', label: 'Para', type: 'string', placeholder: 'destinatario@email.com' },
+      { key: 'subject', label: 'Assunto', type: 'string', placeholder: 'Assunto do email' },
+      { key: 'body', label: 'Corpo (HTML)', type: 'prompt', multiline: true, placeholder: '<h1>Olá!</h1>' },
+      { key: 'smtpHost', label: 'Servidor SMTP', type: 'string', placeholder: 'smtp.gmail.com' },
+      { key: 'smtpPort', label: 'Porta SMTP', type: 'number', defaultValue: 587 },
+      { key: 'smtpUser', label: 'Usuário SMTP', type: 'string' },
+      { key: 'smtpPassword', label: 'Senha SMTP', type: 'password' },
+    ]
+  },
+
+  {
+    id: 'execute-workflow-node',
+    type: 'action',
+    label: '📋 Execute Workflow',
+    description: 'Executa outro workflow como sub-fluxo',
+    icon: RefreshCw,
+    color: '#6366F1',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados para sub-workflow', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado sub-workflow', type: 'success' }],
+    config: [
+      { key: 'workflowId', label: 'ID do Workflow', type: 'string', placeholder: 'ID do workflow a executar' },
+      { key: 'waitForCompletion', label: 'Aguardar conclusão', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== CORE / DADOS =====
+
+  {
+    id: 'aggregate-node',
+    type: 'action',
+    label: '📊 Aggregate',
+    description: 'Agrupa dados por campo comum',
+    icon: BarChart3,
+    color: '#8B5CF6',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados agrupados', type: 'success' }],
+    config: [
+      { key: 'aggregate', label: 'Agregação', type: 'select', options: [
+        { value: 'individualFields', label: 'Campos individuais' }, { value: 'allItemData', label: 'Todos os dados' },
+      ], defaultValue: 'individualFields' },
+      { key: 'groupByField', label: 'Agrupar por campo', type: 'string', placeholder: '{{$json.category}}' },
+    ]
+  },
+
+  {
+    id: 'split-batches-node',
+    type: 'action',
+    label: '✂️ Split In Batches',
+    description: 'Processa dados em lotes',
+    icon: Layers,
+    color: '#F59E0B',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'batch', label: 'Lote', type: 'data' }],
+    config: [
+      { key: 'batchSize', label: 'Tamanho do lote', type: 'number', defaultValue: 10 },
+    ]
+  },
+
+  {
+    id: 'remove-duplicates-node',
+    type: 'action',
+    label: '🚫 Remove Duplicates',
+    description: 'Remove itens duplicados',
+    icon: Archive,
+    color: '#EF4444',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados únicos', type: 'success' }],
+    config: [
+      { key: 'compare', label: 'Comparar por', type: 'select', options: [
+        { value: 'allFields', label: 'Todos os campos' }, { value: 'selectedFields', label: 'Campos selecionados' },
+      ], defaultValue: 'allFields' },
+      { key: 'fieldsToCompare', label: 'Campos', type: 'string', placeholder: 'email, nome' },
+    ]
+  },
+
+  {
+    id: 'sort-node',
+    type: 'action',
+    label: '📋 Sort',
+    description: 'Ordena dados por campo',
+    icon: TrendingUp,
+    color: '#10B981',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados ordenados', type: 'success' }],
+    config: [
+      { key: 'sortField', label: 'Campo para ordenar', type: 'string', placeholder: '{{$json.date}}' },
+      { key: 'sortOrder', label: 'Ordem', type: 'select', options: [
+        { value: 'ascending', label: 'Ascendente' }, { value: 'descending', label: 'Descendente' },
+      ], defaultValue: 'ascending' },
+    ]
+  },
+
+  {
+    id: 'limit-node',
+    type: 'action',
+    label: '🔢 Limit',
+    description: 'Limita quantidade de itens',
+    icon: Hash,
+    color: '#64748B',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados limitados', type: 'success' }],
+    config: [
+      { key: 'maxItems', label: 'Máximo de itens', type: 'number', defaultValue: 10 },
+      { key: 'keep', label: 'Manter', type: 'select', options: [
+        { value: 'first', label: 'Primeiros' }, { value: 'last', label: 'Últimos' },
+      ], defaultValue: 'first' },
+    ]
+  },
+
+  {
+    id: 'summarize-node',
+    type: 'action',
+    label: '📝 Summarize',
+    description: 'Resume dados em estatísticas',
+    icon: FileSearch,
+    color: '#7C3AED',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resumo', type: 'success' }],
+    config: [
+      { key: 'fieldsToSummarize', label: 'Campos para resumir', type: 'string', placeholder: 'amount, quantity' },
+    ]
+  },
+
+  {
+    id: 'sticky-note-node',
+    type: 'action',
+    label: '📌 Sticky Note',
+    description: 'Anotação visual no canvas',
+    icon: StickyNote,
+    color: '#FBBF24',
+    category: 'core_data',
+    inputs: [],
+    outputs: [],
+    config: [
+      { key: 'content', label: 'Conteúdo', type: 'prompt', multiline: true, placeholder: 'Anotação...' },
+      { key: 'color', label: 'Cor', type: 'select', options: [
+        { value: 'yellow', label: 'Amarelo' }, { value: 'blue', label: 'Azul' }, { value: 'green', label: 'Verde' }, { value: 'red', label: 'Vermelho' }, { value: 'purple', label: 'Roxo' },
+      ], defaultValue: 'yellow' },
+    ]
+  },
+
+  {
+    id: 'merge-by-key-node',
+    type: 'action',
+    label: '🔑 Merge by Key',
+    description: 'Junta dados por chave comum',
+    icon: Link2,
+    color: '#06B6D4',
+    category: 'core_data',
+    inputs: [{ id: 'in1', label: 'Entrada 1', type: 'data' }, { id: 'in2', label: 'Entrada 2', type: 'data' }],
+    outputs: [{ id: 'merged', label: 'Dados mesclados', type: 'success' }],
+    config: [
+      { key: 'propertyName', label: 'Nome da chave', type: 'string', placeholder: 'id' },
+    ]
+  },
+
+  {
+    id: 'item-lists-node',
+    type: 'action',
+    label: '📄 Item Lists',
+    description: 'Manipula listas de itens',
+    icon: ClipboardList,
+    color: '#8B5CF6',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Lista processada', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'concatenate', label: 'Concatenar' }, { value: 'removeDuplicates', label: 'Remover duplicatas' }, { value: 'flatten', label: 'Achatar' },
+      ], defaultValue: 'concatenate' },
+    ]
+  },
+
+  {
+    id: 'crypto-node',
+    type: 'action',
+    label: '🔐 Crypto',
+    description: 'Hash, encrypt/decrypt de dados',
+    icon: Lock,
+    color: '#DC2626',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados processados', type: 'success' }],
+    config: [
+      { key: 'action', label: 'Ação', type: 'select', options: [
+        { value: 'hash', label: 'Hash' }, { value: 'encrypt', label: 'Criptografar' }, { value: 'decrypt', label: 'Descriptografar' }, { value: 'hmac', label: 'HMAC' },
+      ], defaultValue: 'hash' },
+      { key: 'algorithm', label: 'Algoritmo', type: 'select', options: [
+        { value: 'md5', label: 'MD5' }, { value: 'sha256', label: 'SHA-256' }, { value: 'sha512', label: 'SHA-512' }, { value: 'aes-256-cbc', label: 'AES-256-CBC' },
+      ], defaultValue: 'sha256' },
+      { key: 'field', label: 'Campo', type: 'string', placeholder: 'password' },
+    ]
+  },
+
+  {
+    id: 'datetime-node',
+    type: 'action',
+    label: '🕐 Date/Time',
+    description: 'Manipulação de datas e horários',
+    icon: Calendar,
+    color: '#0891B2',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Data processada', type: 'success' }],
+    config: [
+      { key: 'action', label: 'Ação', type: 'select', options: [
+        { value: 'format', label: 'Formatar' }, { value: 'add', label: 'Adicionar' }, { value: 'subtract', label: 'Subtrair' }, { value: 'diff', label: 'Diferença' },
+      ], defaultValue: 'format' },
+      { key: 'field', label: 'Campo de data', type: 'string', placeholder: '{{$json.date}}' },
+      { key: 'format', label: 'Formato', type: 'string', placeholder: 'dd/MM/yyyy HH:mm' },
+    ]
+  },
+
+  {
+    id: 'xml-parse-node',
+    type: 'action',
+    label: '📄 XML Parse',
+    description: 'Parse e conversão de XML',
+    icon: FileText,
+    color: '#7C3AED',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados XML', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados parseados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'json', label: 'XML para JSON' }, { value: 'xml', label: 'JSON para XML' },
+      ], defaultValue: 'json' },
+    ]
+  },
+
+  {
+    id: 'csv-parse-node',
+    type: 'action',
+    label: '📄 CSV Parse',
+    description: 'Parse e conversão de CSV',
+    icon: FileSpreadsheet,
+    color: '#059669',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados CSV', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados parseados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'json', label: 'CSV para JSON' }, { value: 'csv', label: 'JSON para CSV' },
+      ], defaultValue: 'json' },
+      { key: 'delimiter', label: 'Delimitador', type: 'string', placeholder: ',' },
+      { key: 'headerRow', label: 'Linha de cabeçalho', type: 'boolean', defaultValue: true },
     ]
   },
 
