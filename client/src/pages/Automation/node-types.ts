@@ -91,6 +91,10 @@ export const CATEGORIES = [
   { id: 'core_logic', label: 'Core / Lógica', color: 'bg-yellow-100 text-yellow-800', icon: GitBranch },
   { id: 'core_actions', label: 'Core / Ações', color: 'bg-blue-100 text-blue-800', icon: Code },
   { id: 'core_data', label: 'Core / Dados', color: 'bg-indigo-100 text-indigo-800', icon: Database },
+  { id: 'integrations', label: 'Integrações / Apps', color: 'bg-cyan-100 text-cyan-800', icon: Globe },
+  { id: 'ai_generic', label: 'IA / Genérica', color: 'bg-violet-100 text-violet-800', icon: Brain },
+  { id: 'payments', label: 'Pagamentos / Financeiro', color: 'bg-green-100 text-green-800', icon: CreditCardIcon },
+
 ];
 
 // ==================== NODE DEFINITIONS ====================
@@ -1570,6 +1574,336 @@ export const NODE_TYPES: WorkflowNode[] = [
     ]
   },
 
+
+  // ===== INTEGRAÇÕES / APPS =====
+
+  {
+    id: 'google-sheets',
+    type: 'action',
+    label: '📊 Google Sheets',
+    description: 'Ler e escrever planilhas Google',
+    icon: FileSpreadsheet,
+    color: '#0F9D58',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados da planilha', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'read', label: 'Ler' }, { value: 'write', label: 'Escrever' }, { value: 'append', label: 'Anexar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'read' },
+      { key: 'spreadsheetId', label: 'ID da Planilha', type: 'string', placeholder: 'ID do Google Sheets' },
+      { key: 'sheetName', label: 'Nome da Aba', type: 'string', placeholder: 'Sheet1' },
+      { key: 'range', label: 'Intervalo', type: 'string', placeholder: 'A1:Z100' },
+    ]
+  },
+
+  {
+    id: 'google-drive',
+    type: 'action',
+    label: '💾 Google Drive',
+    description: 'Upload e download de arquivos',
+    icon: HardDrive,
+    color: '#4285F4',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados/Arquivo', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Arquivo processado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'upload', label: 'Upload' }, { value: 'download', label: 'Download' }, { value: 'list', label: 'Listar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'upload' },
+      { key: 'fileName', label: 'Nome do arquivo', type: 'string', placeholder: 'arquivo.pdf' },
+      { key: 'folderId', label: 'ID da pasta', type: 'string', placeholder: 'ID da pasta no Drive' },
+    ]
+  },
+
+  {
+    id: 'telegram',
+    type: 'action',
+    label: '💬 Telegram',
+    description: 'Envia mensagens via Telegram Bot',
+    icon: SendIcon,
+    color: '#0088CC',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: 'Token do @BotFather' },
+      { key: 'chatId', label: 'Chat ID', type: 'string', placeholder: 'ID do chat ou @username' },
+      { key: 'text', label: 'Mensagem', type: 'prompt', multiline: true, placeholder: 'Olá! Sua receita está pronta.' },
+      { key: 'parseMode', label: 'Formato', type: 'select', options: [
+        { value: 'HTML', label: 'HTML' }, { value: 'Markdown', label: 'Markdown' }, { value: 'none', label: 'Texto puro' },
+      ], defaultValue: 'HTML' },
+    ]
+  },
+
+  {
+    id: 'discord',
+    type: 'action',
+    label: '🎮 Discord',
+    description: 'Envia mensagens via webhook Discord',
+    icon: MessageSquare,
+    color: '#5865F2',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'string', placeholder: 'https://discord.com/api/webhooks/...' },
+      { key: 'content', label: 'Mensagem', type: 'prompt', multiline: true, placeholder: 'Notificação da farmácia' },
+      { key: 'username', label: 'Nome do bot', type: 'string', placeholder: 'Farma Bot' },
+    ]
+  },
+
+  {
+    id: 'slack',
+    type: 'action',
+    label: '💼 Slack',
+    description: 'Envia mensagens via Slack API',
+    icon: MessageSquare,
+    color: '#4A154B',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'token', label: 'Bot Token', type: 'password', placeholder: 'xoxb-...' },
+      { key: 'channel', label: 'Canal', type: 'string', placeholder: '#geral ou C012345' },
+      { key: 'text', label: 'Mensagem', type: 'prompt', multiline: true, placeholder: 'Notificação' },
+    ]
+  },
+
+  {
+    id: 'notion',
+    type: 'action',
+    label: '📝 Notion',
+    description: 'Cria e atualiza páginas no Notion',
+    icon: FileText,
+    color: '#000000',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Página criada', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create', label: 'Criar página' }, { value: 'update', label: 'Atualizar' }, { value: 'read', label: 'Ler' }, { value: 'search', label: 'Buscar' },
+      ], defaultValue: 'create' },
+      { key: 'databaseId', label: 'Database ID', type: 'string', placeholder: 'ID do database' },
+      { key: 'title', label: 'Título', type: 'string', placeholder: 'Nova página' },
+      { key: 'content', label: 'Conteúdo', type: 'prompt', multiline: true },
+    ]
+  },
+
+  {
+    id: 'airtable',
+    type: 'action',
+    label: '🗃️ Airtable',
+    description: 'CRUD em bases Airtable',
+    icon: Database,
+    color: '#18BFFF',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Registro processado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create', label: 'Criar' }, { value: 'read', label: 'Ler' }, { value: 'update', label: 'Atualizar' }, { value: 'delete', label: 'Excluir' }, { value: 'list', label: 'Listar' },
+      ], defaultValue: 'create' },
+      { key: 'baseId', label: 'Base ID', type: 'string', placeholder: 'appXXXXXXXX' },
+      { key: 'tableName', label: 'Nome da tabela', type: 'string', placeholder: 'Table 1' },
+    ]
+  },
+
+  {
+    id: 'mysql',
+    type: 'action',
+    label: '🗄️ MySQL',
+    description: 'Queries em banco MySQL',
+    icon: Database,
+    color: '#4479A1',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado da query', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'execute', label: 'Executar query' }, { value: 'insert', label: 'Inserir' }, { value: 'update', label: 'Atualizar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'execute' },
+      { key: 'host', label: 'Host', type: 'string', placeholder: 'localhost' },
+      { key: 'port', label: 'Porta', type: 'number', defaultValue: 3306 },
+      { key: 'database', label: 'Database', type: 'string', placeholder: 'farma_db' },
+      { key: 'user', label: 'Usuário', type: 'string' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'query', label: 'Query SQL', type: 'prompt', multiline: true, placeholder: 'SELECT * FROM products' },
+    ]
+  },
+
+  {
+    id: 'postgresql',
+    type: 'action',
+    label: '🐘 PostgreSQL',
+    description: 'Queries em banco PostgreSQL',
+    icon: Database,
+    color: '#336791',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado da query', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'execute', label: 'Executar query' }, { value: 'insert', label: 'Inserir' }, { value: 'update', label: 'Atualizar' },
+      ], defaultValue: 'execute' },
+      { key: 'host', label: 'Host', type: 'string', placeholder: 'localhost' },
+      { key: 'port', label: 'Porta', type: 'number', defaultValue: 5432 },
+      { key: 'database', label: 'Database', type: 'string' },
+      { key: 'user', label: 'Usuário', type: 'string' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'query', label: 'Query SQL', type: 'prompt', multiline: true },
+    ]
+  },
+
+  {
+    id: 'github',
+    type: 'action',
+    label: '🐙 GitHub',
+    description: 'Issues, PRs e commits no GitHub',
+    icon: GitBranch,
+    color: '#333333',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'issue', label: 'Criar Issue' }, { value: 'pr', label: 'Criar PR' }, { value: 'commit', label: 'Commit' }, { value: 'read', label: 'Ler' },
+      ], defaultValue: 'issue' },
+      { key: 'token', label: 'Personal Access Token', type: 'password' },
+      { key: 'owner', label: 'Owner', type: 'string', placeholder: 'usuario' },
+      { key: 'repo', label: 'Repositório', type: 'string', placeholder: 'repo-name' },
+      { key: 'title', label: 'Título', type: 'string' },
+      { key: 'body', label: 'Descrição', type: 'prompt', multiline: true },
+    ]
+  },
+
+  {
+    id: 'aws-s3',
+    type: 'action',
+    label: '☁️ AWS S3',
+    description: 'Upload e download de arquivos S3',
+    icon: Cloud,
+    color: '#FF9900',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados/Arquivo', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Arquivo processado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'upload', label: 'Upload' }, { value: 'download', label: 'Download' }, { value: 'list', label: 'Listar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'upload' },
+      { key: 'bucket', label: 'Bucket', type: 'string', placeholder: 'meu-bucket' },
+      { key: 'key', label: 'Chave do arquivo', type: 'string', placeholder: 'pasta/arquivo.pdf' },
+      { key: 'region', label: 'Região', type: 'string', placeholder: 'us-east-1' },
+    ]
+  },
+
+  // ===== IA / GENÉRICA =====
+
+  {
+    id: 'openai',
+    type: 'ai',
+    label: '🤖 OpenAI',
+    description: 'GPT-4, embeddings, DALL-E via OpenAI API',
+    icon: Brain,
+    color: '#10A37F',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Prompt/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta IA', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...' },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+      ], defaultValue: 'gpt-4o' },
+      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true, placeholder: 'Você é um assistente útil.' },
+      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true, placeholder: '{{$json.message}}' },
+      { key: 'temperature', label: 'Temperatura (0-2)', type: 'number', defaultValue: 0.7 },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 2048 },
+    ]
+  },
+
+  {
+    id: 'anthropic',
+    type: 'ai',
+    label: '🧠 Anthropic Claude',
+    description: 'Claude 3.5 Sonnet, Opus via Anthropic API',
+    icon: Brain,
+    color: '#D4A574',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Prompt/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta IA', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-ant-...' },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' }, { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+      ], defaultValue: 'claude-3-5-sonnet-20241022' },
+      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true },
+      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 4096 },
+    ]
+  },
+
+  {
+    id: 'google-ai',
+    type: 'ai',
+    label: '🔮 Google Gemini',
+    description: 'Gemini Pro via Google AI API',
+    icon: Brain,
+    color: '#4285F4',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Prompt/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta IA', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'AIza...' },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'gemini-pro', label: 'Gemini Pro' }, { value: 'gemini-pro-vision', label: 'Gemini Pro Vision' },
+      ], defaultValue: 'gemini-pro' },
+      { key: 'prompt', label: 'Prompt', type: 'prompt', multiline: true },
+    ]
+  },
+
+  // ===== PAGAMENTOS / FINANCEIRO =====
+
+  {
+    id: 'stripe',
+    type: 'action',
+    label: '💳 Stripe',
+    description: 'Cobranças e assinaturas via Stripe',
+    icon: CreditCardIcon,
+    color: '#635BFF',
+    category: 'payments',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Pagamento processado', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'charge', label: 'Cobrar' }, { value: 'refund', label: 'Estornar' }, { value: 'customer', label: 'Criar cliente' }, { value: 'subscription', label: 'Assinatura' },
+      ], defaultValue: 'charge' },
+      { key: 'amount', label: 'Valor (centavos)', type: 'number', placeholder: '1000' },
+      { key: 'currency', label: 'Moeda', type: 'select', options: [
+        { value: 'brl', label: 'BRL (Real)' }, { value: 'usd', label: 'USD (Dólar)' },
+      ], defaultValue: 'brl' },
+      { key: 'description', label: 'Descrição', type: 'string', placeholder: 'Compra na Farmácia' },
+    ]
+  },
+
+  {
+    id: 'twilio',
+    type: 'action',
+    label: '📱 Twilio',
+    description: 'SMS e chamadas via Twilio',
+    icon: Phone,
+    color: '#F22F46',
+    category: 'payments',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'SMS enviado', type: 'success' }],
+    config: [
+      { key: 'accountSid', label: 'Account SID', type: 'string' },
+      { key: 'authToken', label: 'Auth Token', type: 'password' },
+      { key: 'from', label: 'Número origem', type: 'string', placeholder: '+5511999999999' },
+      { key: 'to', label: 'Número destino', type: 'string', placeholder: '+5511999999999' },
+      { key: 'message', label: 'Mensagem', type: 'string', placeholder: 'Seu pedido está pronto!' },
+    ]
+  },
 ];
 
 // ==================== HELPER FUNCTIONS ====================

@@ -45,6 +45,9 @@ const categoryIcons: Record<string, React.ComponentType> = {
   'core_logic': GitBranch,
   'core_actions': Code,
   'core_data': Database,
+  'integrations': Globe,
+  'ai_generic': Brain,
+  'payments': CreditCardIcon,
 };
 
 interface NodeSidebarProps {
