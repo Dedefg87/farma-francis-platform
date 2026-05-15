@@ -1,15 +1,14 @@
-// Modular templates - see ./templates/ directory
-import { pharmacyTemplates } from "./templates/pharmacy";
-import { communicationTemplates } from "./templates/communication";
-import { schedulingTemplates } from "./templates/scheduling";
-import { operationsTemplates } from "./templates/operations";
-import type { FlowTemplate } from "./templates/types";
+// Templates de fluxos de automação
+// Adicione novos templates aqui
 
-export type { FlowTemplate };
+export interface FlowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  nodes: any[];
+  edges: any[];
+}
 
-export const flowTemplates: FlowTemplate[] = [
-  ...pharmacyTemplates,
-  ...communicationTemplates,
-  ...schedulingTemplates,
-  ...operationsTemplates,
-];
+export const flowTemplates: FlowTemplate[] = [];
