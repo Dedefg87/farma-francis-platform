@@ -6,7 +6,11 @@ import {
   MapPin, Mail, Phone, Wifi, Database, Lock, Globe, Zap, Heart,
   Activity, BarChart3, ClipboardList, FileCheck, QrCode, CreditCard,
   RefreshCw, Settings, Bell, Users, Building2, Archive, TrendingUp,
-  ShoppingCart, Receipt, Syringe, Microscope, BookOpen, Cloud, HardDrive
+  ShoppingCart, Receipt, Syringe, Microscope, BookOpen, Cloud, HardDrive,
+  FileX, CreditCard as CreditCardIcon, Store, Video, ShoppingBag,
+  Calculator, Send as SendIcon, Shield, FileSearch, BarChart, DollarSign as DollarIcon,
+  Link2, ClipboardCheck, AlertCircle, TrendingDown, UserCheck, FileSpreadsheet,
+  Receipt as ReceiptIcon, Smartphone, Megaphone, Clipboard, Eye
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -62,6 +66,21 @@ export const CATEGORIES = [
   { id: 'logistica', label: 'Logística / Delivery', color: 'bg-indigo-100 text-indigo-800', icon: Truck },
   { id: 'crm', label: 'CRM / Saúde', color: 'bg-teal-100 text-teal-800', icon: UserPlus },
   { id: 'iot', label: 'IoT / Compliance', color: 'bg-slate-100 text-slate-800', icon: Thermometer },
+  { id: 'fiscal', label: 'Fiscal / ERP', color: 'bg-amber-100 text-amber-800', icon: FileX },
+  { id: 'beneficios', label: 'Financeiro / Benefícios', color: 'bg-lime-100 text-lime-800', icon: CreditCardIcon },
+  { id: 'atendimento_ia', label: 'IA / Atendimento', color: 'bg-fuchsia-100 text-fuchsia-800', icon: Bot },
+  { id: 'estoque_seg', label: 'Estoque / Segurança', color: 'bg-orange-100 text-orange-800', icon: ClipboardCheck },
+  { id: 'automacao_proc', label: 'Automação / Processos', color: 'bg-gray-100 text-gray-800', icon: RefreshCw },
+  { id: 'ecommerce', label: 'E-commerce / Integração', color: 'bg-violet-100 text-violet-800', icon: Store },
+  { id: 'telemedicina', label: 'Saúde / Atendimento', color: 'bg-sky-100 text-sky-800', icon: Video },
+  { id: 'marketing_ia', label: 'IA / Marketing', color: 'bg-pink-100 text-pink-800', icon: ShoppingBag },
+  { id: 'financeiro_erp', label: 'Financeiro / ERP', color: 'bg-emerald-100 text-emerald-800', icon: Calculator },
+  { id: 'comunicacao_mkt', label: 'Comunicação / Marketing', color: 'bg-green-100 text-green-800', icon: Megaphone },
+  { id: 'compliance_anvisa', label: 'Compliance / ANVISA', color: 'bg-yellow-100 text-yellow-800', icon: Shield },
+  { id: 'saude_ia', label: 'Saúde / IA', color: 'bg-red-100 text-red-800', icon: Clipboard },
+  { id: 'analytics', label: 'BI / Analytics', color: 'bg-rose-100 text-rose-800', icon: BarChart },
+  { id: 'pagamentos', label: 'Pagamentos / Financeiro', color: 'bg-teal-100 text-teal-800', icon: DollarIcon },
+  { id: 'ia_compliance', label: 'IA / Compliance', color: 'bg-purple-100 text-purple-800', icon: Eye },
 ];
 
 // ==================== NODE DEFINITIONS ====================
@@ -84,15 +103,11 @@ export const NODE_TYPES: WorkflowNode[] = [
     ],
     config: [
       { key: 'allowedFormats', label: 'Formatos aceitos', type: 'multiselect', options: [
-        { value: 'pdf', label: 'PDF' },
-        { value: 'jpg', label: 'JPG' },
-        { value: 'png', label: 'PNG' },
+        { value: 'pdf', label: 'PDF' }, { value: 'jpg', label: 'JPG' }, { value: 'png', label: 'PNG' },
       ], defaultValue: ['pdf', 'jpg', 'png'] },
       { key: 'ocrEnabled', label: 'OCR ativado', type: 'boolean', defaultValue: true },
       { key: 'ocrLanguage', label: 'Idioma OCR', type: 'select', options: [
-        { value: 'por', label: 'Português' },
-        { value: 'eng', label: 'Inglês' },
-        { value: 'spa', label: 'Espanhol' },
+        { value: 'por', label: 'Português' }, { value: 'eng', label: 'Inglês' }, { value: 'spa', label: 'Espanhol' },
       ], defaultValue: 'por' },
       { key: 'maxFileSize', label: 'Limite tamanho arquivo (MB)', type: 'number', defaultValue: 10 },
       { key: 'autoValidateCrm', label: 'Validação automática CRM/CRO', type: 'boolean', defaultValue: true },
@@ -114,20 +129,12 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Brain,
     color: '#9333EA',
     category: 'ia',
-    inputs: [
-      { id: 'in', label: 'Pergunta/Contexto', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    inputs: [{ id: 'in', label: 'Pergunta/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
     config: [
       { key: 'model', label: 'Modelo IA', type: 'select', options: [
-        { value: 'gpt-4o', label: 'ChatGPT (OpenAI)' },
-        { value: 'claude-3-5-sonnet', label: 'Claude (Anthropic)' },
-        { value: 'gemini-pro', label: 'Gemini (Google)' },
-        { value: 'deepseek', label: 'DeepSeek' },
-        { value: 'mistral', label: 'Mistral' },
+        { value: 'gpt-4o', label: 'ChatGPT (OpenAI)' }, { value: 'claude-3-5-sonnet', label: 'Claude (Anthropic)' },
+        { value: 'gemini-pro', label: 'Gemini (Google)' }, { value: 'deepseek', label: 'DeepSeek' }, { value: 'mistral', label: 'Mistral' },
       ], defaultValue: 'gpt-4o' },
       { key: 'temperature', label: 'Temperatura (0-2)', type: 'number', defaultValue: 0.3 },
       { key: 'maxTokens', label: 'Limite de tokens', type: 'number', defaultValue: 4096 },
@@ -135,13 +142,10 @@ export const NODE_TYPES: WorkflowNode[] = [
       { key: 'medicalContext', label: 'Contexto médico personalizado', type: 'prompt', multiline: true, placeholder: 'Você é um farmacêutico clínico especializado em...' },
       { key: 'lgpdRestrictions', label: 'Restrições LGPD', type: 'boolean', defaultValue: true },
       { key: 'responseMode', label: 'Tipo de resposta', type: 'select', options: [
-        { value: 'technical', label: 'Técnica' },
-        { value: 'simplified', label: 'Simplificada' },
+        { value: 'technical', label: 'Técnica' }, { value: 'simplified', label: 'Simplificada' },
       ], defaultValue: 'simplified' },
       { key: 'languageTone', label: 'Tom de linguagem', type: 'select', options: [
-        { value: 'formal', label: 'Formal' },
-        { value: 'friendly', label: 'Amigável' },
-        { value: 'educational', label: 'Educativo' },
+        { value: 'formal', label: 'Formal' }, { value: 'friendly', label: 'Amigável' }, { value: 'educational', label: 'Educativo' },
       ], defaultValue: 'friendly' },
       { key: 'knowledgeBase', label: 'Base de conhecimento própria', type: 'file', placeholder: 'URL ou arquivo da base' },
       { key: 'sopTraining', label: 'Treinamento com SOP da farmácia', type: 'file', placeholder: 'URL ou arquivo do SOP' },
@@ -156,13 +160,8 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: ScanLine,
     color: '#7C3AED',
     category: 'ia',
-    inputs: [
-      { id: 'in', label: 'Imagem/PDF da bula', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Dados extraídos', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    inputs: [{ id: 'in', label: 'Imagem/PDF da bula', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados extraídos', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
     config: [
       { key: 'ocrMultilingual', label: 'OCR multilíngue', type: 'boolean', defaultValue: true },
       { key: 'extractPosology', label: 'Extração posologia', type: 'boolean', defaultValue: true },
@@ -185,19 +184,12 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Stethoscope,
     color: '#A855F7',
     category: 'ia',
-    inputs: [
-      { id: 'in', label: 'Dados do paciente/sintomas', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Sugestão prescrição', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    inputs: [{ id: 'in', label: 'Dados do paciente/sintomas', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Sugestão prescrição', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
     config: [
       { key: 'medicalModels', label: 'Modelos médicos IA', type: 'multiselect', options: [
-        { value: 'gpt-4o', label: 'GPT-4o Medical' },
-        { value: 'claude-3-5-sonnet', label: 'Claude Medical' },
-        { value: 'meditron', label: 'Meditron (meta)' },
-        { value: 'biogpt', label: 'BioGPT' },
+        { value: 'gpt-4o', label: 'GPT-4o Medical' }, { value: 'claude-3-5-sonnet', label: 'Claude Medical' },
+        { value: 'meditron', label: 'Meditron (meta)' }, { value: 'biogpt', label: 'BioGPT' },
       ] },
       { key: 'suggestMedications', label: 'Sugestão medicamentos', type: 'boolean', defaultValue: true },
       { key: 'interactionAlerts', label: 'Alertas interação', type: 'boolean', defaultValue: true },
@@ -221,9 +213,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: AlertTriangle,
     color: '#DC2626',
     category: 'saude',
-    inputs: [
-      { id: 'in', label: 'Lista de medicamentos', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Lista de medicamentos', type: 'data' }],
     outputs: [
       { id: 'safe', label: 'Sem interação', type: 'success' },
       { id: 'warning', label: 'Interação detectada', type: 'data' },
@@ -233,10 +223,7 @@ export const NODE_TYPES: WorkflowNode[] = [
       { key: 'baseAnvisa', label: 'Base ANVISA', type: 'boolean', defaultValue: true },
       { key: 'baseDrugbank', label: 'Base DrugBank', type: 'boolean', defaultValue: true },
       { key: 'minSeverity', label: 'Severidade mínima', type: 'select', options: [
-        { value: 'low', label: 'Baixa' },
-        { value: 'moderate', label: 'Moderada' },
-        { value: 'high', label: 'Alta' },
-        { value: 'critical', label: 'Crítica' },
+        { value: 'low', label: 'Baixa' }, { value: 'moderate', label: 'Moderada' }, { value: 'high', label: 'Alta' }, { value: 'critical', label: 'Crítica' },
       ], defaultValue: 'moderate' },
       { key: 'criticalAlerts', label: 'Alertas críticos', type: 'boolean', defaultValue: true },
       { key: 'foodInteraction', label: 'Interações alimento-remédio', type: 'boolean', defaultValue: true },
@@ -258,9 +245,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Package,
     color: '#EA580C',
     category: 'erp',
-    inputs: [
-      { id: 'in', label: 'Dados do produto', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Dados do produto', type: 'data' }],
     outputs: [
       { id: 'ok', label: 'Estoque OK', type: 'success' },
       { id: 'low', label: 'Estoque baixo', type: 'data' },
@@ -290,9 +275,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: MessageSquare,
     color: '#16A34A',
     category: 'comunicacao',
-    inputs: [
-      { id: 'in', label: 'Mensagem recebida', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Mensagem recebida', type: 'data' }],
     outputs: [
       { id: 'auto', label: 'Resposta automática', type: 'success' },
       { id: 'human', label: 'Encaminhado humano', type: 'data' },
@@ -322,9 +305,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: ShieldCheck,
     color: '#CA8A04',
     category: 'compliance',
-    inputs: [
-      { id: 'in', label: 'Dados da receita', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Dados da receita', type: 'data' }],
     outputs: [
       { id: 'approved', label: 'Aprovada', type: 'success' },
       { id: 'rejected', label: 'Rejeitada', type: 'error' },
@@ -332,10 +313,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     ],
     config: [
       { key: 'prescriptionType', label: 'Tipo receita', type: 'select', options: [
-        { value: 'A', label: 'Tipo A (azul)' },
-        { value: 'B', label: 'Tipo B (branca)' },
-        { value: 'C', label: 'Tipo C (amarela)' },
-        { value: 'all', label: 'Todos' },
+        { value: 'A', label: 'Tipo A (azul)' }, { value: 'B', label: 'Tipo B (branca)' }, { value: 'C', label: 'Tipo C (amarela)' }, { value: 'all', label: 'Todos' },
       ], defaultValue: 'all' },
       { key: 'signatureCheck', label: 'Conferência assinatura', type: 'boolean', defaultValue: true },
       { key: 'crmCheck', label: 'Conferência CRM', type: 'boolean', defaultValue: true },
@@ -359,9 +337,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Syringe,
     color: '#0891B2',
     category: 'agenda',
-    inputs: [
-      { id: 'in', label: 'Solicitação agendamento', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Solicitação agendamento', type: 'data' }],
     outputs: [
       { id: 'scheduled', label: 'Agendado', type: 'success' },
       { id: 'waitlist', label: 'Fila de espera', type: 'data' },
@@ -391,13 +367,8 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Tag,
     color: '#DB2777',
     category: 'marketing',
-    inputs: [
-      { id: 'in', label: 'Dados do cliente/compra', type: 'data' }
-    ],
-    outputs: [
-      { id: 'promo', label: 'Promoção aplicada', type: 'success' },
-      { id: 'none', label: 'Sem promoção', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Dados do cliente/compra', type: 'data' }],
+    outputs: [{ id: 'promo', label: 'Promoção aplicada', type: 'success' }, { id: 'none', label: 'Sem promoção', type: 'data' }],
     config: [
       { key: 'cashback', label: 'Cashback', type: 'boolean', defaultValue: true },
       { key: 'progressiveDiscount', label: 'Desconto progressivo', type: 'boolean', defaultValue: true },
@@ -422,13 +393,8 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: DollarSign,
     color: '#059669',
     category: 'financeiro',
-    inputs: [
-      { id: 'in', label: 'Código medicamento', type: 'data' }
-    ],
-    outputs: [
-      { id: 'found', label: 'Preço encontrado', type: 'success' },
-      { id: 'notfound', label: 'Não encontrado', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Código medicamento', type: 'data' }],
+    outputs: [{ id: 'found', label: 'Preço encontrado', type: 'success' }, { id: 'notfound', label: 'Não encontrado', type: 'data' }],
     config: [
       { key: 'autoUpdate', label: 'Atualização automática', type: 'boolean', defaultValue: true },
       { key: 'profitMargin', label: 'Margem lucro (%)', type: 'number', defaultValue: 30 },
@@ -453,9 +419,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Truck,
     color: '#4F46E5',
     category: 'logistica',
-    inputs: [
-      { id: 'in', label: 'Pedido de entrega', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Pedido de entrega', type: 'data' }],
     outputs: [
       { id: 'dispatched', label: 'Despachado', type: 'success' },
       { id: 'tracking', label: 'Rastreamento', type: 'data' },
@@ -471,7 +435,7 @@ export const NODE_TYPES: WorkflowNode[] = [
       { key: 'digitalSignature', label: 'Assinatura digital recebimento', type: 'boolean', defaultValue: true },
       { key: 'aiRouting', label: 'Roteirização IA', type: 'boolean', defaultValue: true },
       { key: 'realtimeStatus', label: 'Status em tempo real', type: 'boolean', defaultValue: true },
-      { key: 'coverageArea', label: 'Área cobertura personalizada', type: 'json', placeholder: '{"radius": 10, "center": [-23.55, -46.63]}' },
+      { key: 'coverageArea', label: 'Área cobertura personalizada', type: 'json', placeholder: '{"radius": 10}' },
     ]
   },
 
@@ -485,9 +449,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: UserPlus,
     color: '#0D9488',
     category: 'crm',
-    inputs: [
-      { id: 'in', label: 'Dados do paciente', type: 'data' }
-    ],
+    inputs: [{ id: 'in', label: 'Dados do paciente', type: 'data' }],
     outputs: [
       { id: 'created', label: 'Cadastrado', type: 'success' },
       { id: 'updated', label: 'Atualizado', type: 'success' },
@@ -515,13 +477,8 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Award,
     color: '#0F766E',
     category: 'crm',
-    inputs: [
-      { id: 'in', label: 'Dados da compra/cliente', type: 'data' }
-    ],
-    outputs: [
-      { id: 'points', label: 'Pontos creditados', type: 'success' },
-      { id: 'reward', label: 'Recompensa liberada', type: 'success' }
-    ],
+    inputs: [{ id: 'in', label: 'Dados da compra/cliente', type: 'data' }],
+    outputs: [{ id: 'points', label: 'Pontos creditados', type: 'success' }, { id: 'reward', label: 'Recompensa liberada', type: 'success' }],
     config: [
       { key: 'pointsPerPurchase', label: 'Pontos por compra', type: 'boolean', defaultValue: true },
       { key: 'cashback', label: 'Cashback', type: 'boolean', defaultValue: true },
@@ -546,13 +503,8 @@ export const NODE_TYPES: WorkflowNode[] = [
     icon: Thermometer,
     color: '#64748B',
     category: 'iot',
-    inputs: [
-      { id: 'in', label: 'Leitura do sensor', type: 'data' }
-    ],
-    outputs: [
-      { id: 'normal', label: 'Temperatura OK', type: 'success' },
-      { id: 'alert', label: 'Alerta temperatura', type: 'error' }
-    ],
+    inputs: [{ id: 'in', label: 'Leitura do sensor', type: 'data' }],
+    outputs: [{ id: 'normal', label: 'Temperatura OK', type: 'success' }, { id: 'alert', label: 'Alerta temperatura', type: 'error' }],
     config: [
       { key: 'iotSensors', label: 'Sensores IoT', type: 'string', placeholder: 'IDs dos sensores' },
       { key: 'smsAlerts', label: 'Alertas SMS', type: 'boolean', defaultValue: true },
@@ -565,6 +517,456 @@ export const NODE_TYPES: WorkflowNode[] = [
       { key: 'anvisaAudit', label: 'Auditoria ANVISA', type: 'boolean', defaultValue: true },
       { key: 'realtimeDashboard', label: 'Dashboard tempo real', type: 'boolean', defaultValue: true },
       { key: 'mqttIntegration', label: 'Integração MQTT', type: 'string', placeholder: 'mqtt://broker:1883' },
+    ]
+  },
+
+  // ===== FISCAL / ERP =====
+
+  {
+    id: 'emissao-nota-fiscal',
+    type: 'action',
+    label: '🧾 Emissão de Nota Fiscal Farmacêutica',
+    description: 'Emissão de NF-e/NFC-e com integração SEFAZ',
+    icon: ReceiptIcon,
+    color: '#D97706',
+    category: 'fiscal',
+    inputs: [{ id: 'in', label: 'Dados da venda', type: 'data' }],
+    outputs: [
+      { id: 'authorized', label: 'Nota autorizada', type: 'success' },
+      { id: 'rejected', label: 'Rejeitada', type: 'error' },
+      { id: 'contingency', label: 'Contingência', type: 'data' }
+    ],
+    config: [
+      { key: 'invoiceType', label: 'Tipo nota', type: 'select', options: [
+        { value: 'nfe', label: 'NF-e' }, { value: 'nfce', label: 'NFC-e' },
+      ], defaultValue: 'nfce' },
+      { key: 'certificateType', label: 'Certificado digital', type: 'select', options: [
+        { value: 'A1', label: 'A1' }, { value: 'A3', label: 'A3' },
+      ], defaultValue: 'A1' },
+      { key: 'environment', label: 'Ambiente', type: 'select', options: [
+        { value: 'homologation', label: 'Homologação' }, { value: 'production', label: 'Produção' },
+      ], defaultValue: 'homologation' },
+      { key: 'fiscalSeries', label: 'Série fiscal', type: 'string', placeholder: '001' },
+      { key: 'sefazIntegration', label: 'Integração SEFAZ', type: 'boolean', defaultValue: true },
+      { key: 'danfePrint', label: 'Impressão DANFE', type: 'boolean', defaultValue: true },
+      { key: 'autoCancel', label: 'Cancelamento automático', type: 'boolean', defaultValue: false },
+      { key: 'offlineContingency', label: 'Contingência offline', type: 'boolean', defaultValue: true },
+      { key: 'accountantIntegration', label: 'Integração contador', type: 'boolean', defaultValue: false },
+      { key: 'autoXmlSend', label: 'Envio XML automático', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== FINANCEIRO / BENEFÍCIOS =====
+
+  {
+    id: 'consulta-convenios-pbm',
+    type: 'action',
+    label: '💳 Consulta de Convênios e PBM',
+    description: 'Integração com convênios e PBMs para autorização',
+    icon: CreditCardIcon,
+    color: '#65A30D',
+    category: 'beneficios',
+    inputs: [{ id: 'in', label: 'Dados do convênio/beneficiário', type: 'data' }],
+    outputs: [
+      { id: 'approved', label: 'Autorizado', type: 'success' },
+      { id: 'rejected', label: 'Negado', type: 'error' },
+      { id: 'review', label: 'Revisão manual', type: 'data' }
+    ],
+    config: [
+      { key: 'vidalinkIntegration', label: 'Integração Vidalink', type: 'boolean', defaultValue: true },
+      { key: 'funcionalCard', label: 'Funcional Card', type: 'boolean', defaultValue: true },
+      { key: 'ephramaIntegration', label: 'Integração ePharma', type: 'boolean', defaultValue: true },
+      { key: 'autoAuthorization', label: 'Autorização automática', type: 'boolean', defaultValue: true },
+      { key: 'cpfValidation', label: 'Validação CPF', type: 'boolean', defaultValue: true },
+      { key: 'benefitLimit', label: 'Limite benefício', type: 'number', defaultValue: 0 },
+      { key: 'usageHistory', label: 'Histórico uso', type: 'boolean', defaultValue: true },
+      { key: 'convenioCashback', label: 'Cashback convênio', type: 'boolean', defaultValue: false },
+      { key: 'discountTable', label: 'Tabela descontos', type: 'json', placeholder: '{"percent": 20}' },
+      { key: 'transactionLogs', label: 'Logs transações', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== IA / ATENDIMENTO =====
+
+  {
+    id: 'chatbot-farmaceutico-ia',
+    type: 'ai',
+    label: '🤖 Chatbot Farmacêutico IA',
+    description: 'Chatbot inteligente para atendimento farmacêutico',
+    icon: Bot,
+    color: '#C026D3',
+    category: 'atendimento_ia',
+    inputs: [{ id: 'in', label: 'Mensagem do cliente', type: 'data' }],
+    outputs: [
+      { id: 'response', label: 'Resposta', type: 'success' },
+      { id: 'human', label: 'Encaminhar humano', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'aiModel', label: 'Modelo IA', type: 'select', options: [
+        { value: 'gpt-4o', label: 'ChatGPT' }, { value: 'claude-3-5-sonnet', label: 'Claude' }, { value: 'gemini-pro', label: 'Gemini' },
+      ], defaultValue: 'gpt-4o' },
+      { key: 'customFlows', label: 'Fluxos personalizados', type: 'json', placeholder: '{"welcome": "Olá! Como posso ajudar?"}' },
+      { key: 'pharmaContext', label: 'Contexto farmacêutico', type: 'prompt', multiline: true, placeholder: 'Você é um farmacêutico atendendo clientes...' },
+      { key: 'humanFallback', label: 'Atendimento humano fallback', type: 'boolean', defaultValue: true },
+      { key: 'naturalVoice', label: 'Voz natural (TTS)', type: 'boolean', defaultValue: false },
+      { key: 'multimediaMessages', label: 'Mensagens multimídia', type: 'boolean', defaultValue: true },
+      { key: 'trainableFaq', label: 'FAQ treinável', type: 'file', placeholder: 'Arquivo FAQ' },
+      { key: 'clientMemory', label: 'Memória cliente', type: 'boolean', defaultValue: true },
+      { key: 'businessHours', label: 'Horário funcionamento', type: 'string', placeholder: '08:00-22:00' },
+      { key: 'omnichannel', label: 'Integração omnichannel', type: 'boolean', defaultValue: false },
+    ]
+  },
+
+  // ===== ESTOQUE / SEGURANÇA =====
+
+  {
+    id: 'controle-validade-medicamentos',
+    type: 'action',
+    label: '📅 Controle de Validade de Medicamentos',
+    description: 'Monitoramento de validade com alertas e bloqueio',
+    icon: ClipboardCheck,
+    color: '#C2410C',
+    category: 'estoque_seg',
+    inputs: [{ id: 'in', label: 'Dados do lote/produto', type: 'data' }],
+    outputs: [
+      { id: 'ok', label: 'Validade OK', type: 'success' },
+      { id: 'warning', label: 'Próximo do vencimento', type: 'data' },
+      { id: 'expired', label: 'Vencido', type: 'error' }
+    ],
+    config: [
+      { key: 'expiryAlert', label: 'Alerta vencimento (dias antes)', type: 'number', defaultValue: 30 },
+      { key: 'autoBatchSeparation', label: 'Separação automática lotes', type: 'boolean', defaultValue: true },
+      { key: 'fifoMethod', label: 'Método', type: 'select', options: [
+        { value: 'FIFO', label: 'FIFO (Primeiro a entrar, primeiro a sair)' },
+        { value: 'FEFO', label: 'FEFO (Primeiro a vencer, primeiro a sair)' },
+      ], defaultValue: 'FEFO' },
+      { key: 'lossReports', label: 'Relatórios perdas', type: 'boolean', defaultValue: true },
+      { key: 'qrCodeLabels', label: 'Etiquetas QR Code', type: 'boolean', defaultValue: true },
+      { key: 'stockIntegration', label: 'Integração estoque', type: 'boolean', defaultValue: true },
+      { key: 'blockExpired', label: 'Bloqueio venda vencidos', type: 'boolean', defaultValue: true },
+      { key: 'expiryDashboard', label: 'Dashboard validade', type: 'boolean', defaultValue: true },
+      { key: 'promotionSuggestion', label: 'Sugestão promoção estoque', type: 'boolean', defaultValue: true },
+      { key: 'csvExport', label: 'Exportação CSV', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== AUTOMAÇÃO / PROCESSOS =====
+
+  {
+    id: 'workflow-aprovacao-farmaceutica',
+    type: 'action',
+    label: '✅ Workflow de Aprovação Farmacêutica',
+    description: 'Aprovação em etapas com SLA e auditoria',
+    icon: RefreshCw,
+    color: '#374151',
+    category: 'automacao_proc',
+    inputs: [{ id: 'in', label: 'Solicitação de aprovação', type: 'data' }],
+    outputs: [
+      { id: 'approved', label: 'Aprovado', type: 'success' },
+      { id: 'rejected', label: 'Reprovado', type: 'error' },
+      { id: 'pending', label: 'Pendente', type: 'data' }
+    ],
+    config: [
+      { key: 'multiStepApproval', label: 'Aprovação em etapas', type: 'boolean', defaultValue: true },
+      { key: 'multipleResponsibles', label: 'Responsáveis múltiplos', type: 'string', placeholder: 'IDs separados por vírgula' },
+      { key: 'digitalSignature', label: 'Assinatura digital', type: 'boolean', defaultValue: true },
+      { key: 'approvalSla', label: 'SLA aprovação (horas)', type: 'number', defaultValue: 24 },
+      { key: 'internalComments', label: 'Comentários internos', type: 'boolean', defaultValue: true },
+      { key: 'auditLogs', label: 'Logs auditoria', type: 'boolean', defaultValue: true },
+      { key: 'autoReject', label: 'Reprovação automática (SLA)', type: 'boolean', defaultValue: false },
+      { key: 'emailIntegration', label: 'Integração email', type: 'boolean', defaultValue: true },
+      { key: 'pendingAlerts', label: 'Alertas pendência', type: 'boolean', defaultValue: true },
+      { key: 'changeHistory', label: 'Histórico alterações', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== E-COMMERCE / INTEGRAÇÃO =====
+
+  {
+    id: 'integracao-marketplace',
+    type: 'action',
+    label: '🛒 Integração Marketplace Farmácia',
+    description: 'Sincronização com marketplaces (ML, Amazon, etc)',
+    icon: Store,
+    color: '#7C3AED',
+    category: 'ecommerce',
+    inputs: [{ id: 'in', label: 'Dados do pedido/produto', type: 'data' }],
+    outputs: [
+      { id: 'synced', label: 'Sincronizado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'mercadoLivre', label: 'Mercado Livre', type: 'boolean', defaultValue: false },
+      { key: 'amazon', label: 'Amazon', type: 'boolean', defaultValue: false },
+      { key: 'magalu', label: 'Magalu', type: 'boolean', defaultValue: false },
+      { key: 'shopee', label: 'Shopee', type: 'boolean', defaultValue: false },
+      { key: 'stockSync', label: 'Sincronização estoque', type: 'boolean', defaultValue: true },
+      { key: 'priceUpdate', label: 'Atualização preços', type: 'boolean', defaultValue: true },
+      { key: 'autoOrders', label: 'Pedidos automáticos', type: 'boolean', defaultValue: true },
+      { key: 'deliveryTracking', label: 'Rastreamento entrega', type: 'boolean', defaultValue: true },
+      { key: 'adManagement', label: 'Gestão anúncios', type: 'boolean', defaultValue: false },
+      { key: 'customWebhooks', label: 'Webhooks personalizados', type: 'json', placeholder: '{"url": "https://..."}' },
+    ]
+  },
+
+  // ===== SAÚDE / ATENDIMENTO (TELEMEDICINA) =====
+
+  {
+    id: 'teleconsulta-farmaceutica',
+    type: 'action',
+    label: '📹 Teleconsulta Farmacêutica',
+    description: 'Atendimento remoto com vídeo e prescrição digital',
+    icon: Video,
+    color: '#0284C7',
+    category: 'telemedicina',
+    inputs: [{ id: 'in', label: 'Solicitação de consulta', type: 'data' }],
+    outputs: [
+      { id: 'scheduled', label: 'Agendada', type: 'success' },
+      { id: 'completed', label: 'Concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'videoCall', label: 'Vídeo chamada', type: 'boolean', defaultValue: true },
+      { key: 'integratedChat', label: 'Chat integrado', type: 'boolean', defaultValue: true },
+      { key: 'recordConsultation', label: 'Gravação consulta', type: 'boolean', defaultValue: false },
+      { key: 'digitalPrescription', label: 'Prescrição digital', type: 'boolean', defaultValue: true },
+      { key: 'documentSharing', label: 'Compartilhar documentos', type: 'boolean', defaultValue: true },
+      { key: 'virtualWaitingRoom', label: 'Sala espera virtual', type: 'boolean', defaultValue: true },
+      { key: 'agendaIntegration', label: 'Integração agenda', type: 'boolean', defaultValue: true },
+      { key: 'aiSummary', label: 'IA resumo consulta', type: 'boolean', defaultValue: true },
+      { key: 'electronicSignature', label: 'Assinatura eletrônica', type: 'boolean', defaultValue: true },
+      { key: 'endToEndEncryption', label: 'Criptografia ponta a ponta', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== IA / MARKETING =====
+
+  {
+    id: 'recomendacao-inteligente-produtos',
+    type: 'ai',
+    label: '🎯 Recomendação Inteligente de Produtos',
+    description: 'Cross-sell e upsell com IA baseada em comportamento',
+    icon: ShoppingBag,
+    color: '#BE185D',
+    category: 'marketing_ia',
+    inputs: [{ id: 'in', label: 'Dados do cliente/compra', type: 'data' }],
+    outputs: [{ id: 'recommendations', label: 'Recomendações', type: 'success' }],
+    config: [
+      { key: 'crossSell', label: 'Cross-sell', type: 'boolean', defaultValue: true },
+      { key: 'upsell', label: 'Upsell', type: 'boolean', defaultValue: true },
+      { key: 'aiBehavior', label: 'IA comportamento compra', type: 'boolean', defaultValue: true },
+      { key: 'complementaryProducts', label: 'Produtos complementares', type: 'boolean', defaultValue: true },
+      { key: 'ageSegmentation', label: 'Segmentação idade', type: 'boolean', defaultValue: false },
+      { key: 'diseaseSegmentation', label: 'Segmentação doenças', type: 'boolean', defaultValue: false },
+      { key: 'customRules', label: 'Regras personalizadas', type: 'json', placeholder: '{"minPurchase": 50}' },
+      { key: 'autoLearning', label: 'Aprendizado automático', type: 'boolean', defaultValue: true },
+      { key: 'crmIntegration', label: 'Integração CRM', type: 'boolean', defaultValue: true },
+      { key: 'conversionRanking', label: 'Ranking conversão', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== FINANCEIRO / ERP (CAIXA) =====
+
+  {
+    id: 'controle-caixa',
+    type: 'action',
+    label: '💵 Controle de Caixa',
+    description: 'Gestão financeira de caixa com múltiplos operadores',
+    icon: Calculator,
+    color: '#047857',
+    category: 'financeiro_erp',
+    inputs: [{ id: 'in', label: 'Transação', type: 'data' }],
+    outputs: [
+      { id: 'completed', label: 'Concluído', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'openCloseCash', label: 'Abertura/fechamento caixa', type: 'boolean', defaultValue: true },
+      { key: 'sangria', label: 'Sangria', type: 'boolean', defaultValue: true },
+      { key: 'multiOperators', label: 'Multioperadores', type: 'boolean', defaultValue: true },
+      { key: 'pixIntegration', label: 'PIX integrado', type: 'boolean', defaultValue: true },
+      { key: 'cardIntegration', label: 'Cartão crédito/débito', type: 'boolean', defaultValue: true },
+      { key: 'financialReports', label: 'Relatórios financeiros', type: 'boolean', defaultValue: true },
+      { key: 'transactionAudit', label: 'Auditoria transações', type: 'boolean', defaultValue: true },
+      { key: 'tefIntegration', label: 'Integração TEF', type: 'boolean', defaultValue: false },
+      { key: 'salesDashboard', label: 'Dashboard vendas', type: 'boolean', defaultValue: true },
+      { key: 'accountingExport', label: 'Exportação contábil', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== COMUNICAÇÃO / MARKETING =====
+
+  {
+    id: 'disparo-sms-notificacoes',
+    type: 'action',
+    label: '📱 Disparo de SMS e Notificações',
+    description: 'Campanhas de SMS, push e WhatsApp em massa',
+    icon: Megaphone,
+    color: '#15803D',
+    category: 'comunicacao_mkt',
+    inputs: [{ id: 'in', label: 'Lista de destinatários/mensagem', type: 'data' }],
+    outputs: [
+      { id: 'sent', label: 'Enviado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'bulkSms', label: 'SMS em massa', type: 'boolean', defaultValue: true },
+      { key: 'pushNotifications', label: 'Push notifications', type: 'boolean', defaultValue: true },
+      { key: 'whatsappApi', label: 'WhatsApp API', type: 'boolean', defaultValue: true },
+      { key: 'customerSegmentation', label: 'Segmentação clientes', type: 'boolean', defaultValue: true },
+      { key: 'sendTime', label: 'Horário envio', type: 'string', placeholder: '09:00' },
+      { key: 'customTemplates', label: 'Templates personalizados', type: 'json', placeholder: '{"welcome": "Olá {{nome}}!"}' },
+      { key: 'openTracking', label: 'Rastreamento abertura', type: 'boolean', defaultValue: true },
+      { key: 'shortLinks', label: 'Links curtos', type: 'boolean', defaultValue: true },
+      { key: 'autoCampaigns', label: 'Campanhas automáticas', type: 'boolean', defaultValue: true },
+      { key: 'dispatchLimit', label: 'Limite disparos', type: 'number', defaultValue: 1000 },
+    ]
+  },
+
+  // ===== COMPLIANCE / ANVISA (SNGPC) =====
+
+  {
+    id: 'controle-sngpc',
+    type: 'action',
+    label: '📋 Controle SNGPC',
+    description: 'Envio automático de dados para ANVISA/SNGPC',
+    icon: Shield,
+    color: '#A16207',
+    category: 'compliance_anvisa',
+    inputs: [{ id: 'in', label: 'Dados de movimentação', type: 'data' }],
+    outputs: [
+      { id: 'sent', label: 'Enviado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'autoSendAnvisa', label: 'Envio automático ANVISA', type: 'boolean', defaultValue: true },
+      { key: 'movementRegistration', label: 'Registro movimentações', type: 'boolean', defaultValue: true },
+      { key: 'controlledInventory', label: 'Inventário controlados', type: 'boolean', defaultValue: true },
+      { key: 'inconsistencyCorrection', label: 'Correção inconsistências', type: 'boolean', defaultValue: true },
+      { key: 'digitalCertificate', label: 'Certificado digital', type: 'password', placeholder: 'Senha do certificado' },
+      { key: 'auditLogs', label: 'Logs auditoria', type: 'boolean', defaultValue: true },
+      { key: 'officialReports', label: 'Relatórios oficiais', type: 'boolean', defaultValue: true },
+      { key: 'autoBackup', label: 'Backup automático', type: 'boolean', defaultValue: true },
+      { key: 'rejectionAlerts', label: 'Alertas rejeição', type: 'boolean', defaultValue: true },
+      { key: 'dailySync', label: 'Sincronização diária', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== SAÚDE / IA (ANAMNESE) =====
+
+  {
+    id: 'formulario-anamnese-inteligente',
+    type: 'action',
+    label: '📝 Formulário Inteligente de Anamnese',
+    description: 'Anamnese dinâmica com IA e fluxos condicionais',
+    icon: Clipboard,
+    color: '#B91C1C',
+    category: 'saude_ia',
+    inputs: [{ id: 'in', label: 'Dados do paciente', type: 'data' }],
+    outputs: [
+      { id: 'completed', label: 'Formulário preenchido', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'dynamicFields', label: 'Campos dinâmicos', type: 'boolean', defaultValue: true },
+      { key: 'aiInterpretation', label: 'IA interpretação respostas', type: 'boolean', defaultValue: true },
+      { key: 'conditionalFlows', label: 'Fluxos condicionais', type: 'boolean', defaultValue: true },
+      { key: 'examUpload', label: 'Upload exames', type: 'boolean', defaultValue: true },
+      { key: 'patientSignature', label: 'Assinatura paciente', type: 'boolean', defaultValue: true },
+      { key: 'riskScore', label: 'Score risco', type: 'boolean', defaultValue: true },
+      { key: 'pdfExport', label: 'Exportação PDF', type: 'boolean', defaultValue: true },
+      { key: 'prontuarioIntegration', label: 'Integração prontuário', type: 'boolean', defaultValue: true },
+      { key: 'reusableTemplates', label: 'Templates reutilizáveis', type: 'file' },
+      { key: 'mobileResponsive', label: 'Modo mobile responsivo', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== BI / ANALYTICS =====
+
+  {
+    id: 'dashboard-analitico-farmaceutico',
+    type: 'action',
+    label: '📊 Dashboard Analítico Farmacêutico',
+    description: 'BI com KPIs, gráficos e previsão de demanda',
+    icon: BarChart,
+    color: '#E11D48',
+    category: 'analytics',
+    inputs: [{ id: 'in', label: 'Dados para análise', type: 'data' }],
+    outputs: [{ id: 'report', label: 'Relatório gerado', type: 'success' }],
+    config: [
+      { key: 'realtimeCharts', label: 'Gráficos em tempo real', type: 'boolean', defaultValue: true },
+      { key: 'salesKpis', label: 'KPIs vendas', type: 'boolean', defaultValue: true },
+      { key: 'stockKpis', label: 'KPIs estoque', type: 'boolean', defaultValue: true },
+      { key: 'productHeatmap', label: 'Heatmap produtos', type: 'boolean', defaultValue: true },
+      { key: 'branchComparison', label: 'Comparação filiais', type: 'boolean', defaultValue: false },
+      { key: 'excelPdfExport', label: 'Exportação Excel/PDF', type: 'boolean', defaultValue: true },
+      { key: 'advancedFilters', label: 'Filtros avançados', type: 'boolean', defaultValue: true },
+      { key: 'aiDemandForecast', label: 'IA previsão demanda', type: 'boolean', defaultValue: true },
+      { key: 'autoReports', label: 'Relatórios automáticos', type: 'boolean', defaultValue: true },
+      { key: 'darkMode', label: 'Dark mode', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== PAGAMENTOS / FINANCEIRO (PIX) =====
+
+  {
+    id: 'integracao-pix-automatico',
+    type: 'action',
+    label: '🔗 Integração PIX Automático',
+    description: 'PIX com QR Code dinâmico, conciliação e split',
+    icon: DollarIcon,
+    color: '#0F766E',
+    category: 'pagamentos',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'paid', label: 'Pago', type: 'success' },
+      { id: 'pending', label: 'Pendente', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'bankApi', label: 'Banco integração API', type: 'select', options: [
+        { value: 'itau', label: 'Itaú' }, { value: 'bradesco', label: 'Bradesco' },
+        { value: 'santander', label: 'Santander' }, { value: 'bb', label: 'Banco do Brasil' },
+      ], defaultValue: 'itau' },
+      { key: 'dynamicQrCode', label: 'QR Code dinâmico', type: 'boolean', defaultValue: true },
+      { key: 'autoReconciliation', label: 'Conciliação automática', type: 'boolean', defaultValue: true },
+      { key: 'splitPayment', label: 'Split pagamento', type: 'boolean', defaultValue: false },
+      { key: 'webhookConfirmation', label: 'Webhook confirmação', type: 'string', placeholder: 'URL webhook' },
+      { key: 'chargeExpiry', label: 'Expiração cobrança (min)', type: 'number', defaultValue: 30 },
+      { key: 'autoRefund', label: 'Estorno automático', type: 'boolean', defaultValue: false },
+      { key: 'multiAccounts', label: 'Multi contas', type: 'boolean', defaultValue: false },
+      { key: 'pixRecurring', label: 'PIX recorrente', type: 'boolean', defaultValue: false },
+      { key: 'financialLogs', label: 'Logs financeiros', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== IA / COMPLIANCE (AUDITORIA) =====
+
+  {
+    id: 'auditoria-inteligente-ia',
+    type: 'ai',
+    label: '🔍 Auditoria Inteligente IA',
+    description: 'Detecção de fraude e padrões suspeitos com IA',
+    icon: Eye,
+    color: '#7E22CE',
+    category: 'ia_compliance',
+    inputs: [{ id: 'in', label: 'Dados para auditoria', type: 'data' }],
+    outputs: [
+      { id: 'clean', label: 'Sem anomalias', type: 'success' },
+      { id: 'alert', label: 'Anomalia detectada', type: 'error' }
+    ],
+    config: [
+      { key: 'fraudDetection', label: 'Detecção fraude', type: 'boolean', defaultValue: true },
+      { key: 'suspiciousPatterns', label: 'Verificação padrões suspeitos', type: 'boolean', defaultValue: true },
+      { key: 'fullLogs', label: 'Logs completos', type: 'boolean', defaultValue: true },
+      { key: 'autoAlerts', label: 'Alertas automáticos', type: 'boolean', defaultValue: true },
+      { key: 'aiBehaviorAnalysis', label: 'IA análise comportamento', type: 'boolean', defaultValue: true },
+      { key: 'auditReports', label: 'Relatórios auditoria', type: 'boolean', defaultValue: true },
+      { key: 'userTracking', label: 'Rastreamento usuário', type: 'boolean', defaultValue: true },
+      { key: 'operationRiskScore', label: 'Score risco operação', type: 'boolean', defaultValue: true },
+      { key: 'erpIntegration', label: 'Integração ERP', type: 'boolean', defaultValue: false },
+      { key: 'complianceExport', label: 'Exportação compliance', type: 'boolean', defaultValue: true },
     ]
   },
 

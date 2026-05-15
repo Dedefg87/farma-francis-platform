@@ -3,7 +3,9 @@ import {
   Search, ChevronDown, ChevronRight, GripVertical,
   FileCheck, Brain, Heart, Package, MessageSquare, ShieldCheck,
   Calendar, Tag, DollarSign, Truck, UserPlus, Award, ScanLine, Thermometer,
-  Stethoscope, Pill, AlertTriangle
+  Stethoscope, Pill, AlertTriangle, Bot, ClipboardCheck, RefreshCw,
+  Store, Video, ShoppingBag, Calculator, Megaphone, Shield, Clipboard,
+  BarChart, DollarSign as DollarIcon, Eye, Receipt as ReceiptIcon, CreditCard as CreditCardIcon
 } from 'lucide-react';
 import {
   CATEGORIES, NODE_TYPES, getNodesByCategory
@@ -24,6 +26,21 @@ const categoryIcons: Record<string, React.ComponentType> = {
   'logistica': Truck,
   'crm': UserPlus,
   'iot': Thermometer,
+  'fiscal': ReceiptIcon,
+  'beneficios': CreditCardIcon,
+  'atendimento_ia': Bot,
+  'estoque_seg': ClipboardCheck,
+  'automacao_proc': RefreshCw,
+  'ecommerce': Store,
+  'telemedicina': Video,
+  'marketing_ia': ShoppingBag,
+  'financeiro_erp': Calculator,
+  'comunicacao_mkt': Megaphone,
+  'compliance_anvisa': Shield,
+  'saude_ia': Clipboard,
+  'analytics': BarChart,
+  'pagamentos': DollarIcon,
+  'ia_compliance': Eye,
 };
 
 interface NodeSidebarProps {
