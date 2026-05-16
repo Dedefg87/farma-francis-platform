@@ -11,7 +11,10 @@ import {
   Calculator, Send as SendIcon, Shield, FileSearch, BarChart, DollarSign as DollarIcon,
   Link2, ClipboardCheck, AlertCircle, TrendingDown, UserCheck, FileSpreadsheet,
   Receipt as ReceiptIcon, Smartphone, Megaphone, Clipboard, Eye,
-  Code, Layers, Archive, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge
+  Code, Layers, Archive, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge,
+  Landmark, Building, CreditCard as CreditCard2, Banknote, Wallet, PiggyBank,
+  ShoppingBasket, Utensils, Truck as Truck2, Mail as Mail2, FileInput, FileOutput,
+  UserCog, LineChart, Megaphone as Megaphone2, Radio, Tv, MonitorSpeaker
 } from "lucide-react";
 
 // ==================== TYPES ====================
@@ -94,7 +97,11 @@ export const CATEGORIES = [
   { id: 'integrations', label: 'Integrações / Apps', color: 'bg-cyan-100 text-cyan-800', icon: Globe },
   { id: 'ai_generic', label: 'IA / Genérica', color: 'bg-violet-100 text-violet-800', icon: Brain },
   { id: 'payments', label: 'Pagamentos / Financeiro', color: 'bg-green-100 text-green-800', icon: CreditCardIcon },
-
+  { id: 'integrations_br', label: 'Integrações Brasil', color: 'bg-yellow-100 text-yellow-800', icon: Landmark },
+  { id: 'delivery_br', label: 'Delivery / E-commerce BR', color: 'bg-orange-100 text-orange-800', icon: ShoppingBasket },
+  { id: 'fiscal_br', label: 'Fiscal / Governo BR', color: 'bg-blue-100 text-blue-800', icon: Building },
+  { id: 'marketing_br', label: 'Marketing / CRM BR', color: 'bg-pink-100 text-pink-800', icon: Megaphone2 },
+  { id: 'erp_br', label: 'ERP / Contabilidade BR', color: 'bg-emerald-100 text-emerald-800', icon: LineChart },
 ];
 
 // ==================== NODE DEFINITIONS ====================
@@ -1902,6 +1909,451 @@ export const NODE_TYPES: WorkflowNode[] = [
       { key: 'from', label: 'Número origem', type: 'string', placeholder: '+5511999999999' },
       { key: 'to', label: 'Número destino', type: 'string', placeholder: '+5511999999999' },
       { key: 'message', label: 'Mensagem', type: 'string', placeholder: 'Seu pedido está pronto!' },
+    ]
+  },
+
+  // ===== INTEGRAÇÕES BR =====
+
+  {
+    id: 'asaas-pagamentos',
+    type: 'action',
+    label: '💰 Asaas Pagamentos',
+    description: 'Cobranças PIX, boleto e cartão via Asaas',
+    icon: Wallet,
+    color: '#0080FF',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Cobrança criada', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: '\$aact_...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'pix', label: 'PIX' }, { value: 'boleto', label: 'Boleto' }, { value: 'credit_card', label: 'Cartão de Crédito' }, { value: 'subscription', label: 'Assinatura' },
+      ], defaultValue: 'pix' },
+      { key: 'amount', label: 'Valor (centavos)', type: 'number', placeholder: '1000' },
+      { key: 'customerCpf', label: 'CPF/CNPJ do cliente', type: 'string', placeholder: '000.000.000-00' },
+      { key: 'description', label: 'Descrição', type: 'string', placeholder: 'Compra Farmácia' },
+      { key: 'dueDate', label: 'Data vencimento', type: 'string', placeholder: '2026-06-01' },
+      { key: 'callbackUrl', label: 'URL de callback', type: 'string', placeholder: 'https://...' },
+      { key: 'sandbox', label: 'Modo Sandbox', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'pagarme-pagamentos',
+    type: 'action',
+    label: '💳 Pagarme',
+    description: 'Split payments, recorrência e antifraude',
+    icon: CreditCard2,
+    color: '#4F46E5',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Pagamento OK', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'ak_live_...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'charge', label: 'Cobrar' }, { value: 'split', label: 'Split Payment' }, { value: 'recurring', label: 'Recorrência' },
+      ], defaultValue: 'charge' },
+      { key: 'amount', label: 'Valor (centavos)', type: 'number' },
+      { key: 'paymentMethod', label: 'Método', type: 'select', options: [
+        { value: 'pix', label: 'PIX' }, { value: 'credit_card', label: 'Cartão' }, { value: 'boleto', label: 'Boleto' },
+      ], defaultValue: 'pix' },
+      { key: 'installments', label: 'Parcelas', type: 'number', defaultValue: 1 },
+      { key: 'postbackUrl', label: 'Postback URL', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'mercado-pago',
+    type: 'action',
+    label: '🟦 Mercado Pago',
+    description: 'PIX, boleto, cartão e checkout via Mercado Pago',
+    icon: PiggyBank,
+    color: '#009EE3',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Pagamento OK', type: 'success' },
+      { id: 'pending', label: 'Pendente', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'accessToken', label: 'Access Token', type: 'password', placeholder: 'APP_USR-...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'pix', label: 'PIX' }, { value: 'checkout', label: 'Checkout Pro' }, { value: 'boleto', label: 'Boleto' },
+      ], defaultValue: 'pix' },
+      { key: 'amount', label: 'Valor', type: 'number', placeholder: '10.50' },
+      { key: 'description', label: 'Descrição', type: 'string' },
+      { key: 'payerEmail', label: 'Email do pagador', type: 'string' },
+      { key: 'externalReference', label: 'Referência externa', type: 'string', placeholder: 'PEDIDO-123' },
+    ]
+  },
+
+  {
+    id: 'consulta-cpf-receita',
+    type: 'action',
+    label: '🏛️ Consulta CPF/CNPJ',
+    description: 'Consulta dados na Receita Federal e Serpro',
+    icon: UserCheck,
+    color: '#1E40AF',
+    category: 'fiscal_br',
+    inputs: [{ id: 'in', label: 'CPF ou CNPJ', type: 'data' }],
+    outputs: [
+      { id: 'found', label: 'Dados encontrados', type: 'success' },
+      { id: 'notfound', label: 'Não encontrado', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiProvider', label: 'Provedor', type: 'select', options: [
+        { value: 'serpro', label: 'Serpro (gov.br)' }, { value: 'receitaws', label: 'ReceitaWS' }, { value: 'brasilapi', label: 'BrasilAPI' },
+      ], defaultValue: 'receitaws' },
+      { key: 'apiKey', label: 'API Key (se aplicável)', type: 'password' },
+      { key: 'documentType', label: 'Tipo documento', type: 'select', options: [
+        { value: 'cpf', label: 'CPF' }, { value: 'cnpj', label: 'CNPJ' },
+      ], defaultValue: 'cpf' },
+      { key: 'document', label: 'Número do documento', type: 'string', placeholder: '000.000.000-00' },
+      { key: 'includeAddress', label: 'Incluir endereço', type: 'boolean', defaultValue: true },
+      { key: 'includeSituation', label: 'Incluir situação cadastral', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'consulta-cep',
+    type: 'action',
+    label: '📍 Consulta CEP',
+    description: 'Busca endereço por CEP via ViaCEP/BrasilAPI',
+    icon: MapPin,
+    color: '#0891B2',
+    category: 'fiscal_br',
+    inputs: [{ id: 'in', label: 'CEP', type: 'data' }],
+    outputs: [
+      { id: 'found', label: 'Endereço encontrado', type: 'success' },
+      { id: 'notfound', label: 'CEP inválido', type: 'error' }
+    ],
+    config: [
+      { key: 'apiProvider', label: 'Provedor', type: 'select', options: [
+        { value: 'viacep', label: 'ViaCEP' }, { value: 'brasilapi', label: 'BrasilAPI' }, { value: 'postmon', label: 'Postmon' },
+      ], defaultValue: 'viacep' },
+      { key: 'cep', label: 'CEP', type: 'string', placeholder: '00000-000' },
+      { key: 'autoFillAddress', label: 'Preencher endereço automaticamente', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'correios-rastreamento',
+    type: 'action',
+    label: '📦 Correios Rastreamento',
+    description: 'Rastreia encomendas dos Correios',
+    icon: Truck2,
+    color: '#F59E0B',
+    category: 'delivery_br',
+    inputs: [{ id: 'in', label: 'Código de rastreio', type: 'data' }],
+    outputs: [
+      { id: 'tracking', label: 'Status rastreamento', type: 'success' },
+      { id: 'delivered', label: 'Entregue', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'trackingCode', label: 'Código de rastreio', type: 'string', placeholder: 'AB123456789BR' },
+      { key: 'apiProvider', label: 'Provedor', type: 'select', options: [
+        { value: 'sro', label: 'SRO Web Service' }, { value: 'linkcorreios', label: 'Link Correios' },
+      ], defaultValue: 'linkcorreios' },
+      { key: 'lastUpdate', label: 'Última atualização', type: 'boolean', defaultValue: true },
+      { key: 'notifyOnChange', label: 'Notificar ao mudar status', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'rd-station-marketing',
+    type: 'action',
+    label: '📣 RD Station',
+    description: 'Automação de marketing e CRM via RD Station',
+    icon: Megaphone2,
+    color: '#6D28D9',
+    category: 'marketing_br',
+    inputs: [{ id: 'in', label: 'Dados do contato', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Contato processado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_lead', label: 'Criar Lead' }, { value: 'update_lead', label: 'Atualizar Lead' }, { value: 'add_tag', label: 'Adicionar Tag' }, { value: 'conversion', label: 'Registrar Conversão' },
+      ], defaultValue: 'create_lead' },
+      { key: 'email', label: 'Email do contato', type: 'string' },
+      { key: 'name', label: 'Nome', type: 'string' },
+      { key: 'tags', label: 'Tags (separadas por vírgula)', type: 'string', placeholder: 'farmacia, cliente, vip' },
+      { key: 'lifecycleStage', label: 'Estágio do funil', type: 'select', options: [
+        { value: 'lead', label: 'Lead' }, { value: 'qualified', label: 'Qualificado' }, { value: 'customer', label: 'Cliente' }, { value: 'churned', label: 'Perdido' },
+      ], defaultValue: 'lead' },
+    ]
+  },
+
+  {
+    id: 'tiny-erp',
+    type: 'action',
+    label: '📊 Tiny ERP',
+    description: 'Integração com Tiny ERP (estoque, pedidos, NFe)',
+    icon: LineChart,
+    color: '#059669',
+    category: 'erp_br',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Operação concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Token', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_order', label: 'Criar Pedido' }, { value: 'update_stock', label: 'Atualizar Estoque' }, { value: 'emit_nfe', label: 'Emitir NFe' }, { value: 'list_products', label: 'Listar Produtos' },
+      ], defaultValue: 'create_order' },
+      { key: 'orderNumber', label: 'Número do pedido', type: 'string' },
+      { key: 'productSku', label: 'SKU do produto', type: 'string' },
+      { key: 'quantity', label: 'Quantidade', type: 'number', defaultValue: 1 },
+    ]
+  },
+
+  {
+    id: 'bling-erp',
+    type: 'action',
+    label: '🔷 Bling ERP',
+    description: 'Integração com Bling (estoque, pedidos, financeiro)',
+    icon: Building2,
+    color: '#2563EB',
+    category: 'erp_br',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Operação concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_order', label: 'Criar Pedido' }, { value: 'update_product', label: 'Atualizar Produto' }, { value: 'create_nfe', label: 'Criar NFe' }, { value: 'financial', label: 'Contas a Receber' },
+      ], defaultValue: 'create_order' },
+      { key: 'orderId', label: 'ID do pedido', type: 'string' },
+      { key: 'productId', label: 'ID do produto', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'ifood-delivery',
+    type: 'action',
+    label: '🍔 iFood',
+    description: 'Integração com iFood para delivery de farmácia',
+    icon: Utensils,
+    color: '#EA1D2C',
+    category: 'delivery_br',
+    inputs: [{ id: 'in', label: 'Dados do pedido', type: 'data' }],
+    outputs: [
+      { id: 'confirmed', label: 'Pedido confirmado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'clientId', label: 'Client ID', type: 'string' },
+      { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      { key: 'merchantId', label: 'Merchant ID', type: 'string' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'confirm_order', label: 'Confirmar Pedido' }, { value: 'cancel_order', label: 'Cancelar Pedido' }, { value: 'list_orders', label: 'Listar Pedidos' },
+      ], defaultValue: 'confirm_order' },
+      { key: 'orderId', label: 'ID do pedido', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'mercado-livre',
+    type: 'action',
+    label: '🛒 Mercado Livre',
+    description: 'Integração com Mercado Livre (pedidos, produtos)',
+    icon: ShoppingBasket,
+    color: '#FFE600',
+    category: 'delivery_br',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Operação concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+      { key: 'userId', label: 'User ID', type: 'string' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'list_orders', label: 'Listar Pedidos' }, { value: 'update_stock', label: 'Atualizar Estoque' }, { value: 'create_listing', label: 'Criar Anúncio' },
+      ], defaultValue: 'list_orders' },
+      { key: 'sellerId', label: 'Seller ID', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'sendgrid-email',
+    type: 'action',
+    label: '📧 SendGrid',
+    description: 'Envio de emails transacionais via SendGrid',
+    icon: Mail2,
+    color: '#1A82E2',
+    category: 'marketing_br',
+    inputs: [{ id: 'in', label: 'Dados do email', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Email enviado', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'SG....' },
+      { key: 'from', label: 'Remetente', type: 'string', placeholder: 'farmacia@email.com' },
+      { key: 'to', label: 'Destinatário', type: 'string' },
+      { key: 'subject', label: 'Assunto', type: 'string' },
+      { key: 'htmlBody', label: 'Corpo HTML', type: 'prompt', multiline: true },
+      { key: 'templateId', label: 'Template ID (opcional)', type: 'string' },
+      { key: 'trackOpens', label: 'Rastrear aberturas', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'active-campaign',
+    type: 'action',
+    label: '🎯 ActiveCampaign',
+    description: 'Email marketing e automação via ActiveCampaign',
+    icon: Radio,
+    color: '#356AE6',
+    category: 'marketing_br',
+    inputs: [{ id: 'in', label: 'Dados do contato', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Contato processado', type: 'success' }],
+    config: [
+      { key: 'apiUrl', label: 'URL da API', type: 'string', placeholder: 'https://usuario.api-us1.com' },
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_contact', label: 'Criar Contato' }, { value: 'add_to_list', label: 'Adicionar à Lista' }, { value: 'trigger_automation', label: 'Disparar Automação' },
+      ], defaultValue: 'create_contact' },
+      { key: 'email', label: 'Email', type: 'string' },
+      { key: 'firstName', label: 'Nome', type: 'string' },
+      { key: 'listId', label: 'ID da Lista', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'serpro-integracao',
+    type: 'action',
+    label: '🏛️ Serpro API',
+    description: 'Integração com APIs do governo (CPF, CNPJ, CEP)',
+    icon: Building,
+    color: '#1E3A5F',
+    category: 'fiscal_br',
+    inputs: [{ id: 'in', label: 'Dados para consulta', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados retornados', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'apiType', label: 'Tipo de API', type: 'select', options: [
+        { value: 'cpf', label: 'Consulta CPF' }, { value: 'cnpj', label: 'Consulta CNPJ' }, { value: 'cep', label: 'Consulta CEP' },
+      ], defaultValue: 'cpf' },
+      { key: 'bearerToken', label: 'Bearer Token', type: 'password' },
+      { key: 'document', label: 'Documento', type: 'string', placeholder: 'CPF ou CNPJ' },
+    ]
+  },
+
+  {
+    id: 'whatsapp-business-api',
+    type: 'action',
+    label: '📱 WhatsApp Business API',
+    description: 'Envio avançado via WhatsApp Business Cloud API',
+    icon: Smartphone,
+    color: '#25D366',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Enviada', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+      { key: 'phoneNumberId', label: 'Phone Number ID', type: 'string' },
+      { key: 'to', label: 'Número destino', type: 'string', placeholder: '+5511999999999' },
+      { key: 'messageType', label: 'Tipo mensagem', type: 'select', options: [
+        { value: 'text', label: 'Texto' }, { value: 'template', label: 'Template' }, { value: 'image', label: 'Imagem' }, { value: 'document', label: 'Documento' },
+      ], defaultValue: 'text' },
+      { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true },
+      { key: 'templateName', label: 'Nome do template', type: 'string' },
+      { key: 'templateLanguage', label: 'Idioma do template', type: 'string', defaultValue: 'pt_BR' },
+    ]
+  },
+
+  {
+    id: 'google-calendar',
+    type: 'action',
+    label: '📅 Google Calendar',
+    description: 'Cria e gerencia eventos no Google Calendar',
+    icon: Calendar,
+    color: '#4285F4',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do evento', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Evento criado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create', label: 'Criar Evento' }, { value: 'update', label: 'Atualizar' }, { value: 'delete', label: 'Excluir' }, { value: 'list', label: 'Listar' },
+      ], defaultValue: 'create' },
+      { key: 'calendarId', label: 'Calendar ID', type: 'string', placeholder: 'primary' },
+      { key: 'summary', label: 'Título', type: 'string' },
+      { key: 'description', label: 'Descrição', type: 'string' },
+      { key: 'startTime', label: 'Início (ISO)', type: 'string', placeholder: '2026-05-16T10:00:00-03:00' },
+      { key: 'endTime', label: 'Fim (ISO)', type: 'string', placeholder: '2026-05-16T11:00:00-03:00' },
+    ]
+  },
+
+  {
+    id: 'power-bi',
+    type: 'action',
+    label: '📊 Power BI',
+    description: 'Push de datasets e relatórios Power BI',
+    icon: MonitorSpeaker,
+    color: '#F2C811',
+    category: 'erp_br',
+    inputs: [{ id: 'in', label: 'Dados para push', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados enviados', type: 'success' }],
+    config: [
+      { key: 'workspaceId', label: 'Workspace ID', type: 'string' },
+      { key: 'datasetId', label: 'Dataset ID', type: 'string' },
+      { key: 'tableName', label: 'Nome da tabela', type: 'string' },
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+    ]
+  },
+
+  {
+    id: 'chatgpt-vision',
+    type: 'ai',
+    label: '👁️ ChatGPT Vision',
+    description: 'Análise de imagens com GPT-4 Vision',
+    icon: Eye,
+    color: '#10A37F',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Imagem + Prompt', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Análise', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'prompt', label: 'Prompt', type: 'prompt', multiline: true, placeholder: 'Descreva esta imagem em detalhes' },
+      { key: 'imageUrl', label: 'URL da imagem', type: 'string' },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 512 },
+      { key: 'detail', label: 'Nível de detalhe', type: 'select', options: [
+        { value: 'low', label: 'Baixo' }, { value: 'high', label: 'Alto' }, { value: 'auto', label: 'Auto' },
+      ], defaultValue: 'auto' },
+    ]
+  },
+
+  {
+    id: 'elevenlabs-tts',
+    type: 'ai',
+    label: '🔊 ElevenLabs TTS',
+    description: 'Texto para voz natural com ElevenLabs',
+    icon: Volume2,
+    color: '#FF6B35',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Texto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Áudio gerado', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'text', label: 'Texto', type: 'prompt', multiline: true },
+      { key: 'voiceId', label: 'Voice ID', type: 'string', placeholder: '21m00Tcm4TlvDq8ikWAM' },
+      { key: 'stability', label: 'Estabilidade (0-1)', type: 'number', defaultValue: 0.5 },
+      { key: 'similarityBoost', label: 'Similaridade (0-1)', type: 'number', defaultValue: 0.75 },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'eleven_multilingual_v2', label: 'Multilingual v2' }, { value: 'eleven_turbo_v2', label: 'Turbo v2' },
+      ], defaultValue: 'eleven_multilingual_v2' },
     ]
   },
 ];

@@ -5,7 +5,10 @@ import {
   Calendar, Tag, DollarSign, Truck, UserPlus, Award, ScanLine, Thermometer,
   Stethoscope, Pill, AlertTriangle, Bot, ClipboardCheck, RefreshCw,
   Store, Video, ShoppingBag, Calculator, Megaphone, Shield, Clipboard,
-  BarChart, DollarSign as DollarIcon, Eye, Receipt as ReceiptIcon, CreditCard as CreditCardIcon
+  BarChart, DollarSign as DollarIcon, Eye, Receipt as ReceiptIcon, CreditCard as CreditCardIcon,
+  Landmark, Building, CreditCard as CreditCard2, Wallet, PiggyBank,
+  ShoppingBasket, Utensils, Truck as Truck2, Mail as Mail2,
+  LineChart, Megaphone as Megaphone2, Radio, MonitorSpeaker, Volume2
 } from 'lucide-react';
 import {
   CATEGORIES, NODE_TYPES, getNodesByCategory
@@ -48,6 +51,11 @@ const categoryIcons: Record<string, React.ComponentType> = {
   'integrations': Globe,
   'ai_generic': Brain,
   'payments': CreditCardIcon,
+  'integrations_br': Landmark,
+  'delivery_br': ShoppingBasket,
+  'fiscal_br': Building,
+  'marketing_br': Megaphone2,
+  'erp_br': LineChart,
 };
 
 interface NodeSidebarProps {
