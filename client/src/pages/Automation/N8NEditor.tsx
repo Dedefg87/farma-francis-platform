@@ -190,7 +190,7 @@ export function N8NEditor({
 
     return (
       <svg
-        style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 }}
+        style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, pointerEvents: 'none' }}
       >
         {/* Full canvas grid */}
         <defs>
@@ -711,19 +711,20 @@ export function N8NEditor({
         )}
 
         {/* ReactFlow Canvas */}
-        <div className="flex-1" ref={reactFlowWrapper}>
+        <div className="flex-1" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
             onNodeClick={handleNodeClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            fitView
+            fitView={false}
+            defaultViewport={{ x: -400, y: -200, zoom: 0.85 }}
+            minZoom={0.3}
+            maxZoom={1.5}
             className="bg-gray-50"
             proOptions={{ hideAttribution: true }}
             connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
