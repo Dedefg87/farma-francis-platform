@@ -42,7 +42,7 @@ export default function Automation() {
   // tRPC queries/mutations
   const { data: flowsData, isLoading, refetch } = trpc.automation.list.useQuery(
     { limit: 100, offset: 0 },
-    { refetchOnWindowFocus: false }
+    { refetchOnWindowFocus: true }
   );
   const createMutation = trpc.automation.create.useMutation({
     onSuccess: () => { refetch(); toast.success("Fluxo criado com sucesso"); },
@@ -72,7 +72,7 @@ export default function Automation() {
   );
 
   const allFlows = flowsData?.items || [];
-  const flows = allFlows.filter((f: any) => f.isActive === true);
+  const flows = allFlows;
   const obsoleteCount = allFlows.filter((f: any) => f.isActive === false).length;
   const isActive = flows.some(f => f.isActive);
 
@@ -340,8 +340,8 @@ export default function Automation() {
                         <Trash2 className="w-3 h-3 mr-1" /> Limpar Todos
                       </Button>
                     )}
-                    <Badge variant={isActive ? "default" : "secondary"}>
-                      {isActive ? "Ativo" : "Inativo"}
+                    <Badge variant="outline" className="text-xs">
+                      {flows.filter((f: any) => f.isActive).length} ativo(s)
                     </Badge>
                   </div>
                 </CardTitle>
@@ -361,7 +361,7 @@ export default function Automation() {
                         className={`flex items-center justify-between p-3 rounded-lg border ${darkMode ? "bg-gray-700 border-gray-600" : "bg-gray-50 border-gray-200"}`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded ${flow.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                          <div className={`p-2 rounded ${flow.isActive ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
                             <Zap className="w-4 h-4" />
                           </div>
                           <div>
@@ -430,6 +430,8 @@ export default function Automation() {
                       flowData,
                       isActive: false,
                     });
+                    // Reset editingFlow so next save creates a new flow
+                    // User should see it in the list after refetch
                   }
                 }}
                 onSimulate={() => {
