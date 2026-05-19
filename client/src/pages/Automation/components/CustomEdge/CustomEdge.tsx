@@ -1,5 +1,5 @@
 import React from 'react';
-import { BaseEdge, EdgeProps, getBezierPath, useReactFlow } from 'reactflow';
+import { BaseEdge, EdgeProps, getBezierPath } from 'reactflow';
 
 interface CustomEdgeData {
   animated?: boolean;
