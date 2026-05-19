@@ -238,11 +238,43 @@ export function N8NEditor({
     y: Math.round(y / GRID_SIZE) * GRID_SIZE,
   });
 
-  // Clamp position within workspace bounds
-  const clampToWorkspace = (x: number, y: number): { x: number; y: number } => ({
-    x: Math.max(WORKSPACE.x, Math.min(x, WORKSPACE.x + WORKSPACE.width - 90)),
-    y: Math.max(WORKSPACE.y, Math.min(y, WORKSPACE.y + WORKSPACE.height - 44)),
-  });
+  // Always place node inside workspace area
+  // If drop is inside workspace, use relative position; if outside, place at center
+  const placeInWorkspace = (rawX: number, rawY: number): { x: number; y: number } => {
+    const nodeW = 90;
+    const nodeH = 44;
+    // Check if drop is inside workspace
+    const insideX = rawX >= WORKSPACE.x && rawX <= WORKSPACE.x + WORKSPACE.width - nodeW;
+    const insideY = rawY >= WORKSPACE.y && rawY <= WORKSPACE.y + WORKSPACE.height - nodeH;
+
+    if (insideX && insideY) {
+      // Inside workspace: snap to grid relative to workspace origin
+      const relX = rawX - WORKSPACE.x;
+      const relY = rawY - WORKSPACE.y;
+      return {
+        x: WORKSPACE.x + Math.round(relX / GRID_SIZE) * GRID_SIZE,
+        y: WORKSPACE.y + Math.round(relY / GRID_SIZE) * GRID_SIZE,
+      };
+    }
+
+    // Outside workspace: place at a smart default position inside
+    // Try to preserve relative offset from workspace center
+    const wsCenterX = WORKSPACE.x + WORKSPACE.width / 2;
+    const wsCenterY = WORKSPACE.y + WORKSPACE.height / 2;
+    const offsetX = rawX - wsCenterX;
+    const offsetY = rawY - wsCenterY;
+
+    // Scale offset to fit within workspace (max 40% from center)
+    const maxOffsetX = (WORKSPACE.width / 2) * 0.4;
+    const maxOffsetY = (WORKSPACE.height / 2) * 0.4;
+    const clampedOffsetX = Math.max(-maxOffsetX, Math.min(offsetX, maxOffsetX));
+    const clampedOffsetY = Math.max(-maxOffsetY, Math.min(offsetY, maxOffsetY));
+
+    return {
+      x: Math.round((wsCenterX + clampedOffsetX) / GRID_SIZE) * GRID_SIZE,
+      y: Math.round((wsCenterY + clampedOffsetY) / GRID_SIZE) * GRID_SIZE,
+    };
+  };
 
   const onDrop = useCallback(
     (event: React.DragEvent) => {
@@ -261,9 +293,8 @@ export function N8NEditor({
       const rawX = event.clientX - bounds.left - 45;
       const rawY = event.clientY - bounds.top - 22;
 
-      // Snap to grid and clamp to workspace
-      const snapped = snapToGrid(rawX, rawY);
-      const position = clampToWorkspace(snapped.x, snapped.y);
+      // Always place inside workspace area
+      const position = placeInWorkspace(rawX, rawY);
 
       const newNode: Node = {
         id: `${nodeId}-${Date.now()}`,
