@@ -175,12 +175,59 @@ export function N8NEditor({
   // Workspace area — defined region for placing nodes
   const [showWorkspaceBounds, setShowWorkspaceBounds] = useState(true);
   const WORKSPACE = {
-    x: 100,
-    y: 80,
-    width: 900,
-    height: 600,
+    x: 80,
+    y: 60,
+    width: 960,
+    height: 640,
   };
   const GRID_SIZE = 20;
+
+  // Custom background that shows workspace area with subtle grid
+  const BackgroundGrid = useCallback(() => {
+    if (!showWorkspaceBounds) {
+      return <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} size={0.5} color="#e2e8f0" />;
+    }
+
+    return (
+      <svg
+        style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0 }}
+      >
+        {/* Full canvas grid */}
+        <defs>
+          <pattern id="smallGrid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
+            <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="#f1f5f9" strokeWidth="0.5" />
+          </pattern>
+          <pattern id="workspaceGrid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
+            <rect width={GRID_SIZE} height={GRID_SIZE} fill="rgba(59,130,246,0.03)" />
+            <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="#cbd5e1" strokeWidth="0.5" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#smallGrid)" />
+        <rect
+          x={WORKSPACE.x}
+          y={WORKSPACE.y}
+          width={WORKSPACE.width}
+          height={WORKSPACE.height}
+          fill="url(#workspaceGrid)"
+          stroke="#3b82f6"
+          strokeWidth="2"
+          strokeDasharray="6 3"
+          rx="6"
+          opacity="0.8"
+        />
+        <text
+          x={WORKSPACE.x + 10}
+          y={WORKSPACE.y - 6}
+          fill="#3b82f6"
+          fontSize="10"
+          fontWeight="600"
+          opacity="0.5"
+        >
+          Área de Trabalho
+        </text>
+      </svg>
+    );
+  }, [showWorkspaceBounds]);
 
   // Sync config state when selected node changes
   useEffect(() => {
@@ -276,6 +323,40 @@ export function N8NEditor({
     };
   };
 
+  // Find next available grid position inside workspace
+  const findNextPosition = useCallback((existingNodes: Node[]): { x: number; y: number } => {
+    const cols = 3;
+    const cellW = 220;
+    const cellH = 100;
+    const startX = WORKSPACE.x + 40;
+    const startY = WORKSPACE.y + 40;
+
+    // Build set of occupied grid cells
+    const occupied = new Set<string>();
+    existingNodes.forEach((n) => {
+      const col = Math.round((n.position.x - startX) / cellW);
+      const row = Math.round((n.position.y - startY) / cellH);
+      occupied.add(`${col},${row}`);
+    });
+
+    // Find first free cell
+    for (let row = 0; row < 20; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (!occupied.has(`${col},${row}`)) {
+          return {
+            x: startX + col * cellW,
+            y: startY + row * cellH,
+          };
+        }
+      }
+    }
+    // Fallback: place at end
+    return {
+      x: startX + (existingNodes.length % cols) * cellW,
+      y: startY + Math.floor(existingNodes.length / cols) * cellH,
+    };
+  }, []);
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -286,32 +367,25 @@ export function N8NEditor({
       const nodeDef = getNodeType(nodeId);
       if (!nodeDef) return;
 
-      const bounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!bounds) return;
-
-      // Get raw drop position relative to canvas
-      const rawX = event.clientX - bounds.left - 45;
-      const rawY = event.clientY - bounds.top - 22;
-
-      // Always place inside workspace area
-      const position = placeInWorkspace(rawX, rawY);
-
-      const newNode: Node = {
-        id: `${nodeId}-${Date.now()}`,
-        type: 'customNode',
-        position,
-        data: {
-          label: nodeDef.label,
-          nodeType: nodeDef.id,
-          inputs: nodeDef.inputs,
-          outputs: nodeDef.outputs,
-          config: nodeDef.config,
-        },
-      };
-
-      setNodes((nds) => [...nds, newNode]);
+      // Auto-place in next available grid position
+      setNodes((nds) => {
+        const position = findNextPosition(nds);
+        const newNode: Node = {
+          id: `${nodeId}-${Date.now()}`,
+          type: 'customNode',
+          position,
+          data: {
+            label: nodeDef.label,
+            nodeType: nodeDef.id,
+            inputs: nodeDef.inputs,
+            outputs: nodeDef.outputs,
+            config: nodeDef.config,
+          },
+        };
+        return [...nds, newNode];
+      });
     },
-    [setNodes]
+    [setNodes, findNextPosition]
   );
 
   const handleDragStart = (event: React.DragEvent, nodeDef: WorkflowNode) => {
@@ -659,7 +733,7 @@ export function N8NEditor({
               style: { stroke: '#94a3b8', strokeWidth: 2 },
             }}
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#e2e8f0" />
+            <BackgroundGrid />
             <Controls
               className="!bg-white !border !border-gray-200 !rounded-lg !shadow-sm"
               showInteractive={false}
@@ -674,60 +748,23 @@ export function N8NEditor({
               position="bottom-right"
             />
 
-            {/* Workspace Area Overlay */}
+            {/* Workspace info badge */}
             {showWorkspaceBounds && (
               <Panel position="top-left" className="!m-0 !mt-2">
-                <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <div className="flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
                   <span className="text-[10px] text-gray-600 font-medium">
-                    Área de trabalho: {WORKSPACE.width}×{WORKSPACE.height}px
+                    Área: {WORKSPACE.width}×{WORKSPACE.height}px · Grid: {GRID_SIZE}px
                   </span>
                   <button
                     onClick={() => setShowWorkspaceBounds(false)}
                     className="text-gray-400 hover:text-gray-600 ml-1"
-                    title="Ocultar borda"
+                    title="Ocultar indicador"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 </div>
               </Panel>
-            )}
-
-            {/* Workspace Bounds Rectangle - rendered as SVG overlay */}
-            {showWorkspaceBounds && (
-              <svg
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  pointerEvents: 'none',
-                  zIndex: 0,
-                }}
-              >
-                <rect
-                  x={WORKSPACE.x}
-                  y={WORKSPACE.y}
-                  width={WORKSPACE.width}
-                  height={WORKSPACE.height}
-                  fill="rgba(59, 130, 246, 0.02)"
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                  strokeDasharray="8 4"
-                  rx="8"
-                />
-                <text
-                  x={WORKSPACE.x + 12}
-                  y={WORKSPACE.y + 20}
-                  fill="#3b82f6"
-                  fontSize="11"
-                  fontWeight="500"
-                  opacity="0.6"
-                >
-                  Área de Trabalho
-                </text>
-              </svg>
             )}
 
             {/* Canvas Controls Panel */}
