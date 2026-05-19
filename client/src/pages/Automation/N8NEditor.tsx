@@ -143,7 +143,22 @@ export function N8NEditor({
   isFullCanvas = false,
 }: N8NEditorProps) {
   const sanitizedNodes = sanitizeNodes(initialNodes);
-  const [nodes, setNodes, onNodesChange] = useNodesState(sanitizedNodes);
+  const [nodes, setNodes, onNodesChangeRaw] = useNodesState(sanitizedNodes);
+
+  // Wrap onNodesChange to snap positions to grid on drag end
+  const onNodesChange = useCallback(
+    (changes: any[]) => {
+      changes.forEach((change) => {
+        if (change.type === 'position' && change.dragging === false && change.position) {
+          const snapped = snapToGrid(change.position.x, change.position.y);
+          change.position.x = snapped.x;
+          change.position.y = snapped.y;
+        }
+      });
+      onNodesChangeRaw(changes);
+    },
+    [onNodesChangeRaw]
+  );
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -156,6 +171,16 @@ export function N8NEditor({
 
   // Node config local state — synced with selected node
   const [nodeConfigState, setNodeConfigState] = useState<Record<string, any>>({});
+
+  // Workspace area — defined region for placing nodes
+  const [showWorkspaceBounds, setShowWorkspaceBounds] = useState(true);
+  const WORKSPACE = {
+    x: 100,
+    y: 80,
+    width: 900,
+    height: 600,
+  };
+  const GRID_SIZE = 20;
 
   // Sync config state when selected node changes
   useEffect(() => {
@@ -207,6 +232,18 @@ export function N8NEditor({
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
+  // Snap a position to the grid
+  const snapToGrid = (x: number, y: number): { x: number; y: number } => ({
+    x: Math.round(x / GRID_SIZE) * GRID_SIZE,
+    y: Math.round(y / GRID_SIZE) * GRID_SIZE,
+  });
+
+  // Clamp position within workspace bounds
+  const clampToWorkspace = (x: number, y: number): { x: number; y: number } => ({
+    x: Math.max(WORKSPACE.x, Math.min(x, WORKSPACE.x + WORKSPACE.width - 90)),
+    y: Math.max(WORKSPACE.y, Math.min(y, WORKSPACE.y + WORKSPACE.height - 44)),
+  });
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
@@ -220,10 +257,13 @@ export function N8NEditor({
       const bounds = reactFlowWrapper.current?.getBoundingClientRect();
       if (!bounds) return;
 
-      const position = {
-        x: event.clientX - bounds.left - 45,
-        y: event.clientY - bounds.top - 22,
-      };
+      // Get raw drop position relative to canvas
+      const rawX = event.clientX - bounds.left - 45;
+      const rawY = event.clientY - bounds.top - 22;
+
+      // Snap to grid and clamp to workspace
+      const snapped = snapToGrid(rawX, rawY);
+      const position = clampToWorkspace(snapped.x, snapped.y);
 
       const newNode: Node = {
         id: `${nodeId}-${Date.now()}`,
@@ -541,11 +581,25 @@ export function N8NEditor({
                 </Button>
               </label>
               <input id="import-file" type="file" accept=".json" className="hidden" onChange={handleImport} />
+              <div className="w-px h-5 bg-gray-200 mx-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowWorkspaceBounds(!showWorkspaceBounds)}
+                className={`h-7 text-xs ${showWorkspaceBounds ? 'text-blue-600 bg-blue-50' : 'text-gray-500'}`}
+                title="Mostrar/ocultar área de trabalho"
+              >
+                <Maximize2 className="w-3.5 h-3.5 mr-1" />
+                {showWorkspaceBounds ? 'Área visível' : 'Área oculta'}
+              </Button>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-gray-400">
                 {nodes.length} nós · {edges.length} conexões
+              </span>
+              <span className="text-[10px] text-gray-300">
+                Grid: {GRID_SIZE}px
               </span>
             </div>
           </div>
@@ -588,6 +642,62 @@ export function N8NEditor({
               maskColor="rgba(0,0,0,0.05)"
               position="bottom-right"
             />
+
+            {/* Workspace Area Overlay */}
+            {showWorkspaceBounds && (
+              <Panel position="top-left" className="!m-0 !mt-2">
+                <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-[10px] text-gray-600 font-medium">
+                    Área de trabalho: {WORKSPACE.width}×{WORKSPACE.height}px
+                  </span>
+                  <button
+                    onClick={() => setShowWorkspaceBounds(false)}
+                    className="text-gray-400 hover:text-gray-600 ml-1"
+                    title="Ocultar borda"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </Panel>
+            )}
+
+            {/* Workspace Bounds Rectangle - rendered as SVG overlay */}
+            {showWorkspaceBounds && (
+              <svg
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  pointerEvents: 'none',
+                  zIndex: 0,
+                }}
+              >
+                <rect
+                  x={WORKSPACE.x}
+                  y={WORKSPACE.y}
+                  width={WORKSPACE.width}
+                  height={WORKSPACE.height}
+                  fill="rgba(59, 130, 246, 0.02)"
+                  stroke="#3b82f6"
+                  strokeWidth="2"
+                  strokeDasharray="8 4"
+                  rx="8"
+                />
+                <text
+                  x={WORKSPACE.x + 12}
+                  y={WORKSPACE.y + 20}
+                  fill="#3b82f6"
+                  fontSize="11"
+                  fontWeight="500"
+                  opacity="0.6"
+                >
+                  Área de Trabalho
+                </text>
+              </svg>
+            )}
 
             {/* Canvas Controls Panel */}
             <Panel position="top-right" className="flex gap-1 !m-0">
