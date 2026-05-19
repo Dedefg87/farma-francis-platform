@@ -9204,7 +9204,7 @@ var UpdateAutomationInput = import_zod6.z.object({
   name: import_zod6.z.string().min(1, "Nome \xE9 obrigat\xF3rio").max(255, "Nome muito longo").optional(),
   description: import_zod6.z.string().max(1e3, "Descri\xE7\xE3o muito longa").optional(),
   templateType: import_zod6.z.string().optional(),
-  flowData: import_zod6.z.record(import_zod6.z.any()).optional(),
+  flowData: import_zod6.z.any().optional(),
   isActive: import_zod6.z.boolean().optional(),
   tags: import_zod6.z.array(import_zod6.z.string()).optional()
 });

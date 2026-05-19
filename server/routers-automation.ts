@@ -30,7 +30,7 @@ const UpdateAutomationInput = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(255, "Nome muito longo").optional(),
   description: z.string().max(1000, "Descrição muito longa").optional(),
   templateType: z.string().optional(),
-  flowData: z.record(z.any()).optional(),
+  flowData: z.any().optional(),
   isActive: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
