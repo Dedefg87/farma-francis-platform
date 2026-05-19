@@ -416,14 +416,16 @@ export default function Automation() {
                 initialEdges={editingFlow?.flowData?.edges || []}
                 onSave={(nodes, edges) => {
                   const flowData = { nodes, edges };
-                  if (editingFlow) {
+                  if (editingFlow && editingFlow.id > 0) {
+                    // Existing flow - update
                     updateMutation.mutate({
                       id: editingFlow.id,
                       flowData
                     });
                   } else {
+                    // New flow (from template or blank) - create
                     createMutation.mutate({
-                      name: "Novo Fluxo",
+                      name: editingFlow?.name || "Novo Fluxo",
                       templateType: "custom",
                       flowData,
                       isActive: false,
