@@ -248,7 +248,7 @@ export function N8NEditor({
   // Sync config state when selected node changes
   useEffect(() => {
     if (selectedNode) {
-      setNodeConfigState(selectedNode.data?.config || {});
+      setNodeConfigState(selectedNode.data?.configValues || {});
     }
   }, [selectedNode?.id]);
 
@@ -819,7 +819,7 @@ export function N8NEditor({
                 setNodes((nds) =>
                   nds.map((n) =>
                     n.id === selectedNode.id
-                      ? { ...n, data: { ...n.data, config: { ...n.data.config, [key]: value } } }
+                      ? { ...n, data: { ...n.data, configValues: { ...n.data.configValues, [key]: value } } }
                       : n
                   )
                 );
