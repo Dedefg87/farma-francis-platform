@@ -19,12 +19,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Play, Save, Download, Upload, Trash2, X, Search,
   ChevronDown, ChevronRight, GripVertical, ZoomIn, ZoomOut, Maximize2,
   GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package,
   Phone, Mail, Bot, UserCheck, FileText, CreditCard, Clock, Database,
   Settings, MessageSquare, Zap, AlertTriangle, TestTube, Copy, Undo2, Redo2,
+  FileCheck, Heart, ShieldCheck, Calendar, TrendingUp, DollarSign, Truck,
+  UserPlus, Thermometer, FileX, CreditCard as CreditCardIcon, Store, Video,
+  ShoppingBag, Calculator, Megaphone, Shield, Clipboard, BarChart, Eye,
+  Landmark, ShoppingBasket, Building, LineChart, Megaphone as Megaphone2,
+  RefreshCw, ClipboardCheck, Hash, StickyNote, Layers,
 } from 'lucide-react';
 import {
   NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField,
@@ -36,8 +43,8 @@ import { SimulationModal } from './components/SimulationModal/SimulationModal';
 // ==================== ICON MAPS ====================
 
 const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
-  triggers: GitBranch,
-  logic: Filter,
+  triggers: Zap,
+  logic: GitBranch,
   messages: Send,
   ai: Brain,
   actions: Code,
@@ -45,6 +52,43 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
   integrations: Globe,
   flow: ArrowRight,
   pharmacy: Package,
+  core_triggers: Zap,
+  core_logic: GitBranch,
+  core_actions: Code,
+  core_data: Database,
+  integrations_br: Landmark,
+  delivery_br: ShoppingBasket,
+  fiscal_br: Building,
+  marketing_br: Megaphone,
+  ai_generic: Brain,
+  payments: CreditCardIcon,
+  entrada: FileCheck,
+  ia: Brain,
+  saude: Heart,
+  erp: Package,
+  comunicacao: MessageSquare,
+  compliance: ShieldCheck,
+  agenda: Calendar,
+  marketing: TrendingUp,
+  financeiro: DollarSign,
+  logistica: Truck,
+  crm: UserPlus,
+  iot: Thermometer,
+  fiscal: FileX,
+  beneficios: CreditCardIcon,
+  atendimento_ia: Bot,
+  estoque_seg: ClipboardCheck,
+  automacao_proc: RefreshCw,
+  ecommerce: Store,
+  telemedicina: Video,
+  marketing_ia: ShoppingBag,
+  financeiro_erp: Calculator,
+  comunicacao_mkt: Megaphone,
+  compliance_anvisa: Shield,
+  saude_ia: Clipboard,
+  analytics: BarChart,
+  pagamentos: DollarSign,
+  ia_compliance: Eye,
 };
 
 const nodeIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -70,13 +114,8 @@ const nodeIconMap: Record<string, React.ComponentType<{ className?: string }>> =
 
 // ==================== NODE TYPES ====================
 
-const nodeTypes = {
-  customNode: CustomNode,
-};
-
-const edgeTypes = {
-  custom: CustomEdge,
-};
+const nodeTypes = { customNode: CustomNode };
+const edgeTypes = { custom: CustomEdge };
 
 // ==================== PROPS ====================
 
@@ -90,8 +129,6 @@ interface N8NEditorProps {
 
 // ==================== MAIN COMPONENT ====================
 
-// ==================== NODE TYPE VALIDATION ====================
-// Valid node types that the flow engine understands
 const VALID_NODE_TYPES = new Set([
   "trigger", "condition", "filter", "switch", "if-else",
   "message", "aiAssistant", "transferHuman", "transfer",
@@ -127,13 +164,66 @@ function sanitizeNodes(nodes: Node[]): Node[] {
     if (VALID_NODE_TYPES.has(rawType)) return node;
     const mapped = NODE_TYPE_MAPPINGS[rawType];
     if (mapped) {
-      console.warn(`[N8NEditor] Mapped node type "${rawType}" → "${mapped}" for node "${node.data?.label || node.id}"`);
       return { ...node, type: mapped };
     }
-    console.warn(`[N8NEditor] Unknown node type "${rawType}" for node "${node.data?.label || node.id}" — setting to customNode`);
     return { ...node, type: "customNode" as any };
   });
 }
+
+// ==================== SIMPLIFIED CATEGORIES FOR SIDEBAR ====================
+
+const SIDEBAR_CATEGORIES = [
+  { id: 'triggers', label: 'Triggers', icon: Zap, color: '#f97316' },
+  { id: 'logic', label: 'Logic', icon: GitBranch, color: '#eab308' },
+  { id: 'actions', label: 'Actions', icon: Code, color: '#3b82f6' },
+  { id: 'integrations', label: 'Integrations', icon: Globe, color: '#10b981' },
+  { id: 'ai', label: 'AI', icon: Brain, color: '#a855f7' },
+  { id: 'pharmacy', label: 'Pharmacy', icon: Package, color: '#2563eb' },
+];
+
+// Map node categories to sidebar categories
+const CATEGORY_TO_SIDEBAR: Record<string, string> = {
+  core_triggers: 'triggers',
+  entrada: 'triggers',
+  comunicacao: 'triggers',
+  comunicacao_mkt: 'triggers',
+  core_logic: 'logic',
+  compliance: 'logic',
+  compliance_anvisa: 'logic',
+  ia_compliance: 'logic',
+  estoque_seg: 'logic',
+  core_actions: 'actions',
+  financeiro: 'actions',
+  financeiro_erp: 'actions',
+  pagamentos: 'actions',
+  beneficios: 'actions',
+  erp: 'actions',
+  logistica: 'actions',
+  ecommerce: 'actions',
+  automacao_proc: 'actions',
+  core_data: 'actions',
+  analytics: 'actions',
+  crm: 'actions',
+  saude: 'actions',
+  saude_ia: 'actions',
+  telemedicina: 'actions',
+  agenda: 'actions',
+  fiscal: 'actions',
+  fiscal_br: 'actions',
+  iot: 'actions',
+  integrations: 'integrations',
+  integrations_br: 'integrations',
+  delivery_br: 'integrations',
+  marketing: 'integrations',
+  marketing_br: 'integrations',
+  marketing_ia: 'integrations',
+  erp_br: 'integrations',
+  payments: 'integrations',
+  ia: 'ai',
+  ai_generic: 'ai',
+  atendimento_ia: 'ai',
+  pharmacy: 'pharmacy',
+};
 
 export function N8NEditor({
   initialNodes = [],
@@ -144,97 +234,23 @@ export function N8NEditor({
 }: N8NEditorProps) {
   const sanitizedNodes = sanitizeNodes(initialNodes);
   const [nodes, setNodes, onNodesChangeRaw] = useNodesState(sanitizedNodes);
-
-  // Wrap onNodesChange to snap positions to grid on drag end
-  const onNodesChange = useCallback(
-    (changes: any[]) => {
-      changes.forEach((change) => {
-        if (change.type === 'position' && change.dragging === false && change.position) {
-          const snapped = snapToGrid(change.position.x, change.position.y);
-          change.position.x = snapped.x;
-          change.position.y = snapped.y;
-        }
-      });
-      onNodesChangeRaw(changes);
-    },
-    [onNodesChangeRaw]
-  );
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(
-    CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
+    SIDEBAR_CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
   const [showSimulation, setShowSimulation] = useState(false);
+  const [nodeConfigState, setNodeConfigState] = useState<Record<string, any>>({});
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { zoomIn, zoomOut, fitView } = useReactFlow();
-
-  // Node config local state — synced with selected node
-  const [nodeConfigState, setNodeConfigState] = useState<Record<string, any>>({});
-
-  // Workspace area — defined region for placing nodes
-  const [showWorkspaceBounds, setShowWorkspaceBounds] = useState(true);
-  const WORKSPACE = {
-    x: 80,
-    y: 60,
-    width: 960,
-    height: 640,
-  };
-  const GRID_SIZE = 20;
-
-  // Custom background that shows workspace area with subtle grid
-  const BackgroundGrid = useCallback(() => {
-    if (!showWorkspaceBounds) {
-      return <Background variant={BackgroundVariant.Dots} gap={GRID_SIZE} size={0.5} color="#e2e8f0" />;
-    }
-
-    return (
-      <svg
-        style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, pointerEvents: 'none' }}
-      >
-        {/* Full canvas grid */}
-        <defs>
-          <pattern id="smallGrid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
-            <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="#f1f5f9" strokeWidth="0.5" />
-          </pattern>
-          <pattern id="workspaceGrid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
-            <rect width={GRID_SIZE} height={GRID_SIZE} fill="rgba(59,130,246,0.03)" />
-            <path d={`M ${GRID_SIZE} 0 L 0 0 0 ${GRID_SIZE}`} fill="none" stroke="#cbd5e1" strokeWidth="0.5" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#smallGrid)" />
-        <rect
-          x={WORKSPACE.x}
-          y={WORKSPACE.y}
-          width={WORKSPACE.width}
-          height={WORKSPACE.height}
-          fill="url(#workspaceGrid)"
-          stroke="#3b82f6"
-          strokeWidth="2"
-          strokeDasharray="6 3"
-          rx="6"
-          opacity="0.8"
-        />
-        <text
-          x={WORKSPACE.x + 10}
-          y={WORKSPACE.y - 6}
-          fill="#3b82f6"
-          fontSize="10"
-          fontWeight="600"
-          opacity="0.5"
-        >
-          Área de Trabalho
-        </text>
-      </svg>
-    );
-  }, [showWorkspaceBounds]);
 
   // Sync config state when selected node changes
   useEffect(() => {
     if (selectedNode) {
       setNodeConfigState(selectedNode.data?.config || {});
     }
-  }, [selectedNode?.id, selectedNode?.data?.config]);
+  }, [selectedNode?.id]);
 
   // Sync selectedNode with latest node data from ReactFlow
   useEffect(() => {
@@ -279,67 +295,23 @@ export function N8NEditor({
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // Snap a position to the grid
-  const snapToGrid = (x: number, y: number): { x: number; y: number } => ({
-    x: Math.round(x / GRID_SIZE) * GRID_SIZE,
-    y: Math.round(y / GRID_SIZE) * GRID_SIZE,
-  });
-
-  // Always place node inside workspace area
-  // If drop is inside workspace, use relative position; if outside, place at center
-  const placeInWorkspace = (rawX: number, rawY: number): { x: number; y: number } => {
-    const nodeW = 90;
-    const nodeH = 44;
-    // Check if drop is inside workspace
-    const insideX = rawX >= WORKSPACE.x && rawX <= WORKSPACE.x + WORKSPACE.width - nodeW;
-    const insideY = rawY >= WORKSPACE.y && rawY <= WORKSPACE.y + WORKSPACE.height - nodeH;
-
-    if (insideX && insideY) {
-      // Inside workspace: snap to grid relative to workspace origin
-      const relX = rawX - WORKSPACE.x;
-      const relY = rawY - WORKSPACE.y;
-      return {
-        x: WORKSPACE.x + Math.round(relX / GRID_SIZE) * GRID_SIZE,
-        y: WORKSPACE.y + Math.round(relY / GRID_SIZE) * GRID_SIZE,
-      };
-    }
-
-    // Outside workspace: place at a smart default position inside
-    // Try to preserve relative offset from workspace center
-    const wsCenterX = WORKSPACE.x + WORKSPACE.width / 2;
-    const wsCenterY = WORKSPACE.y + WORKSPACE.height / 2;
-    const offsetX = rawX - wsCenterX;
-    const offsetY = rawY - wsCenterY;
-
-    // Scale offset to fit within workspace (max 40% from center)
-    const maxOffsetX = (WORKSPACE.width / 2) * 0.4;
-    const maxOffsetY = (WORKSPACE.height / 2) * 0.4;
-    const clampedOffsetX = Math.max(-maxOffsetX, Math.min(offsetX, maxOffsetX));
-    const clampedOffsetY = Math.max(-maxOffsetY, Math.min(offsetY, maxOffsetY));
-
-    return {
-      x: Math.round((wsCenterX + clampedOffsetX) / GRID_SIZE) * GRID_SIZE,
-      y: Math.round((wsCenterY + clampedOffsetY) / GRID_SIZE) * GRID_SIZE,
-    };
-  };
-
   // Find next available grid position inside workspace
   const findNextPosition = useCallback((existingNodes: Node[]): { x: number; y: number } => {
     const cols = 3;
     const cellW = 220;
     const cellH = 100;
-    const startX = WORKSPACE.x + 40;
-    const startY = WORKSPACE.y + 40;
+    const startX = 120;
+    const startY = 100;
 
-    // Build set of occupied grid cells
     const occupied = new Set<string>();
     existingNodes.forEach((n) => {
       const col = Math.round((n.position.x - startX) / cellW);
       const row = Math.round((n.position.y - startY) / cellH);
-      occupied.add(`${col},${row}`);
+      if (col >= 0 && col < cols && row >= 0) {
+        occupied.add(`${col},${row}`);
+      }
     });
 
-    // Find first free cell
     for (let row = 0; row < 20; row++) {
       for (let col = 0; col < cols; col++) {
         if (!occupied.has(`${col},${row}`)) {
@@ -350,7 +322,6 @@ export function N8NEditor({
         }
       }
     }
-    // Fallback: place at end
     return {
       x: startX + (existingNodes.length % cols) * cellW,
       y: startY + Math.floor(existingNodes.length / cols) * cellH,
@@ -367,7 +338,6 @@ export function N8NEditor({
       const nodeDef = getNodeType(nodeId);
       if (!nodeDef) return;
 
-      // Auto-place in next available grid position
       setNodes((nds) => {
         const position = findNextPosition(nds);
         const newNode: Node = {
@@ -413,41 +383,32 @@ export function N8NEditor({
 
   const handleDuplicateNode = useCallback(
     (node: Node) => {
-      const newNode: Node = {
-        ...node,
-        id: `${node.data?.nodeType}-${Date.now()}`,
-        position: { x: node.position.x + 160, y: node.position.y },
-        data: { ...node.data },
-      };
-      setNodes((nds) => [...nds, newNode]);
+      setNodes((nds) => {
+        const position = findNextPosition(nds);
+        return [...nds, {
+          ...node,
+          id: `${node.data?.nodeType}-${Date.now()}`,
+          position,
+          data: { ...node.data },
+        }];
+      });
     },
-    [setNodes]
+    [setNodes, findNextPosition]
   );
-
-  // ==================== CLEAR FLOW ====================
 
   const handleClearFlow = useCallback(() => {
     if (nodes.length === 0) return;
     setNodes([]);
     setEdges([]);
     setSelectedNode(null);
-  }, [nodes, edges, setNodes, setEdges]);
-
-  const handleDeleteSelectedNode = useCallback(() => {
-    if (selectedNode) {
-      handleDeleteNode(selectedNode);
-    }
-  }, [selectedNode, handleDeleteNode]);
+  }, [nodes, setNodes, setEdges]);
 
   // ==================== KEYBOARD SHORTCUTS ====================
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts when typing in inputs
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
 
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode) {
         e.preventDefault();
@@ -467,9 +428,7 @@ export function N8NEditor({
 
   // ==================== IMPORT / EXPORT ====================
 
-  const handleSimulate = () => {
-    setShowSimulation(true);
-  };
+  const handleSimulate = () => setShowSimulation(true);
 
   const handleExport = () => {
     const flowData = { nodes, edges };
@@ -512,11 +471,16 @@ export function N8NEditor({
     );
   }, [debouncedSearch]);
 
-  const nodesByCategory = filteredNodes.reduce((acc, node) => {
-    if (!acc[node.category]) acc[node.category] = [];
-    acc[node.category].push(node);
-    return acc;
-  }, {} as Record<string, WorkflowNode[]>);
+  // Group nodes by sidebar category
+  const nodesBySidebarCategory = useMemo(() => {
+    const grouped: Record<string, WorkflowNode[]> = {};
+    filteredNodes.forEach((node) => {
+      const sidebarCat = CATEGORY_TO_SIDEBAR[node.category] || 'actions';
+      if (!grouped[sidebarCat]) grouped[sidebarCat] = [];
+      grouped[sidebarCat].push(node);
+    });
+    return grouped;
+  }, [filteredNodes]);
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories((prev) => ({ ...prev, [catId]: !prev[catId] }));
@@ -526,32 +490,31 @@ export function N8NEditor({
 
   return (
     <>
-    <div className="flex h-full w-full bg-gray-50">
+    <div className="flex h-full w-full bg-[#0f172a]">
       {/* ============ LEFT SIDEBAR ============ */}
       <div
         className={`bg-white border-r border-gray-200 flex flex-col transition-all duration-200 flex-shrink-0 ${
-          sidebarOpen ? 'w-[280px]' : 'w-12'
+          sidebarOpen ? 'w-[260px]' : 'w-12'
         }`}
       >
         {/* Sidebar Header */}
         <div className="p-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
           {sidebarOpen && (
             <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center">
-                <Zap className="w-3 h-3 text-white" />
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+                <Zap className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="font-semibold text-sm text-gray-800">Nós</span>
+              <span className="font-bold text-sm text-gray-800">Nodes</span>
             </div>
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1 hover:bg-gray-100 rounded transition-colors"
-            title={sidebarOpen ? 'Recolher' : 'Expandir'}
+            className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
           >
             {sidebarOpen ? (
-              <ChevronRight className="w-4 h-4 text-gray-500" />
+              <ChevronRight className="w-4 h-4 text-gray-400 rotate-180" />
             ) : (
-              <ChevronRight className="w-4 h-4 text-gray-500 rotate-180" />
+              <ChevronRight className="w-4 h-4 text-gray-400" />
             )}
           </button>
         </div>
@@ -564,37 +527,39 @@ export function N8NEditor({
                 <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
                 <Input
                   type="text"
-                  placeholder="Buscar nó..."
+                  placeholder="Search nodes..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs h-8"
+                  className="w-full pl-8 pr-3 py-1.5 text-xs h-8 bg-gray-50 border-gray-200"
                 />
-              </div>
-              <div className="mt-1.5 text-[10px] text-gray-400">
-                {filteredNodes.length} nós em {CATEGORIES.length} categorias
               </div>
             </div>
 
-            {/* Node Categories */}
+            {/* Categories */}
             <div className="flex-1 overflow-y-auto">
-              {CATEGORIES.map((category) => {
-                const catNodes = nodesByCategory[category.id] || [];
+              {SIDEBAR_CATEGORIES.map((category) => {
+                const catNodes = nodesBySidebarCategory[category.id] || [];
                 if (catNodes.length === 0) return null;
                 const isExpanded = expandedCategories[category.id];
-                const CategoryIcon = categoryIcons[category.id] || GitBranch;
+                const CategoryIcon = category.icon;
 
                 return (
                   <div key={category.id} className="border-b border-gray-50">
                     <button
                       onClick={() => toggleCategory(category.id)}
-                      className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
+                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <CategoryIcon className="w-3.5 h-3.5 text-gray-500" />
-                        <span className="text-xs font-medium text-gray-700">
+                        <div
+                          className="w-5 h-5 rounded flex items-center justify-center"
+                          style={{ backgroundColor: category.color + '20' }}
+                        >
+                          <CategoryIcon className="w-3 h-3" style={{ color: category.color }} />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-700">
                           {category.label}
                         </span>
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full font-medium">
                           {catNodes.length}
                         </span>
                       </div>
@@ -614,17 +579,17 @@ export function N8NEditor({
                               key={node.id}
                               draggable
                               onDragStart={(e) => handleDragStart(e, node)}
-                              className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-grab hover:bg-gray-100 border border-transparent hover:border-gray-200 transition-all group"
+                              className="flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-grab hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all group active:scale-[0.98]"
                             >
                               <GripVertical className="w-3 h-3 text-gray-300 group-hover:text-gray-400 flex-shrink-0" />
                               <div
-                                className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                                className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0"
                                 style={{ backgroundColor: node.color }}
                               >
-                                <NodeIcon className="w-3 h-3 text-white" />
+                                <NodeIcon className="w-3.5 h-3.5 text-white" />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-medium text-gray-700 truncate leading-tight">
+                                <div className="text-[11px] font-medium text-gray-700 truncate leading-tight">
                                   {node.label}
                                 </div>
                               </div>
@@ -641,91 +606,74 @@ export function N8NEditor({
         )}
       </div>
 
-      {/* ============ MAIN CANVAS ============ */}
+      {/* ============ MAIN AREA ============ */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Toolbar */}
         {!isFullCanvas && (
           <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-1.5">
               <Button variant="ghost" size="sm" onClick={() => onSave?.(nodes, edges)} className="h-7 text-xs">
-                <Save className="w-3.5 h-3.5 mr-1" /> Salvar
+                <Save className="w-3.5 h-3.5 mr-1" /> Save
               </Button>
               <Button variant="ghost" size="sm" onClick={handleSimulate} className="h-7 text-xs">
-                <Play className="w-3.5 h-3.5 mr-1" /> Simular
+                <Play className="w-3.5 h-3.5 mr-1" /> Simulate
               </Button>
               <div className="w-px h-5 bg-gray-200 mx-1" />
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleDeleteSelectedNode}
+                onClick={() => selectedNode && handleDeleteNode(selectedNode)}
                 disabled={!selectedNode}
-                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-red-600"
-                title="Excluir nó selecionado (Delete)"
+                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-40"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1" /> Excluir
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleClearFlow}
                 disabled={nodes.length === 0}
-                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-red-600"
-                title="Limpar todo o fluxo"
+                className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-40"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1" /> Limpar
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Clear
               </Button>
               <div className="w-px h-5 bg-gray-200 mx-1" />
               <Button variant="ghost" size="sm" onClick={handleExport} className="h-7 text-xs">
-                <Download className="w-3.5 h-3.5 mr-1" /> Exportar
+                <Download className="w-3.5 h-3.5 mr-1" /> Export
               </Button>
               <label htmlFor="import-file">
                 <Button variant="ghost" size="sm" asChild className="h-7 text-xs cursor-pointer">
                   <span>
-                    <Upload className="w-3.5 h-3.5 mr-1" /> Importar
+                    <Upload className="w-3.5 h-3.5 mr-1" /> Import
                   </span>
                 </Button>
               </label>
               <input id="import-file" type="file" accept=".json" className="hidden" onChange={handleImport} />
-              <div className="w-px h-5 bg-gray-200 mx-1" />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowWorkspaceBounds(!showWorkspaceBounds)}
-                className={`h-7 text-xs ${showWorkspaceBounds ? 'text-blue-600 bg-blue-50' : 'text-gray-500'}`}
-                title="Mostrar/ocultar área de trabalho"
-              >
-                <Maximize2 className="w-3.5 h-3.5 mr-1" />
-                {showWorkspaceBounds ? 'Área visível' : 'Área oculta'}
-              </Button>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-gray-400">
-                {nodes.length} nós · {edges.length} conexões
-              </span>
-              <span className="text-[10px] text-gray-300">
-                Grid: {GRID_SIZE}px
+                {nodes.length} nodes · {edges.length} connections
               </span>
             </div>
           </div>
         )}
 
         {/* ReactFlow Canvas */}
-        <div className="flex-1" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
+        <div className="flex-1 relative" ref={reactFlowWrapper} onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
+            onNodesChange={onNodesChangeRaw}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={handleNodeClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            fitView={false}
-            defaultViewport={{ x: -400, y: -200, zoom: 0.85 }}
+            defaultViewport={{ x: -50, y: -30, zoom: 0.9 }}
             minZoom={0.3}
             maxZoom={1.5}
-            className="bg-gray-50"
+            className="bg-[#f8fafc]"
             proOptions={{ hideAttribution: true }}
             connectionLineStyle={{ stroke: '#3b82f6', strokeWidth: 2 }}
             defaultEdgeOptions={{
@@ -734,7 +682,7 @@ export function N8NEditor({
               style: { stroke: '#94a3b8', strokeWidth: 2 },
             }}
           >
-            <BackgroundGrid />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#cbd5e1" />
             <Controls
               className="!bg-white !border !border-gray-200 !rounded-lg !shadow-sm"
               showInteractive={false}
@@ -749,26 +697,7 @@ export function N8NEditor({
               position="bottom-right"
             />
 
-            {/* Workspace info badge */}
-            {showWorkspaceBounds && (
-              <Panel position="top-left" className="!m-0 !mt-2">
-                <div className="flex items-center gap-2 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
-                  <span className="text-[10px] text-gray-600 font-medium">
-                    Área: {WORKSPACE.width}×{WORKSPACE.height}px · Grid: {GRID_SIZE}px
-                  </span>
-                  <button
-                    onClick={() => setShowWorkspaceBounds(false)}
-                    className="text-gray-400 hover:text-gray-600 ml-1"
-                    title="Ocultar indicador"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              </Panel>
-            )}
-
-            {/* Canvas Controls Panel */}
+            {/* Zoom controls */}
             <Panel position="top-right" className="flex gap-1 !m-0">
               <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoomIn()} title="Zoom in">
                 <ZoomIn className="w-3.5 h-3.5" />
@@ -782,21 +711,68 @@ export function N8NEditor({
             </Panel>
           </ReactFlow>
         </div>
+
+        {/* ============ BOTTOM: LOGS & EXECUTION ============ */}
+        <div className="bg-white border-t border-gray-200 flex-shrink-0 max-h-[180px] overflow-y-auto">
+          <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-xs font-semibold text-gray-700">Logs & Execution</span>
+            </div>
+            <Badge variant="outline" className="text-[10px] text-gray-500">
+              {nodes.length} nodes active
+            </Badge>
+          </div>
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-100">
+                <th className="text-left px-4 py-1.5 font-medium">Time</th>
+                <th className="text-left px-4 py-1.5 font-medium">Status</th>
+                <th className="text-left px-4 py-1.5 font-medium">Type</th>
+                <th className="text-left px-4 py-1.5 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodes.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-center py-4 text-gray-400">
+                    No nodes in workflow. Drag nodes from the sidebar to begin.
+                  </td>
+                </tr>
+              ) : (
+                nodes.slice(0, 5).map((node, idx) => (
+                  <tr key={node.id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="px-4 py-1.5 text-gray-500">—</td>
+                    <td className="px-4 py-1.5">
+                      <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 bg-amber-50">
+                        Ready
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-1.5 text-gray-600 font-medium">{node.data?.label || 'Node'}</td>
+                    <td className="px-4 py-1.5">
+                      <button className="text-gray-400 hover:text-gray-600 text-[10px]">View</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ============ RIGHT CONFIG PANEL ============ */}
       {selectedNode && (
-        <div className="w-[280px] bg-white border-l border-gray-200 flex flex-col flex-shrink-0 animate-in slide-in-from-right duration-200">
+        <div className="w-[300px] bg-white border-l border-gray-200 flex flex-col flex-shrink-0">
           {/* Panel Header */}
           <div className="p-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <div
-                className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ backgroundColor: getNodeType(selectedNode.data?.nodeType)?.color || '#6b7280' }}
               >
                 {React.createElement(
                   nodeIconMap[selectedNode.data?.nodeType] || Settings,
-                  { className: 'w-3.5 h-3.5 text-white' }
+                  { className: 'w-4 h-4 text-white' }
                 )}
               </div>
               <div className="min-w-0">
@@ -811,22 +787,22 @@ export function N8NEditor({
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <button
                 onClick={() => handleDuplicateNode(selectedNode)}
-                className="p-1.5 hover:bg-gray-100 rounded text-gray-500 transition-colors"
-                title="Duplicar (Ctrl+D)"
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+                title="Duplicate"
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => handleDeleteNode()}
-                className="p-1.5 hover:bg-red-50 rounded text-red-500 transition-colors"
-                title="Excluir nó (Delete)"
+                className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
+                title="Delete"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setSelectedNode(null)}
-                className="p-1.5 hover:bg-gray-100 rounded text-gray-500 transition-colors"
-                title="Fechar painel (Esc)"
+                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+                title="Close"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -840,7 +816,6 @@ export function N8NEditor({
               configState={nodeConfigState}
               onConfigChange={(key, value) => {
                 setNodeConfigState(prev => ({ ...prev, [key]: value }));
-                // Persist to node data
                 setNodes((nds) =>
                   nds.map((n) =>
                     n.id === selectedNode.id
@@ -863,8 +838,8 @@ export function N8NEditor({
 
           {/* Panel Footer */}
           <div className="p-3 border-t border-gray-100 flex-shrink-0">
-            <Button size="sm" className="w-full h-8 text-xs">
-              <TestTube className="w-3.5 h-3.5 mr-1.5" /> Testar Nó
+            <Button size="sm" className="w-full h-8 text-xs bg-green-600 hover:bg-green-700">
+              <TestTube className="w-3.5 h-3.5 mr-1.5" /> Test Node
             </Button>
           </div>
         </div>
@@ -882,35 +857,28 @@ export function N8NEditor({
   );
 }
 
-// ==================== CONFIG PANEL ====================
+// ==================== NODE CONFIG PANEL (inline) ====================
 
-function NodeConfigPanel({
-  node,
-  configState,
-  onConfigChange,
-  onLabelChange,
-}: {
+interface NodeConfigPanelProps {
   node: Node;
   configState: Record<string, any>;
   onConfigChange: (key: string, value: any) => void;
-  onLabelChange: (label: string) => void;
-}) {
-  const nodeDef = getNodeType(node.data?.nodeType);
-  if (!nodeDef) return <div className="text-sm text-gray-500">Nó não encontrado</div>;
+  onLabelChange: (newLabel: string) => void;
+}
 
-  // Use configState as single source of truth for live editing
+function NodeConfigPanel({ node, configState, onConfigChange, onLabelChange }: NodeConfigPanelProps) {
+  const nodeDef = getNodeType(node.data?.nodeType);
+  if (!nodeDef) return <div className="p-4 text-sm text-gray-500">Node not found</div>;
+
   const values = configState || node.data?.config || {};
 
   return (
     <div className="space-y-4">
       {/* Node Info */}
       <div className="bg-gray-50 rounded-lg p-3">
-        <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Tipo</div>
+        <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Type</div>
         <div className="flex items-center gap-2">
-          <div
-            className="w-4 h-4 rounded"
-            style={{ backgroundColor: nodeDef.color }}
-          />
+          <div className="w-4 h-4 rounded" style={{ backgroundColor: nodeDef.color }} />
           <span className="text-sm font-medium text-gray-800">{nodeDef.label}</span>
         </div>
         {nodeDef.description && (
@@ -920,9 +888,9 @@ function NodeConfigPanel({
 
       {/* Label */}
       <div>
-        <Label className="text-xs text-gray-500 mb-1.5 block">Nome</Label>
+        <Label className="text-xs text-gray-500 mb-1.5 block">Node Name</Label>
         <Input
-          value={node.data.label || ''}
+          value={node.data?.label || ''}
           onChange={(e) => onLabelChange(e.target.value)}
           className="h-8 text-sm"
         />
@@ -931,28 +899,28 @@ function NodeConfigPanel({
       {/* Ports Info */}
       {(nodeDef.inputs?.length || nodeDef.outputs?.length) && (
         <div>
-          <Label className="text-xs text-gray-500 mb-1.5 block">Conexões</Label>
+          <Label className="text-xs text-gray-500 mb-1.5 block">Connections</Label>
           <div className="space-y-1.5">
             {nodeDef.inputs && nodeDef.inputs.length > 0 && (
               <div className="flex items-center gap-2 text-xs">
                 <div className="w-2 h-2 rounded-full bg-blue-400" />
-                <span className="text-gray-600">{nodeDef.inputs.length} entrada(s)</span>
+                <span className="text-gray-600">{nodeDef.inputs.length} input(s)</span>
               </div>
             )}
             {nodeDef.outputs && nodeDef.outputs.length > 0 && (
               <div className="flex items-center gap-2 text-xs">
                 <div className="w-2 h-2 rounded-full bg-green-400" />
-                <span className="text-gray-600">{nodeDef.outputs.length} saída(s)</span>
+                <span className="text-gray-600">{nodeDef.outputs.length} output(s)</span>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Config Fields — with live state */}
+      {/* Config Fields */}
       {nodeDef.config && nodeDef.config.length > 0 && (
         <div>
-          <Label className="text-xs text-gray-500 mb-2 block">Configurações</Label>
+          <Label className="text-xs text-gray-500 mb-2 block">Settings</Label>
           <div className="space-y-3">
             {nodeDef.config.map((field: ConfigField) => (
               <div key={field.key}>
@@ -966,24 +934,25 @@ function NodeConfigPanel({
                     className="h-8 text-sm"
                   />
                 ) : field.type === 'select' ? (
-                  <select
-                    className="w-full h-8 text-sm border rounded px-2 bg-white"
+                  <Select
                     value={values[field.key] ?? ''}
-                    onChange={(e) => onConfigChange(field.key, e.target.value)}
+                    onValueChange={(val) => onConfigChange(field.key, val)}
                   >
-                    <option value="">Selecionar...</option>
-                    {field.options?.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options?.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : field.type === 'json' || field.type === 'prompt' ? (
-                  <textarea
-                    className="w-full text-sm border rounded p-2 min-h-[80px] resize-y"
+                  <Textarea
                     placeholder={field.placeholder}
                     value={values[field.key] ?? field.defaultValue ?? ''}
                     onChange={(e) => onConfigChange(field.key, e.target.value)}
+                    className="text-sm min-h-[80px] resize-y"
                   />
                 ) : field.type === 'number' ? (
                   <Input
@@ -1002,7 +971,7 @@ function NodeConfigPanel({
                       className="rounded"
                     />
                     <span className="text-xs text-gray-500">
-                      {values[field.key] ? 'Ativado' : 'Desativado'}
+                      {values[field.key] ? 'Enabled' : 'Disabled'}
                     </span>
                   </div>
                 ) : null}
