@@ -164,6 +164,16 @@ export function N8NEditor({
     }
   }, [selectedNode?.id, selectedNode?.data?.config]);
 
+  // Sync selectedNode with latest node data from ReactFlow
+  useEffect(() => {
+    if (selectedNode) {
+      const updated = nodes.find((n) => n.id === selectedNode.id);
+      if (updated && updated !== selectedNode) {
+        setSelectedNode(updated);
+      }
+    }
+  }, [nodes]);
+
   // Debounced search
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -709,7 +719,8 @@ function NodeConfigPanel({
   const nodeDef = getNodeType(node.data?.nodeType);
   if (!nodeDef) return <div className="text-sm text-gray-500">Nó não encontrado</div>;
 
-  const currentConfig = node.data?.config || {};
+  // Use configState as single source of truth for live editing
+  const values = configState || node.data?.config || {};
 
   return (
     <div className="space-y-4">
@@ -771,14 +782,14 @@ function NodeConfigPanel({
                   <Input
                     type={field.type === 'password' ? 'password' : 'text'}
                     placeholder={field.placeholder}
-                    value={currentConfig[field.key] ?? field.defaultValue ?? ''}
+                    value={values[field.key] ?? field.defaultValue ?? ''}
                     onChange={(e) => onConfigChange(field.key, e.target.value)}
                     className="h-8 text-sm"
                   />
                 ) : field.type === 'select' ? (
                   <select
                     className="w-full h-8 text-sm border rounded px-2 bg-white"
-                    value={currentConfig[field.key] ?? ''}
+                    value={values[field.key] ?? ''}
                     onChange={(e) => onConfigChange(field.key, e.target.value)}
                   >
                     <option value="">Selecionar...</option>
@@ -792,14 +803,14 @@ function NodeConfigPanel({
                   <textarea
                     className="w-full text-sm border rounded p-2 min-h-[80px] resize-y"
                     placeholder={field.placeholder}
-                    value={currentConfig[field.key] ?? field.defaultValue ?? ''}
+                    value={values[field.key] ?? field.defaultValue ?? ''}
                     onChange={(e) => onConfigChange(field.key, e.target.value)}
                   />
                 ) : field.type === 'number' ? (
                   <Input
                     type="number"
                     placeholder={field.placeholder}
-                    value={currentConfig[field.key] ?? field.defaultValue ?? ''}
+                    value={values[field.key] ?? field.defaultValue ?? ''}
                     onChange={(e) => onConfigChange(field.key, e.target.value)}
                     className="h-8 text-sm"
                   />
@@ -807,12 +818,12 @@ function NodeConfigPanel({
                   <div className="flex items-center gap-2 h-8">
                     <input
                       type="checkbox"
-                      checked={!!currentConfig[field.key]}
+                      checked={!!values[field.key]}
                       onChange={(e) => onConfigChange(field.key, e.target.checked)}
                       className="rounded"
                     />
                     <span className="text-xs text-gray-500">
-                      {currentConfig[field.key] ? 'Ativado' : 'Desativado'}
+                      {values[field.key] ? 'Ativado' : 'Desativado'}
                     </span>
                   </div>
                 ) : null}
