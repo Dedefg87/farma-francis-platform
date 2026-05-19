@@ -117,6 +117,16 @@ const nodeIconMap: Record<string, React.ComponentType<{ className?: string }>> =
 const nodeTypes = { customNode: CustomNode };
 const edgeTypes = { custom: CustomEdge };
 
+  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    // Select edge for deletion
+    setEdges((eds) =>
+      eds.map((e) => ({
+        ...e,
+        selected: e.id === edge.id,
+      }))
+    );
+  }, [setEdges]);
+
 // ==================== PROPS ====================
 
 interface N8NEditorProps {
@@ -381,6 +391,18 @@ export function N8NEditor({
     },
     [selectedNode, setNodes, setEdges]
   );
+
+  // Handle edge deletion via custom event
+  useEffect(() => {
+    const handleDeleteEdge = (e: CustomEvent) => {
+      const edgeId = e.detail?.edgeId;
+      if (edgeId) {
+        setEdges((eds) => eds.filter((e) => e.id !== edgeId));
+      }
+    };
+    window.addEventListener('delete-edge', handleDeleteEdge as EventListener);
+    return () => window.removeEventListener('delete-edge', handleDeleteEdge as EventListener);
+  }, [setEdges]);
 
   const handleDuplicateNode = useCallback(
     (node: Node) => {
@@ -669,6 +691,7 @@ export function N8NEditor({
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={handleNodeClick}
+            onEdgeClick={onEdgeClick}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             defaultViewport={{ x: -50, y: -30, zoom: 0.9 }}

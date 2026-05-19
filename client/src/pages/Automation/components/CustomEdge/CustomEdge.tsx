@@ -1,5 +1,5 @@
 import React from 'react';
-import { BaseEdge, EdgeProps, getBezierPath } from 'reactflow';
+import { BaseEdge, EdgeProps, getBezierPath, useReactFlow } from 'reactflow';
 
 interface CustomEdgeData {
   animated?: boolean;
@@ -32,6 +32,15 @@ export default function CustomEdge({
 
   return (
     <>
+      {/* Invisible wider path for easier clicking */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={12}
+        style={{ cursor: 'pointer' }}
+      />
+
       {/* Base edge line */}
       <BaseEdge
         id={id}
@@ -40,6 +49,7 @@ export default function CustomEdge({
           stroke: isSelected ? '#3b82f6' : '#94a3b8',
           strokeWidth: isSelected ? 2.5 : 2,
           transition: 'stroke 0.15s, stroke-width 0.15s',
+          pointerEvents: 'none',
         }}
       />
 
@@ -78,6 +88,30 @@ export default function CustomEdge({
               {data.label}
             </span>
           </div>
+        </foreignObject>
+      )}
+
+      {/* Delete button when selected */}
+      {isSelected && (
+        <foreignObject
+          width={24}
+          height={24}
+          x={(sourceX + targetX) / 2 - 12}
+          y={(sourceY + targetY) / 2 - 12}
+          requiredExtensions="http://www.w3.org/1999/xhtml"
+          style={{ overflow: 'visible' }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              // Dispatch custom event to delete this edge
+              window.dispatchEvent(new CustomEvent('delete-edge', { detail: { edgeId: id } }));
+            }}
+            className="w-6 h-6 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg border-2 border-white cursor-pointer"
+            title="Deletar conexão"
+          >
+            <span className="text-xs font-bold">×</span>
+          </button>
         </foreignObject>
       )}
     </>
