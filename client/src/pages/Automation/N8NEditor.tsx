@@ -374,8 +374,9 @@ export function N8NEditor({
     (nodeToDelete?: Node) => {
       const target = nodeToDelete || selectedNode;
       if (!target) return;
-      setNodes((nds) => nds.filter((n) => n.id !== target.id));
-      setEdges((eds) => eds.filter((e) => e.source !== target.id && e.target !== target.id));
+      const targetId = target.id;
+      setNodes((nds) => nds.filter((n) => n.id !== targetId));
+      setEdges((eds) => eds.filter((e) => e.source !== targetId && e.target !== targetId));
       setSelectedNode(null);
     },
     [selectedNode, setNodes, setEdges]
@@ -786,23 +787,23 @@ export function N8NEditor({
             </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <button
-                onClick={() => handleDuplicateNode(selectedNode)}
+                onClick={() => selectedNode && handleDuplicateNode(selectedNode)}
                 className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
-                title="Duplicate"
+                title="Duplicate (Ctrl+D)"
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => handleDeleteNode()}
                 className="p-1.5 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
-                title="Delete"
+                title="Delete (Del)"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={() => setSelectedNode(null)}
                 className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
-                title="Close"
+                title="Close (Esc)"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -837,9 +838,17 @@ export function N8NEditor({
           </div>
 
           {/* Panel Footer */}
-          <div className="p-3 border-t border-gray-100 flex-shrink-0">
+          <div className="p-3 border-t border-gray-100 flex-shrink-0 space-y-2">
             <Button size="sm" className="w-full h-8 text-xs bg-green-600 hover:bg-green-700">
               <TestTube className="w-3.5 h-3.5 mr-1.5" /> Test Node
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              onClick={() => handleDeleteNode()}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete Node
             </Button>
           </div>
         </div>
