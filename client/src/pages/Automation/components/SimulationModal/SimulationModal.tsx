@@ -90,7 +90,7 @@ function validateNode(node: Node, edges: Edge[], allNodes: Node[]): ValidationEr
   // 2. Check connections
   const hasInput = edges.some((e) => e.target === node.id);
   const hasOutput = edges.some((e) => e.source === node.id);
-  const isTrigger = nodeDef.category === 'triggers';
+  const isTrigger = nodeDef.category === 'triggers' || nodeDef.category === 'core_triggers' || nodeDef.type === 'trigger';
 
   if (!isTrigger && !hasInput) {
     errors.push({
@@ -270,7 +270,7 @@ function validateFlow(nodes: Node[], edges: Edge[]): FlowError[] {
   // Check for trigger nodes
   const triggerNodes = nodes.filter((n) => {
     const def = getNodeType(n.data?.nodeType);
-    return def?.category === 'triggers';
+    return def?.category === 'triggers' || def?.category === 'core_triggers' || def?.type === 'trigger';
   });
 
   if (triggerNodes.length === 0 && nodes.length > 0) {
