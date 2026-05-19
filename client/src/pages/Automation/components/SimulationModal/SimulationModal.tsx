@@ -304,13 +304,15 @@ function validateFlow(nodes: Node[], edges: Edge[]): FlowError[] {
   });
 
   // Check for dead ends (nodes with input but no output, that aren't terminal)
-  const terminalTypes = ['wait', 'delay'];
+  const terminalTypes = ['wait', 'delay', 'stop-error', 'error-handler', 'sticky-note'];
   nodes.forEach((n) => {
     const hasInput = edges.some((e) => e.target === n.id);
     const hasOutput = edges.some((e) => e.source === n.id);
     const nodeDef = getNodeType(n.data?.nodeType);
 
-    if (hasInput && !hasOutput && !terminalTypes.includes(nodeDef?.type || '')) {
+    const terminalIds = ['stop-error-node', 'error-handler-node', 'sticky-note-node'];
+    const hasOutputsDefined = nodeDef?.outputs && nodeDef.outputs.length > 0;
+    if (hasInput && !hasOutput && hasOutputsDefined && !terminalTypes.includes(nodeDef?.type || '') && !terminalIds.includes(nodeDef?.id || '')) {
       errors.push({
         type: 'connection',
         nodeId: n.id,
