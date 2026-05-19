@@ -2,10 +2,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Zap, ArrowRight, CheckCircle, Clock, MessageCircle
+  Zap, ArrowRight, CheckCircle, Clock, MessageCircle,
+  Bot, Globe, Webhook, GitBranch, Code, Send, Brain, Package,
+  Phone, Mail, Database, Settings, Filter, Pause, Trash2,
+  type LucideIcon,
 } from "lucide-react";
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Zap, Bot, Globe, Webhook, GitBranch, Code, Send, Brain, Package,
+  Phone, Mail, Database, Settings, Filter, Pause, Trash2, ArrowRight,
+  CheckCircle, Clock, MessageCircle,
+};
 import { flowTemplates } from "./templates";
-import type { FlowTemplate } from "./templates/types";
+import type { FlowTemplate } from "./templates";
 
 interface TemplatesSectionProps {
   darkMode: boolean;
@@ -35,7 +44,7 @@ export function TemplatesSection({ darkMode, onSelectTemplate }: TemplatesSectio
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {templates.map((template) => {
-          const Icon = template.icon;
+          const Icon = ICON_MAP[template.iconName] || Zap;
           const steps = getStepSummary(template);
 
           return (

@@ -5,7 +5,7 @@ export interface FlowTemplate {
   id: string;
   name: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  iconName: string;
   color: string;
   nodes: any[];
   edges: any[];
@@ -197,7 +197,7 @@ export const flowTemplates: FlowTemplate[] = [
       id: 'fluxo-basico-atendimento',
       name: 'Fluxo Básico de Atendimento',
       description: 'Recebe mensagem via webhook, identifica se o cliente existe no CRM, cria contato se necessário e registra tarefa automaticamente. Ideal para iniciar automação de WhatsApp.',
-      icon: Zap,
+      iconName: 'Zap',
       color: '#3b82f6',
       nodes,
       edges,
