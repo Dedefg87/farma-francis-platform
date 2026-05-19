@@ -150,14 +150,24 @@ export default function Automation() {
   const handleSelectTemplate = (templateId: string) => {
     const template = flowTemplates.find(t => t.id === templateId);
     if (!template) return;
+
+    // Open editor directly with template data (don't wait for backend)
+    const templateFlowId = -Date.now(); // negative = unsaved template flow
+    setEditingFlow({
+      id: templateFlowId,
+      name: template.name,
+      flowData: { nodes: template.nodes, edges: template.edges },
+    });
+    setActiveTab("editor");
+    toast.success(`Template "${template.name}" carregado no editor`);
+
+    // Also save to backend in background
     createMutation.mutate({
-      name: `Fluxo - ${template.name}`,
+      name: template.name,
       templateType: templateId,
       flowData: { nodes: template.nodes, edges: template.edges },
       isActive: false,
     });
-    setActiveTab("editor");
-    toast.success(`Template "${template.name}" carregado no editor`);
   };
 
   const handleExportAll = () => {
