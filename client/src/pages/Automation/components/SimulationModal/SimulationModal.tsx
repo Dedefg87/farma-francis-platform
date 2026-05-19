@@ -71,7 +71,8 @@ function validateNode(node: Node, edges: Edge[], allNodes: Node[]): ValidationEr
   // 1. Check required config fields
   if (nodeDef.config) {
     nodeDef.config.forEach((field: ConfigField) => {
-      const value = node.data?.[field.key] || field.defaultValue;
+      // Check configValues (user-filled), then data[field.key], then defaultValue
+      const value = node.data?.configValues?.[field.key] ?? node.data?.[field.key] ?? field.defaultValue;
       if (!value && field.type !== 'boolean' && field.type !== 'select') {
         errors.push({
           field: field.label,
@@ -80,7 +81,7 @@ function validateNode(node: Node, edges: Edge[], allNodes: Node[]): ValidationEr
         });
       }
       // Validate specific field types
-      if (value) {
+      if (value && typeof value === 'string') {
         const typeError = validateFieldType(field, value);
         if (typeError) errors.push(typeError);
       }
