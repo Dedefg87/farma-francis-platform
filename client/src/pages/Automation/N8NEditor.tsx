@@ -117,16 +117,6 @@ const nodeIconMap: Record<string, React.ComponentType<{ className?: string }>> =
 const nodeTypes = { customNode: CustomNode };
 const edgeTypes = { custom: CustomEdge };
 
-  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
-    // Select edge for deletion
-    setEdges((eds) =>
-      eds.map((e) => ({
-        ...e,
-        selected: e.id === edge.id,
-      }))
-    );
-  }, [setEdges]);
-
 // ==================== PROPS ====================
 
 interface N8NEditorProps {
@@ -271,6 +261,16 @@ export function N8NEditor({
       }
     }
   }, [nodes]);
+
+  // Edge click handler for selection
+  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    setEdges((eds) =>
+      eds.map((e) => ({
+        ...e,
+        selected: e.id === edge.id,
+      }))
+    );
+  }, [setEdges]);
 
   // Debounced search
   const [searchInput, setSearchInput] = useState('');
