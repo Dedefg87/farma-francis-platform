@@ -14,7 +14,7 @@ import {
   Code, Layers, Archive, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge,
   Landmark, Building, CreditCard as CreditCard2, Banknote, Wallet, PiggyBank,
   ShoppingBasket, Utensils, Truck as Truck2, Mail as Mail2, FileInput, FileOutput,
-  UserCog, LineChart, Megaphone as Megaphone2, Radio, Tv, MonitorSpeaker
+  UserCog, LineChart, Megaphone as Megaphone2, Radio, Tv, MonitorSpeaker, Volume2
 } from "lucide-react";
 
 // ==================== TYPES ====================
