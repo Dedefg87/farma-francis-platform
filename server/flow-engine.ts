@@ -453,6 +453,11 @@ function sanitizeNodeType(nodeType: string): string {
     "pix_confirmation": "pix-confirmation",
     "check_prescription": "check-prescription",
     "attendance_create": "attendance-create",
+    // Template node types (visual editor)
+    "webhook-trigger": "trigger",
+    "if-node": "if",
+    "http-request-node": "httpRequest",
+    "set-node": "set",
   };
   return mappings[nodeType] || nodeType;
 }
