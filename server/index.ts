@@ -234,6 +234,19 @@ async function startServer() {
   });
 
   // Debug: Check recent conversations and messages
+  // Debug: Close all open/assigned conversations (for admin actions)
+  app.post("/api/debug/close-all-conversations", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closedAt = NOW() WHERE status IN ('open', 'assigned')`);
+      res.json({ success: true, closed: result.affectedRows || 0 });
+    } catch (err: unknown) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/debug/conversations-status", async (_, res) => {
     try {
       const db = await getDb();

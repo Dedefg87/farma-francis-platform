@@ -11646,6 +11646,17 @@ var conversationsRouter = router({
     return { success: true };
   })
 });
+var conversationsCloseAllRouter = router({
+  closeAll: protectedProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const now = /* @__PURE__ */ new Date();
+    const result = await db.execute(
+      import_drizzle_orm19.sql`UPDATE conversations SET status = 'closed', closedAt = ${now} WHERE status IN ('open', 'assigned')`
+    );
+    return { count: result.affectedRows || 0 };
+  })
+});
 
 // server/routers-clients.ts
 var import_zod11 = require("zod");
@@ -17032,6 +17043,17 @@ async function startServer() {
       const tableName = req.params.table.replace(/[^a-z_]/gi, "");
       const [result] = await db.execute(sql31.raw(`DESCRIBE ${tableName}`));
       res.json({ table: tableName, columns: result });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  app.post("/api/debug/close-all-conversations", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql: sql31 } = await import("drizzle-orm");
+      const result = await db.execute(sql31`UPDATE conversations SET status = 'closed', closedAt = NOW() WHERE status IN ('open', 'assigned')`);
+      res.json({ success: true, closed: result.affectedRows || 0 });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

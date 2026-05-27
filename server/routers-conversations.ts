@@ -535,3 +535,18 @@ export const conversationsRouter = router({
       return { success: true };
     }),
 });
+
+export const conversationsCloseAllRouter = router({
+  closeAll: protectedProcedure
+    .mutation(async (): Promise<{ count: number }> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      
+      const now = new Date();
+      const result = await db.execute(
+        sql`UPDATE conversations SET status = 'closed', closedAt = ${now} WHERE status IN ('open', 'assigned')`
+      );
+      
+      return { count: result.affectedRows || 0 };
+    }),
+});
