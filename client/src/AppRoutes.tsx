@@ -18,7 +18,7 @@ const Reports = lazy(() => import("./pages/Reports"));
 const Messages = lazy(() => import("./pages/Messages"));
 const Inbox = lazy(() => import("./pages/Inbox"));
 const Automation = lazy(() => import("./pages/Automation"));
-const APISettings = lazy(() => import("./pages/APISettings"));
+// REMOVIDO: const APISettings - integrado em /automation (aba API/Webhooks)
 const AgentPerformance = lazy(() => import("./pages/AgentPerformance"));
 const DebugData = lazy(() => import("./pages/DebugData"));
 const QueuePanel = lazy(() => import("./pages/QueuePanel"));
@@ -37,7 +37,7 @@ const SystemMonitor = lazy(() => import("./pages/SystemMonitor"));
 // Loading spinner component
 function PageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray--50">
       <div className="flex flex-col items-center gap-4">
         <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
         <p className="text-sm text-gray-500">Carregando...</p>
@@ -141,11 +141,7 @@ export function AppRoutes() {
           <LazyPage component={DebugData} />
         </AdminRoute>
       </Route>
-      <Route path="/settings/api">
-        <AdminRoute>
-          <LazyPage component={APISettings} />
-        </AdminRoute>
-      </Route>
+      {/* REMOVIDO: /settings/api - integrado em /automation */}
       <Route path="/settings/system">
         <AdminRoute>
           <LazyPage component={SystemMonitor} />

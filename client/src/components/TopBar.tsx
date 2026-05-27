@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, Settings, LogOut, Award, Gift, HardDrive, Menu } from "lucide-react";
+import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, LogOut, Award, Gift, HardDrive, Menu } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,7 +18,6 @@ const navigationItems = [
   { icon: Gift, label: "Chá de Bebê", path: "/baby-shower" },
   { icon: Award, label: "Performance", path: "/agent-performance" },
   { icon: HardDrive, label: "Monitor do Sistema", path: "/settings/system" },
-  { icon: Settings, label: "Configurações API", path: "/settings/api" },
 ];
 
 export function TopBar() {
@@ -94,13 +93,8 @@ export function TopBar() {
                   <Button
                     key={item.path}
                     variant="ghost"
-                    className={`justify-start gap-2 ${
-                      isActive ? "bg-[#3FA9D4] text-white" : "text-gray-600"
-                    }`}
-                    onClick={() => {
-                      setLocation(item.path);
-                      setMobileMenuOpen(false);
-                    }}
+                    className={`justify-start gap-2 ${isActive ? "bg-[#3FA9D4] text-white" : "text-gray-600"}`}
+                    onClick={() => { setLocation(item.path); setMobileMenuOpen(false); }}
                   >
                     <Icon className="h-4 w-4" />
                     {item.label}
