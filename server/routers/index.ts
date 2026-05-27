@@ -31,6 +31,7 @@ import { testRouter } from "../routers-test";
 import { approvalsRouter } from "../routers-approvals";
 import { internalMessagesRouter } from "../routers-internal-messages";
 import { ticketsRouter } from "../routers-tickets";
+import { businessHoursRouter } from "../routers-business-hours";
 
 export const appRouter = router({
   auth: authRouter,
@@ -65,6 +66,7 @@ export const appRouter = router({
     approvals: approvalsRouter,
   internalMessages: internalMessagesRouter,
   tickets: ticketsRouter,
+  businessHours: businessHoursRouter,
 });
 
 export type AppRouter = typeof appRouter;

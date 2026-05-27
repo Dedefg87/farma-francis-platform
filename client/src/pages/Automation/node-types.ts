@@ -102,6 +102,51 @@ export const CATEGORIES = [
   { id: 'fiscal_br', label: 'Fiscal / Governo BR', color: 'bg-blue-100 text-blue-800', icon: Building },
   { id: 'marketing_br', label: 'Marketing / CRM BR', color: 'bg-pink-100 text-pink-800', icon: Megaphone2 },
   { id: 'erp_br', label: 'ERP / Contabilidade BR', color: 'bg-emerald-100 text-emerald-800', icon: LineChart },
+  // ===== CORE / BUSINESS HOURS =====
+
+  {
+    id: 'if-business-hours',
+    type: 'condition',
+    label: '🕐 Horário Comercial',
+    description: 'Verifica se está dentro do horário de atendimento (lê valores da aba Horários)',
+    icon: Clock,
+    color: '#0891b2',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [
+      { id: 'open', label: 'Dentro horário', type: 'success' },
+      { id: 'closed', label: 'Fora horário', type: 'data' }
+    ],
+    config: [
+      { key: 'checkType', label: 'Tipo de verificação', type: 'select', options: [
+        { value: 'business', label: 'Horário comercial' },
+        { value: 'holiday', label: 'Horário feriado' },
+      ], defaultValue: 'business' },
+      { key: 'timezone', label: 'Fuso horário', type: 'string', defaultValue: 'America/Sao_Paulo' },
+      { key: 'closedMessage', label: 'Mensagem fechado', type: 'prompt', defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!' },
+    ]
+  },
+
+  // ===== WELCOME MESSAGE WITH AGENT NAME =====
+
+  {
+    id: 'welcome-agent',
+    type: 'action',
+    label: '👋 Boas-vindas com Nome',
+    description: 'Mensagem de boas-vindas com nome do atendente logado automaticamente',
+    icon: MessageSquare,
+    color: '#059669',
+    category: 'comunicacao',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [{ id: 'sent', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+        defaultValue: 'Olá! Eu sou {{agent_name}}! Como posso te ajudar?' },
+      { key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean', defaultValue: true },
+      { key: 'fallbackName', label: 'Nome fallback', type: 'string', defaultValue: 'Assistente Virtual' },
+    ]
+  },
+
 ];
 
 // ==================== NODE DEFINITIONS ====================
@@ -2356,6 +2401,51 @@ export const NODE_TYPES: WorkflowNode[] = [
       ], defaultValue: 'eleven_multilingual_v2' },
     ]
   },
+  // ===== CORE / BUSINESS HOURS =====
+
+  {
+    id: 'if-business-hours',
+    type: 'condition',
+    label: '🕐 Horário Comercial',
+    description: 'Verifica se está dentro do horário de atendimento (lê valores da aba Horários)',
+    icon: Clock,
+    color: '#0891b2',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [
+      { id: 'open', label: 'Dentro horário', type: 'success' },
+      { id: 'closed', label: 'Fora horário', type: 'data' }
+    ],
+    config: [
+      { key: 'checkType', label: 'Tipo de verificação', type: 'select', options: [
+        { value: 'business', label: 'Horário comercial' },
+        { value: 'holiday', label: 'Horário feriado' },
+      ], defaultValue: 'business' },
+      { key: 'timezone', label: 'Fuso horário', type: 'string', defaultValue: 'America/Sao_Paulo' },
+      { key: 'closedMessage', label: 'Mensagem fechado', type: 'prompt', defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!' },
+    ]
+  },
+
+  // ===== WELCOME MESSAGE WITH AGENT NAME =====
+
+  {
+    id: 'welcome-agent',
+    type: 'action',
+    label: '👋 Boas-vindas com Nome',
+    description: 'Mensagem de boas-vindas com nome do atendente logado automaticamente',
+    icon: MessageSquare,
+    color: '#059669',
+    category: 'comunicacao',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [{ id: 'sent', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+        defaultValue: 'Olá! Eu sou {{agent_name}}! Como posso te ajudar?' },
+      { key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean', defaultValue: true },
+      { key: 'fallbackName', label: 'Nome fallback', type: 'string', defaultValue: 'Assistente Virtual' },
+    ]
+  },
+
 ];
 
 // ==================== HELPER FUNCTIONS ====================

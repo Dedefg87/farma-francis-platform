@@ -23,6 +23,7 @@ import {
   findOrCreateCustomerByPhone,
 } from "./db-messages";
 import { invokeLLM } from "./_core/llm";
+import { checkBusinessHours } from "./routers-business-hours";
 
 /**
  * Process pending messages through automation flows
@@ -388,53 +389,11 @@ async function executeFlowFromTrigger(
   await executeNodeWithEdges(triggerNode, nodes, edges, context, message);
 }
 
-/**
- * Execute a single node and follow its outgoing edges
- */
 // ==================== VALID NODE TYPES ====================
 // Only these node types are recognized by the flow engine.
 // Any other type will be skipped with a warning.
 const VALID_NODE_TYPES = new Set([
   // Existing core node types
-  "trigger",
-  "condition",
-  "filter",
-  "switch",
-  "if-else",
-  "message",
-  "aiAssistant",
-  "transferHuman",
-  "transfer",
-  "createTicket",
-  "wait",
-  "setVariable",
-  "httpRequest",
-  "http-request",
-  "uraMenu",
-  "function",
-  "notify",
-  "add_tag",
-  "assign_agent",
-  "create_contact",
-  "create_task",
-  "check-prescription",
-  "pix-confirmation",
-  // ---- NÓS ADICIONADOS PELA ESTRATÉGIA B ----
-  "n8nWebhook",
-  "crontabTrigger",
-  "excelExport",
-  "pdfGenerate",
-  "whatsappCloud",
-  "anvisaVerification",
-  "ocrMultilingual",
-  "digitalSignature",
-  "smartSearch",
-  "voiceConversion",
-  "autoTranslate",
-  "qrCodeLabels",
-  "mqttIntegration",
-  "thirdPartyAuth",
-  // ===== CORE NODE TYPES =====
   "trigger",
   "condition",
   "filter",
@@ -484,6 +443,8 @@ const VALID_NODE_TYPES = new Set([
   "sticky-note-node",
   "schedule-trigger",
   "webhook-trigger",
+  "if-business-hours",
+  "welcome-agent",
 ]);
 
 function sanitizeNodeType(nodeType: string): string {
@@ -518,6 +479,8 @@ function sanitizeNodeType(nodeType: string): string {
     // Template node types (visual editor) - FIXED MAPPINGS
     "webhook-trigger": "trigger",
     "if-node": "if-else",
+    "if-business-hours": "if-business-hours",
+    "welcome-agent": "welcome-agent",
     "http-request-node": "httpRequest",
     "set-node": "setVariable",
     "switch-node": "switch",
@@ -654,6 +617,16 @@ async function executeNodeWithEdges(
       await executeURAMenuNode(config, context, message);
       return;
 
+    // ===== BUSINESS HOURS NODE =====
+    case "if-business-hours":
+      conditionResult = await executeBusinessHoursNode(context, config);
+      break;
+
+    // ===== WELCOME AGENT NODE =====
+    case "welcome-agent":
+      await executeWelcomeAgentNode(config, context, message);
+      break;
+
     // ===== PHARMACY-SPECIFIC NODES =====
     case "check-prescription":
       await executeCheckPrescriptionNode(config, context, message);
@@ -741,11 +714,6 @@ async function executeNodeWithEdges(
       console.log(`[Flow Engine] Email to: ${config.to}, subject: ${config.subject}`);
       break;
 
-    case "sticky-note-node":
-      // Visual only - no execution
-      break;
-
-    // ===== REMAINING VISUAL EDITOR NODE HANDLERS =====
     case "merge-node":
       console.log(`[Flow Engine] Merge node`);
       break;
@@ -952,6 +920,39 @@ function replaceVariables(text: string, context: unknown): string {
 }
 
 /**
+ * Execute Welcome Agent node - sends welcome message with logged-in agent name
+ */
+async function executeWelcomeAgentNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const useAgentName = config.useAgentName !== false;
+  const fallbackName = config.fallbackName || "Assistente Virtual";
+  
+  // Get agent name from context (set in executeVisualFlow)
+  const agentName = context.agent_name || (useAgentName ? fallbackName : null);
+  
+  // Build message with agent name replacement
+  let messageText = config.message || "Olá! Como posso te ajudar?";
+  
+  // Replace {{agent_name}} placeholder
+  if (agentName) {
+    messageText = messageText.replace(/\{\{agent_name\}\}/g, agentName);
+  }
+  
+  const finalMessage = replaceVariables(messageText, context);
+
+  console.log(`[Flow Engine] Welcome Agent message: "${finalMessage.substring(0, 80)}..."`);
+
+  if (message.provider === "whatsapp") {
+    await sendWhatsAppMessage({ to: message.fromNumber, message: finalMessage });
+  } else if (message.provider === "instagram") {
+    await sendInstagramMessage({ to: message.fromNumber, message: finalMessage });
+  }
+}
+
+/**
  * Execute AI Assistant node
  */
 async function executeAIAssistantNode(config: unknown, context: unknown, message: unknown) {
@@ -1123,7 +1124,6 @@ async function executeCreateTicketNode(
   } catch {
     // ignore
   }
-
 }
 
 /**
@@ -1480,6 +1480,35 @@ function executeDatetimeNode(config: unknown, context: unknown) {
   if (config.addDays) {
     const future = new Date(now.getTime() + config.addDays * 24 * 60 * 60 * 1000);
     context.variables.futureDate = future.toISOString();
+  }
+}
+
+/**
+ * Start the flow engine processor
+ */
+/**
+ * Execute Business Hours node - checks if current time is within business hours
+ */
+async function executeBusinessHoursNode(context: unknown, config: unknown = {}): Promise<boolean> {
+  try {
+    // Check if this is a holiday check
+    const checkType = config.checkType || "business";
+    
+    const result = await checkBusinessHours(new Date());
+    
+    context.variables.isBusinessHours = result.isOpen;
+    context.variables.businessHoursOpen = result.isOpen;
+    context.variables.businessHoursSchedule = result.schedule;
+    
+    if (result.holidayName) {
+      context.variables.isHoliday = true;
+      context.variables.holidayName = result.holidayName;
+    }
+    
+    return result.isOpen;
+  } catch (error) {
+    console.error("[Flow Engine] Business Hours check error:", error);
+    return false;
   }
 }
 

@@ -1635,10 +1635,10 @@ function phoneLast8(raw) {
   return digits.length >= 8 ? digits.slice(-8) : digits;
 }
 async function findConversationByPhone(db, phone, conversationsTable, customersTable) {
-  const { eq: eq43, desc: desc22, inArray: inArray9, like: like8, or: or12 } = await import("drizzle-orm");
+  const { eq: eq44, desc: desc22, inArray: inArray9, like: like9, or: or13 } = await import("drizzle-orm");
   const last8 = phoneLast8(phone);
   if (last8.length < 8) return null;
-  const matchedCustomers = await db.select({ id: customersTable.id, phone: customersTable.phone }).from(customersTable).where(like8(customersTable.phone, `%${last8}%`)).limit(10);
+  const matchedCustomers = await db.select({ id: customersTable.id, phone: customersTable.phone }).from(customersTable).where(like9(customersTable.phone, `%${last8}%`)).limit(10);
   if (matchedCustomers.length === 0) return null;
   const customerIds = matchedCustomers.map((c) => c.id);
   const [conversation] = await db.select({
@@ -6159,7 +6159,7 @@ __export(system_exports, {
 });
 async function tableExists(db, tableName) {
   try {
-    const r = await db.execute(import_drizzle_orm46.sql`
+    const r = await db.execute(import_drizzle_orm47.sql`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name = ${tableName}
@@ -6172,7 +6172,7 @@ async function tableExists(db, tableName) {
 }
 async function countRows(db, tableName) {
   try {
-    const r = await db.execute(import_drizzle_orm46.sql`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    const r = await db.execute(import_drizzle_orm47.sql`SELECT COUNT(*) as cnt FROM ${tableName}`);
     const rows = r.rows || r || [];
     return Number(rows[0]?.cnt || 0);
   } catch {
@@ -6181,7 +6181,7 @@ async function countRows(db, tableName) {
 }
 async function deleteOld(db, tableName, cutoff) {
   try {
-    const r = await db.execute(import_drizzle_orm46.sql`DELETE FROM ${tableName} WHERE created_at < ${cutoff}`);
+    const r = await db.execute(import_drizzle_orm47.sql`DELETE FROM ${tableName} WHERE created_at < ${cutoff}`);
     return r.affectedRows || 0;
   } catch (error) {
     if (error.message?.includes("Unknown column")) {
@@ -6190,14 +6190,14 @@ async function deleteOld(db, tableName, cutoff) {
     throw error;
   }
 }
-var import_express5, import_drizzle_orm46, systemRouter2, system_default;
+var import_express6, import_drizzle_orm47, systemRouter2, system_default;
 var init_system = __esm({
   "server/_core/routes/system.ts"() {
     "use strict";
-    import_express5 = __toESM(require("express"), 1);
+    import_express6 = __toESM(require("express"), 1);
     init_db();
-    import_drizzle_orm46 = require("drizzle-orm");
-    systemRouter2 = import_express5.default.Router();
+    import_drizzle_orm47 = require("drizzle-orm");
+    systemRouter2 = import_express6.default.Router();
     systemRouter2.get("/storage", async (req, res) => {
       try {
         const { exec: exec2 } = await import("child_process");
@@ -6221,7 +6221,7 @@ var init_system = __esm({
       try {
         const db = await getDb();
         if (!db) return res.status(503).json({ error: "Database unavailable" });
-        const result = await db.execute(import_drizzle_orm46.sql`
+        const result = await db.execute(import_drizzle_orm47.sql`
       SELECT
         ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb
       FROM information_schema.tables
@@ -6239,7 +6239,7 @@ var init_system = __esm({
       try {
         const db = await getDb();
         if (!db) return res.status(503).json({ error: "Database unavailable" });
-        const result = await db.execute(import_drizzle_orm46.sql`
+        const result = await db.execute(import_drizzle_orm47.sql`
       SELECT
         table_name,
         ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb,
@@ -6302,7 +6302,7 @@ var init_system = __esm({
               results.push({ type: "sessions", deleted, message: `Removidas ${deleted} sess\xF5es` });
             } catch (e) {
               try {
-                const r = await db.execute(import_drizzle_orm46.sql`DELETE FROM sessions WHERE expires_at < ${cutoffDate}`);
+                const r = await db.execute(import_drizzle_orm47.sql`DELETE FROM sessions WHERE expires_at < ${cutoffDate}`);
                 const deleted = r.affectedRows || 0;
                 results.push({ type: "sessions", deleted, message: `Removidas ${deleted} sess\xF5es` });
               } catch (e2) {
@@ -6326,7 +6326,7 @@ var init_system = __esm({
         cutoffDate.setDate(cutoffDate.getDate() - days);
         const db = await getDb();
         if (!db) return res.status(503).json({ error: "Database unavailable" });
-        const statsResult = await db.execute(import_drizzle_orm46.sql`
+        const statsResult = await db.execute(import_drizzle_orm47.sql`
       SELECT
         COUNT(*) as total_messages,
         COUNT(DISTINCT conversation_id) as affected_conversations,
@@ -6349,7 +6349,7 @@ var init_system = __esm({
             message: `Simula\xE7\xE3o: ${stats.total_messages || 0} mensagens em ${stats.affected_conversations || 0} conversas seriam deletadas`
           });
         }
-        const deleteResult = await db.execute(import_drizzle_orm46.sql`
+        const deleteResult = await db.execute(import_drizzle_orm47.sql`
       DELETE FROM conversation_messages
       WHERE created_at < ${cutoffDate}
     `);
@@ -6397,7 +6397,7 @@ var init_system = __esm({
             if (exists) {
               const beforeCount = await countRows(db, tableName);
               try {
-                await db.execute(import_drizzle_orm46.sql`TRUNCATE TABLE ${tableName}`);
+                await db.execute(import_drizzle_orm47.sql`TRUNCATE TABLE ${tableName}`);
                 results.push({
                   table: tableName,
                   success: true,
@@ -6405,7 +6405,7 @@ var init_system = __esm({
                   message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? "s" : ""} removida${beforeCount !== 1 ? "s" : ""}`
                 });
               } catch (truncateError) {
-                await db.execute(import_drizzle_orm46.sql`DELETE FROM ${tableName}`);
+                await db.execute(import_drizzle_orm47.sql`DELETE FROM ${tableName}`);
                 results.push({
                   table: tableName,
                   success: true,
@@ -6423,7 +6423,7 @@ var init_system = __esm({
         for (const tableName of tables) {
           try {
             if (await tableExists(db, tableName)) {
-              await db.execute(import_drizzle_orm46.sql`OPTIMIZE TABLE ${tableName}`);
+              await db.execute(import_drizzle_orm47.sql`OPTIMIZE TABLE ${tableName}`);
             }
           } catch (optimizeError) {
             console.warn(`[System/Optimize] ${tableName}: ${optimizeError.message}`);
@@ -6469,9 +6469,9 @@ async function recoverStuckBroadcasts() {
     id: broadcastMessages.id,
     status: broadcastMessages.status
   }).from(broadcastMessages).where(
-    (0, import_drizzle_orm47.and)(
-      (0, import_drizzle_orm47.eq)(broadcastMessages.status, "sending"),
-      (0, import_drizzle_orm47.lt)(broadcastMessages.sentAt, cutoff)
+    (0, import_drizzle_orm48.and)(
+      (0, import_drizzle_orm48.eq)(broadcastMessages.status, "sending"),
+      (0, import_drizzle_orm48.lt)(broadcastMessages.sentAt, cutoff)
     )
   ).limit(10);
   if (stuckMessages.length === 0) return;
@@ -6488,7 +6488,7 @@ async function recoverStuckBroadcasts() {
         err.message
       );
       try {
-        await db.update(broadcastMessages).set({ status: "failed", errorMessage: `Recovery failed: ${err.message}` }).where((0, import_drizzle_orm47.eq)(broadcastMessages.id, msg.id));
+        await db.update(broadcastMessages).set({ status: "failed", errorMessage: `Recovery failed: ${err.message}` }).where((0, import_drizzle_orm48.eq)(broadcastMessages.id, msg.id));
       } catch {
       }
     }
@@ -6501,13 +6501,13 @@ function stopBroadcastRecoveryWorker() {
     console.log("[BroadcastRecovery] \u{1F6D1} Stopped");
   }
 }
-var import_drizzle_orm47, RECOVERY_INTERVAL_MS, STUCK_THRESHOLD_MINUTES, recoveryTimer;
+var import_drizzle_orm48, RECOVERY_INTERVAL_MS, STUCK_THRESHOLD_MINUTES, recoveryTimer;
 var init_broadcast_recovery = __esm({
   "server/workers/broadcast-recovery.ts"() {
     "use strict";
     init_db();
     init_schema();
-    import_drizzle_orm47 = require("drizzle-orm");
+    import_drizzle_orm48 = require("drizzle-orm");
     init_broadcast_sender();
     RECOVERY_INTERVAL_MS = 60 * 1e3;
     STUCK_THRESHOLD_MINUTES = 2;
@@ -6516,8 +6516,8 @@ var init_broadcast_recovery = __esm({
 });
 
 // server/index.ts
-var import_express6 = __toESM(require("express"), 1);
-var import_express7 = require("@trpc/server/adapters/express");
+var import_express7 = __toESM(require("express"), 1);
+var import_express8 = require("@trpc/server/adapters/express");
 init_db();
 
 // server/_core/migrations.ts
@@ -6592,7 +6592,7 @@ async function applySqlMigrations() {
 
 // server/index.ts
 var import_path = __toESM(require("path"), 1);
-var import_drizzle_orm48 = require("drizzle-orm");
+var import_drizzle_orm49 = require("drizzle-orm");
 init_schema();
 init_schema();
 
@@ -14877,6 +14877,141 @@ var ticketsRouter = router({
   })
 });
 
+// server/routers-business-hours.ts
+var import_zod31 = require("zod");
+var daySchedulesCache = {
+  monday: { enabled: true, openTime: "08:00", closeTime: "18:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" },
+  tuesday: { enabled: true, openTime: "08:00", closeTime: "18:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" },
+  wednesday: { enabled: true, openTime: "08:00", closeTime: "18:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" },
+  thursday: { enabled: true, openTime: "08:00", closeTime: "18:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" },
+  friday: { enabled: true, openTime: "08:00", closeTime: "18:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" },
+  saturday: { enabled: true, openTime: "08:00", closeTime: "12:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" },
+  sunday: { enabled: false, openTime: "08:00", closeTime: "12:00", holidayOpenTime: "08:00", holidayCloseTime: "12:00" }
+};
+var holidaysCache = [];
+var defaultHolidays2026 = [
+  { date: "2026-01-01", name: "Confraterniza\xE7\xE3o Universal", type: "national", enabled: true },
+  { date: "2026-02-17", name: "Carnaval", type: "national", enabled: true },
+  { date: "2026-04-03", name: "Paix\xE3o de Cristo", type: "national", enabled: true },
+  { date: "2026-04-21", name: "Tiradentes", type: "national", enabled: true },
+  { date: "2026-05-01", name: "Dia do Trabalho", type: "national", enabled: true },
+  { date: "2026-09-07", name: "Independ\xEAncia do Brasil", type: "national", enabled: true },
+  { date: "2026-10-12", name: "Nossa Senhora Aparecida", type: "national", enabled: true },
+  { date: "2026-11-02", name: "Finados", type: "national", enabled: true },
+  { date: "2026-11-15", name: "Proclama\xE7\xE3o da Rep\xFAblica", type: "national", enabled: true },
+  { date: "2026-11-20", name: "Dia da Consci\xEAncia Negra", type: "national", enabled: true },
+  { date: "2026-12-25", name: "Natal", type: "national", enabled: true }
+];
+var DayScheduleInput = import_zod31.z.object({
+  day: import_zod31.z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]),
+  enabled: import_zod31.z.boolean().default(true),
+  openTime: import_zod31.z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  closeTime: import_zod31.z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  holidayOpenTime: import_zod31.z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+  holidayCloseTime: import_zod31.z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional()
+});
+var HolidayInput = import_zod31.z.object({
+  date: import_zod31.z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // YYYY-MM-DD
+  name: import_zod31.z.string().min(1),
+  type: import_zod31.z.enum(["national", "municipal", "state"]),
+  enabled: import_zod31.z.boolean().default(true)
+});
+var businessHoursRouter = router({
+  // Get all day schedules
+  getAll: protectedProcedure.query(async () => {
+    return Object.entries(daySchedulesCache).map(([day, s]) => ({
+      day,
+      ...s
+    }));
+  }),
+  // Update day schedule
+  update: protectedProcedure.input(DayScheduleInput).mutation(async ({ input }) => {
+    daySchedulesCache[input.day] = {
+      enabled: input.enabled,
+      openTime: input.openTime,
+      closeTime: input.closeTime,
+      holidayOpenTime: input.holidayOpenTime || "08:00",
+      holidayCloseTime: input.holidayCloseTime || "12:00"
+    };
+    return { success: true };
+  }),
+  // Check if currently within business hours
+  checkNow: protectedProcedure.input(import_zod31.z.object({ date: import_zod31.z.string().optional() }).optional()).query(async ({ input }) => {
+    const now = input?.date ? new Date(input.date) : /* @__PURE__ */ new Date();
+    const dayOfWeek = now.getDay();
+    const timeStr = now.toTimeString().slice(0, 5);
+    const dayMap = {
+      0: "sunday",
+      1: "monday",
+      2: "tuesday",
+      3: "wednesday",
+      4: "thursday",
+      5: "friday",
+      6: "saturday"
+    };
+    const dayKey = dayMap[dayOfWeek];
+    const dateStr = now.toISOString().split("T")[0];
+    const holiday = holidaysCache.find((h) => h.date === dateStr && h.enabled);
+    if (holiday && dayKey && daySchedulesCache[dayKey]?.enabled) {
+      const holidayOpen = daySchedulesCache[dayKey].holidayOpenTime || "08:00";
+      const holidayClose = daySchedulesCache[dayKey].holidayCloseTime || "12:00";
+      const isOpen2 = timeStr >= holidayOpen && timeStr < holidayClose;
+      return {
+        isBusinessHours: isOpen2,
+        isOpen: isOpen2,
+        type: "holiday",
+        holidayName: holiday.name,
+        schedule: { openTime: holidayOpen, closeTime: holidayClose },
+        currentTime: timeStr
+      };
+    }
+    if (!dayKey) {
+      return {
+        isBusinessHours: false,
+        isOpen: false,
+        type: "error",
+        schedule: null,
+        currentTime: timeStr
+      };
+    }
+    const schedule = daySchedulesCache[dayKey];
+    const isOpen = schedule.enabled && timeStr >= schedule.openTime && timeStr < schedule.closeTime;
+    return {
+      isBusinessHours: schedule.enabled && isOpen,
+      isOpen,
+      type: "regular",
+      schedule: { openTime: schedule.openTime, closeTime: schedule.closeTime },
+      currentTime: timeStr
+    };
+  }),
+  // List holidays
+  getHolidays: protectedProcedure.input(import_zod31.z.object({ year: import_zod31.z.number().optional() }).optional()).query(async () => {
+    const merged = [...defaultHolidays2026, ...holidaysCache];
+    const seen = /* @__PURE__ */ new Set();
+    return merged.filter((h) => {
+      if (seen.has(h.date)) return false;
+      seen.add(h.date);
+      return true;
+    });
+  }),
+  // Add/Update holiday
+  upsertHoliday: protectedProcedure.input(HolidayInput).mutation(async ({ input }) => {
+    const existingIndex = holidaysCache.findIndex((h) => h.date === input.date);
+    if (existingIndex >= 0) {
+      holidaysCache[existingIndex] = input;
+    } else {
+      holidaysCache.push(input);
+    }
+    return { success: true };
+  }),
+  // Delete holiday
+  deleteHoliday: protectedProcedure.input(import_zod31.z.object({ date: import_zod31.z.string() })).mutation(async ({ input }) => {
+    holidaysCache = holidaysCache.filter((h) => h.date !== input.date);
+    return { success: true };
+  })
+});
+
 // server/routers/index.ts
 var appRouter = router({
   auth: authRouter,
@@ -14910,7 +15045,8 @@ var appRouter = router({
   test: testRouter,
   approvals: approvalsRouter,
   internalMessages: internalMessagesRouter,
-  tickets: ticketsRouter
+  tickets: ticketsRouter,
+  businessHours: businessHoursRouter
 });
 
 // server/_core/trpc/context.ts
@@ -16597,6 +16733,126 @@ async function validateInstagramSignature(rawBody, signature) {
 }
 var webhooks_default = router4;
 
+// server/routers-rest.ts
+var import_express5 = require("express");
+init_db();
+init_schema();
+var import_drizzle_orm46 = require("drizzle-orm");
+init_messaging();
+init_phone();
+var restRouter = (0, import_express5.Router)();
+restRouter.get("/contatos", async (req, res) => {
+  try {
+    const { telefone } = req.query;
+    if (!telefone || typeof telefone !== "string") {
+      return res.status(400).json({ error: "telefone query parameter required" });
+    }
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "Database not available" });
+    const normalizedPhone = formatPhoneBR(telefone);
+    const [customer] = await db.select().from(customers).where((0, import_drizzle_orm46.eq)(customers.phone, normalizedPhone)).limit(1);
+    if (customer?.length === 0) {
+      return res.json({ found: false });
+    }
+    return res.json({
+      found: true,
+      id: customer[0].id,
+      nome: customer[0].name,
+      telefone: customer[0].phone,
+      email: customer[0].email
+    });
+  } catch (err) {
+    console.error("[REST] /contatos error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+restRouter.post("/contatos", async (req, res) => {
+  try {
+    const { nome, telefone, origem, email } = req.body;
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "Database not available" });
+    const normalizedPhone = telefone ? formatPhoneBR(telefone) : null;
+    const result = await db.insert(customers).values({
+      name: nome || "Cliente",
+      phone: normalizedPhone || null,
+      email: email || null,
+      status: "active",
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    });
+    const insertId = result[0]?.insertId || result.insertId;
+    return res.json({ id: insertId, success: true });
+  } catch (err) {
+    console.error("[REST] POST /contatos error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+restRouter.post("/mensagens/enviar", async (req, res) => {
+  try {
+    const { telefone, mensagem, nome } = req.body;
+    if (!telefone || !mensagem) {
+      return res.status(400).json({ error: "telefone and mensagem required" });
+    }
+    const normalizedPhone = formatPhoneBR(telefone);
+    const result = await sendWhatsAppMessage({
+      to: normalizedPhone,
+      message: mensagem,
+      customerName: nome
+    });
+    return res.json({
+      success: true,
+      externalId: result?.externalId || null,
+      status: result?.status || "sent"
+    });
+  } catch (err) {
+    console.error("[REST] /mensagens/enviar error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+restRouter.post("/tarefas", async (req, res) => {
+  try {
+    const { titulo, descricao, contato_id, telefone, origem, timestamp: timestamp4, status = "open" } = req.body;
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "Database not available" });
+    const result = await db.insert(crmTasks).values({
+      title: titulo || "Tarefa",
+      description: descricao || null,
+      status,
+      assignedTo: null,
+      // Será atribuído depois
+      createdBy: null,
+      relatedEntityType: "contact",
+      relatedEntityId: contato_id || null,
+      createdAt: /* @__PURE__ */ new Date(),
+      updatedAt: /* @__PURE__ */ new Date()
+    });
+    const taskId = result[0]?.insertId || result.insertId;
+    return res.json({ id: taskId, success: true });
+  } catch (err) {
+    console.error("[REST] /tarefas error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+restRouter.put("/atendimentos/atribuir", async (req, res) => {
+  try {
+    const { telefone, mensagem, agentId } = req.body;
+    const db = await getDb();
+    if (!db) return res.status(500).json({ error: "Database not available" });
+    const normalizedPhone = formatPhoneBR(telefone);
+    const [conv] = await db.select().from(conversations).where((0, import_drizzle_orm46.eq)(conversations.customerPhone, normalizedPhone)).limit(1);
+    if (!conv?.length) {
+      return res.status(404).json({ error: "Conversa n\xE3o encontrada" });
+    }
+    if (agentId) {
+      await db.update(conversations).set({ assignedTo: agentId, status: "assigned" }).where((0, import_drizzle_orm46.eq)(conversations.id, conv[0].id));
+    }
+    return res.json({ success: true, conversationId: conv[0].id });
+  } catch (err) {
+    console.error("[REST] /atendimentos/atribuir error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // server/index.ts
 var import_cookie_parser = __toESM(require("cookie-parser"), 1);
 var import_helmet = __toESM(require("helmet"), 1);
@@ -16631,9 +16887,9 @@ async function startServer() {
       console.warn("[DB] \u26A0\uFE0F Could not create internal_messages:", tableErr.message);
     }
     try {
-      const [colRows] = await db.execute(import_drizzle_orm48.sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
+      const [colRows] = await db.execute(import_drizzle_orm49.sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'customers' AND column_name = 'source'`);
       if (!Array.isArray(colRows) || colRows.length === 0) {
-        await db.execute(import_drizzle_orm48.sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
+        await db.execute(import_drizzle_orm49.sql`ALTER TABLE customers ADD COLUMN source VARCHAR(64) DEFAULT 'manual' AFTER status`);
         console.log("[DB] \u2705 customers.source column added");
       }
     } catch (colErr) {
@@ -16643,7 +16899,7 @@ async function startServer() {
     console.error("[Startup Error]", error);
     throw error;
   }
-  const app = (0, import_express6.default)();
+  const app = (0, import_express7.default)();
   app.use((0, import_helmet.default)({
     contentSecurityPolicy: {
       directives: {
@@ -16687,12 +16943,12 @@ async function startServer() {
     // Necessário pra cookies/auth do tRPC
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   }));
-  app.use(import_express6.default.json({ limit: "50mb" }));
+  app.use(import_express7.default.json({ limit: "50mb" }));
   app.use((req, res, next) => {
     console.log("[BODY]", req.method, req.url, "| Body:", JSON.stringify(req.body).substring(0, 200));
     next();
   });
-  app.use(import_express6.default.urlencoded({ limit: "50mb", extended: true }));
+  app.use(import_express7.default.urlencoded({ limit: "50mb", extended: true }));
   app.use((0, import_cookie_parser.default)());
   const possiblePublicPaths = [
     import_path.default.resolve(process.cwd(), "dist/public"),
@@ -16713,7 +16969,7 @@ async function startServer() {
   }
   if (publicPath) {
     console.log("[Static] \u2705 Serving from:", publicPath);
-    app.use(import_express6.default.static(publicPath));
+    app.use(import_express7.default.static(publicPath));
   } else {
     console.error("[Static] \u274C No static files found! Checked:", possiblePublicPaths);
     console.log("[Static] CWD:", process.cwd());
@@ -16745,7 +17001,7 @@ async function startServer() {
   });
   app.use(
     "/api/trpc",
-    (0, import_express7.createExpressMiddleware)({
+    (0, import_express8.createExpressMiddleware)({
       router: appRouter,
       createContext
     })
@@ -16753,6 +17009,7 @@ async function startServer() {
   app.use("/api/events", createSSERouter());
   app.use("/api/webhooks", webhooks_default);
   app.use("/api/media", routers_media_default);
+  app.use("/api", restRouter);
   const systemRestRouter = (init_system(), __toCommonJS(system_exports)).default;
   app.use("/api/system", systemRestRouter);
   app.get("/api/debug/db-tables", async (_, res) => {
@@ -16865,12 +17122,12 @@ async function startServer() {
         res.status(400).json({ error: "Invalid ID" });
         return;
       }
-      await db.update(conversationMessages).set({ readAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm48.and)(
-        (0, import_drizzle_orm48.eq)(conversationMessages.conversationId, conversationId),
-        (0, import_drizzle_orm48.eq)(conversationMessages.senderType, "customer"),
-        import_drizzle_orm48.sql`${conversationMessages.readAt} IS NULL`
+      await db.update(conversationMessages).set({ readAt: /* @__PURE__ */ new Date() }).where((0, import_drizzle_orm49.and)(
+        (0, import_drizzle_orm49.eq)(conversationMessages.conversationId, conversationId),
+        (0, import_drizzle_orm49.eq)(conversationMessages.senderType, "customer"),
+        import_drizzle_orm49.sql`${conversationMessages.readAt} IS NULL`
       ));
-      await db.update(conversations).set({ unreadCount: 0 }).where((0, import_drizzle_orm48.eq)(conversations.id, conversationId));
+      await db.update(conversations).set({ unreadCount: 0 }).where((0, import_drizzle_orm49.eq)(conversations.id, conversationId));
       res.json({ success: true });
     } catch (err) {
       console.error("[mark-read] Error:", err.message);

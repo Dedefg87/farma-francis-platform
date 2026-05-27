@@ -143,7 +143,7 @@ export const flowTemplates: FlowTemplate[] = [
   // ============================================================
   // TEMPLATE 2 — Atendimento Inteligente Unificado (Completo)
   // 12 nós: trigger > buscar contato > if existe > criar >
- 	// organizar > if horário > boas-vindas/ausência > tarefa >
+  // organizar > if horário > boas-vindas/ausência > tarefa >
   // atribuir agente > fim
   // ============================================================
   (() => {
@@ -288,100 +288,86 @@ export const flowTemplates: FlowTemplate[] = [
       },
     };
 
-    // [5] IF — Horário Comercial?
+    // [5] IF — Horário Comercial? (usa DaySchedule do ConfigSettings)
     const nIfHorario = {
       id: nid(),
       type: 'customNode',
       position: { x: 1420, y: 200 },
       data: {
         label: '🕐 Horário Comercial?',
-        nodeType: 'if-node',
+        nodeType: 'if-business-hours',
         inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
         outputs: [
-          { id: 'true', label: 'Dentro (08-18h)', type: 'success' },
+          { id: 'true', label: 'Dentro horário', type: 'success' },
           { id: 'false', label: 'Fora do horário', type: 'error' },
         ],
         config: [
           {
-            key: 'conditions', label: 'Condições (JSON)', type: 'json',
-            defaultValue: {
-              condition: 'working_hours',
-              schedule: { start: '08:00', end: '18:00' },
-            },
+            key: 'checkType', label: 'Tipo de verificação', type: 'select',
+            options: [{ value: 'business', label: 'Horário comercial' }, { value: 'holiday', label: 'Horário feriado' }],
+            defaultValue: 'business',
+          },
+          {
+            key: 'timezone', label: 'Fuso horário', type: 'string',
+            defaultValue: 'America/Sao_Paulo',
           },
         ],
       },
     };
 
-    // [6] HTTP — Enviar Boas-Vindas
+    // [6] WELCOME AGENT — Enviar Boas-Vindas com nome do atendente
     const nBoasVindas = {
       id: nid(),
       type: 'customNode',
       position: { x: 1700, y: 100 },
       data: {
-        label: '✅ Enviar Boas-Vindas',
-        nodeType: 'http-request-node',
+        label: '👋 Enviar Boas-Vindas',
+        nodeType: 'welcome-agent',
         inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
         outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
         config: [
           {
-            key: 'method', label: 'Método', type: 'select',
-            options: [{ value: 'POST', label: 'POST' }],
-            defaultValue: 'POST',
+            key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+            defaultValue: 'Olá, eu sou {{agent_name}}! Como posso te ajudar?',
           },
           {
-            key: 'url', label: 'URL da API', type: 'string',
-            defaultValue: '/api/mensagens/enviar',
+            key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean',
+            defaultValue: true,
           },
           {
-            key: 'body', label: 'Body (JSON)', type: 'json',
-            defaultValue: {
-              telefone: '{{$json.telefone}}',
-              mensagem: 'Olá! Como posso ajudar você hoje?',
-            },
+            key: 'fallbackName', label: 'Nome fallback', type: 'string',
+            defaultValue: 'Assistente Virtual',
           },
         ],
       },
     };
 
-    // [7] HTTP — Mensagem de Ausência
+    // [7] MESSAGE — Mensagem de Ausência (fora do horário)
     const nAusencia = {
       id: nid(),
       type: 'customNode',
       position: { x: 1700, y: 320 },
       data: {
         label: '🌙 Mensagem de Ausência',
-        nodeType: 'http-request-node',
+        nodeType: 'message',
         inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
         outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
         config: [
           {
-            key: 'method', label: 'Método', type: 'select',
-            options: [{ value: 'POST', label: 'POST' }],
-            defaultValue: 'POST',
-          },
-          {
-            key: 'url', label: 'URL da API', type: 'string',
-            defaultValue: '/api/mensagens/enviar',
-          },
-          {
-            key: 'body', label: 'Body (JSON)', type: 'json',
-            defaultValue: {
-              telefone: '{{$json.telefone}}',
-              mensagem: 'Estamos fora do horário comercial. Seu atendimento será respondido assim que possível.',
-            },
+            key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+            defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!',
           },
         ],
       },
     };
 
-    // [8] MERGE — Juntar Boas-Vindas + Ausência
+    // [8] MERGE — Juntar Boas-Vindas + Ausência (continuar fluxo)
     const nMergeMensagens = {
       id: nid(),
       type: 'customNode',
       position: { x: 1960, y: 200 },
       data: {
-        label: '🔀 Merge Mensagens',
+        label: '🔀 Continuar Fluxo',
         nodeType: 'set-node',
         inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
         outputs: [{ id: 'out', label: 'Dados unificados', type: 'success' }],
@@ -530,7 +516,7 @@ export const flowTemplates: FlowTemplate[] = [
       { id: 'e56', source: nIfHorario.id, target: nBoasVindas.id,
         sourceHandle: 'true', targetHandle: 'in',
         type: 'custom', animated: false, style: { stroke: '#22c55e', strokeWidth: 2 },
-        label: '08-18h' },
+        label: 'Dentro' },
 
       // 5 → 7: IF false → Ausência (fora do horário)
       { id: 'e57', source: nIfHorario.id, target: nAusencia.id,
@@ -567,7 +553,7 @@ export const flowTemplates: FlowTemplate[] = [
     return {
       id: 'atendimento-inteligente-unificado',
       name: '🤖 Atendimento Inteligente Unificado',
-      description: 'Fluxo completo de 12 nós para atendimento automático via WhatsApp e Instagram. Recebe mensagem, busca/cria contato no CRM, verifica horário comercial (08-18h), envia boas-vindas ou mensagem de ausência, cria tarefa no sistema e atribui agente. Pronto para uso.',
+      description: 'Fluxo completo de 12 nós para atendimento automático via WhatsApp e Instagram. Recebe mensagem, busca/cria contato no CRM, verifica horário comercial (usa DaySchedule do ConfigSettings), envia boas-vindas com nome do atendente ou mensagem de ausência, cria tarefa no sistema e atribui agente. Pronto para uso.',
       iconName: 'Bot',
       color: '#8b5cf6',
       nodes,
@@ -603,14 +589,14 @@ export const flowTemplates: FlowTemplate[] = [
         position: { x: 380, y: 100 },
         data: {
           label: 'If — Horário Comercial',
-          nodeType: 'if-node',
+          nodeType: 'if-business-hours',
           inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
           outputs: [
             { id: 'true', label: 'Dentro (08-18h)', type: 'success' },
             { id: 'false', label: 'Fora do horário', type: 'error' },
           ],
           config: [
-            { key: 'conditions', label: 'Condições (JSON)', type: 'json', defaultValue: { field: '$now', condition: 'working_hours', schedule: { start: '08:00', end: '18:00' } } },
+            { key: 'checkType', label: 'Tipo', type: 'select', options: [{ value: 'business', label: 'Horário comercial' }], defaultValue: 'business' },
           ],
         },
       },
@@ -620,13 +606,12 @@ export const flowTemplates: FlowTemplate[] = [
         position: { x: 640, y: 40 },
         data: {
           label: 'HTTP — Enviar Boas-Vindas',
-          nodeType: 'http-request-node',
+          nodeType: 'welcome-agent',
           inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
           outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
           config: [
-            { key: 'method', label: 'Método', type: 'select', options: [{ value: 'POST', label: 'POST' }], defaultValue: 'POST' },
-            { key: 'url', label: 'URL', type: 'string', defaultValue: '/api/mensagens/enviar' },
-            { key: 'body', label: 'Body', type: 'json', defaultValue: { mensagem: 'Olá! Como posso ajudar?' } },
+            { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true, defaultValue: 'Olá, eu sou {{agent_name}}! Como posso te ajudar?' },
+            { key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean', defaultValue: true },
           ],
         },
       },
@@ -635,14 +620,12 @@ export const flowTemplates: FlowTemplate[] = [
         type: 'customNode',
         position: { x: 640, y: 180 },
         data: {
-          label: 'HTTP — Mensagem Ausência',
-          nodeType: 'http-request-node',
+          label: 'Mensagem — Ausência',
+          nodeType: 'message',
           inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
           outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
           config: [
-            { key: 'method', label: 'Método', type: 'select', options: [{ value: 'POST', label: 'POST' }], defaultValue: 'POST' },
-            { key: 'url', label: 'URL', type: 'string', defaultValue: '/api/mensagens/enviar' },
-            { key: 'body', label: 'Body', type: 'json', defaultValue: { mensagem: 'Fora do horário. Retornaremos em breve.' } },
+            { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true, defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!' },
           ],
         },
       },

@@ -22,25 +22,22 @@ interface DaySchedule {
   enabled: boolean;
   openTime: string;
   closeTime: string;
+  holidayOpenTime?: string;
+  holidayCloseTime?: string;
 }
 
 interface Holiday {
   date: string;
   name: string;
-  type: "national" | "municipal";
+  type: "national" | "municipal" | "state";
   enabled: boolean;
 }
 
 interface AutomationSettings {
-  schedules: Record<string, DaySchedule>;
   holiday24_7: boolean;
   priorityKeywords: string;
   prioritizeVip: boolean;
   directPrescriptions: boolean;
-  apiUrl: string;
-  apiToken: string;
-  webhookOrder: string;
-  webhookStock: boolean;
   debugLogs: boolean;
   saveConversations: boolean;
 }
@@ -55,25 +52,11 @@ const DAYS = [
   { key: "sunday", label: "Domingo" },
 ];
 
-const DEFAULT_DAY_SCHEDULE: DaySchedule = {
-  enabled: true,
-  openTime: "08:00",
-  closeTime: "18:00",
-};
-
 const DEFAULT_SETTINGS: AutomationSettings = {
-  schedules: DAYS.reduce((acc, day) => ({
-    ...acc,
-    [day.key]: { ...DEFAULT_DAY_SCHEDULE }
-  }), {} as Record<string, DaySchedule>),
   holiday24_7: false,
   priorityKeywords: "urgente, dor, emergência, febre",
   prioritizeVip: true,
   directPrescriptions: true,
-  apiUrl: "",
-  apiToken: "",
-  webhookOrder: "",
-  webhookStock: true,
   debugLogs: false,
   saveConversations: true,
 };
@@ -108,81 +91,92 @@ async function fetchNationalHolidays(year: number): Promise<Holiday[]> {
   }
 }
 
-async function fetchMunicipalHolidays(ibgeCode: string, year: number): Promise<Holiday[]> {
-  try {
-    const response = await fetch(`${HOLIDAYS_API_BASE}/${year}/${ibgeCode}`);
-    if (!response.ok) return [];
-    const data = await response.json();
-    return (data.feriados_municipais || []).map((h: any) => ({
-      date: h.date || h.data,
-      name: h.name || h.nome,
-      type: "municipal",
-      enabled: true,
-    }));
-  } catch {
-    return [];
-  }
-}
-
 export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
+  const [schedules, setSchedules] = useState<Record<string, DaySchedule>>({});
   const [settings, setSettings] = useState<AutomationSettings>(DEFAULT_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
-  const [testConnectionLoading, setTestConnectionLoading] = useState(false);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [ibgeCode, setIbgeCode] = useState("");
   const [loadingHolidays, setLoadingHolidays] = useState(false);
   const [showAddHoliday, setShowAddHoliday] = useState(false);
   const [customHoliday, setCustomHoliday] = useState({ date: "", name: "" });
   const [autoActive, setAutoActive] = useState(true);
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("farma-automation-settings");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
-        setAutoActive(parsed.autoActive ?? true);
-      }
-      const storedHolidays = localStorage.getItem("farma-pharmacy-holidays");
-      if (storedHolidays) setHolidays(JSON.parse(storedHolidays));
-    } catch {}
-  }, []);
+  const utils = trpc.useUtils();
+  const { data: apiSchedules } = trpc.businessHours.getAll.useQuery();
+  const { data: apiHolidays } = trpc.businessHours.getHolidays.useQuery();
 
+  // Load schedules from API
   useEffect(() => {
-    const stored = localStorage.getItem("farma-automation-settings");
-    setHasChanges(stored === null);
-  }, [settings]);
+    if (apiSchedules) {
+      const mapped: Record<string, DaySchedule> = {};
+      apiSchedules.forEach((s: any) => {
+        mapped[s.day] = {
+          enabled: s.enabled,
+          openTime: s.openTime,
+          closeTime: s.closeTime,
+          holidayOpenTime: s.holidayOpenTime || "08:00",
+          holidayCloseTime: s.holidayCloseTime || "12:00",
+        };
+      });
+      setSchedules(mapped);
+    }
+  }, [apiSchedules]);
+
+  // Load holidays from API
+  useEffect(() => {
+    if (apiHolidays) {
+      setHolidays(apiHolidays.map((h: any) => ({
+        date: h.date,
+        name: h.name,
+        type: h.type,
+        enabled: true,
+      })));
+    }
+  }, [apiHolidays]);
 
   const updateDaySchedule = (day: string, field: keyof DaySchedule, value: string | boolean) => {
-    setSettings(prev => ({
+    setSchedules(prev => ({
       ...prev,
-      schedules: { ...prev.schedules, [day]: { ...prev.schedules[day], [field]: value } }
+      [day]: { ...prev[day] || { enabled: true, openTime: "08:00", closeTime: "18:00" }, [field]: value }
     }));
+    setHasChanges(true);
   };
 
   const updateSetting = <K extends keyof AutomationSettings>(key: K, value: AutomationSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    setHasChanges(true);
   };
 
-  const handleSave = () => {
+  const handleSaveSchedules = async () => {
+    setSavingSchedule(true);
+    try {
+      for (const day of DAYS) {
+        const schedule = schedules[day.key];
+        if (schedule) {
+          await utils.businessHours.update.mutate({
+            day: day.key as any,
+            enabled: schedule.enabled,
+            openTime: schedule.openTime,
+            closeTime: schedule.closeTime,
+            holidayOpenTime: schedule.holidayOpenTime,
+            holidayCloseTime: schedule.holidayCloseTime,
+          });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleSave = async () => {
+    await handleSaveSchedules();
     localStorage.setItem("farma-automation-settings", JSON.stringify({ ...settings, autoActive }));
-    localStorage.setItem("farma-pharmacy-holidays", JSON.stringify(holidays));
     setHasChanges(false);
     toast.success("Configurações salvas com sucesso");
-  };
-
-  const handleTestConnection = async () => {
-    if (!settings.apiUrl.trim()) return toast.error("Preencha a URL da API");
-    setTestConnectionLoading(true);
-    try {
-      const response = await fetch(settings.apiUrl, { method: "HEAD", signal: AbortSignal.timeout(5000) });
-      if (response.ok || response.status === 401 || response.status === 403) {
-        toast.success("Conexão estabelecida");
-      } else {
-        toast.warning(`Status: ${response.status}`);
-      }
-    } catch { toast.error("Falha na conexão"); }
-    finally { setTestConnectionLoading(false); }
   };
 
   const fetchHolidaysForMunicipality = async () => {
@@ -190,7 +184,17 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
     setLoadingHolidays(true);
     try {
       const national = await fetchNationalHolidays(2026);
-      const municipal = await fetchMunicipalHolidays(ibgeCode, 2026);
+      const response = await fetch(`${HOLIDAYS_API_BASE}/2026/${ibgeCode}`);
+      let municipal: Holiday[] = [];
+      if (response.ok) {
+        const data = await response.json();
+        municipal = (data.feriados_municipais || []).map((h: any) => ({
+          date: h.date || h.data,
+          name: h.name || h.nome,
+          type: "municipal" as const,
+          enabled: true,
+        }));
+      }
       setHolidays([...national, ...municipal]);
       toast.success(`${national.length} nacionais + ${municipal.length} municipais`);
     } catch { toast.error("Erro ao buscar feriados"); }
@@ -199,11 +203,19 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
 
   const toggleHoliday = (date: string) => setHolidays(prev => prev.map(h => h.date === date ? { ...h, enabled: !h.enabled } : h));
   const deleteHoliday = (date: string) => setHolidays(prev => prev.filter(h => h.date !== date));
-  const addCustomHoliday = () => {
+  const addCustomHoliday = async () => {
     if (!customHoliday.date || !customHoliday.name) return toast.error("Preencha data e nome");
-    setHolidays(prev => [...prev, { ...customHoliday, type: "municipal", enabled: true }]);
-    setCustomHoliday({ date: "", name: "" });
-    setShowAddHoliday(false);
+    try {
+      await utils.businessHours.upsertHoliday.mutate({
+        date: customHoliday.date,
+        name: customHoliday.name,
+        type: "municipal",
+        enabled: true,
+      });
+      await utils.businessHours.getHolidays.invalidate();
+      setCustomHoliday({ date: "", name: "" });
+      setShowAddHoliday(false);
+    } catch { toast.error("Erro ao adicionar feriado"); }
   };
 
   const inputClass = `h-8 text-xs mt-1 ${darkMode ? "bg-gray-700 border-gray-600 text-gray-200" : ""}`;
@@ -243,20 +255,20 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
             </CardHeader>
             <CardContent className="space-y-2">
               {DAYS.map((day) => {
-                const schedule = settings.schedules[day.key];
+                const schedule = schedules[day.key] || { enabled: true, openTime: "08:00", closeTime: "18:00" };
                 return (
                   <div key={day.key} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <Switch checked={schedule?.enabled ?? true} onCheckedChange={(v) => updateDaySchedule(day.key, "enabled", v)} />
-                    <Label className={`text-xs w-24 ${!schedule?.enabled && "line-through opacity-50"}`}>{day.label}</Label>
+                    <Switch checked={schedule.enabled} onCheckedChange={(v) => updateDaySchedule(day.key, "enabled", v)} />
+                    <Label className={`text-xs w-24 ${!schedule.enabled && "line-through opacity-50"}`}>{day.label}</Label>
                     <div className="flex items-center gap-1">
-                      <Input type="time" value={schedule?.openTime ?? "08:00"} onChange={(e) => updateDaySchedule(day.key, "openTime", e.target.value)} className={`h-7 w-20 text-xs ${darkMode ? "bg-gray-700" : ""}`} disabled={!schedule?.enabled} />
+                      <Input type="time" value={schedule.openTime} onChange={(e) => updateDaySchedule(day.key, "openTime", e.target.value)} className={`h-7 w-20 text-xs ${darkMode ? "bg-gray-700" : ""}`} disabled={!schedule.enabled} />
                       <span className="text-xs text-gray-500">às</span>
-                      <Input type="time" value={schedule?.closeTime ?? "18:00"} onChange={(e) => updateDaySchedule(day.key, "closeTime", e.target.value)} className={`h-7 w-20 text-xs ${darkMode ? "bg-gray-700" : ""}`} disabled={!schedule?.enabled} />
+                      <Input type="time" value={schedule.closeTime} onChange={(e) => updateDaySchedule(day.key, "closeTime", e.target.value)} className={`h-7 w-20 text-xs ${darkMode ? "bg-gray-700" : ""}`} disabled={!schedule.enabled} />
                     </div>
                   </div>
                 );
               })}
-              <Badge variant="outline" className="text-xs mt-2">Fuso: America/Sao_Paulo (GMT-3)</Badge>
+              <Badge variant="outline" className="text-xs mt-2">Fuso: America/Sao_Paulo (GMT-3) | Feriados: 8:00-12:00</Badge>
             </CardContent>
           </Card>
           <Card className={darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}>
@@ -278,15 +290,11 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label className={labelClass}>Código IBGE do Município</Label>
+                <Label className={labelClass}>Código IBGE do Município (7 dígitos)</Label>
                 <div className="flex gap-2 mt-1">
                   <Input placeholder="Ex: 3550308 (São Paulo)" value={ibgeCode} onChange={(e) => setIbgeCode(e.target.value.replace(/\D/g, ""))} className={inputClass} maxLength={7} />
                   <Button size="sm" onClick={fetchHolidaysForMunicipality} disabled={loadingHolidays || ibgeCode.length < 7}><Search className="w-3 h-3" /></Button>
                 </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <Label className={labelClass}>Atendimento 24/7 nos Feriados</Label>
-                <Switch checked={settings.holiday24_7} onCheckedChange={(v) => updateSetting("holiday24_7", v)} />
               </div>
               <div className="border-t pt-2">
                 <div className="flex items-center justify-between mb-2">
