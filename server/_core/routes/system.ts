@@ -325,7 +325,7 @@ systemRouter.post("/close-conversations", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
     const now = new Date();
-    const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closedAt = ${now} WHERE status IN ('open', 'assigned')`);
+    const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closed_at = ${now} WHERE status IN ('open', 'assigned')`);
     res.json({ success: true, closed: (result as any).affectedRows || 0 });
   } catch (error: unknown) {
     res.status(500).json({ error: String(error) });

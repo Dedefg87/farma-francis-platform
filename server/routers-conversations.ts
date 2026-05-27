@@ -545,7 +545,7 @@ export const conversationsRouter = router({
       
       const now = new Date();
       const result = await db.execute(
-        sql`UPDATE conversations SET status = 'closed', closedAt = ${now} WHERE status IN ('open', 'assigned')`
+        sql`UPDATE conversations SET status = 'closed', closed_at = ${now} WHERE status IN ('open', 'assigned')`
       );
       
       return { count: result.affectedRows || 0 };
