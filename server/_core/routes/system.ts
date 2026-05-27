@@ -333,4 +333,15 @@ systemRouter.post("/clean-database", async (req, res) => {
   }
 });
 
+systemRouter.post("/close-conversations", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: "Database unavailable" });
+    const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closedAt = NOW() WHERE status IN ('open', 'assigned')`);
+    res.json({ success: true, closed: (result as any).affectedRows || 0 });
+  } catch (error: unknown) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
 export default systemRouter;

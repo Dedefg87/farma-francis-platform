@@ -6439,6 +6439,16 @@ var init_system = __esm({
         res.status(500).json({ error: String(error) });
       }
     });
+    systemRouter2.post("/close-conversations", async (req, res) => {
+      try {
+        const db = await getDb();
+        if (!db) return res.status(503).json({ error: "Database unavailable" });
+        const result = await db.execute(import_drizzle_orm47.sql`UPDATE conversations SET status = 'closed', closedAt = NOW() WHERE status IN ('open', 'assigned')`);
+        res.json({ success: true, closed: result.affectedRows || 0 });
+      } catch (error) {
+        res.status(500).json({ error: String(error) });
+      }
+    });
     system_default = systemRouter2;
   }
 });
