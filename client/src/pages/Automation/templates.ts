@@ -574,4 +574,84 @@ export const flowTemplates: FlowTemplate[] = [
       edges,
     };
   })(),
+
+  // ============================================================
+  // TEMPLATE 3 — Chatbot de Atendimento (IA)
+  // Objetivo: receber mensagem > verificar horário > responder com IA
+  // ============================================================
+  (() => {
+    _id = 0;
+    const nodes = [
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 120, y: 100 },
+        data: {
+          label: 'Webhook — Trigger',
+          nodeType: 'webhook-trigger',
+          inputs: [],
+          outputs: [{ id: 'out', label: 'Dados', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [{ value: 'POST', label: 'POST' }], defaultValue: 'POST' },
+            { key: 'path', label: 'Caminho', type: 'string', defaultValue: '/api/webhook/chatbot' },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 380, y: 100 },
+        data: {
+          label: 'If — Horário Comercial',
+          nodeType: 'if-node',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [
+            { id: 'true', label: 'Dentro (08-18h)', type: 'success' },
+            { id: 'false', label: 'Fora do horário', type: 'error' },
+          ],
+          config: [
+            { key: 'conditions', label: 'Condições (JSON)', type: 'json', defaultValue: { field: '$now', condition: 'working_hours', schedule: { start: '08:00', end: '18:00' } } },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 640, y: 40 },
+        data: {
+          label: 'HTTP — Enviar Boas-Vindas',
+          nodeType: 'http-request-node',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [{ value: 'POST', label: 'POST' }], defaultValue: 'POST' },
+            { key: 'url', label: 'URL', type: 'string', defaultValue: '/api/mensagens/enviar' },
+            { key: 'body', label: 'Body', type: 'json', defaultValue: { mensagem: 'Olá! Como posso ajudar?' } },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 640, y: 180 },
+        data: {
+          label: 'HTTP — Mensagem Ausência',
+          nodeType: 'http-request-node',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [{ value: 'POST', label: 'POST' }], defaultValue: 'POST' },
+            { key: 'url', label: 'URL', type: 'string', defaultValue: '/api/mensagens/enviar' },
+            { key: 'body', label: 'Body', type: 'json', defaultValue: { mensagem: 'Fora do horário. Retornaremos em breve.' } },
+          ],
+        },
+      },
+    ];
+    const edges = [
+      { id: 'ce1', source: nodes[0].id, target: nodes[1].id, sourceHandle: 'out', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#94a3b8' } },
+      { id: 'ce2', source: nodes[1].id, target: nodes[2].id, sourceHandle: 'true', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#22c55e' }, label: 'Dentro' },
+      { id: 'ce3', source: nodes[1].id, target: nodes[3].id, sourceHandle: 'false', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#ef4444' }, label: 'Fora' },
+    ];
+    return { id: 'chatbot-atendimento', name: 'Chatbot de Atendimento', description: 'Chatbot IA que verifica horário comercial e envia mensagens automáticas.', iconName: 'Bot', color: '#3b82f6', nodes, edges };
+  })(),
 ];
