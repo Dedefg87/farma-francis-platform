@@ -16,12 +16,14 @@ export const systemRouter = router({
     };
   }),
   closeAll: publicProcedure
-    .mutation(async (): Promise<{ closed: number }> => {
+    .input({ reason: String })
+    .mutation(async (opts): Promise<{ closed: number }> => {
+      const { reason } = opts.input;
       const db = await getDb();
       if (!db) throw new Error("Database not available");
       
       const result = await db.execute(
-        sql`UPDATE conversations SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE status IN ('open', 'assigned')`
+        sql`UPDATE conversations SET status = 'closed', closed_at = CURRENT_TIMESTAMP, close_reason = ${reason} WHERE status IN ('open', 'assigned')`
       );
       
       return { closed: result.affectedRows || 0 };

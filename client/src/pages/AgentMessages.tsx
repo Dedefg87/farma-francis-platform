@@ -164,6 +164,7 @@ export default function AgentMessages() {
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
+  const [closeAllMessage, setCloseAllMessage] = useState("Obrigado pelo contato! Atendimento encerrado.");
   const [closeAllReason, setCloseAllReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
@@ -1650,6 +1651,25 @@ export default function AgentMessages() {
               <DialogTitle>Encerrar todas as conversas</DialogTitle>
               <DialogDescription>Tem certeza? Esta ação fechará todas as conversas abertas e atribuídas.</DialogDescription>
             </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Select value={closeAllReason} onValueChange={setCloseAllReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Motivo do enecerramento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="venda">Venda</SelectItem>
+                  <SelectItem value="orcamento">Orçamento</SelectItem>
+                  <SelectItem value="conversa_anterior">Conversa anterior</SelectItem>
+                  <SelectItem value="engano">Engano</SelectItem>
+                </SelectContent>
+              </Select>
+              <textarea
+                value={closeAllMessage}
+                onChange={e => setCloseAllMessage(e.target.value)}
+                placeholder="Mensagem de encerramento (opcional)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm min-h-[80px]"
+              />
+            </div>
             <DialogFooter>
               <Button
                 variant="outline"
@@ -1659,7 +1679,7 @@ export default function AgentMessages() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => closeAllConversationMutation.mutate()}
+                onClick={() => closeAllConversationMutation.mutate({ reason: closeAllReason as any, closeMessage: closeAllMessage })}
                 disabled={closeAllConversationMutation.isPending}
               >
                 Encerrar Todas
