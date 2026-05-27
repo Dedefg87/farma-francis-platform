@@ -31,7 +31,7 @@ import {
   UserPlus, Thermometer, FileX, CreditCard as CreditCardIcon, Store, Video,
   ShoppingBag, Calculator, Megaphone, Shield, Clipboard, BarChart, Eye,
   Landmark, ShoppingBasket, Building, LineChart, Megaphone as Megaphone2,
-  RefreshCw, ClipboardCheck, Hash, StickyNote, Layers,
+  RefreshCw, ClipboardCheck, Hash, StickyNote, Layers, FileSpreadsheet,
 } from 'lucide-react';
 import {
   NODE_TYPES, CATEGORIES, getNodeType, WorkflowNode, ConfigField,
