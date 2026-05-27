@@ -534,9 +534,10 @@ export const conversationsRouter = router({
 
       return { success: true };
     }),
-});
 
-export const conversationsCloseAllRouter = router({
+  /**
+   * Encerra todas as conversas abertas e atribuídas.
+   */
   closeAll: protectedProcedure
     .mutation(async (): Promise<{ count: number }> => {
       const db = await getDb();
@@ -550,3 +551,5 @@ export const conversationsCloseAllRouter = router({
       return { count: result.affectedRows || 0 };
     }),
 });
+
+
