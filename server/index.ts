@@ -240,7 +240,8 @@ async function startServer() {
       const db = await getDb();
       if (!db) return res.status(500).json({ error: "Database not available" });
       const { sql } = await import("drizzle-orm");
-      const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closedAt = NOW() WHERE status IN ('open', 'assigned')`);
+      const now = new Date();
+      const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closedAt = ${now} WHERE status IN ('open', 'assigned')`);
       res.json({ success: true, closed: result.affectedRows || 0 });
     } catch (err: unknown) {
       res.status(500).json({ error: err.message });
