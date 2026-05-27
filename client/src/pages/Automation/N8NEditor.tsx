@@ -24,7 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Play, Save, Download, Upload, Trash2, X, Search,
   ChevronDown, ChevronRight, GripVertical, ZoomIn, ZoomOut, Maximize2,
-  GitBranch, Filter, Send, Brain, Code, Pause, Globe, ArrowRight, Package,
+  GitBranch, Filter, Send, GitCompare, GitMerge, Brain, Code, Pause, Globe, ArrowRight, Package,
   Phone, Mail, Bot, UserCheck, FileText, CreditCard, Clock, Database,
   Settings, MessageSquare, Zap, AlertTriangle, TestTube, Copy, Undo2, Redo2,
   FileCheck, Heart, ShieldCheck, Calendar, TrendingUp, DollarSign, Truck,
