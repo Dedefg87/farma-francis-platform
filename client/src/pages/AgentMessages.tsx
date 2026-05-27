@@ -534,9 +534,9 @@ export default function AgentMessages() {
     },
   });
 
-  const closeAllConversationMutation = trpc.conversations.closeAll.useMutation({
+  const closeAllConversationMutation = trpc.system.closeAll.useMutation({
     onSuccess: (data: unknown) => {
-      toast.success(`${(data as { count?: number }).count || 0} conversas encerradas`);
+      toast.success(`${(data as { closed?: number }).closed || 0} conversas encerradas`);
       queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
       refetchConversations();
     },
@@ -1648,24 +1648,19 @@ export default function AgentMessages() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Encerrar todas as conversas</DialogTitle>
-              <DialogDescription>Encerrar todas as conversas abertas e atribuídas</DialogDescription>
+              <DialogDescription>Tem certeza? Esta ação fechará todas as conversas abertas e atribuídas.</DialogDescription>
             </DialogHeader>
-            <Select value={closeAllReason} onValueChange={setCloseAllReason}>
-              <SelectTrigger>
-                <SelectValue placeholder="Motivo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="venda">Venda</SelectItem>
-                <SelectItem value="orcamento">Orçamento</SelectItem>
-                <SelectItem value="conversa_anterior">Conversa anterior</SelectItem>
-                <SelectItem value="engano">Engano</SelectItem>
-              </SelectContent>
-            </Select>
             <DialogFooter>
               <Button
+                variant="outline"
+                onClick={() => setShowCloseAllDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
                 variant="destructive"
-                onClick={() => closeAllConversationMutation.mutate({ reason: closeAllReason as any })}
-                disabled={closeAllConversationMutation.isPending || !closeAllReason}
+                onClick={() => closeAllConversationMutation.mutate()}
+                disabled={closeAllConversationMutation.isPending}
               >
                 Encerrar Todas
               </Button>
