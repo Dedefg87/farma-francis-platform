@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Clock, Key, Globe, Webhook, FileText, TestTube,
-  Bell, Shield, Database, Link2, Save, CheckCircle2, Loader2
+  Bell, Shield, Database, Link2, Save, CheckCircle2, Loader2,
+  Search, Calendar, Trash2, Plus
 } from "lucide-react";
 import { trpc } from "../../lib/trpc";
 
@@ -17,11 +18,23 @@ interface ConfigSettingsProps {
   darkMode: boolean;
 }
 
-interface AutomationSettings {
-  // Schedule
-  autoActive: boolean;
+// Config de horários por dia da semana
+interface DaySchedule {
+  enabled: boolean;
   openTime: string;
   closeTime: string;
+}
+
+interface Holiday {
+  date: string;
+  name: string;
+  type: "national" | "municipal";
+  enabled: boolean;
+}
+
+interface AutomationSettings {
+  // Schedule por dia
+  schedules: Record<string, DaySchedule>;
   holiday24_7: boolean;
   // Rules
   priorityKeywords: string;
@@ -37,10 +50,28 @@ interface AutomationSettings {
   saveConversations: boolean;
 }
 
+const DAYS = [
+  { key: "monday", label: "Segunda-feira" },
+  { key: "tuesday", label: "Terça-feira" },
+  { key: "wednesday", label: "Quarta-feira" },
+  { key: "thursday", label: "Quinta-feira" },
+  { key: "friday", label: "Sexta-feira" },
+  { key: "saturday", label: "Sábado" },
+  { key: "sunday", label: "Domingo" },
+];
+
+const DEFAULT_DAY_SCHEDULE: DaySchedule = {
+  enabled: true,
+  openTime: "08:00",
+  closeTime: "18:00",
+};
+
 const DEFAULT_SETTINGS: AutomationSettings = {
   autoActive: true,
-  openTime: "08:00",
-  closeTime: "22:00",
+  schedules: DAYS.reduce((acc, day) => ({
+    ...acc,
+    [day.key]: { ...DEFAULT_DAY_SCHEDULE }
+  }), {} as Record<string, DaySchedule>),
   holiday24_7: false,
   priorityKeywords: "urgente, dor, emergência, febre",
   prioritizeVip: true,
@@ -53,41 +84,100 @@ const DEFAULT_SETTINGS: AutomationSettings = {
   saveConversations: true,
 };
 
+// API de feriados - usando feriados.dev (gratuita)
+const HOLIDAYS_API_BASE = "https://feriados.dev";
+
+async function fetchNationalHolidays(year: number): Promise<Holiday[]> {
+  try {
+    const response = await fetch(`${HOLIDAYS_API_BASE}/${year}`);
+    if (!response.ok) throw new Error("API error");
+    const data = await response.json();
+    return (data.feriados || data || []).map((h: any) => ({
+      date: h.date || h.data,
+      name: h.name || h.nome,
+      type: "national",
+      enabled: true,
+    }));
+  } catch {
+    // Fallback para feriados nacionais 2026 conhecidos
+    return [
+      { date: "2026-01-01", name: "Confraternização Universal", type: "national", enabled: true },
+      { date: "2026-02-17", name: "Carnaval", type: "national", enabled: true },
+      { date: "2026-04-03", name: "Paixão de Cristo", type: "national", enabled: true },
+      { date: "2026-04-21", name: "Tiradentes", type: "national", enabled: true },
+      { date: "2026-05-01", name: "Dia do Trabalho", type: "national", enabled: true },
+      { date: "2026-09-07", name: "Independência do Brasil", type: "national", enabled: true },
+      { date: "2026-10-12", name: "Nossa Senhora Aparecida", type: "national", enabled: true },
+      { date: "2026-11-02", name: "Finados", type: "national", enabled: true },
+      { date: "2026-11-15", name: "Proclamação da República", type: "national", enabled: true },
+      { date: "2026-11-20", name: "Dia da Consciência Negra", type: "national", enabled: true },
+      { date: "2026-12-25", name: "Natal", type: "national", enabled: true },
+    ];
+  }
+}
+
+async function fetchMunicipalHolidays(ibgeCode: string, year: number): Promise<Holiday[]> {
+  try {
+    const response = await fetch(`${HOLIDAYS_API_BASE}/${year}/${ibgeCode}`);
+    if (!response.ok) throw new Error("API error");
+    const data = await response.json();
+    return (data.feriados_municipais || []).map((h: any) => ({
+      date: h.date || h.data,
+      name: h.name || h.nome,
+      type: "municipal",
+      enabled: true,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   const [settings, setSettings] = useState<AutomationSettings>(DEFAULT_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
   const [testConnectionLoading, setTestConnectionLoading] = useState(false);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [ibgeCode, setIbgeCode] = useState("");
+  const [loadingHolidays, setLoadingHolidays] = useState(false);
+  const [showAddHoliday, setShowAddHoliday] = useState(false);
+  const [customHoliday, setCustomHoliday] = useState({ date: "", name: "" });
 
-  // Load settings from backend
-  const { data: savedSettings, isLoading } = trpc.automation.get.useQuery(
-    { id: 1 }, // Settings stored as flow ID 1 or use a dedicated settings table
-    {
-      enabled: false, // Disable auto-load; we use local state for now
-    }
-  );
+  const [autoActive, setAutoActive] = useState(true);
 
-  // Load from localStorage as fallback
+  // Load settings from localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem("farma-automation-settings");
       if (stored) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+        const parsed = JSON.parse(stored);
+        setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+        setAutoActive(parsed.autoActive ?? true);
       }
-    } catch {
-      // ignore parse errors
-    }
+      const storedHolidays = localStorage.getItem("farma-pharmacy-holidays");
+      if (storedHolidays) {
+        setHolidays(JSON.parse(storedHolidays));
+      }
+    } catch {}
   }, []);
 
-  // Track changes
   useEffect(() => {
     try {
       const stored = localStorage.getItem("farma-automation-settings");
-      const current = JSON.stringify(settings);
-      setHasChanges(stored !== current);
+      setHasChanges(stored === null); // Has changes if nothing stored yet
     } catch {
-      setHasChanges(true);
+      setHasChanges(false);
     }
   }, [settings]);
+
+  const updateDaySchedule = (day: string, field: keyof DaySchedule, value: string | boolean) => {
+    setSettings(prev => ({
+      ...prev,
+      schedules: {
+        ...prev.schedules,
+        [day]: { ...prev.schedules[day], [field]: value }
+      }
+    }));
+  };
 
   const updateSetting = <K extends keyof AutomationSettings>(key: K, value: AutomationSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -96,6 +186,7 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   const handleSave = () => {
     try {
       localStorage.setItem("farma-automation-settings", JSON.stringify(settings));
+      localStorage.setItem("farma-pharmacy-holidays", JSON.stringify(holidays));
       setHasChanges(false);
       toast.success("Configurações salvas com sucesso");
     } catch {
@@ -110,22 +201,58 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
     }
     setTestConnectionLoading(true);
     try {
-      // Simple connectivity test
       const response = await fetch(apiUrlValue(), { method: "HEAD", signal: AbortSignal.timeout(5000) });
       if (response.ok || response.status === 401 || response.status === 403) {
         toast.success("Conexão estabelecida (servidor respondeu)");
       } else {
         toast.warning(`Servidor respondeu com status ${response.status}`);
       }
-    } catch (err) {
-      if (err instanceof TypeError) {
-        toast.error("Falha na conexão. Verifique a URL e sua rede.");
-      } else {
-        toast.error("Timeout: servidor não respondeu em 5s");
-      }
+    } catch {
+      toast.error("Falha na conexão");
     } finally {
       setTestConnectionLoading(false);
     }
+  };
+
+  const fetchHolidaysForMunicipality = async () => {
+    if (!ibgeCode || ibgeCode.length < 7) {
+      toast.error("Digite o código IBGE do município (7 dígitos)");
+      return;
+    }
+    setLoadingHolidays(true);
+    try {
+      const national = await fetchNationalHolidays(2026);
+      const municipal = await fetchMunicipalHolidays(ibgeCode, 2026);
+      setHolidays([...national, ...municipal]);
+      toast.success(`Encontrados ${national.length} feriados nacionais e ${municipal.length} municipais`);
+    } catch {
+      toast.error("Erro ao buscar feriados");
+    } finally {
+      setLoadingHolidays(false);
+    }
+  };
+
+  const toggleHoliday = (date: string) => {
+    setHolidays(prev => prev.map(h => 
+      h.date === date ? { ...h, enabled: !h.enabled } : h
+    ));
+  };
+
+  const deleteHoliday = (date: string) => {
+    setHolidays(prev => prev.filter(h => h.date !== date));
+  };
+
+  const addCustomHoliday = () => {
+    if (!customHoliday.date || !customHoliday.name) {
+      toast.error("Preencha data e nome do feriado");
+      return;
+    }
+    setHolidays(prev => [
+      ...prev,
+      { ...customHoliday, type: "municipal", enabled: true }
+    ]);
+    setCustomHoliday({ date: "", name: "" });
+    setShowAddHoliday(false);
   };
 
   const apiUrlValue = () => settings.apiUrl.trim();
@@ -163,63 +290,182 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-8 text-gray-500">Carregando configurações...</div>
-      ) : (
-        <Tabs defaultValue="schedule" className="w-full">
+      <Tabs defaultValue="schedule" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="schedule" className="text-xs">Horários</TabsTrigger>
+          <TabsTrigger value="holidays" className="text-xs">Feriados</TabsTrigger>
           <TabsTrigger value="rules" className="text-xs">Regras</TabsTrigger>
           <TabsTrigger value="api" className="text-xs">API/Webhooks</TabsTrigger>
-          <TabsTrigger value="logs" className="text-xs">Logs</TabsTrigger>
         </TabsList>
 
+        {/* ABA HORÁRIOS - Por dia da semana */}
         <TabsContent value="schedule" className="space-y-3 mt-4">
           <Card className={darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                Horários de Atendimento
+                Horários por Dia da Semana
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2">
+              {DAYS.map((day) => {
+                const schedule = settings.schedules[day.key];
+                return (
+                  <div key={day.key} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <Switch
+                      checked={schedule?.enabled ?? true}
+                      onCheckedChange={(v) => updateDaySchedule(day.key, "enabled", v)}
+                    />
+                    <Label className={`text-xs w-24 ${!schedule?.enabled && "line-through opacity-50"}`}>
+                      {day.label}
+                    </Label>
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="time"
+                        value={schedule?.openTime ?? "08:00"}
+                        onChange={(e) => updateDaySchedule(day.key, "openTime", e.target.value)}
+                        className={`h-7 w-24 text-xs ${darkMode ? "bg-gray-700" : ""}`}
+                        disabled={!schedule?.enabled}
+                      />
+                      <span className="text-xs text-gray-500">às</span>
+                      <Input
+                        type="time"
+                        value={schedule?.closeTime ?? "18:00"}
+                        onChange={(e) => updateDaySchedule(day.key, "closeTime", e.target.value)}
+                        className={`h-7 w-24 text-xs ${darkMode ? "bg-gray-700" : ""}`}
+                        disabled={!schedule?.enabled}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              <Badge variant="outline" className="text-xs mt-2">
+                Fuso: America/Sao_Paulo (GMT-3)
+              </Badge>
+            </CardContent>
+          </Card>
+
+          <Card className={darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}>
+            <CardContent className="pt-4">
               <div className="flex items-center justify-between">
                 <Label className={labelClass}>Atendimento Automático Ativo</Label>
                 <Switch
-                  checked={settings.autoActive}
-                  onCheckedChange={(v) => updateSetting("autoActive", v)}
+                  checked={autoActive}
+                  onCheckedChange={setAutoActive}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className={labelClass}>Abertura</Label>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ABA FERIADOS - Nova aba completa */}
+        <TabsContent value="holidays" className="space-y-3 mt-4">
+          <Card className={darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Feriados da Farmácia
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className={labelClass}>Código IBGE do Município</Label>
+                <div className="flex gap-2 mt-1">
                   <Input
-                    type="time"
-                    value={settings.openTime}
-                    onChange={(e) => updateSetting("openTime", e.target.value)}
+                    placeholder="Ex: 3550308 (São Paulo)"
+                    value={ibgeCode}
+                    onChange={(e) => setIbgeCode(e.target.value.replace(/\D/g, ""))}
                     className={inputClass}
+                    maxLength={7}
                   />
+                  <Button
+                    size="sm"
+                    onClick={fetchHolidaysForMunicipality}
+                    disabled={loadingHolidays || ibgeCode.length < 7}
+                  >
+                    <Search className="w-3 h-3" />
+                  </Button>
                 </div>
-                <div>
-                  <Label className={labelClass}>Fechamento</Label>
-                  <Input
-                    type="time"
-                    value={settings.closeTime}
-                    onChange={(e) => updateSetting("closeTime", e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Busca feriados nacionais + municipais automaticamente
+                </p>
               </div>
+
               <div className="flex items-center justify-between">
-                <Label className={labelClass}>Atendimento 24/7 (Feriados)</Label>
+                <Label className={labelClass}>Atendimento 24/7 nos Feriados</Label>
                 <Switch
                   checked={settings.holiday24_7}
                   onCheckedChange={(v) => updateSetting("holiday24_7", v)}
                 />
               </div>
-              <Badge variant="outline" className="text-xs">
-                Fuso: America/Sao_Paulo (GMT-3)
-              </Badge>
+
+              <div className="border-t pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                    Feriados {holidays.length > 0 && `(${holidays.length})`}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs"
+                    onClick={() => setShowAddHoliday(!showAddHoliday)}
+                  >
+                    <Plus className="w-3 h-3 mr-1" />
+                    Adicionar Manual
+                  </Button>
+                </div>
+
+                {showAddHoliday && (
+                  <div className="flex gap-2 mb-2 p-2 border rounded">
+                    <Input
+                      type="date"
+                      value={customHoliday.date}
+                      onChange={(e) => setCustomHoliday(p => ({ ...p, date: e.target.value }))}
+                      className="h-7 text-xs"
+                    />
+                    <Input
+                      placeholder="Nome do feriado"
+                      value={customHoliday.name}
+                      onChange={(e) => setCustomHoliday(p => ({ ...p, name: e.target.value }))}
+                      className="h-7 text-xs flex-1"
+                    />
+                    <Button size="sm" onClick={addCustomHoliday} className="h-7">
+                      OK
+                    </Button>
+                  </div>
+                )}
+
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {holidays.length === 0 ? (
+                    <p className="text-xs text-gray-500 py-2">
+                      Nenhum feriado carregado. Digite o código IBGE e clique em buscar.
+                    </p>
+                  ) : holidays.map((holiday) => (
+                    <div key={holiday.date} className="flex items-center justify-between py-1 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={holiday.enabled}
+                          onCheckedChange={() => toggleHoliday(holiday.date)}
+                        />
+                        <span className={`text-xs ${!holiday.enabled && "line-through opacity-50"}`}>
+                          {new Date(holiday.date).toLocaleDateString('pt-BR')} - {holiday.name}
+                        </span>
+                        <Badge variant={holiday.type === "national" ? "default" : "secondary"} className="text-xs">
+                          {holiday.type === "national" ? "Nacional" : "Municipal"}
+                        </Badge>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 w-5 p-0"
+                        onClick={() => deleteHoliday(holiday.date)}
+                      >
+                        <Trash2 className="w-3 h-3 text-red-500" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -331,49 +577,10 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
                   onCheckedChange={(v) => updateSetting("webhookStock", v)}
                 />
               </div>
-              <div className="flex items-center justify-between">
-                <Label className={labelClass}>Notificar estoque baixo</Label>
-                <Switch
-                  checked={settings.webhookStock}
-                  onCheckedChange={(v) => updateSetting("webhookStock", v)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="logs" className="space-y-3 mt-4">
-          <Card className={darkMode ? "bg-gray-800 border-gray-700" : "bg-white"}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Logs e Monitoramento
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className={labelClass}>Ativar Logs de Debug</Label>
-                <Switch
-                  checked={settings.debugLogs}
-                  onCheckedChange={(v) => updateSetting("debugLogs", v)}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <Label className={labelClass}>Salvar Histórico de Conversas</Label>
-                <Switch
-                  checked={settings.saveConversations}
-                  onCheckedChange={(v) => updateSetting("saveConversations", v)}
-                />
-              </div>
-              <Button size="sm" variant="outline" className="w-full" onClick={() => toast.info("Teste de fluxo em desenvolvimento")}>
-                <TestTube className="w-3 h-3 mr-2" />
-                Teste de Fluxo em Tempo Real
-              </Button>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-      )}
     </div>
   );
 }
