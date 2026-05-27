@@ -518,3 +518,4 @@ startServer().catch((err) => {
 });
 // Railway deploy: Mon May  4 14:22:25 -03 2026
 // Trigger redeploy 1779922491
+// Force redeploy 1779924378
