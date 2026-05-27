@@ -1,6 +1,7 @@
 import { publicProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 export const systemRouter = router({
   health: publicProcedure.query(() => {
@@ -16,7 +17,7 @@ export const systemRouter = router({
     };
   }),
   closeAll: publicProcedure
-    .input({ reason: String })
+    .input(z.object({ reason: z.string() }))
     .mutation(async (opts): Promise<{ closed: number }> => {
       const { reason } = opts.input;
       const db = await getDb();
