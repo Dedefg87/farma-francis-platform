@@ -163,6 +163,8 @@ export default function AgentMessages() {
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
+  const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
+  const [closeAllReason, setCloseAllReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [showNewOptionsModal, setShowNewOptionsModal] = useState(false);
@@ -529,6 +531,17 @@ export default function AgentMessages() {
     },
     onError: error => {
       toast.error(`Erro ao encerrar: ${error.message}`);
+    },
+  });
+
+  const closeAllConversationMutation = trpc.conversations.closeAll.useMutation({
+    onSuccess: (data: unknown) => {
+      toast.success(`${(data as { count?: number }).count || 0} conversas encerradas`);
+      queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
+      refetchConversations();
+    },
+    onError: error => {
+      toast.error(`Erro ao encerrar todas: ${error.message}`);
     },
   });
 
@@ -1630,7 +1643,37 @@ export default function AgentMessages() {
         </Dialog>
       </div>
 
-      {showQuickReplies && (
+      
+        <Dialog open={showCloseAllDialog} onOpenChange={setShowCloseAllDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Encerrar todas as conversas</DialogTitle>
+              <DialogDescription>Encerrar todas as conversas abertas e atribuídas</DialogDescription>
+            </DialogHeader>
+            <Select value={closeAllReason} onValueChange={setCloseAllReason}>
+              <SelectTrigger>
+                <SelectValue placeholder="Motivo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="venda">Venda</SelectItem>
+                <SelectItem value="orcamento">Orçamento</SelectItem>
+                <SelectItem value="conversa_anterior">Conversa anterior</SelectItem>
+                <SelectItem value="engano">Engano</SelectItem>
+              </SelectContent>
+            </Select>
+            <DialogFooter>
+              <Button
+                variant="destructive"
+                onClick={() => closeAllConversationMutation.mutate({ reason: closeAllReason as any })}
+                disabled={closeAllConversationMutation.isPending || !closeAllReason}
+              >
+                Encerrar Todas
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+{showQuickReplies && (
         <QuickRepliesModal
           open={showQuickReplies}
           onClose={() => setShowQuickReplies(false)}
