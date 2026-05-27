@@ -32,7 +32,6 @@ systemRouter.get("/database/size", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    // MySQL: total size from information_schema
     const result = await db.execute(sql`
       SELECT
         ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb
@@ -114,7 +113,6 @@ async function deleteOld(db: unknown, tableName: string, cutoff: Date): Promise<
     const r = await db.execute(sql`DELETE FROM ${tableName} WHERE created_at < ${cutoff}`);
     return (r as any).affectedRows || 0;
   } catch (error: unknown) {
-    // Se tabela não tem created_at, ignorar
     if (error.message?.includes('Unknown column')) {
       return 0;
     }
@@ -130,7 +128,6 @@ systemRouter.post("/clean", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    // Clean logs (older than 30 days)
     if (!types || types.includes('logs')) {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 30);
@@ -140,7 +137,6 @@ systemRouter.post("/clean", async (req, res) => {
       for (const tableName of logTables) {
         try {
           if (await tableExists(db, tableName)) {
-            // Check if table has created_at column
             const deleted = await deleteOld(db, tableName, cutoffDate);
             tablesFound++;
             totalDeleted += deleted;
@@ -158,7 +154,6 @@ systemRouter.post("/clean", async (req, res) => {
       });
     }
 
-    // Clean sessions (older than 7 days)
     if (!types || types.includes('sessions')) {
       const exists = await tableExists(db, 'sessions');
       if (exists) {
@@ -168,7 +163,6 @@ systemRouter.post("/clean", async (req, res) => {
           const deleted = await deleteOld(db, 'sessions', cutoffDate);
           results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
         } catch (e: unknown) {
-          // sessions pode ter expires_at em vez de created_at
           try {
             const r = await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${cutoffDate}`);
             const deleted = (r as any).affectedRows || 0;
@@ -199,7 +193,6 @@ systemRouter.post("/clean-messages", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    // Count stats
     const statsResult = await db.execute(sql`
       SELECT
         COUNT(*) as total_messages,
@@ -225,7 +218,6 @@ systemRouter.post("/clean-messages", async (req, res) => {
       });
     }
 
-    // Delete messages
     const deleteResult = await db.execute(sql`
       DELETE FROM conversation_messages
       WHERE created_at < ${cutoffDate}
@@ -260,7 +252,6 @@ systemRouter.post("/clean-database", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    // Tables that can be safely truncated (non-critical data)
     const tables = [
       'conversation_messages',
       'received_messages',
@@ -282,8 +273,6 @@ systemRouter.post("/clean-database", async (req, res) => {
         const exists = await tableExists(db, tableName);
         if (exists) {
           const beforeCount = await countRows(db, tableName);
-
-          // Truncate is faster than DELETE for full table clear
           try {
             await db.execute(sql`TRUNCATE TABLE ${tableName}`);
             results.push({
@@ -293,7 +282,6 @@ systemRouter.post("/clean-database", async (req, res) => {
               message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? 's' : ''} removida${beforeCount !== 1 ? 's' : ''}`
             });
           } catch (truncateError) {
-            // Fallback to DELETE if TRUNCATE fails (e.g., foreign key constraints)
             await db.execute(sql`DELETE FROM ${tableName}`);
             results.push({
               table: tableName,
@@ -310,14 +298,12 @@ systemRouter.post("/clean-database", async (req, res) => {
       }
     }
 
-    // OPTIMIZE tables to reclaim space (best-effort, non-blocking)
     for (const tableName of tables) {
       try {
         if (await tableExists(db, tableName)) {
           await db.execute(sql`OPTIMIZE TABLE ${tableName}`);
         }
       } catch (optimizeError) {
-        // OPTIMIZE can fail on large tables or replicas — ignore
         console.warn(`[System/Optimize] ${tableName}: ${optimizeError.message}`);
       }
     }
@@ -333,9 +319,6 @@ systemRouter.post("/clean-database", async (req, res) => {
   }
 });
 
-systemRouter.post("/close-conversations", async (req, res) => {
-  try {
-    const db = await getDb();
 // POST /api/system/close-conversations - Fecha todas as conversas abertas
 systemRouter.post("/close-conversations", async (req, res) => {
   try {
@@ -348,4 +331,5 @@ systemRouter.post("/close-conversations", async (req, res) => {
     res.status(500).json({ error: String(error) });
   }
 });
+
 export default systemRouter;
