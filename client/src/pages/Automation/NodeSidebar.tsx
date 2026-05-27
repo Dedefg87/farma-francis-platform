@@ -8,7 +8,8 @@ import {
   BarChart, DollarSign as DollarIcon, Eye, Receipt as ReceiptIcon, CreditCard as CreditCardIcon,
   Landmark, Building, CreditCard as CreditCard2, Wallet, PiggyBank,
   ShoppingBasket, Utensils, Truck as Truck2, Mail as Mail2,
-  LineChart, Megaphone as Megaphone2, Radio, MonitorSpeaker, Volume2
+  LineChart, Megaphone as Megaphone2, Radio, MonitorSpeaker, Volume2,
+  Zap, GitBranch, Code, Database, Globe
 } from 'lucide-react';
 import {
   CATEGORIES, NODE_TYPES, getNodesByCategory

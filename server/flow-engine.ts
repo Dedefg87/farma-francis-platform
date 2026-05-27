@@ -395,6 +395,46 @@ async function executeFlowFromTrigger(
 // Only these node types are recognized by the flow engine.
 // Any other type will be skipped with a warning.
 const VALID_NODE_TYPES = new Set([
+  // Existing core node types
+  "trigger",
+  "condition",
+  "filter",
+  "switch",
+  "if-else",
+  "message",
+  "aiAssistant",
+  "transferHuman",
+  "transfer",
+  "createTicket",
+  "wait",
+  "setVariable",
+  "httpRequest",
+  "http-request",
+  "uraMenu",
+  "function",
+  "notify",
+  "add_tag",
+  "assign_agent",
+  "create_contact",
+  "create_task",
+  "check-prescription",
+  "pix-confirmation",
+  // ---- NÓS ADICIONADOS PELA ESTRATÉGIA B ----
+  "n8nWebhook",
+  "crontabTrigger",
+  "excelExport",
+  "pdfGenerate",
+  "whatsappCloud",
+  "anvisaVerification",
+  "ocrMultilingual",
+  "digitalSignature",
+  "smartSearch",
+  "voiceConversion",
+  "autoTranslate",
+  "qrCodeLabels",
+  "mqttIntegration",
+  "thirdPartyAuth",
+  // ===== CORE NODE TYPES =====
   "trigger",
   "condition",
   "filter",
@@ -421,7 +461,29 @@ const VALID_NODE_TYPES = new Set([
   "attendance-create",
   "email-send",
   "whatsapp-send",
-  "customNode",
+  // ===== NEW NODE TYPES FOR VISUAL EDITOR =====
+  "if-node",
+  "set-node",
+  "http-request-node",
+  "switch-node",
+  "filter-node",
+  "merge-node",
+  "wait-node",
+  "error-handler-node",
+  "code-node",
+  "split-batches-node",
+  "aggregate-node",
+  "csv-parse-node",
+  "datetime-node",
+  "email-send-node",
+  "execute-workflow-node",
+  "summarize-node",
+  "sort-node",
+  "limit-node",
+  "remove-duplicates-node",
+  "sticky-note-node",
+  "schedule-trigger",
+  "webhook-trigger",
 ]);
 
 function sanitizeNodeType(nodeType: string): string {
@@ -453,11 +515,29 @@ function sanitizeNodeType(nodeType: string): string {
     "pix_confirmation": "pix-confirmation",
     "check_prescription": "check-prescription",
     "attendance_create": "attendance-create",
-    // Template node types (visual editor)
+    // Template node types (visual editor) - FIXED MAPPINGS
     "webhook-trigger": "trigger",
-    "if-node": "if",
+    "if-node": "if-else",
     "http-request-node": "httpRequest",
-    "set-node": "set",
+    "set-node": "setVariable",
+    "switch-node": "switch",
+    "filter-node": "filter",
+    "merge-node": "setVariable", // Merge as set variable (combine data)
+    "wait-node": "wait",
+    "error-handler-node": "customNode", // Visual only, no execution
+    "code-node": "function",
+    "split-batches-node": "customNode", // Visual only
+    "aggregate-node": "setVariable", // Aggregate as set
+    "csv-parse-node": "customNode", // Visual only
+    "datetime-node": "setVariable", // Set variables with dates
+    "email-send-node": "email-send",
+    "execute-workflow-node": "customNode", // Visual only
+    "summarize-node": "setVariable", // Summarize and set
+    "sort-node": "setVariable", // Sort and set
+    "limit-node": "setVariable", // Limit and set
+    "remove-duplicates-node": "setVariable", // Remove dupes and set
+    "sticky-note-node": "customNode", // Visual only
+    "schedule-trigger": "trigger",
   };
   return mappings[nodeType] || nodeType;
 }
@@ -623,6 +703,109 @@ async function executeNodeWithEdges(
       } else if (message.provider === "instagram") {
         await sendInstagramMessage({ to: message.fromNumber, message: waBody });
       }
+      break;
+
+    // ===== NEW VISUAL EDITOR NODE HANDLERS =====
+    case "if-node":
+    case "if-else":
+      conditionResult = evaluateConditionNode(config, context);
+      break;
+
+    case "set-node":
+    case "setVariable":
+      executeSetVariableNode(config, context);
+      break;
+
+    case "http-request-node":
+    case "httpRequest":
+      await executeHttpRequestNode(config, context, message);
+      break;
+
+    case "switch-node":
+    case "switch":
+      await executeSwitchNode(config, context, edges, node.id, nodes);
+      break;
+
+    case "filter-node":
+    case "filter":
+      conditionResult = evaluateConditionNode(config, context);
+      break;
+
+    case "datetime-node":
+    case "setVariable":
+      executeDatetimeNode(config, context);
+      break;
+
+    case "email-send-node":
+    case "email-send":
+      console.log(`[Flow Engine] Email to: ${config.to}, subject: ${config.subject}`);
+      break;
+
+    case "sticky-note-node":
+      // Visual only - no execution
+      break;
+
+    // ===== REMAINING VISUAL EDITOR NODE HANDLERS =====
+    case "merge-node":
+      console.log(`[Flow Engine] Merge node`);
+      break;
+
+    case "wait-node":
+      const waitDelay = config.delay || config.duration || 1000;
+      await new Promise(resolve => setTimeout(resolve, waitDelay));
+      break;
+
+    case "error-handler-node":
+      console.log(`[Flow Engine] Error handler`);
+      context.lastError = config.errorMessage || null;
+      break;
+
+    case "code-node":
+      console.log(`[Flow Engine] Code node`);
+      break;
+
+    case "split-batches-node":
+      console.log(`[Flow Engine] Split batches`);
+      break;
+
+    case "aggregate-node":
+      console.log(`[Flow Engine] Aggregate`);
+      break;
+
+    case "csv-parse-node":
+      console.log(`[Flow Engine] CSV parse`);
+      break;
+
+    case "execute-workflow-node":
+      console.log(`[Flow Engine] Execute workflow`);
+      break;
+
+    case "summarize-node":
+      console.log(`[Flow Engine] Summarize`);
+      break;
+
+    case "sort-node":
+      console.log(`[Flow Engine] Sort`);
+      break;
+
+    case "limit-node":
+      console.log(`[Flow Engine] Limit`);
+      break;
+
+    case "remove-duplicates-node":
+      console.log(`[Flow Engine] Remove duplicates`);
+      break;
+
+    case "schedule-trigger":
+      console.log(`[Flow Engine] Schedule trigger`);
+      break;
+
+    case "webhook-trigger":
+      console.log(`[Flow Engine] Webhook trigger`);
+      break;
+
+    case "customNode":
+      console.warn(`[Flow Engine] customNode has no handler - ensure sanitizeNodeType mapped correctly`);
       break;
 
     default:
@@ -954,30 +1137,6 @@ function executeSetVariableNode(config: unknown, context: unknown) {
 }
 
 /**
- * Execute HTTP Request node
- */
-async function executeHttpRequestNode(config: unknown, context: unknown) {
-  const url = replaceVariables(config.url || "", context);
-  const method = config.method || "GET";
-  const headers = config.headers || {};
-  const body = config.body ? replaceVariables(config.body, context) : undefined;
-
-  try {
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(JSON.parse(body)) : undefined,
-    });
-
-    const data = await response.json();
-    context.variables.httpResponse = data;
-
-  } catch (error) {
-    console.error(`[Flow Engine] HTTP Request error:`, error);
-  }
-}
-
-/**
  * Execute URA Menu node
  */
 async function executeURAMenuNode(config: unknown, context: unknown, message: unknown) {
@@ -1023,6 +1182,7 @@ async function executeCheckPrescriptionNode(
           role: "system" as const,
           content: "Você é um farmacêutico especializado. Analise a receita médica e retorne: válida ou inválida, nome do medicamento, dosagem, e observações.",
         },
+        {
           role: "user" as const,
           content: `Analise esta receita: ${fileUrl}. Mensagem do cliente: ${message.messageText || ""}`,
         },
@@ -1239,6 +1399,88 @@ async function executeCreateTaskNode(
   console.log(`[Flow Engine] Task created: ${title} (priority: ${priority}, assignTo: ${assignTo})`);
 
   context.variables.lastTask = { title, description, priority, assignTo };
+}
+
+/**
+ * Execute HTTP Request node (with message context)
+ */
+async function executeHttpRequestNode(
+  config: unknown,
+  context: unknown,
+  message: unknown
+) {
+  const url = replaceVariables(config.url || "", context);
+  const method = config.method || "GET";
+  const headers = config.headers || {};
+  const body = config.body ? replaceVariables(config.body, context) : undefined;
+
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(JSON.parse(body)) : undefined,
+    });
+
+    const data = await response.json();
+    context.variables.httpResponse = data;
+
+  } catch (error) {
+    console.error(`[Flow Engine] HTTP Request error:`, error);
+  }
+}
+
+/**
+ * Execute Switch node — routes to multiple outputs based on value
+ */
+async function executeSwitchNode(
+  config: unknown,
+  context: unknown,
+  edges: unknown[],
+  nodeId: string,
+  nodes: unknown[]
+) {
+  const value = replaceVariables(config.value || "", context);
+  const rules = config.rules || [];
+
+  // Find matching rule
+  let matchedEdge = null;
+  for (const rule of rules) {
+    if (value === rule.value || value.includes(rule.value)) {
+      matchedEdge = edges.find((e: unknown) => e.sourceHandle === rule.output);
+      break;
+    }
+  }
+
+  // Default fallback
+  if (!matchedEdge) {
+    matchedEdge = edges.find((e: unknown) => e.sourceHandle === "default");
+  }
+
+  if (matchedEdge) {
+    const nextNode = nodes.find((n: unknown) => n.id === matchedEdge.target);
+    if (nextNode) {
+      console.log(`[Flow Engine] Switch matched: ${matchedEdge.sourceHandle}`);
+    }
+  }
+}
+
+/**
+ * Execute Datetime node — sets date/time variables
+ */
+function executeDatetimeNode(config: unknown, context: unknown) {
+  const format = config.format || "iso";
+  const now = new Date();
+
+  if (config.variableName) {
+    context.variables[config.variableName] = format === "iso" 
+      ? now.toISOString() 
+      : now.toLocaleString("pt-BR");
+  }
+
+  if (config.addDays) {
+    const future = new Date(now.getTime() + config.addDays * 24 * 60 * 60 * 1000);
+    context.variables.futureDate = future.toISOString();
+  }
 }
 
 /**

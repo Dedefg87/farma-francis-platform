@@ -11,7 +11,7 @@ import {
   Calculator, Send as SendIcon, Shield, FileSearch, BarChart, DollarSign as DollarIcon,
   Link2, ClipboardCheck, AlertCircle, TrendingDown, UserCheck, FileSpreadsheet,
   Receipt as ReceiptIcon, Smartphone, Megaphone, Clipboard, Eye,
-  Code, Layers, Archive, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge,
+  Code, Layers, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge,
   Landmark, Building, CreditCard as CreditCard2, Banknote, Wallet, PiggyBank,
   ShoppingBasket, Utensils, Truck as Truck2, Mail as Mail2, FileInput, FileOutput,
   UserCog, LineChart, Megaphone as Megaphone2, Radio, Tv, MonitorSpeaker, Volume2
@@ -35,11 +35,11 @@ export interface WorkflowNode {
   category: string;
   inputs?: NodePort[];
 
-outputs?: NodePort[];
+  outputs?: NodePort[];
 
-config?: ConfigField[];
+  config?: ConfigField[];
 
-errors?: NodeError[];
+  errors?: NodeError[];
 
 }
 
@@ -120,7 +120,7 @@ export const NODE_TYPES: WorkflowNode[] = [
     category: 'entrada',
     outputs: [
       { id: 'success', label: 'Receita processada', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: 'error', label: 'Erro', type: 'error' },
     ],
     config: [
       { key: 'allowedFormats', label: 'Formatos aceitos', type: 'multiselect', options: [
