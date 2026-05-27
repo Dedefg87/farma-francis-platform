@@ -110,6 +110,26 @@ const nodeIconMap: Record<string, React.ComponentType<{ className?: string }>> =
   'check-prescription': FileText,
   'pix-confirmation': CreditCard,
   'attendance-create': Phone,
+  // Visual editor node types
+  'if-node': GitBranch,
+  'set-node': Settings,
+  'http-request-node': Globe,
+  'switch-node': GitCompare,
+  'merge-node': GitMerge,
+  'filter-node': Filter,
+  'wait-node': Clock,
+  'error-handler-node': AlertTriangle,
+  'code-node': Code,
+  'split-batches-node': Layers,
+  'aggregate-node': BarChart,
+  'csv-parse-node': FileSpreadsheet,
+  'datetime-node': Clock,
+  'email-send-node': Mail,
+  'execute-workflow-node': FileInput,
+  'summarize-node': FileText,
+  'sort-node': ArrowRight,
+  'limit-node': FileX,
+  'remove-duplicates-node': FileX,
 };
 
 // ==================== NODE TYPES ====================
@@ -137,6 +157,12 @@ const VALID_NODE_TYPES = new Set([
   "create_contact", "create_task", "check-prescription",
   "pix-confirmation", "attendance-create", "email-send", "whatsapp-send",
   "customNode",
+  // Visual editor node types
+  "webhook-trigger", "if-node", "set-node", "http-request-node", "switch-node",
+  "filter-node", "merge-node", "wait-node", "error-handler-node", "code-node",
+  "split-batches-node", "aggregate-node", "csv-parse-node", "datetime-node",
+  "email-send-node", "execute-workflow-node", "summarize-node", "sort-node",
+  "limit-node", "remove-duplicates-node", "schedule-trigger",
 ]);
 
 const NODE_TYPE_MAPPINGS: Record<string, string> = {
@@ -156,6 +182,16 @@ const NODE_TYPE_MAPPINGS: Record<string, string> = {
   "pix_confirmation": "pix-confirmation",
   "check_prescription": "check-prescription",
   "attendance_create": "attendance-create",
+  // Visual editor mappings
+  "webhook-trigger": "trigger",
+  "if-node": "if-else",
+  "set-node": "setVariable",
+  "http-request-node": "httpRequest",
+  "switch-node": "switch",
+  "filter-node": "filter",
+  "wait-node": "wait",
+  "code-node": "function",
+  "email-send-node": "email-send",
 };
 
 function sanitizeNodes(nodes: Node[]): Node[] {
