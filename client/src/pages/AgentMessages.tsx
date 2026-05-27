@@ -165,6 +165,7 @@ export default function AgentMessages() {
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
   const [closeAllMessage, setCloseAllMessage] = useState("Obrigado pelo contato! Atendimento encerrado.");
+  const [closeAllLoading, setCloseAllLoading] = useState(false);
   const [closeAllReason, setCloseAllReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
@@ -535,16 +536,29 @@ export default function AgentMessages() {
     },
   });
 
-  const closeAllConversationMutation = trpc.system.closeAll.useMutation({
-    onSuccess: (data: unknown) => {
-      toast.success(`${(data as { closed?: number }).closed || 0} conversas encerradas`);
-      queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
-      refetchConversations();
+  const closeAllConversationMutation = {
+    mutate: async () => {
+      setCloseAllLoading(true);
+      try {
+        const res = await fetch("/api/system/close-conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast.success(`${data.closed || 0} conversas encerradas`);
+          queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
+          refetchConversations();
+          setShowCloseAllDialog(false);
+        }
+      } catch (err) {
+        toast.error("Erro ao encerrar conversas");
+      } finally {
+        setCloseAllLoading(false);
+      }
     },
-    onError: error => {
-      toast.error(`Erro ao encerrar todas: ${error.message}`);
-    },
-  });
+    isPending: closeAllLoading,
+  };
 
   // Bug 1 fix: Delete message mutation
   const deleteMessageMutation = trpc.messages.delete.useMutation({
@@ -1679,8 +1693,8 @@ export default function AgentMessages() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => closeAllConversationMutation.mutate({ reason: closeAllReason as any, closeMessage: closeAllMessage })}
-                disabled={closeAllConversationMutation.isPending}
+                onClick={() => closeAllConversationMutation.mutate()}
+                disabled={closeAllConversationMutation.isPending || closeAllLoading}
               >
                 Encerrar Todas
               </Button>
