@@ -88,12 +88,28 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
     // Extract rows using same pattern as db.ts
     const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
     
-    // Map to expected format - rows are objects, not arrays
-    const tables = (rows as any[]).map((row: any) => ({
-      table_name: row.table_name,
-      size_mb: Number(row.size_mb || 0),
-      table_rows: Number(row.table_rows || 0),
-    }));
+    // Debug logging
+    console.log("[System/Tables] rawResult type:", typeof rawResult, "isArray:", Array.isArray(rawResult));
+    if (Array.isArray(rawResult)) {
+      console.log("[System/Tables] rawResult[0] isArray:", Array.isArray(rawResult[0]));
+      console.log("[System/Tables] rawResult[0][0] sample:", JSON.stringify(rawResult[0][0]));
+    }
+    
+    // Map to expected format - handle both array and object formats
+    const tables = (rows as any[]).map((row: any) => {
+      // MySQL2 raw returns arrays [table_name, size_mb, table_rows]
+      const tableName = Array.isArray(row) ? row[0] : row?.table_name;
+      const sizeMb = Array.isArray(row) ? Number(row[1]) : Number(row?.size_mb || 0);
+      const tableRows = Array.isArray(row) ? Number(row[2]) : Number(row?.table_rows || 0);
+      
+      return {
+        table_name: tableName || "unknown",
+        size_mb: sizeMb || 0,
+        table_rows: tableRows || 0,
+      };
+    });
+
+    console.log("[System/Tables] Final count:", tables.length, "first:", tables[0]?.table_name);
 
     res.json({ success: true, tables, timestamp: new Date().toISOString() });
   } catch (error) {
