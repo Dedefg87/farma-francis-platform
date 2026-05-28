@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import { getDb } from "../../db";
 import jwt from "jsonwebtoken";
+import { sql } from "drizzle-orm";
 
 // Middleware to verify admin authentication
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -60,9 +61,8 @@ systemRouter.get("/database/size", requireAdmin, async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    // Same pattern as db.ts getUserByOpenId
     const rawResult = await db.execute(
-      "SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.tables WHERE table_schema = DATABASE()"
+      sql`SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.tables WHERE table_schema = DATABASE()`
     );
     const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
     const size_mb = Number((rows as any[])[0]?.size_mb || 0);
@@ -80,36 +80,21 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    // Same pattern as db.ts getUserByOpenId - use raw query
     const rawResult = await db.execute(
-      "SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT LIKE '\\_%' AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied') ORDER BY (data_length + index_length) DESC"
+      sql`SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT LIKE '\\_%' AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied') ORDER BY (data_length + index_length) DESC`
     );
     
-    // Extract rows using same pattern as db.ts
     const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-    
-    // Debug logging
-    console.log("[System/Tables] rawResult type:", typeof rawResult, "isArray:", Array.isArray(rawResult));
-    if (Array.isArray(rawResult)) {
-      console.log("[System/Tables] rawResult[0] isArray:", Array.isArray(rawResult[0]));
-      console.log("[System/Tables] rawResult[0][0] sample:", JSON.stringify(rawResult[0][0]));
+    console.log("[System/Tables] rawResult format check - rows length:", Array.isArray(rows) ? rows.length : "not array");
+    if (Array.isArray(rows) && rows.length > 0) {
+      console.log("[System/Tables] First row sample:", JSON.stringify(rows[0]).substring(0, 150));
     }
     
-    // Map to expected format - handle both array and object formats
-    const tables = (rows as any[]).map((row: any) => {
-      // MySQL2 raw returns arrays [table_name, size_mb, table_rows]
-      const tableName = Array.isArray(row) ? row[0] : row?.table_name;
-      const sizeMb = Array.isArray(row) ? Number(row[1]) : Number(row?.size_mb || 0);
-      const tableRows = Array.isArray(row) ? Number(row[2]) : Number(row?.table_rows || 0);
-      
-      return {
-        table_name: tableName || "unknown",
-        size_mb: sizeMb || 0,
-        table_rows: tableRows || 0,
-      };
-    });
-
-    console.log("[System/Tables] Final count:", tables.length, "first:", tables[0]?.table_name);
+    const tables = (rows as any[]).map((row: any) => ({
+      table_name: row.table_name,
+      size_mb: Number(row.size_mb || 0),
+      table_rows: Number(row.table_rows || 0),
+    }));
 
     res.json({ success: true, tables, timestamp: new Date().toISOString() });
   } catch (error) {
@@ -122,7 +107,7 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
 async function tableExists(db: any, tableName: string): Promise<boolean> {
   try {
     const rawResult = await db.execute(
-      `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${tableName}'`
+      sql`SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ${tableName}`
     );
     const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
     return (rows as any[]).length > 0;
@@ -134,7 +119,7 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 // Helper: count rows in table
 async function countRows(db: any, tableName: string): Promise<number> {
   try {
-    const rawResult = await db.execute(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    const rawResult = await db.execute(sql`SELECT COUNT(*) as cnt FROM ${sql.identifier(tableName)}`);
     const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
     return Number((rows as any[])[0]?.cnt || 0);
   } catch {
@@ -145,7 +130,7 @@ async function countRows(db: any, tableName: string): Promise<number> {
 // Helper: delete old rows from table
 async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<number> {
   try {
-    const result = await db.execute(`DELETE FROM ${tableName} WHERE created_at < '${cutoff.toISOString().slice(0, 19).replace('T', ' ')}'`);
+    const result = await db.execute(sql`DELETE FROM ${sql.identifier(tableName)} WHERE created_at < ${sql.raw(cutoff.toISOString().slice(0, 19).replace('T', ' ')}`);
     return (result as any).affectedRows || 0;
   } catch (error: any) {
     if (error.message?.includes('Unknown column') || error.message?.includes('no such column')) {
@@ -199,7 +184,7 @@ systemRouter.post("/clean", requireAdmin, async (req, res) => {
           results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
         } catch (e: any) {
           try {
-            await db.execute(`DELETE FROM sessions WHERE expires_at < '${cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}'`);
+            await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${sql.raw(cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}`);
             results.push({ type: 'sessions', deleted: 0, message: `Removidas sessões (via DELETE)` });
           } catch (e2) {
             results.push({ type: 'sessions', deleted: 0, message: `Erro: ${e2.message}` });
@@ -241,7 +226,7 @@ systemRouter.post("/clean-messages", requireAdmin, async (req, res) => {
       });
     }
 
-    await db.execute(`DELETE FROM conversation_messages WHERE created_at < '${cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}'`);
+    await db.execute(sql`DELETE FROM conversation_messages WHERE created_at < ${sql.raw(cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}`);
 
     res.json({
       success: true,
@@ -292,7 +277,7 @@ systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
         if (exists) {
           const beforeCount = await countRows(db, tableName);
           try {
-            await db.execute(`TRUNCATE TABLE ${tableName}`);
+            await db.execute(sql.raw(`TRUNCATE TABLE ${tableName}`));
             results.push({
               table: tableName,
               success: true,
@@ -301,7 +286,7 @@ systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
             });
           } catch (truncateError: any) {
             // TRUNCATE may fail due to foreign keys, fallback to DELETE
-            await db.execute(`DELETE FROM ${tableName}`);
+            await db.execute(sql.raw(`DELETE FROM ${tableName}`));
             results.push({
               table: tableName,
               success: true,
@@ -321,7 +306,7 @@ systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
     for (const tableName of tables) {
       try {
         if (await tableExists(db, tableName)) {
-          await db.execute(`OPTIMIZE TABLE ${tableName}`);
+          await db.execute(sql.raw(`OPTIMIZE TABLE ${tableName}`));
         }
       } catch (optimizeError: any) {
         console.warn(`[System/Optimize] ${tableName}: ${optimizeError.message}`);
@@ -345,7 +330,7 @@ systemRouter.post("/close-conversations", requireAdmin, async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
     const now = new Date();
-    await db.execute(`UPDATE conversations SET status = 'closed', closed_at = '${now.toISOString().slice(0, 19).replace('T', ' ')}' WHERE status IN ('open', 'assigned')`);
+    await db.execute(sql`UPDATE conversations SET status = 'closed', closed_at = ${sql.raw(now.toISOString().slice(0, 19).replace('T', ' '))} WHERE status IN ('open', 'assigned')`);
     res.json({ success: true, closed: 0 });
   } catch (error: any) {
     res.status(500).json({ error: String(error) });
@@ -358,7 +343,7 @@ systemRouter.get("/health", async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ db: "unavailable" });
 
-    await db.execute("SELECT 1 as ok");
+    await db.execute(sql`SELECT 1 as ok`);
     res.json({
       success: true,
       db: "ok",
