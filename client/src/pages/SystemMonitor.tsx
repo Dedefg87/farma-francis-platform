@@ -46,7 +46,7 @@ interface CleanResult {
 
 export default function SystemMonitor() {
   const [storage, setStorage] = useState<StorageData | null>(null);
-  const [dbSize, setDbSize] = useState<number>(0);
+  const [dbSize, setDbSize] = useState(0);
   const [tables, setTables] = useState<TableSize[]>([]);
   const [cleanResults, setCleanResults] = useState<CleanResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,26 +64,26 @@ export default function SystemMonitor() {
         setStorage(storageData);
       }
 
-  // Buscar tamanho do banco
-      // const dbSizeRes = await fetch("/api/system/database/size");
-      // if (dbSizeRes.ok) {
-      //   const dbSizeData = await dbSizeRes.json();
-      //   const size = Number(dbSizeData.size_mb) || 0;
-      //   setDbSize(size);
-      // }
+      // Buscar tamanho do banco
+      const dbSizeRes = await fetch("/api/system/database/size");
+      if (dbSizeRes.ok) {
+        const dbSizeData = await dbSizeRes.json();
+        const size = Number(dbSizeData.size_mb) || 0;
+        setDbSize(size);
+      }
 
       // Buscar estatísticas das tabelas
-      // const tablesRes = await fetch("/api/system/database/tables");
-      // if (tablesRes.ok) {
-      //   const tablesData = await tablesRes.json();
-      //   // Garantir que cada tabela tenha valores numéricos
-      //   const normalized = (tablesData.tables || []).map((t: unknown) => ({
-      //     table_name: t.table_name || "unknown",
-      //     size_mb: Number(t.size_mb) || 0,
-      //     table_rows: Number(t.table_rows) || 0,
-      //   }));
-      //   setTables(normalized);
-      // }
+      const tablesRes = await fetch("/api/system/database/tables");
+      if (tablesRes.ok) {
+        const tablesData = await tablesRes.json();
+        // Garantir que cada tabela tenha valores numéricos
+        const normalized = (tablesData.tables || []).map((t: unknown) => ({
+          table_name: t.table_name || "unknown",
+          size_mb: Number(t.size_mb) || 0,
+          table_rows: Number(t.table_rows) || 0,
+        }));
+        setTables(normalized);
+      }
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
       toast.error("Erro ao carregar dados do sistema");
@@ -97,7 +97,10 @@ export default function SystemMonitor() {
     try {
       const response = await fetch("/api/system/clean", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        const token = localStorage.getItem("jti") || sessionStorage.getItem("auth-token");
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) { headers["Authorization"] = `Bearer ${token}`; }
+        headers,
         body: JSON.stringify({ types }),
       });
 
@@ -119,17 +122,14 @@ export default function SystemMonitor() {
   };
 
   const handleCleanDatabase = async () => {
-    // Funcionalidade temporariamente indisponível - endpoint não implementado
-    toast.error("Limpeza de banco de dados temporariamente indisponível");
-    setDbConfirmOpen(false);
-    return;
-    
-    /* Código original comentado:
     setCleaningDb(true);
     try {
       const response = await fetch("/api/system/clean-database", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        const token = localStorage.getItem("jti") || sessionStorage.getItem("auth-token");
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) { headers["Authorization"] = `Bearer ${token}`; }
+        headers,
         body: JSON.stringify({ confirm: true }),
       });
 
@@ -153,7 +153,6 @@ export default function SystemMonitor() {
       setCleaningDb(false);
       setDbConfirmOpen(false);
     }
-    */
   };
 
   useEffect(() => {
@@ -179,9 +178,6 @@ export default function SystemMonitor() {
   const safeTimestamp = storage?.timestamp ? new Date(storage.timestamp) : new Date();
   const safeDisk = storage?.disk || {};
   const safeAppSize = storage?.appSize || "N/A";
-
-  // Debug logs para verificar dados recebidos
-  console.log("[SystemMonitor] Debug:", { storage, dbSize, tables, topTables, totalTablesSize });
 
   if (loading) {
     return (
@@ -250,7 +246,7 @@ export default function SystemMonitor() {
               <Database className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dbSize.toFixed(2)} MB</div>
+              <div className="text-2xl font-bold">{formatBytes(dbSize)}</div>
               <p className="text-xs text-muted-foreground">
                 {tables.length} tabelas
               </p>
@@ -396,7 +392,7 @@ export default function SystemMonitor() {
               Tamanho das Tabelas
             </CardTitle>
             <CardDescription>
-              Total: <strong>{totalTablesSize.toFixed(2)} MB</strong> em {tables.length} tabela{tables.length !== 1 ? 's' : ''}
+              Total: <strong>{formatBytes(totalTablesSize)}</strong> em {tables.length} tabela{tables.length !== 1 ? 's' : ''}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -425,7 +421,7 @@ export default function SystemMonitor() {
                         <tr key={table.table_name} className="border-b hover:bg-muted/50">
                           <td className="p-2 font-mono text-xs">{table.table_name}</td>
                           <td className="text-right p-2">{rows.toLocaleString()}</td>
-                          <td className="text-right p-2">{size.toFixed(2)} MB</td>
+                          <td className="text-right p-2">{formatBytes(size)}</td>
                           <td className="text-right p-2">{percent}%</td>
                         </tr>
                       );
