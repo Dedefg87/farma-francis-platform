@@ -34,6 +34,33 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
 
 const systemRouter = express.Router();
 
+// Helper: normalize rows from MySQL2 raw mode (can be array of arrays or array of objects)
+function normalizeRows(rawResult: unknown): any[] {
+  // Drizzle raw mode returns { rows: [...] } or [[rows], fields]
+  let rows = rawResult;
+  if (rawResult && typeof rawResult === 'object') {
+    if ('rows' in rawResult) {
+      rows = (rawResult as any).rows;
+    } else if (Array.isArray(rawResult) && Array.isArray((rawResult as any)[0])) {
+      rows = (rawResult as any)[0]; // [[rows], fields] format
+    }
+  }
+  return Array.isArray(rows) ? rows : [];
+}
+
+// Helper: normalize a single row (array or object format)
+function normalizeRow(row: any): any {
+  if (Array.isArray(row)) {
+    // MySQL2 raw format: [table_name, size_mb, table_rows]
+    return {
+      table_name: row[0],
+      size_mb: row[1],
+      table_rows: row[2],
+    };
+  }
+  return row;
+}
+
 // GET /api/system/storage (public - uses shell commands)
 systemRouter.get("/storage", async (req, res) => {
   try {
@@ -64,8 +91,8 @@ systemRouter.get("/database/size", requireAdmin, async (req, res) => {
     const rawResult = await db.execute(
       sql`SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.tables WHERE table_schema = DATABASE()`
     );
-    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-    const size_mb = Number((rows as any[])[0]?.size_mb || 0);
+    const rows = normalizeRows(rawResult);
+    const size_mb = Number(normalizeRow(rows[0])?.size_mb || 0);
 
     res.json({ success: true, size_mb, timestamp: new Date().toISOString() });
   } catch (error) {
@@ -84,17 +111,17 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
       sql`SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT LIKE '\\_%' AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied') ORDER BY (data_length + index_length) DESC`
     );
     
-    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-    console.log("[System/Tables] rawResult format check - rows length:", Array.isArray(rows) ? rows.length : "not array");
-    if (Array.isArray(rows) && rows.length > 0) {
-      console.log("[System/Tables] First row sample:", JSON.stringify(rows[0]).substring(0, 150));
-    }
-    
-    const tables = (rows as any[]).map((row: any) => ({
-      table_name: row.table_name,
-      size_mb: Number(row.size_mb || 0),
-      table_rows: Number(row.table_rows || 0),
-    }));
+    const rows = normalizeRows(rawResult);
+    const tables = rows.map((row: any) => {
+      const normalized = normalizeRow(row);
+      return {
+        table_name: normalized.table_name || "unknown",
+        size_mb: Number(normalized.size_mb || 0),
+        table_rows: Number(normalized.table_rows || 0),
+      };
+    });
+
+    console.log("[System/Tables] Normalized tables count:", tables.length, "first:", tables[0]?.table_name);
 
     res.json({ success: true, tables, timestamp: new Date().toISOString() });
   } catch (error) {
@@ -109,8 +136,8 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
     const rawResult = await db.execute(
       sql`SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ${tableName}`
     );
-    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-    return (rows as any[]).length > 0;
+    const rows = normalizeRows(rawResult);
+    return rows.length > 0;
   } catch {
     return false;
   }
@@ -120,8 +147,9 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 async function countRows(db: any, tableName: string): Promise<number> {
   try {
     const rawResult = await db.execute(sql`SELECT COUNT(*) as cnt FROM ${sql.identifier(tableName)}`);
-    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
-    return Number((rows as any[])[0]?.cnt || 0);
+    const rows = normalizeRows(rawResult);
+    const normalized = normalizeRow(rows[0]);
+    return Number(normalized?.cnt || 0);
   } catch {
     return 0;
   }
@@ -285,7 +313,6 @@ systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
               message: `Tabela ${tableName}: ${beforeCount} linha${beforeCount !== 1 ? 's' : ''} removida${beforeCount !== 1 ? 's' : ''}`
             });
           } catch (truncateError: any) {
-            // TRUNCATE may fail due to foreign keys, fallback to DELETE
             await db.execute(sql.raw(`DELETE FROM ${tableName}`));
             results.push({
               table: tableName,
@@ -302,7 +329,6 @@ systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
       }
     }
 
-    // Optimize tables after cleanup
     for (const tableName of tables) {
       try {
         if (await tableExists(db, tableName)) {
