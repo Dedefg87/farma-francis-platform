@@ -60,8 +60,12 @@ systemRouter.get("/database/size", requireAdmin, async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    const [result] = await db.execute("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.tables WHERE table_schema = DATABASE()");
-    const size_mb = Number((result as any[])[0]?.[0] || (result as any)[0]?.size_mb || 0);
+    // Same pattern as db.ts getUserByOpenId
+    const rawResult = await db.execute(
+      "SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.tables WHERE table_schema = DATABASE()"
+    );
+    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+    const size_mb = Number((rows as any[])[0]?.size_mb || 0);
 
     res.json({ success: true, size_mb, timestamp: new Date().toISOString() });
   } catch (error) {
@@ -76,13 +80,19 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
     const db = await getDb();
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
-    const [result] = await db.execute("SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT LIKE '\\_%' AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied') ORDER BY (data_length + index_length) DESC");
-
-    // MySQL2 raw queries return arrays - convert to objects
-    const tables = (result as any[]).map((row: any) => ({
-      table_name: Array.isArray(row) ? row[0] : row.table_name,
-      size_mb: Array.isArray(row) ? Number(row[1]) : Number(row.size_mb || 0),
-      table_rows: Array.isArray(row) ? Number(row[2]) : Number(row.table_rows || 0),
+    // Same pattern as db.ts getUserByOpenId - use raw query
+    const rawResult = await db.execute(
+      "SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT LIKE '\\_%' AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied') ORDER BY (data_length + index_length) DESC"
+    );
+    
+    // Extract rows using same pattern as db.ts
+    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+    
+    // Map to expected format - rows are objects, not arrays
+    const tables = (rows as any[]).map((row: any) => ({
+      table_name: row.table_name,
+      size_mb: Number(row.size_mb || 0),
+      table_rows: Number(row.table_rows || 0),
     }));
 
     res.json({ success: true, tables, timestamp: new Date().toISOString() });
@@ -95,9 +105,11 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
 // Helper: check if table exists
 async function tableExists(db: any, tableName: string): Promise<boolean> {
   try {
-    const [result] = await db.execute(`SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${tableName}'`);
-    const rows = (result as any[]) || [];
-    return rows.length > 0;
+    const rawResult = await db.execute(
+      `SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${tableName}'`
+    );
+    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+    return (rows as any[]).length > 0;
   } catch {
     return false;
   }
@@ -106,8 +118,9 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 // Helper: count rows in table
 async function countRows(db: any, tableName: string): Promise<number> {
   try {
-    const [result] = await db.execute(`SELECT COUNT(*) as cnt FROM ${tableName}`);
-    return Number((result as any[])[0]?.[0] || 0);
+    const rawResult = await db.execute(`SELECT COUNT(*) as cnt FROM ${tableName}`);
+    const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
+    return Number((rows as any[])[0]?.cnt || 0);
   } catch {
     return 0;
   }
@@ -116,7 +129,7 @@ async function countRows(db: any, tableName: string): Promise<number> {
 // Helper: delete old rows from table
 async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<number> {
   try {
-    const [result] = await db.execute(`DELETE FROM ${tableName} WHERE created_at < '${cutoff.toISOString().slice(0, 19).replace('T', ' ')}'`);
+    const result = await db.execute(`DELETE FROM ${tableName} WHERE created_at < '${cutoff.toISOString().slice(0, 19).replace('T', ' ')}'`);
     return (result as any).affectedRows || 0;
   } catch (error: any) {
     if (error.message?.includes('Unknown column') || error.message?.includes('no such column')) {
