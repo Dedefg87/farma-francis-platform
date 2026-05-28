@@ -40,19 +40,29 @@ systemRouter.get("/storage", async (req, res) => {
     const { promisify } = await import("util");
     const execAsync = promisify(exec);
     const { stdout } = await execAsync("df -h /");
-    const lines = stdout.trim().split("\n");
+    const lines = stdout.trim().split("\\n");
     const diskInfo = lines.slice(1).map(line => {
-      const [filesystem, size, used, available, usePct, mounted] = line.split(/\s+/);
+      const [filesystem, size, used, available, usePct, mounted] = line.split(/\\s+/);
       return { filesystem, size, used, available, usePct, mounted };
     })[0] || {};
     const appPath = process.cwd();
     const { stdout: duStdout } = await execAsync(`du -sh ${appPath}`);
-    const appSize = duStdout.trim().split("\t")[0];
+    const appSize = duStdout.trim().split("\\t")[0];
     res.json({ success: true, disk: diskInfo, appSize, timestamp: new Date().toISOString() });
   } catch (error) {
     res.status(500).json({ error: String(error) });
   }
 });
+
+// Helper to extract rows from MySQL2 result
+function extractRows(result: unknown): any[] {
+  if (Array.isArray(result)) {
+    // MySQL2 returns [rows, fields] from execute()
+    return result[0] || [];
+  }
+  // Fallback para outros formatos
+  return (result as any)?.rows || [];
+}
 
 // GET /api/system/database/size (requires admin)
 systemRouter.get("/database/size", requireAdmin, async (req, res) => {
@@ -61,7 +71,7 @@ systemRouter.get("/database/size", requireAdmin, async (req, res) => {
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
     const result = await db.execute("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) as size_mb FROM information_schema.tables WHERE table_schema = DATABASE()");
-    const rows = (result as any).rows || result || [];
+    const rows = extractRows(result);
     const size_mb = Number(rows[0]?.size_mb || 0);
 
     res.json({ success: true, size_mb, timestamp: new Date().toISOString() });
@@ -79,7 +89,7 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
 
     const result = await db.execute("SELECT table_name, ROUND((data_length + index_length) / 1024 / 1024, 2) as size_mb, table_rows FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name NOT LIKE '\\_%' AND table_name NOT IN ('schema_migrations', 'migrations', '_migrations_applied') ORDER BY (data_length + index_length) DESC");
 
-    const rows = (result as any).rows || result || [];
+    const rows = extractRows(result);
     const tables = rows.map((row: any) => ({
       table_name: row.table_name,
       size_mb: Number(row.size_mb || 0),
@@ -97,7 +107,7 @@ systemRouter.get("/database/tables", requireAdmin, async (req, res) => {
 async function tableExists(db: any, tableName: string): Promise<boolean> {
   try {
     const r = await db.execute(`SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${tableName}'`);
-    const rows = (r as any).rows || r || [];
+    const rows = extractRows(r);
     return rows.length > 0;
   } catch {
     return false;
@@ -108,7 +118,7 @@ async function tableExists(db: any, tableName: string): Promise<boolean> {
 async function countRows(db: any, tableName: string): Promise<number> {
   try {
     const r = await db.execute(`SELECT COUNT(*) as cnt FROM ${tableName}`);
-    const rows = (r as any).rows || r || [];
+    const rows = extractRows(r);
     return Number(rows[0]?.cnt || 0);
   } catch {
     return 0;
@@ -119,7 +129,8 @@ async function countRows(db: any, tableName: string): Promise<number> {
 async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<number> {
   try {
     const r = await db.execute(`DELETE FROM ${tableName} WHERE created_at < '${cutoff.toISOString().slice(0, 19).replace('T', ' ')}'`);
-    return (r as any).affectedRows || 0;
+    const result = r as any;
+    return result.affectedRows || 0;
   } catch (error: any) {
     if (error.message?.includes('Unknown column') || error.message?.includes('no such column')) {
       return 0;
@@ -173,7 +184,7 @@ systemRouter.post("/clean", requireAdmin, async (req, res) => {
         } catch (e: any) {
           try {
             const r = await db.execute(`DELETE FROM sessions WHERE expires_at < '${cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}'`);
-            const deleted = (r as any).affectedRows || 0;
+            const deleted = (r as any)[0]?.affectedRows || 0;
             results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
           } catch (e2) {
             results.push({ type: 'sessions', deleted: 0, message: `Erro: ${e2.message}` });
@@ -202,7 +213,7 @@ systemRouter.post("/clean-messages", requireAdmin, async (req, res) => {
     if (!db) return res.status(503).json({ error: "Database unavailable" });
 
     const statsResult = await db.execute(`SELECT COUNT(*) as total_messages, COUNT(DISTINCT conversation_id) as affected_conversations, SUM(CASE WHEN file_url IS NOT NULL THEN 1 ELSE 0 END) as with_media FROM conversation_messages WHERE created_at < '${cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}'`);
-    const statsRows = (statsResult as any).rows || statsResult || [];
+    const statsRows = extractRows(statsResult);
     const stats = statsRows[0];
 
     if (dryRun) {
@@ -210,24 +221,24 @@ systemRouter.post("/clean-messages", requireAdmin, async (req, res) => {
         success: true,
         dryRun: true,
         stats: {
-          messages: Number(stats.total_messages || 0),
-          conversations: Number(stats.affected_conversations || 0),
-          withMedia: Number(stats.with_media || 0),
+          messages: Number(stats?.total_messages || 0),
+          conversations: Number(stats?.affected_conversations || 0),
+          withMedia: Number(stats?.with_media || 0),
           cutoffDate: cutoffDate.toISOString(),
         },
-        message: `Simulação: ${stats.total_messages || 0} mensagens em ${stats.affected_conversations || 0} conversas seriam deletadas`
+        message: `Simulação: ${stats?.total_messages || 0} mensagens em ${stats?.affected_conversations || 0} conversas seriam deletadas`
       });
     }
 
     const deleteResult = await db.execute(`DELETE FROM conversation_messages WHERE created_at < '${cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}'`);
-    const deletedCount = (deleteResult as any).affectedRows || 0;
+    const deletedCount = (deleteResult as any)[0]?.affectedRows || 0;
 
     res.json({
       success: true,
       stats: {
         messages: Number(deletedCount),
-        conversations: Number(stats.affected_conversations || 0),
-        withMedia: Number(stats.with_media || 0),
+        conversations: Number(stats?.affected_conversations || 0),
+        withMedia: Number(stats?.with_media || 0),
         cutoffDate: cutoffDate.toISOString(),
       },
       message: `Removidas ${deletedCount} mensagens antigas`
@@ -238,7 +249,7 @@ systemRouter.post("/clean-messages", requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/system/clean-database (REQUIRES ADMIN - MySQL version - drops multiple tables)
+// POST /api/system/clean-database (REQUIRES ADMIN - MySQL version)
 systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
   try {
     const { confirm } = req.body;
@@ -325,13 +336,13 @@ systemRouter.post("/close-conversations", requireAdmin, async (req, res) => {
     if (!db) return res.status(503).json({ error: "Database unavailable" });
     const now = new Date();
     const result = await db.execute(`UPDATE conversations SET status = 'closed', closed_at = '${now.toISOString().slice(0, 19).replace('T', ' ')}' WHERE status IN ('open', 'assigned')`);
-    res.json({ success: true, closed: (result as any).affectedRows || 0 });
+    res.json({ success: true, closed: (result as any)[0]?.affectedRows || 0 });
   } catch (error: any) {
     res.status(500).json({ error: String(error) });
   }
 });
 
-// POST /api/system/health - health check (public)
+// GET /api/system/health - health check (public)
 systemRouter.get("/health", async (req, res) => {
   try {
     const db = await getDb();
