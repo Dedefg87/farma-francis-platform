@@ -158,7 +158,7 @@ async function countRows(db: any, tableName: string): Promise<number> {
 // Helper: delete old rows from table
 async function deleteOld(db: any, tableName: string, cutoff: Date): Promise<number> {
   try {
-    const result = await db.execute(sql`DELETE FROM ${sql.identifier(tableName)} WHERE created_at < ${sql.raw(cutoff.toISOString().slice(0, 19).replace('T', ' ')}`);
+    const result = await db.execute(sql`DELETE FROM ${sql.identifier(tableName)} WHERE created_at < ${sql.raw(cutoff.toISOString().slice(0, 19).replace('T', ' '))}`);
     return (result as any).affectedRows || 0;
   } catch (error: any) {
     if (error.message?.includes('Unknown column') || error.message?.includes('no such column')) {
@@ -212,7 +212,7 @@ systemRouter.post("/clean", requireAdmin, async (req, res) => {
           results.push({ type: 'sessions', deleted, message: `Removidas ${deleted} sessões` });
         } catch (e: any) {
           try {
-            await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${sql.raw(cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}`);
+            await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${sql.raw(cutoffDate.toISOString().slice(0, 19).replace('T', ' '))}`);
             results.push({ type: 'sessions', deleted: 0, message: `Removidas sessões (via DELETE)` });
           } catch (e2) {
             results.push({ type: 'sessions', deleted: 0, message: `Erro: ${e2.message}` });
@@ -254,7 +254,7 @@ systemRouter.post("/clean-messages", requireAdmin, async (req, res) => {
       });
     }
 
-    await db.execute(sql`DELETE FROM conversation_messages WHERE created_at < ${sql.raw(cutoffDate.toISOString().slice(0, 19).replace('T', ' ')}`);
+    await db.execute(sql`DELETE FROM conversation_messages WHERE created_at < ${sql.raw(cutoffDate.toISOString().slice(0, 19).replace('T', ' '))}`);
 
     res.json({
       success: true,
