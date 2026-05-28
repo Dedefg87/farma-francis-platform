@@ -54,35 +54,50 @@ export default function SystemMonitor() {
   const [cleaningDb, setCleaningDb] = useState(false);
   const [dbConfirmOpen, setDbConfirmOpen] = useState(false);
 
+  // Helper to get auth headers
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem("jti") || sessionStorage.getItem("auth-token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Buscar informações de armazenamento
+      const headers = getAuthHeaders();
+
+      // Buscar informações de armazenamento (público)
       const storageRes = await fetch("/api/system/storage");
       if (storageRes.ok) {
         const storageData = await storageRes.json();
         setStorage(storageData);
       }
 
-      // Buscar tamanho do banco
-      const dbSizeRes = await fetch("/api/system/database/size");
+      // Buscar tamanho do banco (requer admin)
+      const dbSizeRes = await fetch("/api/system/database/size", { headers });
       if (dbSizeRes.ok) {
         const dbSizeData = await dbSizeRes.json();
         const size = Number(dbSizeData.size_mb) || 0;
         setDbSize(size);
+      } else if (dbSizeRes.status === 401) {
+        console.warn("[System] Não autenticado para buscar size do DB");
       }
 
-      // Buscar estatísticas das tabelas
-      const tablesRes = await fetch("/api/system/database/tables");
+      // Buscar estatísticas das tabelas (requer admin)
+      const tablesRes = await fetch("/api/system/database/tables", { headers });
       if (tablesRes.ok) {
         const tablesData = await tablesRes.json();
-        // Garantir que cada tabela tenha valores numéricos
         const normalized = (tablesData.tables || []).map((t: any) => ({
           table_name: t.table_name || "unknown",
           size_mb: Number(t.size_mb) || 0,
           table_rows: Number(t.table_rows) || 0,
         }));
         setTables(normalized);
+      } else if (tablesRes.status === 401) {
+        console.warn("[System] Não autenticado para buscar tabelas");
       }
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
@@ -111,7 +126,6 @@ export default function SystemMonitor() {
       if (data.success) {
         setCleanResults(data.results);
         toast.success("Limpeza concluída com sucesso!");
-        // Recarregar estatísticas
         fetchData();
       } else {
         toast.error("Erro na limpeza");
@@ -147,7 +161,6 @@ export default function SystemMonitor() {
           deleted: r.rows,
           message: `Tabela ${r.table}: ${r.success ? 'limpa' : r.error}`
         }))]);
-        // Recarregar estatísticas
         fetchData();
       } else {
         toast.error(data.error || "Erro ao limpar banco de dados");
@@ -254,7 +267,7 @@ export default function SystemMonitor() {
             <CardContent>
               <div className="text-2xl font-bold">{formatBytes(dbSize)}</div>
               <p className="text-xs text-muted-foreground">
-                {tables.length} tabelas
+                {tables.length} tabelas{tables.length === 0 ? " - faça login como admin para ver dados" : ""}
               </p>
             </CardContent>
           </Card>
@@ -405,7 +418,8 @@ export default function SystemMonitor() {
             {topTables.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhuma tabela encontrada ou banco de dados vazio.</p>
+                <p>Nenhuma tabela encontrada ou necessária autenticação de admin.</p>
+                <p className="text-xs mt-2">Faça login como administrador para ver estatísticas do banco.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
