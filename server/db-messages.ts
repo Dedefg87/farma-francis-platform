@@ -748,4 +748,16 @@ export async function listReceivedMessages(filters?: {
   });
 
   return stats;
+
+  // 11. Trigger automation flows (WhatsApp/Business) - fire and forget
+  setImmediate(async () => {
+    try {
+      const { findAndExecuteFlowForTrigger } = await import("./flow-engine");
+      await findAndExecuteFlowForTrigger(message.fromNumber, customer, conversationId);
+    } catch (err) {
+      console.error("[Flow Engine] Error:", err);
+    }
+  });
+
+  return { conversationId, customerId: customer.id };
 }

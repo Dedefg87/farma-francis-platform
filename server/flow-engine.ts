@@ -300,6 +300,57 @@ async function executeSimpleFlow(message: unknown, flow: unknown, customer: unkn
 }
 
 /**
+ * Find and execute active flow for a trigger (typically on new inbound message)
+ */
+export async function findAndExecuteFlowForTrigger(
+  fromNumber: string,
+  customer: unknown,
+  conversationId: number
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Find active (non-archived) flows
+  const activeFlows = await db
+    .select()
+    .from(visualFlows)
+    .where(eq(visualFlows.isActive, true))
+    .limit(10);
+
+  if (activeFlows.length === 0) {
+    console.log("[Flow Engine] No active flows found");
+    return;
+  }
+
+  for (const flow of activeFlows) {
+    try {
+      const parsedFlowData = JSON.parse(flow.flowData || "{}");
+      const nodes = parsedFlowData.nodes || [];
+      const edges = parsedFlowData.edges || [];
+
+      // Build message context
+      const message = {
+        from: fromNumber,
+        provider: "whatsapp",
+      };
+
+      // Build customer context
+      const customerContext = {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+      };
+
+      // Execute flow
+      await executeFlowFromTrigger(nodes, edges, customerContext, message);
+      console.log("[Flow Engine] Flow executed:", flow.id);
+    } catch (err) {
+      console.error("[Flow Engine] Error executing flow", flow.id, ":", err);
+    }
+  }
+}
+
+/**
  * Execute a visual flow (N8N-style flow) with proper conditional logic
  */
 export async function executeVisualFlow(

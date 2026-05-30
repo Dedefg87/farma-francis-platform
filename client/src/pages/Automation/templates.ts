@@ -193,7 +193,7 @@ export const flowTemplates: FlowTemplate[] = [
           },
           {
             key: 'url', label: 'URL da API', type: 'string',
-            defaultValue: '/api/contatos?telefone={{$json.telefone}}',
+            defaultValue: '/api/contatos?telefone={{$json.fromNumber}}',
           },
           {
             key: 'headers', label: 'Headers (JSON)', type: 'json',
