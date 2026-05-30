@@ -199,6 +199,10 @@ export const flowTemplates: FlowTemplate[] = [
             key: 'headers', label: 'Headers (JSON)', type: 'json',
             defaultValue: { 'Content-Type': 'application/json' },
           },
+          {
+            key: 'body', label: 'Body (JSON)', type: 'json',
+            defaultValue: {},
+          },
         ],
       },
     };

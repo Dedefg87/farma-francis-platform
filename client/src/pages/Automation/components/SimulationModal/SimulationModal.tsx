@@ -137,7 +137,27 @@ function validateNode(node: Node, edges: Edge[], allNodes: Node[]): ValidationEr
 
 function validateFieldType(field: ConfigField, value: string): ValidationError | null {
   // URL validation
-  if (field.key.toLowerCase().includes('url') || field.key.toLowerCase().includes('endpoint')) {
+  if (field.key.toLowerCase().includes('url' ) || field.key.toLowerCase().includes('endpoint' )) {
+    // Skip validation for relative URLs (internal API routes)
+    if (value.startsWith('/api/')) return null;
+    if (value.startsWith('http://' ) || value.startsWith('https://' )) {
+      try {
+        new URL(value);
+      } catch {
+        return {
+          field: field.label,
+          message: `URL inválida: "${value}"`,
+          suggestion: 'Insira uma URL válida completa, ex: https://api.exemplo.com/webhook',
+        };
+      }
+    } else if (value && !value.startsWith('/')) {
+      return {
+        field: field.label,
+        message: `URL inválida: "${value}"`,
+        suggestion: 'Use URL relativa começando com /api/ ou URL completa',
+      };
+    }
+  }
     try {
       new URL(value);
     } catch {
