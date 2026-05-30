@@ -249,7 +249,7 @@ export const flowTemplates: FlowTemplate[] = [
             key: 'body', label: 'Body (JSON)', type: 'json',
             defaultValue: {
               nome: '{{$json.nome}}',
-              telefone: '{{$json.telefone}}',
+              telefone: "{{$json.fromNumber}}",
               origem: '{{$json.origem}}',
             },
           },
@@ -278,7 +278,7 @@ export const flowTemplates: FlowTemplate[] = [
             defaultValue: {
               contato_id: '{{$json.id}}',
               nome: '{{$json.nome}}',
-              telefone: '{{$json.telefone}}',
+              telefone: "{{$json.fromNumber}}",
               mensagem: '{{$json.mensagem}}',
               origem: '{{$json.origem}}',
               timestamp: '{{$now}}',
@@ -408,7 +408,7 @@ export const flowTemplates: FlowTemplate[] = [
               descricao: 'Mensagem recebida: {{$json.mensagem}}',
               status: 'aberta',
               contato_id: '{{$json.contato_id}}',
-              telefone: '{{$json.telefone}}',
+              telefone: "{{$json.fromNumber}}",
               origem: '{{$json.origem}}',
               timestamp: '{{$now}}',
             },
@@ -440,7 +440,7 @@ export const flowTemplates: FlowTemplate[] = [
           {
             key: 'body', label: 'Body (JSON)', type: 'json',
             defaultValue: {
-              telefone: '{{$json.telefone}}',
+              telefone: "{{$json.fromNumber}}",
               mensagem: 'Novo atendimento disponível.',
             },
           },

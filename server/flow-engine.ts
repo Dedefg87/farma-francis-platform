@@ -328,10 +328,13 @@ export async function findAndExecuteFlowForTrigger(
       const nodes = parsedFlowData.nodes || [];
       const edges = parsedFlowData.edges || [];
 
-      // Build message context
+      // Build message context - campos que o template espera
       const message = {
         from: fromNumber,
         provider: "whatsapp",
+        nome: customer.name,
+        mensagem: "",
+        origem: "whatsapp",
       };
 
       // Build customer context
@@ -511,22 +514,6 @@ const VALID_NODE_TYPES = new Set([
   "welcome-agent",
 ]);
 
-/**
- * Infer node type from label/config for legacy "default" type nodes
- */
-function inferNodeTypeFromLabel(label: string, config: unknown): string {
-  const l = (label || "").toLowerCase();
-  if (l.includes("nova mensagem") || l.includes("trigger")) return "trigger";
-  if (l.includes("horário") || l.includes("ligação") || l.includes("venda") ||
-      l.includes("orçamento") || l.includes("silêncio") || l.includes("logado") ||
-      l.includes("condição") || l.includes("condition")) return "condition";
-  if (l.includes("mensagem") || l.includes("saudação") || l.includes("agradecer") ||
-      l.includes("pesquisa") || l.includes("recusar") || l.includes("fora de horário")) return "message";
-  if (l.includes("gerar") || (config && config.function)) return "function";
-  if (l.includes("não responder") || (config && config.action === "no_response")) return "setVariable";
-  return "customNode";
-}
-
 function sanitizeNodeType(nodeType: string): string {
   if (VALID_NODE_TYPES.has(nodeType)) return nodeType;
   // Try to map common variations
@@ -596,15 +583,13 @@ async function executeNodeWithEdges(
   const rawType = (node.type as string) || "customNode";
   const nodeType = node.data?.nodeType as string;
   
-  // Map node type based on priority
+  // If type is customNode and nodeType exists, use nodeType for mapping
   if (rawType === "customNode" && nodeType) {
     node.type = sanitizeNodeType(nodeType);
-  } else if (rawType === "default") {
-    const label = (node.data?.label as string || "").toLowerCase();
-    node.type = inferNodeTypeFromLabel(label, node.data?.config);
   } else {
     node.type = sanitizeNodeType(rawType);
   }
+
   if (!VALID_NODE_TYPES.has(node.type)) {
     console.warn(
       `[Flow Engine] SKIPPING unknown node type: "${rawType}" (label: ${node.data?.label || node.id}). ` +
