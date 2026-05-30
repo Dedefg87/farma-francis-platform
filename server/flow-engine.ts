@@ -512,9 +512,16 @@ async function executeNodeWithEdges(
   context: unknown,
   message: unknown
 ): Promise<void> {
-  // Sanitize node type
+  // Sanitize node type - check nodeType first, then type
   const rawType = (node.type as string) || "customNode";
-  node.type = sanitizeNodeType(rawType);
+  const nodeType = node.data?.nodeType as string;
+  
+  // If type is customNode and nodeType exists, use nodeType for mapping
+  if (rawType === "customNode" && nodeType) {
+    node.type = sanitizeNodeType(nodeType);
+  } else {
+    node.type = sanitizeNodeType(rawType);
+  }
 
   if (!VALID_NODE_TYPES.has(node.type)) {
     console.warn(
