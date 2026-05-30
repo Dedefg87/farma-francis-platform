@@ -164,3 +164,49 @@ restRouter.put("/atendimentos/atribuir", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// GET /api/feriados?ibge=XXX - Buscar feriados municipais/estaduais
+restRouter.get("/feriados", async (req, res) => {
+  try {
+    const { ibge } = req.query;
+    
+    // Feriados nacionais fixos (2026)
+    const nationalHolidays = [
+      { date: "2026-01-01", name: "Confraternização Universal", type: "national" },
+      { date: "2026-02-17", name: "Carnaval", type: "national" },
+      { date: "2026-04-03", name: "Paixão de Cristo", type: "national" },
+      { date: "2026-04-21", name: "Tiradentes", type: "national" },
+      { date: "2026-05-01", name: "Dia do Trabalho", type: "national" },
+      { date: "2026-09-07", name: "Independência do Brasil", type: "national" },
+      { date: "2026-10-12", name: "Nossa Senhora Aparecida", type: "national" },
+      { date: "2026-11-02", name: "Finados", type: "national" },
+      { date: "2026-11-15", name: "Proclamação da República", type: "national" },
+      { date: "2026-11-20", name: "Dia da Consciência Negra", type: "national" },
+      { date: "2026-12-25", name: "Natal", type: "national" },
+    ];
+
+    // Feriados estaduais/SP (IBGE 35)
+    const spStateHolidays = (ibge && String(ibge).startsWith("35"))
+      ? [
+          { date: "2026-07-09", name: "Revolução Constitucionalista", type: "state" },
+          { date: "2026-12-30", name: "Corpus Christi", type: "state" },
+        ]
+      : [];
+
+    // Feriados municipais/SP capital (IBGE 3550308)
+    const saoPauloHolidays = ibge === "3550308"
+      ? [
+          { date: "2026-01-25", name: "Ano Novo Paulista", type: "municipal" },
+          { date: "2026-07-13", name: "Emancipação de SP", type: "municipal" },
+        ]
+      : [];
+
+    return res.json({
+      ibge: ibge || null,
+      holidays: [...nationalHolidays, ...spStateHolidays, ...saoPauloHolidays],
+      count: nationalHolidays.length + spStateHolidays.length + saoPauloHolidays.length,
+    });
+  } catch (err: unknown) {
+    console.error("[REST] /feriados error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
