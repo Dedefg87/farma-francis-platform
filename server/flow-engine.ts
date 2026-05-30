@@ -382,6 +382,19 @@ async function executeFlowFromTrigger(
 ): Promise<void> {
   const triggerNode = nodes.find((n: unknown) => n.type === "trigger");
   if (!triggerNode) {
+    // Try fallback for legacy "default" type nodes with trigger label
+    const triggerNodeFallback = nodes.find((n: unknown) => 
+      n.type === "default" &&
+      (n.data?.label?.toLowerCase().includes("nova mensagem") ||
+       n.data?.label?.toLowerCase().includes("trigger"))
+    );
+    
+    if (triggerNodeFallback) {
+      triggerNodeFallback.type = "trigger";
+      const trigger = triggerNodeFallback;
+      await executeNodeWithEdges(trigger, nodes, edges, context, message);
+      return;
+    }
     console.error(`[Chatbot Flow] No trigger node found`);
     return;
   }
@@ -446,6 +459,22 @@ const VALID_NODE_TYPES = new Set([
   "if-business-hours",
   "welcome-agent",
 ]);
+
+/**
+ * Infer node type from label/config for legacy "default" type nodes
+ */
+function inferNodeTypeFromLabel(label: string, config: unknown): string {
+  const l = (label || "").toLowerCase();
+  if (l.includes("nova mensagem") || l.includes("trigger")) return "trigger";
+  if (l.includes("horário") || l.includes("ligação") || l.includes("venda") ||
+      l.includes("orçamento") || l.includes("silêncio") || l.includes("logado") ||
+      l.includes("condição") || l.includes("condition")) return "condition";
+  if (l.includes("mensagem") || l.includes("saudação") || l.includes("agradecer") ||
+      l.includes("pesquisa") || l.includes("recusar") || l.includes("fora de horário")) return "message";
+  if (l.includes("gerar") || (config && config.function)) return "function";
+  if (l.includes("não responder") || (config && config.action === "no_response")) return "setVariable";
+  return "customNode";
+}
 
 function sanitizeNodeType(nodeType: string): string {
   if (VALID_NODE_TYPES.has(nodeType)) return nodeType;
@@ -516,13 +545,15 @@ async function executeNodeWithEdges(
   const rawType = (node.type as string) || "customNode";
   const nodeType = node.data?.nodeType as string;
   
-  // If type is customNode and nodeType exists, use nodeType for mapping
+  // Map node type based on priority
   if (rawType === "customNode" && nodeType) {
     node.type = sanitizeNodeType(nodeType);
+  } else if (rawType === "default") {
+    const label = (node.data?.label as string || "").toLowerCase();
+    node.type = inferNodeTypeFromLabel(label, node.data?.config);
   } else {
     node.type = sanitizeNodeType(rawType);
   }
-
   if (!VALID_NODE_TYPES.has(node.type)) {
     console.warn(
       `[Flow Engine] SKIPPING unknown node type: "${rawType}" (label: ${node.data?.label || node.id}). ` +
