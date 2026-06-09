@@ -233,6 +233,19 @@ async function startServer() {
     }
   });
 
+  // Debug: Get active visual flows
+  app.get("/api/debug/visual-flows", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const [result] = await db.execute(sql`SELECT id, name, is_active, template_type, created_at, LENGTH(flow_data) as flow_size FROM visual_flows WHERE is_active = 1 ORDER BY id DESC LIMIT 20`);
+      res.json({ flows: result, count: result.length });
+    } catch (err: unknown) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Debug: Check recent conversations and messages
   // Debug: Close all open/assigned conversations (for admin actions)
   app.post("/api/debug/close-all-conversations", async (_, res) => {

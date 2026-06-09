@@ -426,6 +426,135 @@ export async function executeVisualFlow(
 }
 
 /**
+ * Infer node type from label (Portuguese labels to node types)
+ * Used for legacy/customNode types that have Portuguese labels like "Gatilho", "Condição", etc.
+ */
+function inferNodeTypeFromLabel(label: string): string | null {
+  if (!label) return null;
+  
+  const labelLower = label.toLowerCase();
+  
+  // Trigger/gatilho variations
+  if (labelLower.includes("gatilho") || labelLower.includes("trigger") || labelLower.includes("nova mensagem")) {
+    return "trigger";
+  }
+  
+  // Condition variations
+  if (labelLower.includes("condiçao") || labelLower.includes("condicao") || labelLower.includes("if") || labelLower.includes("se")) {
+    return "condition";
+  }
+  
+  // Filter variations
+  if (labelLower.includes("filtro") || labelLower.includes("filter")) {
+    return "filter";
+  }
+  
+  // Message variations
+  if (labelLower.includes("mensagem") || labelLower.includes("message") || labelLower.includes("responder") || labelLower.includes("enviar")) {
+    return "message";
+  }
+  
+  // Switch variations
+  if (labelLower.includes("switch") || labelLower.includes("casos") || labelLower.includes("cases")) {
+    return "switch";
+  }
+  
+  // Wait variations
+  if (labelLower.includes("esperar") || labelLower.includes("wait") || labelLower.includes("pausa")) {
+    return "wait";
+  }
+  
+  // Set variable variations
+  if (labelLower.includes("variavel") || labelLower.includes("set") || labelLower.includes("definir")) {
+    return "setVariable";
+  }
+  
+  // HTTP request variations
+  if (labelLower.includes("http") || labelLower.includes("api") || labelLower.includes("webhook")) {
+    return "httpRequest";
+  }
+  
+  // Transfer human variations
+  if (labelLower.includes("transferir") || labelLower.includes("atendente") || labelLower.includes("human")) {
+    return "transferHuman";
+  }
+  
+  // Create ticket variations
+  if (labelLower.includes("ticket") || labelLower.includes("chamado")) {
+    return "createTicket";
+  }
+  
+  // URA menu variations
+  if (labelLower.includes("ura") || labelLower.includes("menu") || labelLower.includes("opcoes")) {
+    return "uraMenu";
+  }
+  
+  // AI Assistant variations
+  if (labelLower.includes("ia") || labelLower.includes("ai") || labelLower.includes("assistente")) {
+    return "aiAssistant";
+  }
+  
+  // Function variations
+  if (labelLower.includes("funcao") || labelLower.includes("function") || labelLower.includes("acao")) {
+    return "function";
+  }
+  
+  // Notify variations
+  if (labelLower.includes("notificar") || labelLower.includes("notify") || labelLower.includes("avisar")) {
+    return "notify";
+  }
+  
+  // Add tag variations
+  if (labelLower.includes("tag") || labelLower.includes("etiqueta")) {
+    return "add_tag";
+  }
+  
+  // Assign agent variations
+  if (labelLower.includes("atribuir") || labelLower.includes("assign") || labelLower.includes("agente")) {
+    return "assign_agent";
+  }
+  
+  // Create contact variations
+  if (labelLower.includes("contato") || labelLower.includes("contact")) {
+    return "create_contact";
+  }
+  
+  // Create task variations
+  if (labelLower.includes("tarefa") || labelLower.includes("task")) {
+    return "create_task";
+  }
+  
+  // Email variations
+  if (labelLower.includes("email") || labelLower.includes("e-mail")) {
+    return "email-send";
+  }
+  
+  // Business hours variations
+  if (labelLower.includes("horario") || labelLower.includes("business")) {
+    return "if-business-hours";
+  }
+  
+  // Welcome agent variations
+  if (labelLower.includes("bem-vindo") || labelLower.includes("welcome")) {
+    return "welcome-agent";
+  }
+  
+  // Pharmacy-specific variations
+  if (labelLower.includes("receita") || labelLower.includes("prescription")) {
+    return "check-prescription";
+  }
+  
+  if (labelLower.includes("pix") || labelLower.includes("pagamento")) {
+    return "pix-confirmation";
+  }
+  
+  if (labelLower.includes("atendimento")) {
+    return "attendance-create";
+  }
+  
+  return null;
+}
+/**
  * Execute flow starting from trigger node following edges
  */
 async function executeFlowFromTrigger(
@@ -434,21 +563,30 @@ async function executeFlowFromTrigger(
   context: unknown,
   message: unknown
 ): Promise<void> {
-  const triggerNode = nodes.find((n: unknown) => n.type === "trigger");
+  // Try to find trigger node - check type first, then infer from label
+  let triggerNode = nodes.find((n: unknown) => n.type === "trigger");
+  
   if (!triggerNode) {
-    // Try fallback for legacy "default" type nodes with trigger label
-    const triggerNodeFallback = nodes.find((n: unknown) => 
-      n.type === "default" &&
-      (n.data?.label?.toLowerCase().includes("nova mensagem") ||
-       n.data?.label?.toLowerCase().includes("trigger"))
-    );
+    // Try fallback for legacy nodes - infer type from label
+    const triggerNodeFallback = nodes.find((n: unknown) => {
+      const inferredType = inferNodeTypeFromLabel(n.data?.label);
+      if (inferredType === "trigger") {
+        n.type = inferredType;
+        return true;
+      }
+      // Also check for explicit trigger/default types
+      return n.type === "default" &&
+        (n.data?.label?.toLowerCase().includes("nova mensagem") ||
+         n.data?.label?.toLowerCase().includes("trigger"));
+    });
     
     if (triggerNodeFallback) {
-      triggerNodeFallback.type = "trigger";
-      const trigger = triggerNodeFallback;
-      await executeNodeWithEdges(trigger, nodes, edges, context, message);
-      return;
+      triggerNodeFallback.type = triggerNodeFallback.type || "trigger";
+      triggerNode = triggerNodeFallback;
     }
+  }
+
+  if (!triggerNode) {
     console.error(`[Chatbot Flow] No trigger node found`);
     return;
   }
@@ -579,13 +717,20 @@ async function executeNodeWithEdges(
   context: unknown,
   message: unknown
 ): Promise<void> {
-  // Sanitize node type - check nodeType first, then type
+  // Sanitize node type - check nodeType first, then infer from label for legacy nodes
   const rawType = (node.type as string) || "customNode";
   const nodeType = node.data?.nodeType as string;
   
-  // If type is customNode and nodeType exists, use nodeType for mapping
-  if (rawType === "customNode" && nodeType) {
-    node.type = sanitizeNodeType(nodeType);
+  // Try to infer node type from label for legacy/customNode/default types
+  if (rawType === "customNode" || rawType === "default") {
+    const inferredType = inferNodeTypeFromLabel(node.data?.label);
+    if (inferredType) {
+      node.type = sanitizeNodeType(inferredType);
+    } else if (nodeType) {
+      node.type = sanitizeNodeType(nodeType);
+    } else {
+      node.type = sanitizeNodeType(rawType);
+    }
   } else {
     node.type = sanitizeNodeType(rawType);
   }
