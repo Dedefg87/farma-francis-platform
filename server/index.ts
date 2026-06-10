@@ -529,6 +529,6 @@ startServer().catch((err) => {
   console.error("[Server] Failed to start:", err);
   process.exit(1);
 });
-// Railway deploy: Mon May  4 14:22:25 -03 2026
-// Trigger redeploy 1779922491
-// Force redeploy 1779924378
+// Railway deploy: Tue Jun 10 12:25 -03 2026 - trigger deploy
+// Force redeploy 1781105277
+// Force redeploy 1782327700
