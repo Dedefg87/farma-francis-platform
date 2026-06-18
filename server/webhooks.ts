@@ -828,6 +828,27 @@ async function processWhatsAppWebhook(body: unknown) {
  * Process Instagram webhook payload
  * Extracts message data and saves to database
  */
+
+async function downloadMediaToBuffer(url: string): Promise<Buffer | null> {
+  try {
+    console.log("[downloadMediaToBuffer] Downloading:", url.substring(0, 100));
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; FarmaFrancisBot/1.0)",
+      },
+    });
+    if (!response.ok) {
+      console.error("[downloadMediaToBuffer] HTTP error:", response.status, response.statusText);
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (err) {
+    console.error("[downloadMediaToBuffer] Download failed:", err);
+    return null;
+  }
+}
+
 async function processInstagramWebhook(body: unknown) {
   try {
     const db = await getDb();
@@ -885,7 +906,25 @@ async function processInstagramWebhook(body: unknown) {
                           ? "image"
                           : "unknown";
 
-          mediaUrl = payload?.url || null;
+          let rawMediaUrl = payload?.url || null;
+
+          // Download and upload to R2 for Instagram media URLs (hotlink protection)
+          if (rawMediaUrl && !cleanR2Url(rawMediaUrl)) {
+            try {
+              const mediaBuffer = await downloadMediaToBuffer(rawMediaUrl);
+              if (mediaBuffer) {
+                const { uploadToR2 } = await import("./r2-client");
+                const fileName = rawMediaUrl.split("/").pop() || "instagram-media";
+                const uploadResult = await uploadToR2(mediaBuffer, fileName, attachment.mime_type || "image/jpeg");
+                rawMediaUrl = uploadResult.url;
+                console.log("[Instagram] Uploaded media to R2:", rawMediaUrl);
+              }
+            } catch (downloadErr) {
+              console.error("[Instagram] Failed to download/upload media:", downloadErr);
+            }
+          }
+
+          mediaUrl = cleanR2Url(rawMediaUrl) || rawMediaUrl;
 
           // Priority for story caption (Instagram may send text in caption field)
           const storyCaption = attachment.caption || attachment.story_caption || null;
