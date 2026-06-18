@@ -158,16 +158,6 @@ function validateFieldType(field: ConfigField, value: string): ValidationError |
       };
     }
   }
-    try {
-      new URL(value);
-    } catch {
-      return {
-        field: field.label,
-        message: `URL inválida: "${value}"`,
-        suggestion: 'Insira uma URL válida completa, ex: https://api.exemplo.com/webhook',
-      };
-    }
-  }
 
   // JSON validation
   if (field.type === 'json') {
