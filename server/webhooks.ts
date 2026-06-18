@@ -1208,6 +1208,9 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string)
   // Limpar URL do R2 para obter apenas o caminho relativo
   const mediaUrl = rawUrl ? cleanR2Url(rawUrl) : null;
 
+  // Se não é R2, retornar rawUrl para download posterior
+  const needsDownload = rawUrl && !mediaUrl;
+
   // ===========================================
   // 🎯 Texto e Caption
   // ===========================================
@@ -1270,6 +1273,8 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string)
     text,
     caption,
     mediaUrl,
+    rawUrl,
+    needsDownload,
     mimeType,
     fileName,
     fileSize,
@@ -1341,11 +1346,27 @@ async function processEvolutionWebhook(body: unknown) {
 
         // Determinar tipo e conteúdo da mensagem (rápido, sem download)
         const parsed = parseEvolutionMessageContent(messageContent, rawMessageType);
-        const messageType = parsed.type;
+        let messageType = parsed.type;
         const messageText = parsed.text;
         const caption = parsed.caption;
-        const mediaUrl = parsed.mediaUrl;
+        let mediaUrl = parsed.mediaUrl;
         const mimeType = parsed.mimeType;
+        
+        // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN
+        if (parsed.needsDownload && parsed.rawUrl) {
+          try {
+            const mediaBuffer = await downloadMediaToBuffer(parsed.rawUrl);
+            if (mediaBuffer) {
+              const { uploadToR2 } = await import("./r2-client");
+              const fileName = parsed.rawUrl.split("/").pop() || "whatsapp-media";
+              const uploadResult = await uploadToR2(mediaBuffer, fileName, parsed.mimeType || "image/jpeg");
+              mediaUrl = cleanR2Url(uploadResult.url);
+              console.log("[Evolution] Downloaded WhatsApp CDN media to R2:", mediaUrl);
+            }
+          } catch (downloadErr) {
+            console.error("[Evolution] Failed to download WhatsApp CDN media:", downloadErr);
+          }
+        }
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
