@@ -635,6 +635,12 @@ export default function AgentMessages() {
     isAtBottomRef.current = isAtBottom;
   }, []);
 
+  // Resets: when conversation changes, allow scroll to bottom on new conversation
+  useEffect(() => {
+    hasInitiallyScrolledRef.current = false;
+    isAtBottomRef.current = true;
+  }, [selectedConversationId]);
+
   // Scroll inicial quando carrega conversa
   useEffect(() => {
     if (!hasInitiallyScrolledRef.current && messages && messages.length > 0) {
