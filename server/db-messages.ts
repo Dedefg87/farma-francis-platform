@@ -592,7 +592,7 @@ export async function ingestInboundConversationMessage(message: {
     message.externalId &&
     (
       // Case 1: has WhatsApp CDN URL
-      (fileUrlToSave && fileUrlToSave.includes("mmg.whatsapp.net")) ||
+      (fileUrlToSave && fileUrlToSave.includes("mmg.whatsapp.net") || fileUrlToSave.includes("pps.whatsapp.net")) ||
       // Case 2: has media but no URL (stickers, etc.) — mediaId or mimeType indicates media
       (!fileUrlToSave && (message.mediaId || ["sticker", "stickerMessage", "image", "audio", "video", "document"].includes(message.messageType || "")))
     );
