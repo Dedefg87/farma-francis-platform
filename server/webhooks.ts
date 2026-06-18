@@ -877,9 +877,21 @@ async function processInstagramWebhook(body: unknown) {
                   ? "audio"
                   : type === "file"
                     ? "document"
-                    : "unknown";
+                    : type === "story"
+                      ? "image"
+                      : type === "story_template"
+                        ? "image"
+                        : type === "fallback"
+                          ? "image"
+                          : "unknown";
 
           mediaUrl = payload?.url || null;
+
+          // Priority for story caption (Instagram may send text in caption field)
+          const storyCaption = attachment.caption || attachment.story_caption || null;
+          if (storyCaption) {
+            text = text || storyCaption;
+          }
         }
 
         const existing = await getReceivedMessageByExternalId(
