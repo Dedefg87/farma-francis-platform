@@ -1219,6 +1219,54 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string)
 
   if (typeToSave === 'text' || typeToSave === 'unknown') {
     text = message.conversation || message.extendedTextMessage?.text || null;
+    
+    // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
+    const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (quotedMessage) {
+      console.log("[Parse] Detected quotedMessage in extendedTextMessage (story reply)");
+      
+      // Detect media type from quoted message
+      if (quotedMessage.imageMessage) {
+        messageType = 'image';
+        rawUrl = quotedMessage.imageMessage.url || quotedMessage.imageMessage.mediaUrl || null;
+        mimeType = quotedMessage.imageMessage.mimetype || quotedMessage.imageMessage.mimeType || null;
+        fileName = quotedMessage.imageMessage.fileName || null;
+        fileSize = quotedMessage.imageMessage.fileSize || null;
+        caption = quotedMessage.imageMessage.caption || null;
+        console.log("[Parse] Story reply with imageMessage detected");
+      } else if (quotedMessage.videoMessage) {
+        messageType = 'video';
+        rawUrl = quotedMessage.videoMessage.url || quotedMessage.videoMessage.mediaUrl || null;
+        mimeType = quotedMessage.videoMessage.mimetype || quotedMessage.videoMessage.mimeType || null;
+        fileName = quotedMessage.videoMessage.fileName || null;
+        fileSize = quotedMessage.videoMessage.fileSize || null;
+        caption = quotedMessage.videoMessage.caption || null;
+        console.log("[Parse] Story reply with videoMessage detected");
+      } else if (quotedMessage.stickerMessage) {
+        messageType = 'sticker';
+        rawUrl = quotedMessage.stickerMessage.url || quotedMessage.stickerMessage.mediaUrl || null;
+        mimeType = quotedMessage.stickerMessage.mimetype || quotedMessage.stickerMessage.mimeType || null;
+        fileName = quotedMessage.stickerMessage.fileName || null;
+        fileSize = quotedMessage.stickerMessage.fileSize || null;
+        console.log("[Parse] Story reply with stickerMessage detected");
+      } else if (quotedMessage.audioMessage) {
+        messageType = 'audio';
+        rawUrl = quotedMessage.audioMessage.url || quotedMessage.audioMessage.mediaUrl || null;
+        mimeType = quotedMessage.audioMessage.mimetype || quotedMessage.audioMessage.mimeType || null;
+        fileName = quotedMessage.audioMessage.fileName || null;
+        fileSize = quotedMessage.audioMessage.fileSize || null;
+        caption = quotedMessage.audioMessage.caption || null;
+        console.log("[Parse] Story reply with audioMessage detected");
+      } else if (quotedMessage.documentMessage) {
+        messageType = 'document';
+        rawUrl = quotedMessage.documentMessage.url || quotedMessage.documentMessage.mediaUrl || null;
+        mimeType = quotedMessage.documentMessage.mimetype || quotedMessage.documentMessage.mimeType || null;
+        fileName = quotedMessage.documentMessage.fileName || quotedMessage.documentMessage.title || null;
+        fileSize = quotedMessage.documentMessage.fileSize || null;
+        caption = quotedMessage.documentMessage.caption || null;
+        console.log("[Parse] Story reply with documentMessage detected");
+      }
+    }
   } else {
     caption = message.caption || 
               actualMessage.imageMessage?.caption || 
