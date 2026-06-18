@@ -1297,7 +1297,7 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string)
   // ===========================================
   // 🎯 FileSize (tentar de qualquer fonte)
   // ===========================================
-  const fileSize = message.fileSize || 
+  let fileSize = message.fileSize || 
                    actualMessage.imageMessage?.fileSize || 
                    actualMessage.videoMessage?.fileSize || 
                    actualMessage.documentMessage?.fileSize || 
