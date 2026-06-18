@@ -855,7 +855,7 @@ async function processInstagramWebhook(body: unknown) {
         if (!message || !sender) continue;
 
         const messageId = message.mid;
-        const text = message.text || null;
+        let text = message.text || null;
 
         // Extract attachments
         let mediaUrl = null;
