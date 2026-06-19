@@ -1222,8 +1222,11 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
     
     // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
     // Support both formats: extendedTextMessage.contextInfo.quotedMessage OR data.contextInfo.quotedMessage
-    const contextInfo = (contextInfoFromParent as any) || {};
-    const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || contextInfo.quotedMessage;
+    const contextInfo = (params?.contextInfo as any) || null;
+  // Check for quotedMessage in multiple possible locations:
+  // Format 1: extendedTextMessage.contextInfo.quotedMessage (comum)
+  // Format 2: data.contextInfo.quotedMessage (Evolution API sem extendedTextMessage)
+    const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || contextInfo?.quotedMessage;
     if (quotedMessage) {
       console.log("[Parse] Detected quotedMessage in extendedTextMessage (story reply)");
       
