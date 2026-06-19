@@ -73,25 +73,25 @@ async function startServer() {
 
   const app = express();
   // Aumentar limite do body-parser para 50MB (padrão é 100kb)
-  // Helmet — headers de segurança (config customizada pra não quebrar iframes)
+  // Helmet — headers de segurança (config customizada pra não quebrar iframes/media)
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"], // TODO: remover unsafe-inline depois
-        workerSrc: ["'self'", "blob:"], // Permite workers (blob: para createObjectURL)
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        workerSrc: ["'self'", "blob:"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https://*"], // permite imagens do R2/externas
+        imgSrc: ["'self'", "data:", "https://*"],
         connectSrc: ["'self'", "https://innovative-enjoyment-production-ed8f.up.railway.app"],
+        frameSrc: ["'self'", "https://*"],
+        mediaSrc: ["'self'", "https://*"],
       },
     },
-    frameguard: { action: "sameorigin" }, // Permite iframe da mesma origem (PDF previews)
-    hsts: process.env.NODE_ENV === "production", // HSTS só em produção
+    frameguard: { action: "sameorigin" },
+    hsts: process.env.NODE_ENV === "production",
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-    crossOriginEmbedderPolicy: false,     // Necessário pra R2/embeds externos
+    crossOriginEmbedderPolicy: false,
   }));
-
-  // CORS — controla quem pode chamar a API de outros domínios
   // Frontend e backend são same-origin (mesmo domínio), então CORS não deve bloquear
   const allowedOrigins = [
     process.env.PUBLIC_BASE_URL,           // URL do frontend (Railway)
