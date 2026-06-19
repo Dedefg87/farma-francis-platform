@@ -1045,7 +1045,7 @@ function extractEvolutionMessage(body: unknown) {
   };
 }
 
-function parseEvolutionMessageContent(message: unknown, rawMessageType?: string) {
+function parseEvolutionMessageContent(message: unknown, rawMessageType?: string, contextInfoFromParent?: unknown) {
   if (!message)
     return {
       type: "unknown",
@@ -1221,7 +1221,9 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string)
     text = message.conversation || message.extendedTextMessage?.text || null;
     
     // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
-    const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage;
+    // Support both formats: extendedTextMessage.contextInfo.quotedMessage OR data.contextInfo.quotedMessage
+    const contextInfo = (contextInfoFromParent as any) || {};
+    const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || contextInfo.quotedMessage;
     if (quotedMessage) {
       console.log("[Parse] Detected quotedMessage in extendedTextMessage (story reply)");
       
@@ -1393,7 +1395,7 @@ async function processEvolutionWebhook(body: unknown) {
         if (!fromNumber) return;
 
         // Determinar tipo e conteúdo da mensagem (rápido, sem download)
-        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType);
+        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, data?.contextInfo);
         let messageType = parsed.type;
         const messageText = parsed.text;
         const caption = parsed.caption;
