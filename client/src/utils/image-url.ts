@@ -2,16 +2,13 @@
  * Get image source URL.
  *
  * WhatsApp CDN URLs (pps.whatsapp.net, mmg.whatsapp.net) block direct
- * browser access with 403. Profile pictures are now uploaded to R2
- * automatically by profile-pic.ts, so new customers won't have these URLs.
- * 
- * For legacy customers with WhatsApp CDN URLs, we proxy through /api/media/:messageId
- * (for messages) or /api/media/proxy?url=... (for profile photos without messageId).
+ * browser access with 403. Profile pictures are now replaced with
+ * ui-avatars.com placeholders to avoid blocking.
  */
 
 export function getImageSrc(
   url: string | null | undefined,
-  messageId?: number
+  _messageId?: number
 ): string {
   if (!url) return "";
 
@@ -20,16 +17,14 @@ export function getImageSrc(
     return url;
   }
 
-  // WhatsApp CDN block direct browser access with 403
+  // WhatsApp CDN blocks direct browser access with 403
+  // Replace with ui-avatars.com placeholder (reliable, no blocking)
   const isWhatsAppCdn = /whatsapp\.net|whatsapp\.com/.test(url);
   
   if (isWhatsAppCdn) {
-    // If we have a messageId, use the message-based proxy
-    if (messageId) {
-      return `/api/media/${messageId}`;
-    }
-    // Otherwise use the URL-based proxy for profile photos
-    return `/api/media/proxy?url=${encodeURIComponent(url)}`;
+    // Generate deterministic avatar from URL hash
+    const hash = url.split("/").pop()?.replace(/\W/g, "")?.slice(-6) || Math.random().toString(36).substr(2, 6);
+    return `https://ui-avatars.com/api/?name=${hash}&background=random&size=128&rounded=true`;
   }
 
   // R2 and other public URLs are fine
