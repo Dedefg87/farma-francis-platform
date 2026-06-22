@@ -1227,7 +1227,7 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
       
       // Detect media type from quoted message
       if (quotedMessage.imageMessage) {
-        messageType = 'image';
+        typeToSave = 'image';
         rawUrl = quotedMessage.imageMessage.url || quotedMessage.imageMessage.mediaUrl || null;
         mimeType = quotedMessage.imageMessage.mimetype || quotedMessage.imageMessage.mimeType || null;
         fileName = quotedMessage.imageMessage.fileName || null;
@@ -1235,7 +1235,7 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
         caption = quotedMessage.imageMessage.caption || null;
         console.log("[Parse] Story reply with imageMessage detected");
       } else if (quotedMessage.videoMessage) {
-        messageType = 'video';
+        typeToSave = 'video';
         rawUrl = quotedMessage.videoMessage.url || quotedMessage.videoMessage.mediaUrl || null;
         mimeType = quotedMessage.videoMessage.mimetype || quotedMessage.videoMessage.mimeType || null;
         fileName = quotedMessage.videoMessage.fileName || null;
@@ -1243,14 +1243,14 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
         caption = quotedMessage.videoMessage.caption || null;
         console.log("[Parse] Story reply with videoMessage detected");
       } else if (quotedMessage.stickerMessage) {
-        messageType = 'sticker';
+        typeToSave = 'sticker';
         rawUrl = quotedMessage.stickerMessage.url || quotedMessage.stickerMessage.mediaUrl || null;
         mimeType = quotedMessage.stickerMessage.mimetype || quotedMessage.stickerMessage.mimeType || null;
         fileName = quotedMessage.stickerMessage.fileName || null;
         fileSize = quotedMessage.stickerMessage.fileSize || null;
         console.log("[Parse] Story reply with stickerMessage detected");
       } else if (quotedMessage.audioMessage) {
-        messageType = 'audio';
+        typeToSave = 'audio';
         rawUrl = quotedMessage.audioMessage.url || quotedMessage.audioMessage.mediaUrl || null;
         mimeType = quotedMessage.audioMessage.mimetype || quotedMessage.audioMessage.mimeType || null;
         fileName = quotedMessage.audioMessage.fileName || null;
@@ -1258,7 +1258,7 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
         caption = quotedMessage.audioMessage.caption || null;
         console.log("[Parse] Story reply with audioMessage detected");
       } else if (quotedMessage.documentMessage) {
-        messageType = 'document';
+        typeToSave = 'document';
         rawUrl = quotedMessage.documentMessage.url || quotedMessage.documentMessage.mediaUrl || null;
         mimeType = quotedMessage.documentMessage.mimetype || quotedMessage.documentMessage.mimeType || null;
         fileName = quotedMessage.documentMessage.fileName || quotedMessage.documentMessage.title || null;
