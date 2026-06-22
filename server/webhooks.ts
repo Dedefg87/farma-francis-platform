@@ -1403,10 +1403,23 @@ async function processEvolutionWebhook(body: unknown) {
         // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN
         if (parsed.needsDownload && parsed.rawUrl) {
           try {
-            const mediaBuffer = await downloadMediaToBuffer(parsed.rawUrl);
+            let mediaBuffer: Buffer | null = null;
+            
+            // Check if URL is WhatsApp CDN (hotlink protected)
+            const isWhatsAppCdn = parsed.rawUrl.includes("mmg.whatsapp.net") || parsed.rawUrl.includes("pps.whatsapp.net") || parsed.rawUrl.includes("whatsapp.net") || parsed.rawUrl.includes("whatsapp.com");
+            
+            if (isWhatsAppCdn) {
+              // Use authenticated download via Evolution API
+              const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+              const messageKey = messageId;
+              mediaBuffer = await downloadWhatsAppMediaFromEvolution(messageKey);
+            } else {
+              // Standard download for other URLs
+              mediaBuffer = await downloadMediaToBuffer(parsed.rawUrl);
+            }
             if (mediaBuffer) {
               const { uploadToR2 } = await import("./r2-client");
-              const fileName = parsed.rawUrl.split("/").pop() || "whatsapp-media";
+              const fileName = parsed.fileName || parsed.rawUrl.split("/").pop() || "whatsapp-media";
               const uploadResult = await uploadToR2(mediaBuffer, fileName, parsed.mimeType || "image/jpeg");
               mediaUrl = cleanR2Url(uploadResult.url);
               console.log("[Evolution] Downloaded WhatsApp CDN media to R2:", mediaUrl);
