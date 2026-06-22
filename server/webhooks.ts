@@ -1217,11 +1217,16 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
   let text: string | null = null;
   let caption: string | null = null;
 
+  // ===========================================
+  // 🎯 FileSize declaration (moved outside text block)
+  // ===========================================
+  let fileSize: number | null = message.fileSize ||
+    actualMessage.imageMessage?.fileSize ||
+    actualMessage.videoMessage?.fileSize ||
+    actualMessage.documentMessage?.fileSize ||
+    actualMessage.audioMessage?.fileSize || null;
+
   if (typeToSave === 'text' || typeToSave === 'unknown') {
-    // ===========================================
-    // 🎯 FileSize declaration (moved up for story reply)
-    // ===========================================
-    let fileSize: number | null = null;
     text = message.conversation || message.extendedTextMessage?.text || null;
     
     // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
