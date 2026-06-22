@@ -1218,6 +1218,10 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
   let caption: string | null = null;
 
   if (typeToSave === 'text' || typeToSave === 'unknown') {
+    // ===========================================
+    // 🎯 FileSize declaration (moved up for story reply)
+    // ===========================================
+    let fileSize: number | null = null;
     text = message.conversation || message.extendedTextMessage?.text || null;
     
     // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
@@ -1297,12 +1301,6 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
   // ===========================================
   // 🎯 FileSize (tentar de qualquer fonte)
   // ===========================================
-  let fileSize = message.fileSize || 
-                   actualMessage.imageMessage?.fileSize || 
-                   actualMessage.videoMessage?.fileSize || 
-                   actualMessage.documentMessage?.fileSize || 
-                   actualMessage.audioMessage?.fileSize || null;
-
   // Base64 (apenas para imagens, se fornecido)
   const base64 = typeToSave === 'image' ? actualMessage.imageMessage?.base64 || null : null;
   const mediaKey = (typeToSave === 'image' && actualMessage.imageMessage?.mediaKey) ||
