@@ -1206,10 +1206,10 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
   }
 
   // Limpar URL do R2 para obter apenas o caminho relativo
-  const mediaUrl = rawUrl ? cleanR2Url(rawUrl) : null;
+  let mediaUrl = rawUrl ? cleanR2Url(rawUrl) : null;
 
   // Se não é R2, retornar rawUrl para download posterior
-  const needsDownload = rawUrl && !mediaUrl;
+  let needsDownload = rawUrl && !mediaUrl;
 
   // ===========================================
   // 🎯 Texto e Caption
@@ -1275,6 +1275,16 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
         caption = quotedMessage.documentMessage.caption || null;
         console.log("[Parse] Story reply with documentMessage detected");
       }
+    }
+
+    // ===========================================
+    // 🎯 RECALCULAR mediaUrl e needsDownload após story reply
+    // Quando o quotedMessage mudar typeToSave/rawUrl, recalcular as variáveis
+    // ===========================================
+    if (rawUrl && !mediaUrl) {
+      mediaUrl = cleanR2Url(rawUrl);
+      needsDownload = rawUrl && !mediaUrl;
+      console.log("[Parse] Recalculated mediaUrl after story reply:", mediaUrl ? "FOUND" : "needs download");
     }
   } else {
     caption = message.caption || 
