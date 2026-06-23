@@ -1069,6 +1069,15 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
     message.documentWithCaptionMessage?.message ||
     message;
 
+# 🎯 EXTRAIR TEXTO - Para respostas a stories, texto está em message.conversation
+# Para mensagens de texto normais, também está em message.conversation ou extendedTextMessage.text
+let text: string | null = null;
+if (message.conversation) {
+    text = message.conversation;
+} else if (message.extendedTextMessage?.text) {
+    text = message.extendedTextMessage.text;
+}
+
   // ===========================================
   // 🎯 PRIORIDADE 1: Usar messageType da Evolution API
   // A Evolution envia o tipo exato em payload.data.messageType
@@ -1234,7 +1243,7 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     actualMessage.audioMessage?.fileSize || null;
 
   if (typeToSave === 'text' || typeToSave === 'unknown') {
-    text = message.conversation || message.extendedTextMessage?.text || null;
+    # Text already set at the start of the function
     
     // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
     const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || (contextInfoFromData as any)?.quotedMessage;
