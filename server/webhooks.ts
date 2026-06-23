@@ -1205,6 +1205,13 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
     rawUrl = actualMessage.stickerMessage.url || actualMessage.stickerMessage.mediaUrl || null;
   }
 
+// Story reply via conversation (contextInfo na raiz do data)
+if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
+  rawUrl = contextInfoFromData.quotedMessage.imageMessage.url;
+  typeToSave = 'image'; } else if (!rawUrl && contextInfoFromData?.quotedMessage?.videoMessage?.url) {
+  rawUrl = contextInfoFromData.quotedMessage.videoMessage.url;
+  typeToSave = 'video'; }
+
   // Limpar URL do R2 para obter apenas o caminho relativo
   let mediaUrl = rawUrl ? cleanR2Url(rawUrl) : null;
 
