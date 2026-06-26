@@ -1,16 +1,24 @@
 /**
  * Evolution API Media Download Service
  *
- * Uses the Evolution API /message/downloadMedia endpoint which handles
- * WhatsApp authentication internally, avoiding 403 hotlink blocks.
+ * Downloads WhatsApp CDN media through Evolution API's proxy endpoints.
+ * WhatsApp CDN URLs (mmg.whatsapp.net, pps.whatsapp.net) are hotlink-protected
+ * and require authentication through the Evolution instance.
  */
 
 import { getDb } from '../db';
 import { integrationSettings } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
+/**
+ * Download WhatsApp media using Evolution API proxy endpoint.
+ * Supports URL-based download for story replies where mediaKey is unavailable.
+ */
 export async function downloadWhatsAppMediaFromEvolution(
-  messageKey: string | { id: string; fromMe?: boolean; remoteJid: string }
+  params: { 
+    url: string;  // WhatsApp CDN URL (mmg.whatsapp.net, pps.whatsapp.net)
+    messageKey?: { id: string; remoteJid: string; fromMe?: boolean }; // Optional for reference
+  }
 ): Promise<Buffer | null> {
   try {
     const db = await getDb();
@@ -44,29 +52,34 @@ export async function downloadWhatsAppMediaFromEvolution(
       return null;
     }
 
-    // Evolution API endpoint for authenticated download
-    const downloadUrl = `${apiUrl}/message/downloadMedia/${instanceName}`;
+    console.log('[Evolution Download] Attempting proxy download for:', params.url.substring(0, 60) + '...');
+
+    // Method 1: Try /instance/fetchImage (accepts URL directly for proxy download)
+    const fetchImageUrl = `${apiUrl}/instance/fetchImage/${instanceName}`;
     
-    // Format messageKey for Evolution API - supports both string and object formats
-    const keyPayload = typeof messageKey === 'string'
-      ? { messageKey }
-      : {
-          messageKey: {
-            id: messageKey.id,
-            fromMe: messageKey.fromMe ?? false,
-            remoteJid: messageKey.remoteJid
-          }
-        };
-    
-    const keyDisplay = typeof messageKey === 'string' 
-      ? messageKey.substring(0, 30) + '...' 
-      : `id=${messageKey.id}, remoteJid=${messageKey.remoteJid}`;
-    
-    console.log('[Evolution Download] Calling authenticated endpoint:', {
-      messageKey: keyDisplay,
+    const fetchResponse = await fetch(fetchImageUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: params.url }),
     });
 
-    const response = await fetch(downloadUrl, {
+    if (fetchResponse.ok) {
+      const buffer = Buffer.from(await fetchResponse.arrayBuffer());
+      console.log('[Evolution Download] fetchImage success, size:', buffer.length);
+      return buffer;
+    }
+
+    // Method 2: Try /message/downloadMedia with messageKey format
+    const downloadUrl = `${apiUrl}/message/downloadMedia/${instanceName}`;
+    
+    const keyPayload = params.messageKey 
+      ? { messageKey: params.messageKey }
+      : { messageKey: { id: 'unknown' } };
+    
+    const downloadResponse = await fetch(downloadUrl, {
       method: 'POST',
       headers: {
         'apikey': apiKey,
@@ -75,38 +88,36 @@ export async function downloadWhatsAppMediaFromEvolution(
       body: JSON.stringify(keyPayload),
     });
 
-    if (!response.ok) {
-      console.log('[Evolution Download] Failed:', response.status, response.statusText);
-      const errorBody = await response.text();
-      console.log('[Evolution Download] Error body:', errorBody.substring(0, 500));
+    if (!downloadResponse.ok) {
+      console.log('[Evolution Download] Both endpoints failed:', {
+        fetchImageStatus: fetchResponse.status,
+        downloadMediaStatus: downloadResponse.status,
+      });
+      const errorBody = await downloadResponse.text();
+      console.log('[Evolution Download] Error body:', errorBody.substring(0, 300));
       return null;
     }
 
     // Check content type - Evolution may return base64 JSON or binary
-    const contentType = response.headers.get('content-type');
+    const contentType = downloadResponse.headers.get('content-type');
     console.log('[Evolution Download] Response content-type:', contentType);
     
     let buffer: Buffer | null = null;
     if (contentType?.includes('application/json')) {
-      // Evolution returns JSON with base64
-      const jsonResponse = await response.json();
+      const jsonResponse = await downloadResponse.json();
       console.log('[Evolution Download] JSON response keys:', Object.keys(jsonResponse));
       if (jsonResponse.base64) {
         buffer = Buffer.from(jsonResponse.base64, 'base64');
-        console.log('[Evolution Download] Got base64 payload, decoded size:', buffer.length);
       } else if (jsonResponse.url) {
-        // Evolution may return a proxy URL instead
-        console.log('[Evolution Download] Got URL in response, fetching:', jsonResponse.url.substring(0, 50) + '...');
         const proxiedResponse = await fetch(jsonResponse.url);
         if (proxiedResponse.ok) {
           buffer = Buffer.from(await proxiedResponse.arrayBuffer());
         }
       }
     } else {
-      // Binary response
-      buffer = Buffer.from(await response.arrayBuffer());
+      buffer = Buffer.from(await downloadResponse.arrayBuffer());
     }
-    
+
     if (!buffer || buffer.length === 0) {
       console.log('[Evolution Download] Empty response body');
       return null;

@@ -1253,11 +1253,13 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
       if (quotedMessage.imageMessage) {
         typeToSave = 'image';
         rawUrl = quotedMessage.imageMessage.url || quotedMessage.imageMessage.mediaUrl || null;
+        // Try to get mediaKey/directPath for authenticated download
+        const quotedMediaKey = quotedMessage.imageMessage.mediaKey || quotedMessage.imageMessage.directPath || null;
         mimeType = quotedMessage.imageMessage.mimetype || quotedMessage.imageMessage.mimeType || null;
         fileName = quotedMessage.imageMessage.fileName || null;
         fileSize = quotedMessage.imageMessage.fileSize || null;
         caption = quotedMessage.imageMessage.caption || null;
-        console.log("[Parse] Story reply with imageMessage detected");
+        console.log("[Parse] Story reply with imageMessage detected. mediaKey available:", !!quotedMediaKey);
       } else if (quotedMessage.videoMessage) {
         typeToSave = 'video';
         rawUrl = quotedMessage.videoMessage.url || quotedMessage.videoMessage.mediaUrl || null;
@@ -1437,11 +1439,12 @@ async function processEvolutionWebhook(body: unknown) {
             const isWhatsAppCdn = parsed.rawUrl.includes("mmg.whatsapp.net") || parsed.rawUrl.includes("pps.whatsapp.net") || parsed.rawUrl.includes("whatsapp.net") || parsed.rawUrl.includes("whatsapp.com");
             
             if (isWhatsAppCdn) {
-              // Use authenticated download via Evolution API
+              // Use Evolution API proxy for WhatsApp CDN URLs (story replies)
               const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-              // Pass full message key object for story replies (includes remoteJid and fromMe)
-              const messageKey = { id: messageId, remoteJid, fromMe: false };
-              mediaBuffer = await downloadWhatsAppMediaFromEvolution(messageKey);
+              mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                url: parsed.rawUrl,
+                messageKey: { id: messageId, remoteJid, fromMe: false }
+              });
             } else {
               // Standard download for other URLs
               mediaBuffer = await downloadMediaToBuffer(parsed.rawUrl);
