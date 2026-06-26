@@ -1241,11 +1241,11 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     actualMessage.documentMessage?.fileSize ||
     actualMessage.audioMessage?.fileSize || null;
 
+  // 🎯 Store quotedMessage for later access (needed for mediaKey/directPath)
+  const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || (contextInfoFromData as any)?.quotedMessage;
+
   if (typeToSave === 'text' || typeToSave === 'unknown') {
     // Text already set at the start of the function
-    
-    // 🎯 STORY REPLY: Check for media in quotedMessage (respostas a stories)
-    const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || (contextInfoFromData as any)?.quotedMessage;
     if (quotedMessage) {
       console.log("[Parse] Detected quotedMessage in extendedTextMessage (story reply)");
       
@@ -1335,15 +1335,24 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
   // ===========================================
   // Base64 (apenas para imagens, se fornecido)
   const base64 = typeToSave === 'image' ? actualMessage.imageMessage?.base64 || null : null;
+  // 🎯 Include quotedMessage mediaKey/directPath for story replies
   const mediaKey = (typeToSave === 'image' && actualMessage.imageMessage?.mediaKey) ||
                    (typeToSave === 'video' && actualMessage.videoMessage?.mediaKey) ||
                    (typeToSave === 'audio' && actualMessage.audioMessage?.mediaKey) ||
                    (typeToSave === 'document' && actualMessage.documentMessage?.mediaKey) ||
+                   (typeToSave === 'image' && quotedMessage?.imageMessage?.mediaKey) ||
+                   (typeToSave === 'video' && quotedMessage?.videoMessage?.mediaKey) ||
+                   (typeToSave === 'audio' && quotedMessage?.audioMessage?.mediaKey) ||
+                   (typeToSave === 'document' && quotedMessage?.documentMessage?.mediaKey) ||
                    null;
   const directPath = (typeToSave === 'image' && actualMessage.imageMessage?.directPath) ||
                      (typeToSave === 'video' && actualMessage.videoMessage?.directPath) ||
                      (typeToSave === 'audio' && actualMessage.audioMessage?.directPath) ||
                      (typeToSave === 'document' && actualMessage.documentMessage?.directPath) ||
+                     (typeToSave === 'image' && quotedMessage?.imageMessage?.directPath) ||
+                     (typeToSave === 'video' && quotedMessage?.videoMessage?.directPath) ||
+                     (typeToSave === 'audio' && quotedMessage?.audioMessage?.directPath) ||
+                     (typeToSave === 'document' && quotedMessage?.documentMessage?.directPath) ||
                      null;
 
   return {
