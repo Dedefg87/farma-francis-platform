@@ -10,7 +10,7 @@ import { integrationSettings } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
 export async function downloadWhatsAppMediaFromEvolution(
-  messageKey: string
+  messageKey: string | { id: string; fromMe?: boolean; remoteJid: string }
 ): Promise<Buffer | null> {
   try {
     const db = await getDb();
@@ -47,8 +47,23 @@ export async function downloadWhatsAppMediaFromEvolution(
     // Evolution API endpoint for authenticated download
     const downloadUrl = `${apiUrl}/message/downloadMedia/${instanceName}`;
     
+    // Format messageKey for Evolution API - supports both string and object formats
+    const keyPayload = typeof messageKey === 'string'
+      ? { messageKey }
+      : {
+          messageKey: {
+            id: messageKey.id,
+            fromMe: messageKey.fromMe ?? false,
+            remoteJid: messageKey.remoteJid
+          }
+        };
+    
+    const keyDisplay = typeof messageKey === 'string' 
+      ? messageKey.substring(0, 30) + '...' 
+      : `id=${messageKey.id}, remoteJid=${messageKey.remoteJid}`;
+    
     console.log('[Evolution Download] Calling authenticated endpoint:', {
-      messageKey: messageKey.substring(0, 30) + '...',
+      messageKey: keyDisplay,
     });
 
     const response = await fetch(downloadUrl, {
@@ -57,13 +72,13 @@ export async function downloadWhatsAppMediaFromEvolution(
         'apikey': apiKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        messageKey: messageKey, // Baileys message key format
-      }),
+      body: JSON.stringify(keyPayload),
     });
 
     if (!response.ok) {
       console.log('[Evolution Download] Failed:', response.status, response.statusText);
+      const errorBody = await response.text();
+      console.log('[Evolution Download] Error body:', errorBody.substring(0, 200));
       return null;
     }
 

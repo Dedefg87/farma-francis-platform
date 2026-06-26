@@ -1439,7 +1439,8 @@ async function processEvolutionWebhook(body: unknown) {
             if (isWhatsAppCdn) {
               // Use authenticated download via Evolution API
               const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-              const messageKey = messageId;
+              // Pass full message key object for story replies (includes remoteJid and fromMe)
+              const messageKey = { id: messageId, remoteJid, fromMe: false };
               mediaBuffer = await downloadWhatsAppMediaFromEvolution(messageKey);
             } else {
               // Standard download for other URLs

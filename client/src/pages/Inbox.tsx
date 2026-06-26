@@ -379,6 +379,39 @@ export default function Inbox() {
                               : "bg-muted"
                           }`}
                         >
+                          {/* Media rendering - images/videos */}
+                          {msg.mediaUrl && (msg.messageType === "image" || msg.messageType?.startsWith("image")) && (
+                            <div className="mb-2">
+                              <img
+                                src={msg.mediaUrl}
+                                alt="Imagem recebida"
+                                className="max-w-full max-h-64 object-contain rounded cursor-pointer"
+                                onClick={() => window.open(msg.mediaUrl!, '_blank')}
+                              />
+                            </div>
+                          )}
+                          {msg.mediaUrl && (msg.messageType === "video" || msg.messageType?.startsWith("video")) && (
+                            <div className="mb-2">
+                              <video
+                                src={msg.mediaUrl}
+                                controls
+                                className="max-w-full max-h-64 rounded"
+                              />
+                            </div>
+                          )}
+                          {msg.mediaUrl && msg.messageType === "document" && (
+                            <div className="mb-2 p-2 bg-blue-50 rounded flex items-center gap-2">
+                              <Paperclip className="w-4 h-4 text-blue-600" />
+                              <a
+                                href={msg.mediaUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 underline"
+                              >
+                                📊 Documento anexo
+                              </a>
+                            </div>
+                          )}
                           <p className="text-sm whitespace-pre-wrap">
                             {msg.content}
                           </p>
