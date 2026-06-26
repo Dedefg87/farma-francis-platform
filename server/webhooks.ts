@@ -1230,7 +1230,6 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
   // ===========================================
   // 🎯 Texto e Caption
   // ===========================================
-  let text: string | null = null;
   let caption: string | null = null;
 
   // ===========================================
