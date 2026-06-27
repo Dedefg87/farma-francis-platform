@@ -1438,7 +1438,27 @@ async function processEvolutionWebhook(body: unknown) {
         // 🎯 contextInfo deve vir de data.message.contextInfo (Evolution API docs) ou data.contextInfo (fallback)
         const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
         
+        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
+        let messageType = parsed.type; // DECLARAR ANTES DO STORY REPLY
+        let messageText = parsed.text;
+        const caption = parsed.caption;
+        let mediaUrl = parsed.mediaUrl; // DECLARAR ANTES DO STORY REPLY
+        
+        // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
+        const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
+        
+        console.log("5. [Evolution] fromMe check:", { isSentByMe, fromMe, fromNumber, messageType });
+        
+        if (!isSentByMe) {
+          console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
+        }
+
         // 🎯 STORY REPLY DETECTION - @lid indica reply a story (sem contextInfo por bug da Evolution API)
+        // Declarar as variáveis como let ANTES do bloco
+        let storyMessageType = messageType;
+        let storyMediaUrl = mediaUrl;
+        let storyMessageText = messageText;
+        
         const isStoryReply = remoteJid?.includes('@lid') && !isSentByMe;
         if (isStoryReply) {
           console.log("[Evolution Webhook] 🎯 STORY REPLY DETECTADO via @lid - contextInfo não disponível");
@@ -1462,10 +1482,12 @@ async function processEvolutionWebhook(body: unknown) {
           if (cachedStory?.[0]) {
             console.log("[Evolution Webhook] ✅ Story correlacionado via cache:", cachedStory[0].storyId);
             // Correlacionar dados do story
-            if (!messageType || messageType === 'text') {
+            if (messageType === 'text' || messageType === 'unknown') {
               messageType = cachedStory[0].mediaType;
             }
-            mediaUrl = cachedStory[0].mediaUrl;
+            if (!mediaUrl) {
+              mediaUrl = cachedStory[0].mediaUrl;
+            }
             // Manter texto original como resposta + indicar story
             if (messageText) {
               messageText = `Responderam ao seu story: ${messageText}`;
@@ -1474,12 +1496,6 @@ async function processEvolutionWebhook(body: unknown) {
             console.log("[Evolution Webhook] ⚠️ Nenhum story cacheado encontrado para correlacionar");
           }
         }
-        
-        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
-        let messageType = parsed.type;
-        const messageText = parsed.text;
-        const caption = parsed.caption;
-        let mediaUrl = parsed.mediaUrl;
         const mimeType = parsed.mimeType;
         
         // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN
@@ -1515,17 +1531,6 @@ async function processEvolutionWebhook(body: unknown) {
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
-
-        // Detectar mensagens enviadas pelo celular (fromMe === true)
-        const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
-
-        console.log("5. [Evolution] fromMe check:", { isSentByMe, fromMe, fromNumber, messageType });
-
-        if (!isSentByMe) {
-          console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
-        }
-
-        if (isSentByMe) {
           console.log("[Evolution Webhook] Detected fromMe message, enqueuing:", messageId, "to:", fromNumber);
           // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
           // Enfileirar job em background (fire and forget)
