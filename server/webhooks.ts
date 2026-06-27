@@ -1434,7 +1434,9 @@ async function processEvolutionWebhook(body: unknown) {
         if (!fromNumber) return;
 
         // Determinar tipo e conteúdo da mensagem (rápido, sem download)
-        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, data?.contextInfo);
+        // 🎯 contextInfo deve vir de data.message.contextInfo (Evolution API docs) ou data.contextInfo (fallback)
+        const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
+        const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
         let messageType = parsed.type;
         const messageText = parsed.text;
         const caption = parsed.caption;
