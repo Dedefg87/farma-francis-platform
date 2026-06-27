@@ -582,7 +582,7 @@ async function processEvolutionWebhookAsync(req: Request) {
       return;
     }
 
-    // Extrair apikey da URL
+    // Extrair apikey da URL (suportar webhook_by_events: apikey/event-name)
     const [configRow] = await db
       .select()
       .from(integrationSettings)
@@ -596,15 +596,17 @@ async function processEvolutionWebhookAsync(req: Request) {
           : configRow.config;
       const expectedApiKey = configData.apiKey || configData.accessToken;
 
-      const queryApikey = queryApikeyRaw;
-      const cleanApikey = queryApikey.split("/")[0].replace("@", "");
-      const cleanExpected = expectedApiKey?.replace("@", "") || "";
+      // Extrair apenas o primeiro segmento antes de "/" (para webhook_by_events)
+      const cleanApikey = queryApikeyRaw.split("/")[0].split("@")[0] || "";
+      const cleanExpected = expectedApiKey?.split("@")[0] || "";
 
-      if (expectedApiKey && cleanApikey !== cleanExpected && cleanExpected && isProduction) {
-        console.log("[Evolution Webhook] 🔐 API key mismatch, ignoring");
+      // Se há apikey configurada no banco mas não bate com a recebida, logar mas NÃO bloquque
+      // Isso permite webhooks de múltiplas instâncias ou mudança de apikey
+      if (expectedApiKey && cleanApikey && cleanExpected && cleanApikey !== cleanExpected) {
+        console.log("[Evolution Webhook] ⚠️ API key mismatch (continuing anyway):");
         console.log("  Expected:", cleanExpected.substring(0, 5) + "...");
         console.log("  Received:", cleanApikey.substring(0, 5) + "...");
-        return;
+        // NÃO return - permite processamento mesmo com mismatch
       }
     } else {
       console.warn("[Evolution Webhook] ⚠️ No Evolution API config found in database");
