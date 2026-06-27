@@ -1516,3 +1516,29 @@ export type InsertProcessedWebhookMessage =
 
 export * from './schema_logs';
 
+
+/**
+ * STORY CACHE - Cache de stories para correlacionar replies
+ * Quando alguém responde a um story, a Evolution API NÃO envia contextInfo
+ * Guardamos o story original e correlacionamos replies pelo timestamp (+/- 2 minutos)
+ */
+export const storyCache = mysqlTable("story_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  storyId: varchar("story_id", { length: 255 }).notNull(), // message.key.id do story
+  remoteJid: varchar("remote_jid", { length: 255 }).notNull(), // Quem enviou o story
+  fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone normalizado
+  fromName: varchar("from_name", { length: 255 }),
+  mediaUrl: longtext("media_url"), // URL da mídia no R2
+  rawUrl: longtext("raw_url"), // URL original antes do download
+  mediaType: mysqlEnum("media_type", ["image", "video", "audio", "document", "text"]).notNull(),
+  caption: text("caption"),
+  mimeType: varchar("mime_type", { length: 100 }),
+  fileName: varchar("file_name", { length: 255 }),
+  fileSize: int("file_size"),
+  messageTimestamp: int("message_timestamp").notNull(), // Unix timestamp
+  expiresAt: timestamp("expires_at").notNull(), // Stories expiram em 24h
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type StoryCache = typeof storyCache.$inferSelect;
+export type InsertStoryCache = typeof storyCache.$inferInsert;

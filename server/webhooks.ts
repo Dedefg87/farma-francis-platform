@@ -7,8 +7,9 @@ import {
   conversations,
   conversationMessages,
   customers,
+  storyCache,
 } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
@@ -1436,6 +1437,44 @@ async function processEvolutionWebhook(body: unknown) {
         // Determinar tipo e conteúdo da mensagem (rápido, sem download)
         // 🎯 contextInfo deve vir de data.message.contextInfo (Evolution API docs) ou data.contextInfo (fallback)
         const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
+        
+        // 🎯 STORY REPLY DETECTION - @lid indica reply a story (sem contextInfo por bug da Evolution API)
+        const isStoryReply = remoteJid?.includes('@lid') && !isSentByMe;
+        if (isStoryReply) {
+          console.log("[Evolution Webhook] 🎯 STORY REPLY DETECTADO via @lid - contextInfo não disponível");
+          
+          // 🚨 CACHE WORKAROUND - Pesquisar story cacheado recentemente
+          const timeWindow = 120; // 2 minutos
+          const storyCacheWindowStart = Math.floor(messageTimestamp) - timeWindow;
+          
+          const cachedStory = await db
+            .select()
+            .from(storyCache)
+            .where(
+              and(
+                eq(storyCache.fromNumber, fromNumber),
+                sql`${storyCache.messageTimestamp} >= ${storyCacheWindowStart}`
+              )
+            )
+            .orderBy(desc(storyCache.messageTimestamp))
+            .limit(1);
+            
+          if (cachedStory?.[0]) {
+            console.log("[Evolution Webhook] ✅ Story correlacionado via cache:", cachedStory[0].storyId);
+            // Correlacionar dados do story
+            if (!messageType || messageType === 'text') {
+              messageType = cachedStory[0].mediaType;
+            }
+            mediaUrl = cachedStory[0].mediaUrl;
+            // Manter texto original como resposta + indicar story
+            if (messageText) {
+              messageText = `Responderam ao seu story: ${messageText}`;
+            }
+          } else {
+            console.log("[Evolution Webhook] ⚠️ Nenhum story cacheado encontrado para correlacionar");
+          }
+        }
+        
         const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
         let messageType = parsed.type;
         const messageText = parsed.text;
