@@ -1531,6 +1531,8 @@ async function processEvolutionWebhook(body: unknown) {
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
+        
+        if (isSentByMe) {
           console.log("[Evolution Webhook] Detected fromMe message, enqueuing:", messageId, "to:", fromNumber);
           // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
           // Enfileirar job em background (fire and forget)
