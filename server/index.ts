@@ -15,6 +15,7 @@ import mediaRouter from "./routers-media";
 import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
 import { restRouter } from "./routers-rest";
+import whatsappPairingRouter from "./whatsapp-pairing";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import cors from "cors";
@@ -197,6 +198,9 @@ async function startServer() {
   // Webhooks para WhatsApp, Instagram e Evolution API
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/media", mediaRouter);
+
+  // WhatsApp Pairing Code endpoints (para o novo método de conexão)
+  app.use("/api", whatsappPairingRouter);
 
   // REST endpoints para templates de fluxo (contatos, mensagens, tarefas, atendimentos)
   app.use("/api", restRouter);
