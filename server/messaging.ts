@@ -219,6 +219,11 @@ export async function sendWhatsAppMessage(params: {
     content: params.message,
     messageId: result.messages[0].id,
     status: "sent",
+    metadata: params.mediaUrl ? JSON.stringify({
+      mediaUrl: params.mediaUrl,
+      caption: params.caption,
+      fileType: "image",
+    }) : null,
   });
 
   console.log(

@@ -4,7 +4,7 @@
  * IMPORTANTE: Esta fila processa jobs em background SEM bloquear o webhook
  */
 import { getDb } from "../db";
-import { conversations, conversationMessages, customers, integrationSettings } from "../../drizzle/schema";
+import { conversations, conversationMessages, customers, integrationSettings, messages } from "../../drizzle/schema";
 import { eq, and, or, sql, gte, desc } from "drizzle-orm";
 import { generatePhoneVariants } from "../utils/phone";
 

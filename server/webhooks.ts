@@ -1454,7 +1454,7 @@ async function processEvolutionWebhook(body: unknown) {
         }
 
         // 🎯 STORY REPLY DETECTION - @lid indica reply a story (sem contextInfo por bug da Evolution API)
-        // Declarar as variáveis como let ANTES do bloco
+        / Declarar as variáveis como let ANTES do bloco
         let storyMessageType = messageType;
         let storyMediaUrl = mediaUrl;
         let storyMessageText = messageText;
@@ -1494,6 +1494,42 @@ async function processEvolutionWebhook(body: unknown) {
             }
           } else {
             console.log("[Evolution Webhook] ⚠️ Nenhum story cacheado encontrado para correlacionar");
+            // 🔥 FALLBACK: Tentar baixar mídia diretamente via Evolution API usando o remoteJid/messageId
+            try {
+              const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+              const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                url: null,
+                messageKey: { id: messageId, remoteJid, fromMe: false }
+              });
+              if (mediaBuffer) {
+                console.log("[Evolution Webhook] ✅ Mídia do story baixada via fallback");
+                const { uploadToR2 } = await import("./r2-client");
+                const fileName = `story-${messageId}`;
+                const mimeTypeFromBuffer = parsed?.mimeType || "image/jpeg";
+                const uploadResult = await uploadToR2(mediaBuffer, fileName, mimeTypeFromBuffer);
+                const cleanUrl = uploadResult.url;
+                mediaUrl = cleanUrl;
+                
+                // Salvar no cache para futuras replies
+                try {
+                  await db.insert(storyCache).values({
+                    storyId: messageId,
+                    remoteJid: remoteJid || '',
+                    fromNumber,
+                    mediaUrl: cleanUrl,
+                    rawUrl: cleanUrl,
+                    mediaType: messageType === 'video' || messageType?.includes('video') ? 'video' : 'image',
+                    caption: messageText || null,
+                    messageTimestamp: Math.floor(messageTimestamp),
+                  });
+                  console.log("[Evolution Webhook] ✅ Story cached for future replies");
+                } catch (cacheErr) {
+                  console.error("[Evolution Webhook] ❌ Failed to cache story:", cacheErr);
+                }
+              }
+            } catch (fallbackErr) {
+              console.error("[Evolution Webhook] ❌ Fallback download failed:", fallbackErr);
+            }
           }
         }
         const mimeType = parsed.mimeType;

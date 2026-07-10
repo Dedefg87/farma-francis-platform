@@ -1,2 +1,3 @@
 export type { FlowTemplate } from "./types";
-export const flowTemplates: FlowTemplate[] = [];
+// Export the real templates
+export { flowTemplates } from "../templates";

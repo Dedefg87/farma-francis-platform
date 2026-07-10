@@ -162,8 +162,8 @@ export const inboxRouter = router({
           id: `sent-${msg.id}`,
           direction: "outbound" as const,
           content: msg.content,
-          messageType: "text",
-          mediaUrl: null,
+          messageType: msg.metadata ? (() => { try { const m = JSON.parse(msg.metadata); return m.fileType || "text"; } catch { return "text"; } })() : "text",
+          mediaUrl: msg.metadata ? (() => { try { const m = JSON.parse(msg.metadata); return m.mediaUrl || null; } catch { return null; } })() : null,
           timestamp: msg.createdAt.getTime(),
           createdAt: msg.createdAt,
           fromName: null,
@@ -197,6 +197,26 @@ export const inboxRouter = router({
           mediaUrl: input.fileUrl,
           caption: input.fileName,
         });
+
+        // 💾 Save outbound message to conversation history
+        try {
+          const { ingestInboundConversationMessage } = await import('./db-messages');
+          await ingestInboundConversationMessage({
+            provider: "whatsapp",
+            fromNumber: input.to,
+            messageType: input.fileUrl ? 'image' : 'text',
+            messageText: input.message,
+            mediaUrl: input.fileUrl,
+            fileName: input.fileName,
+            externalId: result?.messages?.[0]?.id || `outbound-${Date.now()}`,
+            createdAt: new Date(),
+          });
+          console.log('[Inbox] Outbound message saved to conversation history');
+        } catch (saveError) {
+          console.error('[Inbox] Failed to save outbound message:', saveError);
+          // Non-critical - message was already sent
+        }
+
         return result;
       } else if (input.provider === "instagram") {
         const result = await sendInstagramMessage({
