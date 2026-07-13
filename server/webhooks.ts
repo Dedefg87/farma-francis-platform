@@ -297,17 +297,22 @@ router.get("/whatsapp", async (req: Request, res: Response) => {
       const configData =
         typeof config[0].config === "string"
           ? JSON.parse(config[0].config)
-  // Parse config JSON
-  const configData =
-    typeof config[0].config === "string"
-      ? JSON.parse(config[0].config)
-      : config[0].config;
-  const storedToken = process.env.WHATSAPP_VERIFY_TOKEN || configData.webhookVerifyToken;
+          : config[0].config;
+      const storedToken = configData.webhookVerifyToken;
 
-  console.log("[WhatsApp Webhook] Verify token present:", Boolean(token));
-  console.log("[WhatsApp Webhook] token:", JSON.stringify(token));
-  console.log("[WhatsApp Webhook] storedToken:", JSON.stringify(storedToken));
-  console.log("[WhatsApp Webhook] Stored token present:", Boolean(storedToken));
+      console.log("[WhatsApp Webhook] Verify token present:", Boolean(token));
+      console.log(
+        "[WhatsApp Webhook] Stored token present:",
+        Boolean(storedToken)
+      );
+
+      if (token === storedToken) {
+        console.log("[WhatsApp Webhook] Verification successful");
+        return res.status(200).send(challenge);
+      } else {
+        console.log("[WhatsApp Webhook] Token mismatch");
+        return res.status(403).send("Verification token mismatch");
+      }
     }
 
     res.status(400).send("Invalid verification request");
