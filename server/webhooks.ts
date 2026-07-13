@@ -263,7 +263,7 @@ function logWebhookSummary(
  * WhatsApp Webhook Verification (GET)
  * Called by Meta when setting up the webhook
  */
-router.get("/webhooks/whatsapp", async (req: Request, res: Response) => {
+router.get("/whatsapp", async (req: Request, res: Response) => {
   try {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -326,7 +326,7 @@ router.get("/webhooks/whatsapp", async (req: Request, res: Response) => {
  * WhatsApp Webhook Message Handler (POST)
  * Receives incoming messages from WhatsApp Business API
  */
-router.post("/webhooks/whatsapp", async (req: Request, res: Response) => {
+router.get("/whatsapp", async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
@@ -423,7 +423,7 @@ router.get("/webhooks/instagram", async (req: Request, res: Response) => {
  * Instagram Webhook Message Handler (POST)
  * Receives incoming messages from Instagram Graph API
  */
-router.post("/webhooks/instagram", async (req: Request, res: Response) => {
+router.get("/whatsapp", async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
@@ -464,11 +464,11 @@ router.post("/webhooks/instagram", async (req: Request, res: Response) => {
  * Evolution API Webhook (POST)
  * Supports both /evolution and /evolution/:event (when webhook_by_events is true)
  */
-router.post("/evolution", async (req: Request, res: Response) => {
+router.get("/whatsapp", async (req: Request, res: Response) => {
   return handleEvolutionWebhook(req, res);
 });
 
-router.post("/evolution/:event", async (req: Request, res: Response) => {
+router.get("/whatsapp", async (req: Request, res: Response) => {
   return handleEvolutionWebhook(req, res);
 });
 
