@@ -263,7 +263,7 @@ function logWebhookSummary(
  * WhatsApp Webhook Verification (GET)
  * Called by Meta when setting up the webhook
  */
-router.get("/webhooks/whatsapp", async (req: Request, res: Response) => {
+router.get("/whatsapp", async (req: Request, res: Response) => {
   try {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -366,7 +366,7 @@ router.get("/whatsapp", async (req: Request, res: Response) => {
  * Instagram Webhook Verification (GET)
  * Called by Meta when setting up the webhook
  */
-router.get("/webhooks/instagram", async (req: Request, res: Response) => {
+router.get("/instagram", async (req: Request, res: Response) => {
   try {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -423,7 +423,7 @@ router.get("/webhooks/instagram", async (req: Request, res: Response) => {
  * Instagram Webhook Message Handler (POST)
  * Receives incoming messages from Instagram Graph API
  */
-router.get("/webhooks/instagram", async (req: Request, res: Response) => {
+router.get("/instagram", async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
