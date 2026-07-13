@@ -1454,7 +1454,7 @@ async function processEvolutionWebhook(body: unknown) {
         }
 
         // 🎯 STORY REPLY DETECTION - @lid indica reply a story (sem contextInfo por bug da Evolution API)
-        / Declarar as variáveis como let ANTES do bloco
+        // Declarar as variáveis como let ANTES do bloco
         let storyMessageType = messageType;
         let storyMediaUrl = mediaUrl;
         let storyMessageText = messageText;
