@@ -298,10 +298,10 @@ router.get("/whatsapp", async (req: Request, res: Response) => {
         typeof config[0].config === "string"
           ? JSON.parse(config[0].config)
           : config[0].config;
-      const storedToken = configData.webhookVerifyToken;
+      const storedToken = process.env.WHATSAPP_VERIFY_TOKEN || configData.webhookVerifyToken;
 
       console.log("[WhatsApp Webhook] Verify token present:", Boolean(token));
-      console.log(
+      console.log("[WhatsApp Webhook] token:", JSON.stringify(token));\n      console.log("[WhatsApp Webhook] storedToken:", JSON.stringify(storedToken));\n      console.log(
         "[WhatsApp Webhook] Stored token present:",
         Boolean(storedToken)
       );
@@ -401,7 +401,7 @@ router.get("/instagram", async (req: Request, res: Response) => {
         typeof config[0].config === "string"
           ? JSON.parse(config[0].config)
           : config[0].config;
-      const storedToken = configData.webhookVerifyToken;
+      const storedToken = process.env.WHATSAPP_VERIFY_TOKEN || configData.webhookVerifyToken;
 
       if (token === storedToken) {
         console.log("[Instagram Webhook] Verification successful");
