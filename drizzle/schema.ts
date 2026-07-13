@@ -629,6 +629,7 @@ export const receivedMessages = mysqlTable("received_messages", {
   externalId: varchar("external_id", { length: 255 }).notNull(), // Message ID from provider
   fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone number or Instagram user ID
   fromName: varchar("from_name", { length: 255 }), // Sender name if available
+  fromProfilePic: longtext("from_profile_pic"), // Sender profile picture URL (WhatsApp/Instagram)
   messageType: mysqlEnum("message_type", [
     "text",
     "image",

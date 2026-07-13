@@ -123,6 +123,37 @@ export async function fetchEvolutionProfile(phone: string) {
 }
 
 /**
+ * Fetch Instagram user profile (name + profile picture) via Graph API.
+ * Requires instagram_manage_messages / IGSID lookup permission on the token.
+ */
+export async function fetchInstagramProfile(igsid: string) {
+  try {
+    const { configData } = await getIntegrationConfig("instagram_graph");
+    const token = configData.accessToken as string | undefined;
+    if (!token || !igsid) return null;
+
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${igsid}?fields=name,username,profile_pic&access_token=${encodeURIComponent(token)}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+
+    if (!response.ok) {
+      console.warn("[Instagram Profile] fetch failed:", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return {
+      name: data.name || data.username || null,
+      profilePicture: data.profile_pic || null,
+    };
+  } catch (error) {
+    console.error("[Instagram Profile] Error fetching profile:", error);
+    return null;
+  }
+}
+
+/**
  * Send a text message via WhatsApp Business API
  */
 export async function sendWhatsAppMessage(params: {

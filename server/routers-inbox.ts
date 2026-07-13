@@ -62,6 +62,7 @@ export const inboxRouter = router({
         .select({
           fromNumber: receivedMessages.fromNumber,
           fromName: receivedMessages.fromName,
+          fromProfilePic: sql<string | null>`MAX(${receivedMessages.fromProfilePic})`,
           provider: receivedMessages.provider,
           lastMessage: receivedMessages.messageText,
           lastMessageType: receivedMessages.messageType,

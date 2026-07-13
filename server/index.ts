@@ -67,6 +67,17 @@ async function startServer() {
     } catch (colErr: unknown) {
       console.warn("[DB] ⚠️ Could not add customers.source:", colErr.message);
     }
+
+    // Safety net: ensure received_messages.from_profile_pic column exists (foto do cliente)
+    try {
+      const [picCols] = await db.execute(sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'received_messages' AND column_name = 'from_profile_pic'`);
+      if (!Array.isArray(picCols) || picCols.length === 0) {
+        await db.execute(sql`ALTER TABLE received_messages ADD COLUMN from_profile_pic LONGTEXT NULL AFTER from_name`);
+        console.log("[DB] ✅ received_messages.from_profile_pic column added");
+      }
+    } catch (picErr: unknown) {
+      console.warn("[DB] ⚠️ Could not add received_messages.from_profile_pic:", (picErr as Error).message);
+    }
   } catch (error) {
     console.error("[Startup Error]", error);
     throw error;

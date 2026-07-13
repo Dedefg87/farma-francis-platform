@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Send,
@@ -176,6 +177,15 @@ export default function Inbox() {
     return date.toLocaleDateString("pt-BR");
   };
 
+  // Iniciais para o avatar de fallback (estilo WhatsApp)
+  const getInitials = (name?: string | null) => {
+    if (!name) return "?";
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "?";
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
+
   return (
     <div className="h-[calc(100vh-4rem)] flex">
       {/* Conversations List */}
@@ -215,11 +225,27 @@ export default function Inbox() {
             >
               <div className="flex items-start justify-between mb-1">
                 <div className="flex items-center gap-2">
-                  {conv.provider === "whatsapp" ? (
-                    <MessageSquare className="w-4 h-4 text-green-600" />
-                  ) : (
-                    <Instagram className="w-4 h-4 text-pink-600" />
-                  )}
+                  {/* Foto do cliente (estilo WhatsApp) com badge do canal */}
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="w-9 h-9">
+                      {conv.fromProfilePic && (
+                        <AvatarImage
+                          src={conv.fromProfilePic}
+                          alt={conv.fromName || conv.fromNumber}
+                        />
+                      )}
+                      <AvatarFallback className="bg-[#3FA9D4] text-white text-xs">
+                        {getInitials(conv.fromName || conv.fromNumber)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="absolute -bottom-1 -right-1 bg-white rounded-full p-[1px]">
+                      {conv.provider === "whatsapp" ? (
+                        <MessageSquare className="w-3 h-3 text-green-600" />
+                      ) : (
+                        <Instagram className="w-3 h-3 text-pink-600" />
+                      )}
+                    </span>
+                  </div>
                   <div className="flex flex-col">
                     <span className="font-medium">
                       {conv.fromName || conv.fromNumber}
@@ -315,12 +341,27 @@ export default function Inbox() {
           <>
             {/* Chat Header */}
             <div className="p-4 border-b bg-background">
-              <div className="flex items-center gap-2">
-                {selectedConversation.provider === "whatsapp" ? (
-                  <MessageSquare className="w-5 h-5 text-green-600" />
-                ) : (
-                  <Instagram className="w-5 h-5 text-pink-600" />
-                )}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-shrink-0">
+                  <Avatar className="w-10 h-10">
+                    {selectedConversation.fromProfilePic && (
+                      <AvatarImage
+                        src={selectedConversation.fromProfilePic}
+                        alt={selectedConversation.fromName || selectedConversation.fromNumber}
+                      />
+                    )}
+                    <AvatarFallback className="bg-[#3FA9D4] text-white">
+                      {getInitials(selectedConversation.fromName || selectedConversation.fromNumber)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="absolute -bottom-1 -right-1 bg-white rounded-full p-[1px]">
+                    {selectedConversation.provider === "whatsapp" ? (
+                      <MessageSquare className="w-3.5 h-3.5 text-green-600" />
+                    ) : (
+                      <Instagram className="w-3.5 h-3.5 text-pink-600" />
+                    )}
+                  </span>
+                </div>
                 <div>
                   <h3 className="font-semibold">
                     {selectedConversation.fromName ||

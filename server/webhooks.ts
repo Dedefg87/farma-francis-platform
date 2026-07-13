@@ -29,6 +29,39 @@ try {
   console.error("[Webhooks] Debug module not loaded");
 }
 
+// In-memory cache of customer profile pictures to avoid hitting provider APIs on every message.
+// key: `${provider}:${fromNumber}` -> { url, fetchedAt }
+const profilePicCache = new Map<string, { url: string | null; fetchedAt: number }>();
+const PROFILE_PIC_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
+async function resolveProfilePic(
+  provider: "whatsapp" | "instagram",
+  fromNumber: string
+): Promise<string | null> {
+  const key = `${provider}:${fromNumber}`;
+  const cached = profilePicCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < PROFILE_PIC_TTL_MS) {
+    return cached.url;
+  }
+  let url: string | null = null;
+  try {
+    if (provider === "whatsapp") {
+      const { fetchEvolutionProfile } = await import("./messaging");
+      const prof = await fetchEvolutionProfile(fromNumber);
+      url = prof?.profilePicture || null;
+    } else {
+      const { fetchInstagramProfile } = await import("./messaging");
+      const prof = await fetchInstagramProfile(fromNumber);
+      url = prof?.profilePicture || null;
+    }
+  } catch (e) {
+    console.warn(`[ProfilePic] Failed to fetch for ${key}:`, (e as Error).message);
+  }
+  profilePicCache.set(key, { url, fetchedAt: Date.now() });
+  return url;
+}
+
+
 const router = Router();
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -936,6 +969,47 @@ async function processInstagramWebhook(body: unknown) {
           }
         }
 
+        // Story reply: cliente respondeu a um story. O Instagram envia a imagem do
+        // story em message.reply_to.story (NÃO em attachments). Precisamos anexar
+        // essa imagem como mídia e manter o texto digitado embaixo.
+        if (!mediaUrl && message.reply_to && message.reply_to.story) {
+          const storyUrl =
+            message.reply_to.story.url ||
+            message.reply_to.story.cdn_url ||
+            message.reply_to.story.link ||
+            null;
+          if (storyUrl) {
+            let rawStoryUrl = storyUrl;
+            // Download + upload to R2 (Instagram story URLs expire / hotlink-protected)
+            if (!cleanR2Url(rawStoryUrl)) {
+              try {
+                const mediaBuffer = await downloadMediaToBuffer(rawStoryUrl);
+                if (mediaBuffer) {
+                  const { uploadToR2 } = await import("./r2-client");
+                  const fileName = `story-${messageId || Date.now()}.jpg`;
+                  const uploadResult = await uploadToR2(mediaBuffer, fileName, "image/jpeg");
+                  rawStoryUrl = uploadResult.url;
+                  console.log("[Instagram] Uploaded story image to R2:", rawStoryUrl);
+                }
+              } catch (storyErr) {
+                console.error("[Instagram] Failed to download/upload story image:", storyErr);
+              }
+            }
+            mediaUrl = cleanR2Url(rawStoryUrl) || rawStoryUrl;
+            messageType = "image";
+            // texto digitado pelo cliente já está em `text` e será exibido embaixo da imagem
+            console.log("[Instagram] Story reply detected — attaching story image + reply text");
+          }
+        }
+
+        // Buscar foto de perfil do cliente (com cache) para exibir na tela de conversas
+        let profilePic: string | null = null;
+        try {
+          profilePic = await resolveProfilePic("instagram", sender);
+        } catch (picErr) {
+          console.warn("[Instagram] Could not resolve profile pic:", (picErr as Error).message);
+        }
+
         const existing = await getReceivedMessageByExternalId(
           messageId,
           "instagram"
@@ -952,6 +1026,7 @@ async function processInstagramWebhook(body: unknown) {
             externalId: messageId,
             fromNumber: sender,
             fromName: null, // Instagram doesn't provide name in webhook
+            fromProfilePic: profilePic,
             messageType,
             messageText: text,
             mediaUrl,
@@ -1357,6 +1432,11 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
                      (typeToSave === 'audio' && quotedMessage?.audioMessage?.directPath) ||
                      (typeToSave === 'document' && quotedMessage?.documentMessage?.directPath) ||
                      null;
+  const quotedRawUrl = (typeToSave === 'image' && quotedMessage?.imageMessage?.url) ||
+                       (typeToSave === 'video' && quotedMessage?.videoMessage?.url) ||
+                       (typeToSave === 'audio' && quotedMessage?.audioMessage?.url) ||
+                       (typeToSave === 'document' && quotedMessage?.documentMessage?.url) ||
+                       null;
 
   return {
     type: typeToSave as any,
@@ -1364,10 +1444,12 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     caption,
     mediaUrl,
     rawUrl,
+    quotedRawUrl,
     needsDownload,
     mimeType,
     fileName,
     fileSize,
+    isStoryReply: !!quotedMessage,
     // Campos extras que podem ser úteis
     ...(base64 && { base64 }),
     ...(mediaKey && { mediaKey }),
@@ -1564,14 +1646,58 @@ async function processEvolutionWebhook(body: unknown) {
             console.error("[Evolution] Failed to download WhatsApp CDN media:", downloadErr);
           }
         }
+
+        // Story reply fallback: quando a Evolution não expõe rawUrl, usar quotedRawUrl/mediaKey/directPath
+        if (!mediaUrl && parsed.isStoryReply) {
+          try {
+            const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+            const fallbackUrl = parsed.quotedRawUrl || parsed.rawUrl || null;
+            const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+              url: fallbackUrl || "",
+              messageKey: { id: messageId, remoteJid, fromMe: false }
+            });
+            if (mediaBuffer) {
+              const { uploadToR2 } = await import("./r2-client");
+              const uploadResult = await uploadToR2(mediaBuffer, parsed.fileName || `story-${messageId}.jpg`, parsed.mimeType || "image/jpeg");
+              mediaUrl = cleanR2Url(uploadResult.url);
+              messageType = parsed.type === "video" ? "video" : "image";
+              console.log("[Evolution] Story reply fallback downloaded to R2:", mediaUrl);
+            }
+          } catch (storyDownloadErr) {
+            console.error("[Evolution] Story reply fallback failed:", storyDownloadErr);
+          }
+        }
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
         
         if (isSentByMe) {
           console.log("[Evolution Webhook] Detected fromMe message, enqueuing:", messageId, "to:", fromNumber);
+
+          // 🎯 Cachear stories enviadas para que respostas futuras (story replies) possam
+          // recuperar a mídia original. A Evolution NÃO envia o contextInfo/quotedMessage
+          // nas replies de story, então precisamos do cache.
+          const isMediaType = messageType === "image" || messageType === "video";
+          const isStoryCandidate = isMediaType && mediaUrl && mediaUrl.length > 0;
+          if (isStoryCandidate) {
+            try {
+              await db.insert(storyCache).values({
+                storyId: messageId,
+                remoteJid: remoteJid || "",
+                fromNumber,
+                mediaUrl: mediaUrl,
+                rawUrl: mediaUrl,
+                mediaType: messageType === "video" ? "video" : "image",
+                caption: caption || messageText || null,
+                messageTimestamp: Math.floor(messageTimestamp),
+              });
+              console.log("[Evolution] ✅ Story cached on send for future replies:", messageId);
+            } catch (cacheErr) {
+              console.error("[Evolution] ❌ Failed to cache story on send:", cacheErr);
+            }
+          }
+
           // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
-          // Enfileirar job em background (fire and forget)
           try {
             enqueueMobileSyncJob({
               remoteJid: remoteJid,
@@ -1616,12 +1742,21 @@ async function processEvolutionWebhook(body: unknown) {
         // Verificar se já existe (mais seguro que simples insert)
         const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
 
+        // Buscar foto de perfil do cliente (Evolution API, com cache)
+        let profilePic: string | null = null;
+        try {
+          profilePic = await resolveProfilePic("whatsapp", fromNumber);
+        } catch (picErr) {
+          console.warn("[Evolution Webhook] Could not resolve profile pic:", (picErr as Error).message);
+        }
+
         // Dados comuns
         const messageValues = {
           provider: "whatsapp" as const,
           externalId: messageId,
           fromNumber,
           fromName: pushName || null,
+          fromProfilePic: profilePic,
           messageType: messageType as any,
           messageText,
           mediaUrl: mediaUrl || null,
@@ -1641,6 +1776,7 @@ async function processEvolutionWebhook(body: unknown) {
             .update(receivedMessages)
             .set({
               fromName: pushName || null,
+              fromProfilePic: profilePic || existing.fromProfilePic,
               messageText: messageText || existing.messageText,
               mediaUrl: mediaUrl || existing.mediaUrl,
               mimeType: mimeType || existing.mimeType,
