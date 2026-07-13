@@ -21,7 +21,7 @@ interface SystemHealth {
 }
 
 const HEALTH_FILE = "/data/.openclaw/workspace/.system-health.json";
-const API_BASE = "https://innovative-enjoyment-production-ed8f.up.railway.app";
+const API_BASE = "https://farmafrancis.up.railway.app";
 
 /**
  * Carrega o estado de saúde do sistema

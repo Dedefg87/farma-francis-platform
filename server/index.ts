@@ -83,7 +83,7 @@ async function startServer() {
         workerSrc: ["'self'", "blob:"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https://*"],
-        connectSrc: ["'self'", "https://innovative-enjoyment-production-ed8f.up.railway.app"],
+        connectSrc: ["'self'", "https://farmafrancis.up.railway.app"],
         frameSrc: ["'self'", "https://*"],
         mediaSrc: ["'self'", "https://*"],
       },
@@ -96,7 +96,7 @@ async function startServer() {
   // Frontend e backend são same-origin (mesmo domínio), então CORS não deve bloquear
   const allowedOrigins = [
     process.env.PUBLIC_BASE_URL,           // URL do frontend (Railway)
-    "https://innovative-enjoyment-production-ed8f.up.railway.app", // Railway URL
+    "https://farmafrancis.up.railway.app", // Railway URL
     "http://localhost:5173",                // Dev local
     "http://localhost:3000",                // Dev local alt
   ].filter(Boolean);

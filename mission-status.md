@@ -6,7 +6,7 @@
 
 ## 🎉 RESUMO FINAL
 
-**Sistema Online:** https://innovative-enjoyment-production-ed8f.up.railway.app
+**Sistema Online:** https://farmafrancis.up.railway.app
 **Health Check:** ✅ OK
 **Workers:** ✅ Ativos
 
