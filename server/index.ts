@@ -360,6 +360,13 @@ async function startServer() {
         assignedTo: { id: admin.id, name: admin.displayName || admin.name, role: admin.role },
         result: result,
       });
+  app.get("/api/debug/webhook-token", (_, res) => {
+    const token = process.env.WHATSAPP_VERIFY_TOKEN;
+    if (!token) {
+      return res.json({ present: false });
+    }
+    return res.json({ present: true, length: token.length, first: token[0], last: token[token.length - 1] });
+  });
     } catch (err: unknown) {
       res.status(500).json({ error: err.message, stack: err.stack });
     }
@@ -472,6 +479,8 @@ async function startServer() {
     next();
   });
 
+
+  // Debug: Webhook token info (length and first/last char only for safety)
   app.get("*", (req, res) => {
     console.log('[SPA] Hit', req.method, req.originalUrl || req.url, req.path);
     if (!req.path.startsWith("/api")) {

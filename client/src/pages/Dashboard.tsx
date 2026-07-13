@@ -427,7 +427,16 @@ export default function Dashboard() {
                     <tbody className="divide-y divide-gray-200">
                       {agentData.map((agent) => (
                         <tr key={agent.agentId} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
+                          <td className="px-4 py-3 flex items-center space-x-3">
+     {agent.photo ? (
+       <img src={agent.photo} alt={agent.agentName} className="h-8 w-8 rounded-full object-cover" />
+     ) : (
+       <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+         {agent.agentName.charAt(0).toUpperCase()}
+       </div>
+     )}
+     <span className="font-medium text-gray-900">{agent.agentName}</span>
+   </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{agent.totalConversations}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{agent.daysActive}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{(agent.avgPerDay ?? 0).toFixed(1)}</td>

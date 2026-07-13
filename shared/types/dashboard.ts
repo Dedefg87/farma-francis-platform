@@ -3,6 +3,7 @@
 export interface AgentStats {
   agentId: number;
   agentName: string;
+  photo: string | null;
   totalConversations: number;
   daysActive: number;
   avgPerDay: number;

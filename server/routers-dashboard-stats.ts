@@ -242,6 +242,7 @@ export const dashboardStatsRouter = router({
         .select({
           agentId: users.id,
           agentName: users.name,
+          photo: users.photo,
           // Conversas no período (abertas no período)
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
           daysActive: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
@@ -273,6 +274,7 @@ export const dashboardStatsRouter = router({
       return agentStats.map((stat) => ({
         agentId: stat.agentId,
         agentName: stat.agentName,
+        photo: stat.photo ?? null,
         totalConversations: Number(stat.totalConversations) || 0,
         daysActive: Number(stat.daysActive) || 0,
         avgPerDay: Number(stat.daysActive) > 0 ? Number(((Number(stat.totalConversations) || 0) / Number(stat.daysActive)).toFixed(1)) : 0,
