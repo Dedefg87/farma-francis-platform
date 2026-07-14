@@ -1688,7 +1688,6 @@ async function processEvolutionWebhook(body: unknown) {
                                                                                                           } else {
                                                                                                             console.log("[Evolution Webhook] ⚠️ Todas tentativas falharam - salvando apenas texto");
                                                                                                           }
-                                                                                                        }
                                             // Se ainda não tem mediaUrl, tentar cache
                                             if (!mediaUrl) {
                                               // 🚨 CACHE WORKAROUND - Pesquisar story cacheado recentemente
@@ -1763,7 +1762,6 @@ async function processEvolutionWebhook(body: unknown) {
                                               }
                                             }
                                           }
-                                        }
         const mimeType = parsed.mimeType;
        
                 // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN (COM VALIDAÇÃO ROBUSTA)
