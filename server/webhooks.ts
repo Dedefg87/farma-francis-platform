@@ -541,8 +541,17 @@ async function processEvolutionWebhookAsync(req: Request) {
       url: fullUrl,
       bodyKeys: Object.keys(body || {}),
       hasData: !!body?.data,
+      dataKeys: body?.data ? Object.keys(body.data) : [],
+      hasContextInfo: !!body?.data?.contextInfo,
+      hasMessage: !!body?.data?.message,
+      hasKey: !!body?.data?.key,
+      hasContextInfoMessage: !!body?.data?.message?.contextInfo,
+      rawUrlPreview: body?.data?.message?.imageMessage?.url ? 'SIM' : 'NÃO',
       query: req.query,
     });
+    // DUMP COMPLETO do body para debug (limitado a 1500 chars)
+    const bodyDump = JSON.stringify(body).substring(0, 1500);
+    console.log("1.5 [Evolution Webhook] 📦 Body dump:", bodyDump);
 
     if (!body || Object.keys(body).length === 0) {
       console.log("[Evolution Webhook] Empty body, skipping");
