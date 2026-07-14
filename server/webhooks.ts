@@ -507,6 +507,8 @@ router.post("/evolution", async (req: Request, res: Response) => {
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
+    console.log("🔵🔵🔵 [Evolution Handler] ENTRY - req.method:", req.method, "req.path:", req.path, "query:", JSON.stringify(req.query));
+    console.log("🔵🔵🔵 [Evolution Handler] BODY type:", typeof req.body, "| keys:", Object.keys(req.body || {}));
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
     console.log("[Evolution Handler] 🎯 Received webhook:", {
       method: req.method,
