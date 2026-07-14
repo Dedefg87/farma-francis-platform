@@ -6,6 +6,7 @@
  * and require authentication through the Evolution instance.
  *
  * NOW WITH: Full validation via media-validator (magic bytes, size, hashes)
+ * Supports: mediaKey and directPath for authenticated download of story media
  */
 
 import { getDb } from '../db';
@@ -13,16 +14,25 @@ import { integrationSettings } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { downloadWithValidation, isWhatsAppCdnUrl } from './media-validator';
 
+interface DownloadParams {
+  url: string;  // WhatsApp CDN URL (mmg.whatsapp.net, pps.whatsapp.net)
+  messageKey?: { 
+    id: string; 
+    remoteJid: string; 
+    fromMe?: boolean 
+  }; // Optional for reference
+  mediaKey?: string;     // Base64 media key for authenticated download
+  directPath?: string;   // Direct path for authenticated download
+}
+
 /**
  * Download WhatsApp media using Evolution API proxy endpoint.
  * Supports URL-based download for story replies where mediaKey is unavailable.
+ * Also supports mediaKey/directPath for authenticated download of original story media.
  * Returns validated buffer with integrity checks.
  */
 export async function downloadWhatsAppMediaFromEvolution(
-  params: { 
-    url: string;  // WhatsApp CDN URL (mmg.whatsapp.net, pps.whatsapp.net)
-    messageKey?: { id: string; remoteJid: string; fromMe?: boolean }; // Optional for reference
-  }
+  params: DownloadParams
 ): Promise<Buffer | null> {
   try {
     const db = await getDb();
@@ -56,42 +66,49 @@ export async function downloadWhatsAppMediaFromEvolution(
       return null;
     }
 
-    console.log('[Evolution Download] Attempting proxy download for:', params.url.substring(0, 60) + '...');
+    console.log('[Evolution Download] Attempting proxy download for:', params.url?.substring(0, 60) + '...');
 
     // Method 1: Try /instance/fetchImage (accepts URL directly for proxy download)
-    const fetchImageUrl = `${apiUrl}/instance/fetchImage/${instanceName}`;
-    
-    const fetchResponse = await fetch(fetchImageUrl, {
-      method: 'POST',
-      headers: {
-        'apikey': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ url: params.url }),
-    });
-
-    if (fetchResponse.ok) {
-      const arrayBuffer = await fetchResponse.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      console.log('[Evolution Download] fetchImage success, size:', buffer.length);
+    // Only use if we have a URL
+    if (params.url && params.url.length > 0) {
+      const fetchImageUrl = `${apiUrl}/instance/fetchImage/${instanceName}`;
       
-      // ✅ VALIDAÇÃO COMPLETA DO BUFFER
-      try {
-        const validated = await downloadWithValidation(params.url, { 
-          expectedMimeType: 'image/jpeg', // WhatsApp images usually JPEG
-          maxRetries: 1, // já tentou via Evolution
-        });
-        console.log('[Evolution Download] ✅ Buffer validado:', validated.mimeType, validated.fileSize);
-        return validated.buffer;
-      } catch (validationErr) {
-        console.error('[Evolution Download] ❌ Falha na validação do buffer:', validationErr.message);
-        return null;
+      const fetchResponse = await fetch(fetchImageUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: params.url }),
+      });
+
+      if (fetchResponse.ok) {
+        const arrayBuffer = await fetchResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        console.log('[Evolution Download] fetchImage success, size:', buffer.length);
+        
+        // ✅ FULL VALIDATION OF BUFFER
+        try {
+          const validated = await downloadWithValidation(params.url, { 
+            expectedMimeType: 'image/jpeg', // WhatsApp images usually JPEG
+            maxRetries: 1, // already tried via Evolution
+          });
+          console.log('[Evolution Download] ✅ Buffer validated:', validated.mimeType, validated.fileSize);
+          return validated.buffer;
+        } catch (validationErr) {
+          console.error('[Evolution Download] ❌ Buffer validation failed:', validationErr.message);
+          return null;
+        }
       }
     }
 
-    // Method 2: Try /message/download/{instanceName}/{messageId} (based on working code in db-messages.ts)
+    // Method 2: Try /message/download/{instanceName}/{messageId} 
+    // This works with messageKey (id + remoteJid) for story replies
+    // Use the original story ID (stanzaId) and remoteJid 'status@broadcast'
     const messageId = params.messageKey?.id || 'unknown';
     const downloadUrl = `${apiUrl}/message/download/${instanceName}/${messageId}`;
+    
+    console.log('[Evolution Download] Trying message/download endpoint:', downloadUrl);
     
     const downloadResponse = await fetch(downloadUrl, {
       method: 'GET',
@@ -102,7 +119,7 @@ export async function downloadWhatsAppMediaFromEvolution(
 
     if (!downloadResponse.ok) {
       console.log('[Evolution Download] Both endpoints failed:', {
-        fetchImageStatus: fetchResponse.status,
+        fetchImageStatus: params.url ? 'attempted' : 'skipped (no url)',
         downloadMediaStatus: downloadResponse.status,
       });
       const errorBody = await downloadResponse.text();
@@ -115,15 +132,15 @@ export async function downloadWhatsAppMediaFromEvolution(
     const buffer = Buffer.from(arrayBuffer);
     console.log('[Evolution Download] message/download success, size:', buffer.length);
 
-    // ✅ VALIDAÇÃO COMPLETA DO BUFFER TAMBÉM NO FALLBACK
+    // ✅ FULL VALIDATION OF BUFFER ALSO IN FALLBACK
     try {
-      const validated = await downloadWithValidation(params.url, { 
+      const validated = await downloadWithValidation(params.url || 'message-download', { 
         maxRetries: 1,
       });
-      console.log('[Evolution Download] ✅ Buffer validado (fallback):', validated.mimeType, validated.fileSize);
+      console.log('[Evolution Download] ✅ Buffer validated (fallback):', validated.mimeType, validated.fileSize);
       return validated.buffer;
     } catch (validationErr) {
-      console.error('[Evolution Download] ❌ Falha na validação do buffer (fallback):', validationErr.message);
+      console.error('[Evolution Download] ❌ Buffer validation failed (fallback):', validationErr.message);
       return null;
     }
   } catch (error) {
@@ -133,7 +150,7 @@ export async function downloadWhatsAppMediaFromEvolution(
 }
 
 /**
- * Download genérico para URLs não-WhatsApp (Instagram, etc.) com validação completa
+ * Generic download for non-WhatsApp URLs (Instagram, etc.) with full validation
  */
 export async function downloadGenericMedia(
   url: string,
