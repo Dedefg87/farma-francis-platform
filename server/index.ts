@@ -127,6 +127,16 @@ async function startServer() {
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }));
 
+  // 🟡 LOG DE REQUISIÇÃO ANTES DO BODY PARSER - para diagnosticar webhooks que não chegam
+  app.use((req, res, next) => {
+    console.log('🟡 [RAW]', req.method, req.url, '| headers:', JSON.stringify({
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length'],
+      'user-agent': req.headers['user-agent']?.substring(0, 50),
+    }));
+    next();
+  });
+
   app.use(express.json({ limit: '50mb' }));
   app.use((req, res, next) => {
     console.log('[BODY]', req.method, req.url, '| Body:', JSON.stringify(req.body).substring(0, 200));
