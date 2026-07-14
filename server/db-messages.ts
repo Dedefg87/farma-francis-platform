@@ -9,6 +9,7 @@ import {
   queues,
   users,
   processedWebhookMessages,
+  integrationSettings,
 } from "../drizzle/schema";
 import { eq, desc, and, or, sql, like, inArray, gte, lte } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";

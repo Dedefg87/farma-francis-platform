@@ -72,20 +72,15 @@ export async function downloadWhatsAppMediaFromEvolution(
       return buffer;
     }
 
-    // Method 2: Try /message/downloadMedia with messageKey format
-    const downloadUrl = `${apiUrl}/message/downloadMedia/${instanceName}`;
-    
-    const keyPayload = params.messageKey 
-      ? { messageKey: params.messageKey }
-      : { messageKey: { id: 'unknown' } };
+    // Method 2: Try /message/download/{instanceName}/{messageId} (based on working code in db-messages.ts)
+    const messageId = params.messageKey?.id || 'unknown';
+    const downloadUrl = `${apiUrl}/message/download/${instanceName}/${messageId}`;
     
     const downloadResponse = await fetch(downloadUrl, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         'apikey': apiKey,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(keyPayload),
     });
 
     if (!downloadResponse.ok) {
@@ -98,35 +93,12 @@ export async function downloadWhatsAppMediaFromEvolution(
       return null;
     }
 
-    // Check content type - Evolution may return base64 JSON or binary
-    const contentType = downloadResponse.headers.get('content-type');
-    console.log('[Evolution Download] Response content-type:', contentType);
-    
-    let buffer: Buffer | null = null;
-    if (contentType?.includes('application/json')) {
-      const jsonResponse = await downloadResponse.json();
-      console.log('[Evolution Download] JSON response keys:', Object.keys(jsonResponse));
-      if (jsonResponse.base64) {
-        buffer = Buffer.from(jsonResponse.base64, 'base64');
-      } else if (jsonResponse.url) {
-        const proxiedResponse = await fetch(jsonResponse.url);
-        if (proxiedResponse.ok) {
-          buffer = Buffer.from(await proxiedResponse.arrayBuffer());
-        }
-      }
-    } else {
-      buffer = Buffer.from(await downloadResponse.arrayBuffer());
-    }
-
-    if (!buffer || buffer.length === 0) {
-      console.log('[Evolution Download] Empty response body');
-      return null;
-    }
-
-    console.log('[Evolution Download] Success, size:', buffer.length);
+    // The response should be the media file directly (arrayBuffer)
+    const buffer = Buffer.from(await downloadResponse.arrayBuffer());
+    console.log('[Evolution Download] message/download success, size:', buffer.length);
     return buffer;
-  } catch (err) {
-    console.error('[Evolution Download] Error:', err);
+  } catch (error) {
+    console.error('[Evolution Download] Unexpected error:', error);
     return null;
   }
 }
