@@ -1555,15 +1555,16 @@ async function processEvolutionWebhook(body: unknown) {
                 }
 
                 // 🎯 STORY REPLY DETECTION - Verificar contextInfo.remoteJid === 'status@broadcast' + quotedMessage
-                                        // A Evolution API envia story replies COM contextInfo (não @lid no remoteJid principal)
-                                        const contextInfo = data?.contextInfo || data?.message?.contextInfo || {};
-                                        const isStoryReply = contextInfo.remoteJid === 'status@broadcast' && 
-                                          (contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage);
-       
-                                        if (isStoryReply) {
-                                          console.log("[Evolution Webhook] 🎯 STORY REPLY DETECTADO via status@broadcast + quotedMessage");
-                                          // Log completo do quotedMessage para debug
-                                          console.log("[Evolution Webhook] 📋 quotedMessage keys:", Object.keys(contextInfo.quotedMessage || {}));
+                                                        // A Evolution API envia story replies COM contextInfo (não @lid no remoteJid principal)
+                                                        const contextInfo = data?.contextInfo || data?.message?.contextInfo || {};
+                                                        const isStoryReply = contextInfo.remoteJid === 'status@broadcast' && 
+                                                          (contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage);
+      
+                                                        if (isStoryReply) {
+                                                          console.log("🚨🚨🚨 [Evolution Webhook] STORY REPLY DETECTADO - INICIANDO PROCESSAMENTO 🚨🚨🚨");
+                                                          console.log("[Evolution Webhook] 🎯 STORY REPLY DETECTADO via status@broadcast + quotedMessage");
+                                                          // Log completo do quotedMessage para debug
+                                                          console.log("[Evolution Webhook] 📋 quotedMessage keys:", Object.keys(contextInfo.quotedMessage || {}));
                                           if (contextInfo.quotedMessage?.imageMessage) {
                                             console.log("[Evolution Webhook] 📋 imageMessage keys:", Object.keys(contextInfo.quotedMessage.imageMessage));
                                             console.log("[Evolution Webhook] 📋 imageMessage mediaKey:", !!contextInfo.quotedMessage.imageMessage.mediaKey);
@@ -1643,6 +1644,8 @@ async function processEvolutionWebhook(body: unknown) {
                                                   fromMe: false 
                                                 }
                                               });
+                             
+                                              console.log("🚨🚨🚨 [Evolution Webhook] DEPOIS DO DOWNLOAD - mediaBuffer:", mediaBuffer ? `SIM (${mediaBuffer.length} bytes)` : "NULL/UNDEFINED");
                               
                                               if (mediaBuffer) {
                                                 const fileName = `story-${messageId}.${contextInfo.quotedMessage?.imageMessage ? 'jpg' : 'mp4'}`;
