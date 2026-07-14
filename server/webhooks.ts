@@ -1547,9 +1547,41 @@ async function processEvolutionWebhook(body: unknown) {
                           // Se já temos mídia do quotedMessage (contextInfo), usar direto
                           const quotedMedia = contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage;
                           if (quotedMedia?.url || quotedMedia?.mediaUrl) {
-                            mediaUrl = quotedMedia.url || quotedMedia.mediaUrl;
+                            let storyMediaUrl = quotedMedia.url || quotedMedia.mediaUrl;
                             messageType = contextInfo.quotedMessage?.imageMessage ? 'image' : 'video';
-                            console.log("[Evolution Webhook] ✅ Story reply: mídia extraída do quotedMessage:", mediaUrl);
+                            
+                            // 🎯 Baixar via Evolution API e subir pro R2 (igual mensagens normais)
+                            // A URL do WhatsApp CDN (mmg.whatsapp.net) é hotlink-protected
+                            const isWhatsAppCdn = storyMediaUrl.includes("mmg.whatsapp.net") || 
+                              storyMediaUrl.includes("pps.whatsapp.net") || 
+                              storyMediaUrl.includes("whatsapp.net") || 
+                              storyMediaUrl.includes("whatsapp.com");
+                            
+                            if (isWhatsAppCdn) {
+                              try {
+                                console.log("[Evolution Webhook] 📥 Baixando mídia do story via Evolution API...");
+                                const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+                                const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                                  url: storyMediaUrl,
+                                  messageKey: { id: messageId, remoteJid, fromMe: false }
+                                });
+                                if (mediaBuffer) {
+                                  const { uploadToR2 } = await import("./r2-client");
+                                  const fileName = `story-${messageId}.${messageType === 'video' ? 'mp4' : 'jpg'}`;
+                                  const uploadResult = await uploadToR2(mediaBuffer, fileName, messageType === 'video' ? "video/mp4" : "image/jpeg");
+                                  mediaUrl = cleanR2Url(uploadResult.url);
+                                  console.log("[Evolution Webhook] ✅ Story reply: mídia baixada e upada pro R2:", mediaUrl);
+                                } else {
+                                  console.log("[Evolution Webhook] ⚠️ Falha ao baixar mídia do story via Evolution");
+                                }
+                              } catch (downloadErr) {
+                                console.error("[Evolution Webhook] ❌ Erro ao baixar mídia do story:", downloadErr);
+                              }
+                            } else {
+                              // URL não é CDN (raro), usar direto
+                              mediaUrl = storyMediaUrl;
+                              console.log("[Evolution Webhook] ✅ Story reply: mídia extraída do quotedMessage (não CDN):", mediaUrl);
+                            }
                           } else {
                             // 🚨 CACHE WORKAROUND - Pesquisar story cacheado recentemente
                             const timeWindow = 120; // 2 minutos
@@ -1580,7 +1612,42 @@ async function processEvolutionWebhook(body: unknown) {
                               }
                             } else {
                               console.log("[Evolution Webhook] ⚠️ Nenhum story cacheado encontrado para correlacionar");
-                              // Fallback: tentar via Evolution API se necessário
+                              // 🔥 FALLBACK: Tentar baixar via Evolution API usando messageKey
+                              try {
+                                console.log("[Evolution Webhook] 🔄 Tentando fallback download via Evolution API...");
+                                const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+                                const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                                  url: "",
+                                  messageKey: { id: messageId, remoteJid, fromMe: false }
+                                });
+                                if (mediaBuffer) {
+                                  const { uploadToR2 } = await import("./r2-client");
+                                  const fileName = `story-${messageId}.jpg`;
+                                  const uploadResult = await uploadToR2(mediaBuffer, fileName, "image/jpeg");
+                                  mediaUrl = cleanR2Url(uploadResult.url);
+                                  messageType = 'image';
+                                  console.log("[Evolution Webhook] ✅ Story reply fallback: mídia baixada e upada pro R2:", mediaUrl);
+                                  
+                                  // Salvar no cache para futuras replies
+                                  try {
+                                    await db.insert(storyCache).values({
+                                      storyId: messageId,
+                                      remoteJid: remoteJid || '',
+                                      fromNumber,
+                                      mediaUrl: mediaUrl,
+                                      rawUrl: mediaUrl,
+                                      mediaType: 'image',
+                                      caption: messageText || null,
+                                      messageTimestamp: Math.floor(messageTimestamp),
+                                    });
+                                    console.log("[Evolution Webhook] ✅ Story cached for future replies");
+                                  } catch (cacheErr) {
+                                    console.error("[Evolution Webhook] ❌ Failed to store story in cache:", cacheErr);
+                                  }
+                                }
+                              } catch (fallbackErr) {
+                                console.error("[Evolution Webhook] ❌ Fallback download failed:", fallbackErr);
+                              }
                             }
                           }
                         }
