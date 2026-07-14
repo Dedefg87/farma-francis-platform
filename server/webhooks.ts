@@ -1,5 +1,15 @@
 import { Router, Request, Response } from "express";
 import { getDb } from "./db";
+
+// ============================================
+// 🛡️ GLOBAL ERROR HANDLERS - capturar crashes que escapam do try/catch
+// ============================================
+process.on('unhandledRejection', (reason) => {
+  console.error('🔴 [UNHANDLED REJECTION]', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('🔴 [UNCAUGHT EXCEPTION]', err?.message, err?.stack);
+});
 import {
   apiConfigurations,
   receivedMessages,
@@ -507,28 +517,23 @@ router.post("/evolution", async (req: Request, res: Response) => {
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
   try {
-    console.log("🔵🔵🔵 [Evolution Handler] ENTRY - req.method:", req.method, "req.path:", req.path, "query:", JSON.stringify(req.query));
-    console.log("🔵🔵🔵 [Evolution Handler] BODY type:", typeof req.body, "| keys:", Object.keys(req.body || {}));
-    const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
-    console.log("[Evolution Handler] 🎯 Received webhook:", {
-      method: req.method,
-      path: req.path,
-      url: fullUrl,
-      query: req.query,
-    });
+    const apikey = req.query.apikey || '';
+    console.log("🔵 [Evolution Handler] ENTRY method:", req.method, "path:", req.path, "apikey:", String(apikey).substring(0, 30));
 
     // RESPOSTA IMEDIATA - não bloquear o Evolution
     res.status(200).send("EVENT_RECEIVED");
 
     // Processar em background (não usar await para não bloquear)
+    // Usar Promise.resolve para garantir que erros sejam capturados
     setImmediate(() => {
       processEvolutionWebhookAsync(req).catch((err) => {
-        console.error("[Evolution Webhook] Background processing error:", err);
+        console.error("🔴 [Evolution Webhook] Background CRASH:", err?.message || String(err));
+        if (err?.stack) console.error("🔴 [Evolution Webhook] STACK:", err.stack);
       });
     });
   } catch (error) {
-    console.error("[Evolution Webhook] Handler error:", error);
-    // Já enviamos 200, então só logamos o erro
+    console.error("🔴 [Evolution Webhook] Handler CRASH:", error?.message || String(error));
+    try { res.status(200).send("EVENT_RECEIVED"); } catch (_) {}
   }
 }
 
@@ -537,21 +542,19 @@ async function processEvolutionWebhookAsync(req: Request) {
     const body = req.body;
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
-    console.log("1. [Evolution Webhook] 📥 Webhook recebido:", {
-      url: fullUrl,
-      bodyKeys: Object.keys(body || {}),
-      hasData: !!body?.data,
-      dataKeys: body?.data ? Object.keys(body.data) : [],
-      hasContextInfo: !!body?.data?.contextInfo,
-      hasMessage: !!body?.data?.message,
-      hasKey: !!body?.data?.key,
-      hasContextInfoMessage: !!body?.data?.message?.contextInfo,
-      rawUrlPreview: body?.data?.message?.imageMessage?.url ? 'SIM' : 'NÃO',
-      query: req.query,
-    });
-    // DUMP COMPLETO do body para debug (limitado a 1500 chars)
-    const bodyDump = JSON.stringify(body).substring(0, 1500);
-    console.log("1.5 [Evolution Webhook] 📦 Body dump:", bodyDump);
+    // LOG SIMPLES - sem objetos complexos para evitar crash
+    console.log("📥 [Webhook] event:", body?.event, "| hasData:", !!body?.data, "| dataKeys:", body?.data ? Object.keys(body.data).join(',') : 'none');
+    console.log("📥 [Webhook] hasContextInfo:", !!body?.data?.contextInfo, "| hasMessage:", !!body?.data?.message);
+    if (body?.data?.contextInfo) {
+      const ctx = body.data.contextInfo;
+      console.log("📥 [Webhook] ctx.remoteJid:", ctx.remoteJid, "| ctx.participant:", ctx.participant, "| stanzaId:", ctx.stanzaId);
+      console.log("📥 [Webhook] has quotedMessage:", !!ctx.quotedMessage, "| has imageMessage:", !!ctx.quotedMessage?.imageMessage);
+      if (ctx.quotedMessage?.imageMessage) {
+        const img = ctx.quotedMessage.imageMessage;
+        console.log("📥 [Webhook] img keys:", Object.keys(img).join(','));
+        console.log("📥 [Webhook] img has url:", !!img.url, "| mediaKey:", !!img.mediaKey, "| jpegThumbnail:", !!img.jpegThumbnail, "| directPath:", !!img.directPath);
+      }
+    }
 
     if (!body || Object.keys(body).length === 0) {
       console.log("[Evolution Webhook] Empty body, skipping");
