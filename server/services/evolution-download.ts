@@ -5,9 +5,11 @@
  * WhatsApp CDN URLs (mmg.whatsapp.net, pps.whatsapp.net) are hotlink-protected
  * and require authentication through the Evolution instance.
  *
- * NOW WITH: Full validation via media-validator (magic bytes, size, hashes)
- * Supports: mediaKey and directPath for authenticated download of story media
- * CRITICAL: /message/download returns JSON with URL, not raw bytes!
+ * KEY ENDPOINTS:
+ * - /message/download/{instance}/{msgId} -> returns JSON {url, mediaUrl}
+ * - /chat/getBase64FromMediaMessage -> POST with messageKey, returns {base64, mimetype}
+ *   (used for story replies where quotedMessage has no URL)
+ * - /instance/fetchImage/{instance} -> proxy download of external URL
  */
 
 import { getDb } from '../db';
@@ -33,6 +35,150 @@ interface EvolutionDownloadResponse {
 }
 
 /**
+ * Get Evolution API config from database
+ */
+async function getEvolutionConfig(): Promise<{ apiUrl: string; apiKey: string; instanceName: string } | null> {
+  try {
+    const db = await getDb();
+    if (!db) return null;
+
+    const [config] = await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.integrationType, 'evolution_api'))
+      .limit(1);
+
+    if (!config) return null;
+
+    const configData =
+      typeof config.config === 'string'
+        ? JSON.parse(config.config)
+        : config.config;
+
+    const apiUrl = configData.apiUrl?.replace(/\/$/, '');
+    const apiKey = configData.apiKey || configData.accessToken;
+    const instanceName = configData.instanceName;
+
+    if (!apiUrl || !apiKey || !instanceName) return null;
+
+    return { apiUrl, apiKey, instanceName };
+  } catch (err) {
+    console.error('[Evolution Config] Error:', err);
+    return null;
+  }
+}
+
+/**
+ * Download story media via Evolution API /chat/getBase64FromMediaMessage endpoint.
+ * 
+ * This is the CORRECT way to get story reply media from WhatsApp.
+ * Story replies don't have URL/mediaKey in quotedMessage — only stanzaId + participant.
+ * 
+ * @param stanzaId - The original story message ID (from contextInfo.stanzaId)
+ * @param participant - The LID of who posted the story (from contextInfo.participant)
+ * @param quotedMessage - The quotedMessage object (imageMessage or videoMessage)
+ * @param instanceName - The Evolution instance name
+ * @returns Buffer with the media, or null if failed
+ */
+export async function getStoryMediaViaBase64(
+  stanzaId: string,
+  participant: string,
+  quotedMessage: Record<string, unknown>,
+  instanceName?: string
+): Promise<Buffer | null> {
+  try {
+    const config = await getEvolutionConfig();
+    if (!config) {
+      console.log('[StoryMedia] ❌ No Evolution API config found');
+      return null;
+    }
+
+    const apiUrl = config.apiUrl;
+    const apiKey = config.apiKey;
+    const inst = instanceName || config.instanceName;
+
+    const endpoint = `${apiUrl}/chat/getBase64FromMediaMessage`;
+    
+    // Build the payload matching what Evolution API expects
+    // The message.key structure MUST have:
+    // - remoteJid: 'status@broadcast' (stories are on status)
+    // - id: the stanzaId (original story message ID)
+    // - fromMe: true (the story was posted by the instance user)
+    // - participant: the LID of the person who posted (e.g., '84735929938087@lid')
+    const payload = {
+      message: {
+        key: {
+          remoteJid: 'status@broadcast',
+          id: stanzaId,
+          fromMe: true,
+          participant: participant,
+        },
+        message: quotedMessage,
+      },
+    };
+
+    console.log(`[StoryMedia] 📤 Calling getBase64FromMediaMessage:`, {
+      endpoint: endpoint,
+      stanzaId,
+      participant,
+      hasQuotedMessage: !!quotedMessage,
+    });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+        'instance': inst,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    console.log(`[StoryMedia] 📥 getBase64FromMediaMessage response status:`, response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`[StoryMedia] ❌ HTTP ${response.status}:`, errorText.substring(0, 200));
+      return null;
+    }
+
+    const result = await response.json();
+    console.log(`[StoryMedia] 📥 Response keys:`, Object.keys(result));
+
+    // Evolution API returns { base64: "...", mimetype: "..." }
+    if (result?.base64) {
+      const buffer = Buffer.from(result.base64, 'base64');
+      console.log(`[StoryMedia] ✅ Buffer obtido: ${buffer.length} bytes, mime: ${result.mimetype || 'unknown'}`);
+      return buffer;
+    }
+
+    // If no base64, check if it returned a URL instead
+    if (result?.url || result?.mediaUrl) {
+      const mediaUrl = result.url || result.mediaUrl;
+      console.log(`[StoryMedia] 🔄 Got URL instead of base64, fetching: ${mediaUrl.substring(0, 80)}`);
+      
+      const mediaResponse = await fetch(mediaUrl, {
+        signal: AbortSignal.timeout(15000),
+      });
+      
+      if (mediaResponse.ok) {
+        const arrayBuffer = await mediaResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        console.log(`[StoryMedia] ✅ Buffer from URL: ${buffer.length} bytes`);
+        return buffer;
+      }
+    }
+
+    console.log(`[StoryMedia] ❌ No base64 or URL in response:`, JSON.stringify(result).substring(0, 200));
+    return null;
+  } catch (err) {
+    console.error(`[StoryMedia] ❌ Error:`, err.message);
+    return null;
+  }
+}
+
+/**
  * Download WhatsApp media using Evolution API proxy endpoint.
  * Supports URL-based download for story replies where mediaKey is unavailable.
  * Also supports mediaKey/directPath for authenticated download of original story media.
@@ -44,7 +190,7 @@ interface EvolutionDownloadResponse {
 export async function downloadWhatsAppMediaFromEvolution(
   params: DownloadParams
 ): Promise<Buffer | null> {
-  console.log("🚨🚨🚨 [Evolution Download] INÍCIO - params:", {
+  console.log("🚨 [Evolution Download] INÍCIO - params:", {
     hasUrl: !!params.url && params.url.length > 0,
     urlPreview: params.url?.substring(0, 60),
     hasMessageKey: !!params.messageKey,
@@ -55,41 +201,19 @@ export async function downloadWhatsAppMediaFromEvolution(
   });
 
   try {
-    const db = await getDb();
-    if (!db) {
-      console.log('🚨 [Evolution Download] No database connection');
-      return null;
-    }
-
-    const [config] = await db
-      .select()
-      .from(integrationSettings)
-      .where(eq(integrationSettings.integrationType, 'evolution_api'))
-      .limit(1);
-
+    const config = await getEvolutionConfig();
     if (!config) {
       console.log('🚨 [Evolution Download] No Evolution API config found');
       return null;
     }
 
-    const configData =
-      typeof config.config === 'string'
-        ? JSON.parse(config.config)
-        : config.config;
-
-    const apiUrl = configData.apiUrl?.replace(/\/$/, '');
-    const apiKey = configData.apiKey || configData.accessToken;
-    const instanceName = configData.instanceName;
-
-    if (!apiUrl || !apiKey || !instanceName) {
-      console.log('🚨 [Evolution Download] Missing required config fields');
-      return null;
-    }
+    const apiUrl = config.apiUrl;
+    const apiKey = config.apiKey;
+    const instanceName = config.instanceName;
 
     console.log('🚨 [Evolution Download] Config OK, attempting download...');
 
     // Method 1: Try /instance/fetchImage (accepts URL directly for proxy download)
-    // Only use if we have a URL
     if (params.url && params.url.length > 0) {
       console.log('🚨 [Evolution Download] Trying fetchImage endpoint...');
       const fetchImageUrl = `${apiUrl}/instance/fetchImage/${instanceName}`;
@@ -110,17 +234,8 @@ export async function downloadWhatsAppMediaFromEvolution(
         const buffer = Buffer.from(arrayBuffer);
         console.log('🚨 [Evolution Download] fetchImage success, size:', buffer.length);
         
-        // ✅ FULL VALIDATION OF BUFFER
-        try {
-          const validated = await downloadWithValidation(params.url, { 
-            expectedMimeType: 'image/jpeg', // WhatsApp images usually JPEG
-            maxRetries: 1, // already tried via Evolution
-          });
-          console.log('🚨 [Evolution Download] ✅ Buffer validated:', validated.mimeType, validated.fileSize);
-          return validated.buffer;
-        } catch (validationErr) {
-          console.error('🚨 [Evolution Download] ❌ Buffer validation failed:', validationErr.message);
-          return null;
+        if (buffer.length > 0) {
+          return buffer;
         }
       } else {
         const errorText = await fetchResponse.text();
@@ -157,12 +272,10 @@ export async function downloadWhatsAppMediaFromEvolution(
       return null;
     }
 
-    // CRITICAL: This endpoint returns JSON with URL, NOT raw bytes!
-    // Format: { "url": "https://...", "mediaUrl": "https://...", ... }
+    // This endpoint returns JSON with URL, NOT raw bytes!
     const data = await downloadResponse.json() as EvolutionDownloadResponse;
-    console.log('🚨 [Evolution Download] message/download response data:', JSON.stringify(data).substring(0, 500));
+    console.log('🚨 [Evolution Download] message/download response data keys:', Object.keys(data));
     
-    // Get the media URL from response
     const mediaUrl = data?.url || data?.mediaUrl || null;
     
     if (!mediaUrl) {
@@ -173,11 +286,8 @@ export async function downloadWhatsAppMediaFromEvolution(
     console.log('🚨 [Evolution Download] Got media URL:', mediaUrl.substring(0, 80));
 
     // Now download the actual media from the returned URL
-    // This URL might be a direct WhatsApp CDN URL or an Evolution/MinIO/R2 URL
     const mediaResponse = await fetch(mediaUrl, {
-      headers: {
-        'User-Agent': 'FarmaFrancisBot/1.0',
-      },
+      headers: { 'User-Agent': 'FarmaFrancisBot/1.0' },
     });
 
     if (!mediaResponse.ok) {
@@ -189,17 +299,7 @@ export async function downloadWhatsAppMediaFromEvolution(
     const buffer = Buffer.from(arrayBuffer);
     console.log('🚨 [Evolution Download] Media fetch success, size:', buffer.length);
 
-    // ✅ FULL VALIDATION OF BUFFER
-    try {
-      const validated = await downloadWithValidation(mediaUrl, { 
-        maxRetries: 1,
-      });
-      console.log('🚨 [Evolution Download] ✅ Buffer validated:', validated.mimeType, validated.fileSize);
-      return validated.buffer;
-    } catch (validationErr) {
-      console.error('🚨 [Evolution Download] ❌ Buffer validation failed:', validationErr.message);
-      return null;
-    }
+    return buffer;
   } catch (error) {
     console.error('🚨 [Evolution Download] Unexpected error:', error);
     return null;
@@ -207,7 +307,7 @@ export async function downloadWhatsAppMediaFromEvolution(
 }
 
 /**
- * Generic download for non-WhatsApp URLs (Instagram, etc.) with full validation
+ * Download non-WhatsApp media (Instagram, etc.)
  */
 export async function downloadGenericMedia(
   url: string,

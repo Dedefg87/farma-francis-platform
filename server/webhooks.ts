@@ -1620,48 +1620,122 @@ async function processEvolutionWebhook(body: unknown) {
                                               console.log("[Evolution Webhook] ✅ Story reply: mídia extraída do quotedMessage (não CDN):", mediaUrl);
                                             }
                                           } else {
-                                            // 🚨 SEM URL NO QUOTEDMESSAGE - usar stanzaId + mediaKey/directPath para download autenticado
-                                            console.log("[Evolution Webhook] ⚠️ quotedMessage NÃO tem url/mediaUrl - tentando download via stanzaId + mediaKey");
-                                            try {
-                                              const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-                                              const { uploadToR2 } = await import("./r2-client");
-                              
-                                              // Usar stanzaId (ID do story original) + mediaKey/directPath do quotedMessage
-                                              const originalStoryId = contextInfo.stanzaId || messageId;
-                                              const mediaKey = quotedMedia?.mediaKey || quotedMedia?.directPath || null;
-                              
-                                              console.log("[Evolution Webhook] 🔑 Tentando download com:", { 
-                                                originalStoryId, 
-                                                hasMediaKey: !!mediaKey,
-                                                mediaKeyPreview: mediaKey ? mediaKey.substring(0, 20) + '...' : null
-                                              });
-                              
-                                              const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
-                                                url: "", // Sem URL direta, vai usar messageKey
-                                                messageKey: { 
-                                                  id: originalStoryId, 
-                                                  remoteJid: 'status@broadcast', // Importante: status@broadcast para story original
-                                                  fromMe: false 
+                                            // 🚨 SEM URL NO QUOTEDMESSAGE - usar getBase64FromMediaMessage + thumbnail fallback
+                                            console.log("[Evolution Webhook] ⚠️ quotedMessage NÃO tem url/mediaUrl - tentando getBase64FromMediaMessage");
+                                            
+                                            // PRESERVAR participant original (não o normalizado vazio)
+                                            // No log, participant aparece como '84735929938087@lid' na primeira ocorrência
+                                            // mas vazio na versão normalizada. Precisamos do original!
+                                            const rawContextInfo = data?.contextInfo || {};
+                                            const storyParticipant = rawContextInfo.participant || 
+                                                                    data?.key?.participant || 
+                                                                    data?.participant || 
+                                                                    '';
+                                            console.log("[Evolution Webhook] 📋 storyParticipant:", storyParticipant || '(vazio)');
+
+                                            const originalStoryId = contextInfo.stanzaId || messageId;
+                                            const quotedMsg = contextInfo.quotedMessage;
+                                            const quotedImage = quotedMsg?.imageMessage;
+                                            const quotedVideo = quotedMsg?.videoMessage;
+                                            const isImage = !!quotedImage;
+                                            const isVideo = !!quotedVideo;
+                                            const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+                                            const ext = isImage ? 'jpg' : 'mp4';
+
+                                            let mediaBuffer: Buffer | null = null;
+                                            let source = '';
+
+                                            // TENTATIVA 1: getBase64FromMediaMessage (endpoint correto para stories)
+                                            if (originalStoryId && storyParticipant) {
+                                              try {
+                                                const { getStoryMediaViaBase64 } = await import("./services/evolution-download");
+                                                const { uploadToR2 } = await import("./r2-client");
+                                                console.log("[Evolution Webhook] 📤 Tentativa 1: getBase64FromMediaMessage com stanzaId:", originalStoryId, "participant:", storyParticipant);
+                                                
+                                                mediaBuffer = await getStoryMediaViaBase64(
+                                                  originalStoryId,
+                                                  storyParticipant,
+                                                  quotedMsg,
+                                                  data.instance || 'Meu'
+                                                );
+                                                
+                                                if (mediaBuffer) {
+                                                  source = 'getBase64FromMediaMessage';
+                                                  console.log("[Evolution Webhook] ✅ Tentativa 1 OK: buffer obtido via getBase64FromMediaMessage:", mediaBuffer.length, "bytes");
+                                                } else {
+                                                  console.log("[Evolution Webhook] ⚠️ Tentativa 1 falhou: getBase64FromMediaMessage retornou null");
                                                 }
+                                              } catch (err1) {
+                                                console.error("[Evolution Webhook] ❌ Tentativa 1 (getBase64FromMediaMessage) erro:", err1.message);
+                                              }
+                                            } else {
+                                              console.log("[Evolution Webhook] ⚠️ Pulando Tentativa 1: stanzaId ou participant vazio", { 
+                                                originalStoryId, 
+                                                hasParticipant: !!storyParticipant 
                                               });
-                             
-                                              console.log("🚨🚨🚨 [Evolution Webhook] DEPOIS DO DOWNLOAD - mediaBuffer:", mediaBuffer ? `SIM (${mediaBuffer.length} bytes)` : "NULL/UNDEFINED");
-                              
-                                              if (mediaBuffer) {
-                                                const fileName = `story-${messageId}.${contextInfo.quotedMessage?.imageMessage ? 'jpg' : 'mp4'}`;
-                                                const uploadResult = await uploadToR2(mediaBuffer, fileName, contextInfo.quotedMessage?.imageMessage ? "image/jpeg" : "video/mp4");
+                                            }
+
+                                            // TENTATIVA 2: jpegThumbnail como fallback (baixa resolução, mas aparece na tela)
+                                            if (!mediaBuffer && quotedImage?.jpegThumbnail) {
+                                              try {
+                                                console.log("[Evolution Webhook] 📤 Tentativa 2: jpegThumbnail fallback");
+                                                const thumbnailBase64 = quotedImage.jpegThumbnail;
+                                                mediaBuffer = Buffer.from(thumbnailBase64, 'base64');
+                                                source = 'thumbnail_fallback';
+                                                console.log("[Evolution Webhook] ✅ Tentativa 2 OK: thumbnail buffer obtido:", mediaBuffer.length, "bytes");
+                                              } catch (err2) {
+                                                console.error("[Evolution Webhook] ❌ Tentativa 2 (thumbnail) erro:", err2.message);
+                                              }
+                                            } else if (!mediaBuffer) {
+                                              console.log("[Evolution Webhook] ⚠️ Pulando Tentativa 2: jpegThumbnail não disponível ou já temos buffer");
+                                            }
+
+                                            // TENTATIVA 3: message/download (fallback antigo)
+                                            if (!mediaBuffer) {
+                                              try {
+                                                const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+                                                const { uploadToR2 } = await import("./r2-client");
+                                                console.log("[Evolution Webhook] 📤 Tentativa 3: message/download endpoint");
+                                                
+                                                mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                                                  url: "",
+                                                  messageKey: { 
+                                                    id: originalStoryId, 
+                                                    remoteJid: 'status@broadcast',
+                                                    fromMe: true 
+                                                  }
+                                                });
+                                                
+                                                if (mediaBuffer) {
+                                                  source = 'message_download';
+                                                  console.log("[Evolution Webhook] ✅ Tentativa 3 OK: buffer obtido via message/download:", mediaBuffer.length, "bytes");
+                                                } else {
+                                                  console.log("[Evolution Webhook] ❌ Tentativa 3 falhou: message/download retornou null");
+                                                }
+                                              } catch (err3) {
+                                                console.error("[Evolution Webhook] ❌ Tentativa 3 (message/download) erro:", err3.message);
+                                              }
+                                            }
+
+                                            // Se alguma tentativa funcionou, fazer upload para R2
+                                            if (mediaBuffer) {
+                                              try {
+                                                const { uploadToR2 } = await import("./r2-client");
+                                                const fileName = `story-${messageId}.${ext}`;
+                                                const uploadResult = await uploadToR2(mediaBuffer, fileName, mimeType);
                                                 mediaUrl = cleanR2Url(uploadResult.url);
-                                                messageType = contextInfo.quotedMessage?.imageMessage ? 'image' : 'video';
-                                                console.log("[Evolution Webhook] ✅ Story reply (stanzaId fallback): mídia validada e upada pro R2:", { 
+                                                messageType = isImage ? 'image' : 'video';
+                                                console.log("[Evolution Webhook] ✅ Story reply: mídia upada pro R2 (fonte:", source, "):", { 
                                                   url: mediaUrl, 
                                                   etag: uploadResult.etag, 
-                                                  size: uploadResult.size 
+                                                  size: uploadResult.size,
+                                                  source
                                                 });
-                                              } else {
-                                                console.log("[Evolution Webhook] ⚠️ Fallback stanzaId falhou - tentando cache...");
+                                              } catch (uploadErr) {
+                                                console.error("[Evolution Webhook] ❌ Erro no upload R2:", uploadErr.message);
                                               }
-                                            } catch (stanzaErr) {
-                                              console.error("[Evolution Webhook] ❌ Erro no fallback stanzaId:", stanzaErr);
+                                            } else {
+                                              console.log("[Evolution Webhook] ⚠️ Todas as tentativas de download falharam - salvando apenas texto");
                                             }
                             
                                             // Se ainda não tem mediaUrl, tentar cache
