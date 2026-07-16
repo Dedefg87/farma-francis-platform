@@ -427,8 +427,13 @@ export async function ingestInboundConversationMessage(message: {
   );
 
   // 2. Fetch profile picture in background (non-blocking)
-  // Download from WhatsApp CDN and upload to R2 (avoids 403 in browser)
-  if (message.provider === "whatsapp" && !customer?.photoUrl && customer?.id) {
+  // Download from WhatsApp CDN (proxied via Evolution API) and upload to R2.
+  // Re-download if missing OR if the stored URL is a (now-expired) WhatsApp CDN link.
+  const isExpiredCdn =
+    !!customer?.photoUrl &&
+    (customer.photoUrl.includes('whatsapp.net') ||
+      customer.photoUrl.includes('whatsapp.com'));
+  if (message.provider === "whatsapp" && customer?.id && (!customer?.photoUrl || isExpiredCdn)) {
     setImmediate(async () => {
       try {
         const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');

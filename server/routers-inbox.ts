@@ -99,6 +99,38 @@ export const inboxRouter = router({
 
       const conversations = await query;
 
+      // Lazy load profile pictures in background if null or expired CDN URLs
+      conversations.forEach(conv => {
+        const hasNoPhoto = !conv.fromProfilePic;
+        const isExpiredWhatsAppCdn = conv.fromProfilePic && (
+          conv.fromProfilePic.includes("whatsapp.net") || 
+          conv.fromProfilePic.includes("whatsapp.com") ||
+          conv.fromProfilePic.includes("mmg.whatsapp.net") ||
+          conv.fromProfilePic.includes("pps.whatsapp.net")
+        );
+
+        if ((hasNoPhoto || isExpiredWhatsAppCdn) && conv.fromNumber && conv.provider === "whatsapp") {
+          setImmediate(async () => {
+            try {
+              // Resolve customerId if missing (old messages may not have it)
+              let custId = conv.customerId ? Number(conv.customerId) : null;
+              if (!custId) {
+                const { findOrCreateCustomerByPhone } = await import('./db-messages.js');
+                const c = await findOrCreateCustomerByPhone(conv.fromNumber);
+                custId = c?.id ?? null;
+              }
+              if (!custId) return;
+
+              console.log(`[Inbox Lazy Load] Resolving missing/expired profile pic for ${conv.fromNumber}...`);
+              const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
+              await downloadAndUploadProfilePic(conv.fromNumber, custId);
+            } catch (err) {
+              console.error(`[Inbox Lazy Load] Failed resolving profile pic for ${conv.fromNumber}:`, err);
+            }
+          });
+        }
+      });
+
       return conversations.map(conv => ({
         ...conv,
         lastMessageTime: Number(conv.lastMessageTime),
