@@ -35,51 +35,49 @@ export const messagesRouter = router({
       if (!db) throw new Error("Database not available");
 
       try {
-        // Buscar mensagens usando query raw com JOIN
-        const rows = await db.execute(`
-          SELECT 
-            cm.id,
-            cm.conversation_id,
-            cm.external_id,
-            cm.remote_jid,
-            cm.provider,
-            cm.sender_id,
-            cm.sender_type,
-            cm.content,
-            cm.file_url,
-            cm.file_name,
-            cm.file_type,
-            cm.file_size,
-            cm.read_at,
-            cm.created_at,
-            u.name as sender_name,
-            e.position as sender_position
-          FROM conversation_messages cm
-          LEFT JOIN users u ON cm.sender_id = u.id
-          LEFT JOIN employees e ON u.id = e.user_id
-          WHERE cm.conversation_id = ?
-          ORDER BY cm.created_at ASC
-        `, [input.conversation_id]);
+        // Buscar mensagens usando Drizzle ORM simples
+        const messages = await db
+          .select()
+          .from(conversationMessages)
+          .where(eq(conversationMessages.conversationId, input.conversation_id))
+          .orderBy(conversationMessages.createdAt);
 
-        // Mapear resultados para o formato esperado pelo frontend
-        return (rows as any[]).map((row: any) => ({
-          id: row.id,
-          conversationId: row.conversation_id,
-          externalId: row.external_id,
-          remoteJid: row.remote_jid,
-          provider: row.provider,
-          senderId: row.sender_id,
-          senderType: row.sender_type,
-          content: row.content,
-          fileUrl: row.file_url,
-          fileName: row.file_name,
-          fileType: row.file_type,
-          fileSize: row.file_size,
-          readAt: row.read_at,
-          createdAt: row.created_at,
-          senderName: row.sender_name,
-          senderPosition: row.sender_position,
+        // Mapear mensagens e buscar dados do usuário separadamente
+        const result = await Promise.all(messages.map(async (msg) => {
+          let senderName = null;
+          let senderPosition = null;
+
+          // Buscar nome do usuário
+          if (msg.senderId) {
+            const [user] = await db.select().from(users).where(eq(users.id, msg.senderId)).limit(1);
+            senderName = user?.name || null;
+
+            // Buscar cargo do funcionário
+            const [employee] = await db.select().from(employees).where(eq(employees.userId, msg.senderId)).limit(1);
+            senderPosition = employee?.position || null;
+          }
+
+          return {
+            id: msg.id,
+            conversationId: msg.conversationId,
+            externalId: msg.externalId,
+            remoteJid: msg.remoteJid,
+            provider: msg.provider,
+            senderId: msg.senderId,
+            senderType: msg.senderType,
+            content: msg.content,
+            fileUrl: msg.fileUrl,
+            fileName: msg.fileName,
+            fileType: msg.fileType,
+            fileSize: msg.fileSize,
+            readAt: msg.readAt,
+            createdAt: msg.createdAt,
+            senderName,
+            senderPosition,
+          };
         }));
+
+        return result;
       } catch (error) {
         console.error("[messages.list] Error fetching messages:", error);
         return []; // Return empty array on error to prevent UI crash
@@ -237,23 +235,25 @@ export const messagesRouter = router({
       const userId = (ctx as any)?.user?.id;
       const agentName = (ctx as any)?.user?.name || "Atendente";
       
-      // Fetch position from employees table using raw query
+      // Fetch position from employees table
       let agentPosition = null;
       let senderName = agentName;
       
       if (userId) {
         try {
-          const employeeResult = await db.execute(`
-            SELECT u.name as sender_name, e.position as sender_position
-            FROM users u
-            LEFT JOIN employees e ON u.id = e.user_id
-            WHERE u.id = ?
-          `, [userId]);
+          const [employee] = await db.select()
+            .from(employees)
+            .where(eq(employees.userId, userId))
+            .limit(1);
           
-          const empRow = (employeeResult as any[])?.[0];
-          if (empRow) {
-            senderName = empRow.sender_name || agentName;
-            agentPosition = empRow.sender_position;
+          if (employee) {
+            agentPosition = employee.position;
+          }
+          
+          // Also get user name
+          const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+          if (user?.name) {
+            senderName = user.name;
           }
         } catch (err) {
           console.error("[messages.send] Error fetching employee:", err);
@@ -286,7 +286,7 @@ export const messagesRouter = router({
 
       // Notify via SSE - INCLUDE senderName and senderPosition
       const assignedTo = conv.assignedTo;
-      if (assignedTo && userId) {
+      if (assignedTo) {
         sseManager.emitToUser(String(assignedTo), {
           type: EVENTS.MESSAGE_NEW,
           data: {
