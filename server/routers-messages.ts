@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq, and, leftJoin } from "drizzle-orm/expressions";
+import { eq, and } from "drizzle-orm";
 import { conversationMessages, conversations, users, employees } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
@@ -34,46 +34,56 @@ export const messagesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Buscar mensagens com nome e cargo do agente usando JOIN
-      const rows = await db.query.conversationMessages.findMany({
-        where: eq(conversationMessages.conversationId, input.conversation_id),
-        orderBy: (m, asc) => asc(m.createdAt),
-        with: {
-          sender: {
-            columns: { name: true },
-            with: {
-              employees: {
-                columns: { position: true },
-              },
-            },
-          },
-        },
-      });
+      try {
+        // Buscar mensagens usando query raw com JOIN
+        const rows = await db.execute(`
+          SELECT 
+            cm.id,
+            cm.conversation_id,
+            cm.external_id,
+            cm.remote_jid,
+            cm.provider,
+            cm.sender_id,
+            cm.sender_type,
+            cm.content,
+            cm.file_url,
+            cm.file_name,
+            cm.file_type,
+            cm.file_size,
+            cm.read_at,
+            cm.created_at,
+            u.name as sender_name,
+            e.position as sender_position
+          FROM conversation_messages cm
+          LEFT JOIN users u ON cm.sender_id = u.id
+          LEFT JOIN employees e ON u.id = e.user_id
+          WHERE cm.conversation_id = ?
+          ORDER BY cm.created_at ASC
+        `, [input.conversation_id]);
 
-      // Mapear resultados para o formato esperado pelo frontend
-      return rows.map(msg => {
-        const senderUser = (msg as any).sender;
-        const senderEmployee = senderUser?.employees?.[0];
-        
-        return {
-          id: msg.id,
-          conversationId: msg.conversationId,
-          externalId: msg.externalId,
-          remoteJid: msg.remoteJid,
-          provider: msg.provider,
-          senderId: msg.senderId,
-          senderType: msg.senderType,
-          content: msg.content,
-          fileUrl: msg.fileUrl,
-          fileName: msg.fileName,
-          fileType: msg.fileType,
-          fileSize: msg.fileSize,
-          readAt: msg.readAt,
-          createdAt: msg.createdAt,
-          senderName: senderUser?.name || null,
-          senderPosition: senderEmployee?.position || null,
-        };
-      });
+        // Mapear resultados para o formato esperado pelo frontend
+        return (rows as any[]).map((row: any) => ({
+          id: row.id,
+          conversationId: row.conversation_id,
+          externalId: row.external_id,
+          remoteJid: row.remote_jid,
+          provider: row.provider,
+          senderId: row.sender_id,
+          senderType: row.sender_type,
+          content: row.content,
+          fileUrl: row.file_url,
+          fileName: row.file_name,
+          fileType: row.file_type,
+          fileSize: row.file_size,
+          readAt: row.read_at,
+          createdAt: row.created_at,
+          senderName: row.sender_name,
+          senderPosition: row.sender_position,
+        }));
+      } catch (error) {
+        console.error("[messages.list] Error fetching messages:", error);
+        return []; // Return empty array on error to prevent UI crash
+      }
     }),
 
   send: protectedProcedure
