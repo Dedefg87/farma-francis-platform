@@ -135,10 +135,8 @@ export async function getStoryMediaViaBase64(
           console.log('[StoryMedia] 📥 Response keys:', Object.keys(result));
 
           if (result?.base64) {
-            const base64Str = typeof result.base64 === 'string' \
-              ? result.base64 \
-              : JSON.stringify(result.base64);\
-            const buffer = Buffer.from(base64Str, 'base64');\
+            const base64Str = typeof result.base64 === 'string' ? result.base64 : JSON.stringify(result.base64);
+            const buffer = Buffer.from(base64Str, 'base64');
             console.log(`[StoryMedia] ✅ Buffer: ${buffer.length} bytes`);
             return buffer;
           }
