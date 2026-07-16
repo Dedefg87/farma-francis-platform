@@ -1,13 +1,15 @@
-Deploy trigger: 2026-07-16 23:05:00 -03
-Fix: Client profile pictures now resolve via Evolution API proxy instead of direct CDN fetch
+Deploy trigger: 2026-07-16 23:35:00 -03
+Fix: ROOT CAUSE of missing client photos identified and fixed
 
-Root cause: previous profile-pic.ts did fetch(pictureUrl) directly on WhatsApp CDN
-(pps.whatsapp.net), which is hotlink-protected and returns 403 even server-side.
-Now uses downloadWhatsAppMediaFromEvolution (Evolution instance proxy) to obtain
-the bytes, then uploads to R2 and stores the permanent public URL.
+The webhook inserted received_messages WITHOUT customerId. This broke BOTH:
+1. getConversations LEFT JOIN (customers.id = receivedMessages.customerId) -> never matched
+2. profile-pic DB update (WHERE customerId = X) -> touched zero rows
+Result: COALESCE(customers.photoUrl, MAX(fromProfilePic)) was ALWAYS NULL.
 
-Lazy-loads on getConversations so ALL existing customers get their photo resolved
-retroactively the moment the inbox is opened.
+Now ingestInboundConversationMessage AND the getConversations lazy-load backfill
+receivedMessages.customerId = customer.id. After that, JOIN + photo resolution work.
 
-Note: the 404s in console are for OLD document PDFs (comprovantes) uploaded before
-the R2 fix — separate issue, not profile photos.
+Also: profile-pic.ts now proxies WhatsApp CDN downloads through Evolution API
+(direct fetch of pps.whatsapp.net is hotlink-blocked -> 403).
+
+Note: console 404s are OLD comprovante PDFs (pre-R2 fix), unrelated to photos.
