@@ -154,6 +154,35 @@ export const messagesRouter = router({
         throw new Error("Conversation not found - cannot determine which conversation to add message to");
       }
 
+      // Get agent info for sender name and position - DO THIS BEFORE SENDING
+      const userId = (ctx as any)?.user?.id;
+      const agentName = (ctx as any)?.user?.name || "Atendente";
+      
+      // Fetch position from employees table
+      let agentPosition = null;
+      let senderName = agentName;
+      
+      if (userId) {
+        try {
+          const [employee] = await db.select()
+            .from(employees)
+            .where(eq(employees.userId, userId))
+            .limit(1);
+          
+          if (employee) {
+            agentPosition = employee.position;
+          }
+          
+          // Also get user name
+          const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+          if (user?.name) {
+            senderName = user.name;
+          }
+        } catch (err) {
+          console.error("[messages.send] Error fetching employee:", err);
+        }
+      }
+
       // If fileUrl is a data URL (base64), upload to R2 first
       // Evolution API requires a public URL or raw base64 for media
       if (fileUrl && fileUrl.startsWith("data:")) {
@@ -206,7 +235,7 @@ export const messagesRouter = router({
 
       if (!conv) throw new Error("Conversation not found");
 
-      // Send via Evolution API if WhatsApp
+      // Send via Evolution API if WhatsApp - NOW WITH SENDER INFO
       let externalId: string | null = null;
       if (conv.channel === "whatsapp" && conv.customerPhone) {
         try {
@@ -216,6 +245,8 @@ export const messagesRouter = router({
             message: messageText,
             mediaUrl: fileUrl || undefined,
             caption: fileName || undefined,
+            senderName,
+            senderPosition: agentPosition,
           });
           externalId = result?.messageId || null;
           console.log(
@@ -228,35 +259,6 @@ export const messagesRouter = router({
             err
           );
           // Continue to save message locally even if send fails
-        }
-      }
-
-      // Get agent info for sender name and position
-      const userId = (ctx as any)?.user?.id;
-      const agentName = (ctx as any)?.user?.name || "Atendente";
-      
-      // Fetch position from employees table
-      let agentPosition = null;
-      let senderName = agentName;
-      
-      if (userId) {
-        try {
-          const [employee] = await db.select()
-            .from(employees)
-            .where(eq(employees.userId, userId))
-            .limit(1);
-          
-          if (employee) {
-            agentPosition = employee.position;
-          }
-          
-          // Also get user name
-          const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          if (user?.name) {
-            senderName = user.name;
-          }
-        } catch (err) {
-          console.error("[messages.send] Error fetching employee:", err);
         }
       }
 
