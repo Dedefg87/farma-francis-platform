@@ -1,9 +1,9 @@
-Deploy trigger: 2026-07-16 20:30:00 -03
-This file forces Railway to rebuild.
-Agent message display with position - commit message
-server/routers-messages.ts - Added sender_position to messages.list query
-client/src/pages/AgentChat.tsx - Updated to show "Name - Position" format
-client/src/pages/AgentMessages.tsx - Updated to show "Name - Position" format
-client/src/pages/Messages.tsx - Updated to show "Name - Position" format
-shared/types/conversations.ts - Added senderPosition field to ConversationMessage type
-Deploy
+Deploy trigger: 2026-07-16 22:45:00 -03
+Feature: Client profile picture display and lightbox enlargement
+
+Changes:
+1. server/routers-inbox.ts - Merged photo from customers table with fallbacks
+2. server/services/profile-pic.ts - Implemented R2 profile picture downloader and publisher
+3. client/src/pages/Inbox.tsx - Added modal lightbox for magnifying avatars in CSS WhatsApp style
+
+This resolves dynamic WhatsApp CDN URL expiration errors, keeping profile pictures persistent on R2 and fully expandable/zoomable for agents!
