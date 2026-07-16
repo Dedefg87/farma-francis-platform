@@ -158,7 +158,7 @@ export async function fetchInstagramProfile(igsid: string) {
  * Send a text message via WhatsApp Business API
  */
 export async function sendWhatsAppMessage(params: {
-  to: string; // Phone number in international format (e.g., +551****9999)
+  to: string;
   message: string;
   replyToMessageId?: string;
   mediaUrl?: string;
@@ -425,6 +425,311 @@ export async function sendWhatsAppImage(params: {
 }
 
 /**
+ * Send an Instagram text message
+ */
+export async function sendInstagramMessage(params: {
+  to: string;
+  message: string;
+  mediaUrl?: string;
+  caption?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const { configData } = await getIntegrationConfig("instagram_graph");
+  const token = configData.accessToken as string | undefined;
+  const igsid = configData.igsid as string | undefined;
+
+  if (!token || !igsid) {
+    throw new Error("Instagram configuration missing accessToken or igsid");
+  }
+
+  const messageText = params.message;
+  
+  const body = {
+    messaging_product: "instagram",
+    recipient_id: params.to,
+    message: {
+      text: {
+        body: messageText,
+      },
+    },
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${igsid}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Instagram API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+
+  await db.insert(messages).values({
+    channel: "instagram",
+    direction: "outbound",
+    content: messageText,
+    messageId: result?.messageId || null,
+    status: "sent",
+  });
+
+  return {
+    success: true,
+    messageId: result?.messageId || null,
+    to: params.to,
+  };
+}
+
+/**
+ * Send an Instagram image
+ */
+export async function sendInstagramImage(params: {
+  to: string;
+  imageUrl: string;
+  caption?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const { configData } = await getIntegrationConfig("instagram_graph");
+  const token = configData.accessToken as string | undefined;
+  const igsid = configData.igsid as string | undefined;
+
+  if (!token || !igsid) {
+    throw new Error("Instagram configuration missing accessToken or igsid");
+  }
+
+  const body = {
+    messaging_product: "instagram",
+    recipient_id: params.to,
+    message: {
+      image: {
+        link: params.imageUrl,
+        caption: params.caption,
+      },
+    },
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${igsid}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Instagram API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+
+  await db.insert(messages).values({
+    channel: "instagram",
+    direction: "outbound",
+    content: params.caption || "[Image]",
+    messageId: result?.messageId || null,
+    status: "sent",
+    metadata: JSON.stringify({
+      imageUrl: params.imageUrl,
+      caption: params.caption,
+    }),
+  });
+
+  return {
+    success: true,
+    messageId: result?.messageId || null,
+    to: params.to,
+  };
+}
+
+/**
+ * Send a document via WhatsApp Business API
+ */
+export async function sendWhatsAppDocument(params: {
+  to: string;
+  documentUrl: string;
+  fileName: string;
+  caption?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const { configData } = await getIntegrationConfig("whatsapp_business");
+  const token = configData.accessToken;
+  const phoneNumberId = configData.phoneNumberId;
+
+  if (!token || !phoneNumberId) {
+    throw new Error(
+      "WhatsApp configuration missing accessToken or phoneNumberId"
+    );
+  }
+
+  const body = {
+    messaging_product: "whatsapp",
+    to: normalizeWhatsAppNumber(params.to),
+    type: "document",
+    document: {
+      link: params.documentUrl,
+      caption: params.caption,
+      filename: params.fileName,
+    },
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`WhatsApp API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+
+  await db.insert(messages).values({
+    channel: "whatsapp",
+    direction: "outbound",
+    content: params.caption || params.fileName,
+    messageId: result.messages[0].id,
+    status: "sent",
+  });
+
+  return {
+    success: true,
+    messageId: result.messages[0].id,
+    to: params.to,
+  };
+}
+
+/**
+ * Send an Instagram document
+ */
+export async function sendInstagramDocument(params: {
+  to: string;
+  documentUrl: string;
+  fileName: string;
+  caption?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const { configData } = await getIntegrationConfig("instagram_graph");
+  const token = configData.accessToken as string | undefined;
+  const igsid = configData.igsid as string | undefined;
+
+  if (!token || !igsid) {
+    throw new Error("Instagram configuration missing accessToken or igsid");
+  }
+
+  const body = {
+    messaging_product: "instagram",
+    recipient_id: params.to,
+    message: {
+      attachment: {
+        type: "MEDIA",
+        payload: {
+          url: params.documentUrl,
+          is_video: false,
+        },
+      },
+    },
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${igsid}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Instagram API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+
+  await db.insert(messages).values({
+    channel: "instagram",
+    direction: "outbound",
+    content: params.caption || params.fileName,
+    messageId: result?.messageId || null,
+    status: "sent",
+  });
+
+  return {
+    success: true,
+    messageId: result?.messageId || null,
+    to: params.to,
+  };
+}
+
+/**
+ * Send any media file via WhatsApp (generic function)
+ */
+export async function sendWhatsAppMedia(params: {
+  to: string;
+  mediaUrl: string;
+  mediaType: "image" | "video" | "audio" | "document";
+  fileName?: string;
+  caption?: string;
+}) {
+  // Route to appropriate function based on media type
+  switch (params.mediaType) {
+    case "image":
+      return await sendWhatsAppImage({
+        to: params.to,
+        imageUrl: params.mediaUrl,
+        caption: params.caption,
+      });
+    case "video":
+      // For video, we'd need a sendWhatsAppVideo function
+      throw new Error("Video sending not implemented yet");
+    case "audio":
+      // For audio, we'd need a sendWhatsAppAudio function
+      throw new Error("Audio sending not implemented yet");
+    case "document":
+      return await sendWhatsAppDocument({
+        to: params.to,
+        documentUrl: params.mediaUrl,
+        fileName: params.fileName || "document",
+        caption: params.caption,
+      });
+    default:
+      throw new Error(`Unsupported media type: ${params.mediaType}`);
+  }
+}
+
+/**
  * Send a view-once (disappearing) image or video via WhatsApp Business API
  */
 export async function sendWhatsAppViewOnceMedia(params: {
@@ -468,85 +773,113 @@ export async function sendWhatsAppViewOnceMedia(params: {
       }
     );
 
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Evolution API error: ${response.status} - ${error}`);
+    }
+
+    const result = await response.json();
+    await db.insert(messages).values({
+      channel: "whatsapp",
+      direction: "outbound",
+      content: finalCaption,
+      messageId: result?.key?.id || null,
+      status: "sent",
+      metadata: JSON.stringify({
+        mediaUrl: params.mediaUrl,
+        mediaType: params.mediaType,
+        caption: finalCaption,
+        viewOnce: true,
+      }),
+    });
+    return { success: true, messageId: result?.key?.id || null, to: params.to };
+  }
+
+  const { configData } = await getIntegrationConfig("whatsapp_business");
+  const token = configData.accessToken;
+  const phoneNumberId = configData.phoneNumberId;
+
+  if (!token || !phoneNumberId) {
+    throw new Error(
+      "WhatsApp configuration missing accessToken or phoneNumberId"
+    );
+  }
+
+  const body = {
+    messaging_product: "whatsapp",
+    to: normalizeWhatsAppNumber(params.to),
+    type: params.mediaType,
+    [params.mediaType]: {
+      link: params.mediaUrl,
+      caption: finalCaption,
+      animated: false,
+    },
+    ephemeral: true,
+  };
+
+  const response = await fetch(
+    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    }
+  );
+
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Evolution API error: ${response.status} - ${error}`);
+    throw new Error(`WhatsApp API error: ${response.status} - ${error}`);
   }
 
   const result = await response.json();
-  await db.insert(messages).values({
-    channel: "whatsapp",
-    direction: "outbound",
-    content: finalCaption,
-    messageId: result?.key?.id || null,
-    status: "sent",
-    metadata: JSON.stringify({
-      mediaUrl: params.mediaUrl,
-      mediaType: params.mediaType,
-      caption: finalCaption,
-      viewOnce: true,
-    }),
+
+  // Also save to conversation_messages for visibility in chat
+  await ingestOutboundConversationMessage({
+    provider: "whatsapp",
+    toNumber: params.to,
+    fromUserId: 1,
+    messageType: params.mediaType,
+    messageText: finalCaption,
+    mediaUrl: params.mediaUrl,
+    mimeType: params.mediaType === "image" ? "image/jpeg" : "video/mp4",
+    fileName: params.mediaUrl.split("/").pop() || "media.jpg",
+    externalId: result.messages[0].id,
   });
-  return { success: true, messageId: result?.key?.id || null, to: params.to };
+
+  return {
+    success: true,
+    messageId: result.messages[0].id,
+    to: params.to,
+  };
 }
 
-const { configData } = await getIntegrationConfig("whatsapp_business");
-const token = configData.accessToken;
-const phoneNumberId = configData.phoneNumberId;
+/**
+ * Get sent messages (for testing and admin views)
+ */
+export async function getSentMessages(params: {
+  channel?: "whatsapp" | "instagram";
+  customerId?: number;
+  limit?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
 
-if (!token || !phoneNumberId) {
-  throw new Error(
-    "WhatsApp configuration missing accessToken or phoneNumberId"
-  );
-}
+  let query = db.select().from(messages);
 
-const body = {
-  messaging_product: "whatsapp",
-  to: normalizeWhatsAppNumber(params.to),
-  type: params.mediaType,
-  [params.mediaType]: {
-    link: params.mediaUrl,
-    caption: finalCaption,
-    animated: false,
-  },
-  ephemeral: true,
-};
-
-const response = await fetch(
-  `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-  {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+  if (params.channel) {
+    query = query.where(eq(messages.channel, params.channel));
   }
-);
 
-if (!response.ok) {
-  const error = await response.text();
-  throw new Error(`WhatsApp API error: ${response.status} - ${error}`);
-}
+  if (params.customerId) {
+    query = query.where(eq(messages.customerId, params.customerId));
+  }
 
-const result = await response.json();
+  if (params.limit) {
+    query = query.limit(params.limit);
+  }
 
-// Also save to conversation_messages for visibility in chat
-await ingestOutboundConversationMessage({
-  provider: "whatsapp",
-  toNumber: params.to,
-  fromUserId: 1,
-  messageType: params.mediaType,
-  messageText: finalCaption,
-  mediaUrl: params.mediaUrl,
-  mimeType: params.mediaType === "image" ? "image/jpeg" : "video/mp4",
-  fileName: params.mediaUrl.split("/").pop() || "media.jpg",
-  externalId: result.messages[0].id,
-});
-
-return {
-  success: true,
-  messageId: result.messages[0].id,
-  to: params.to,
-};
+  return await query;
 }
