@@ -18,7 +18,7 @@ import {
  * - Converte tipos numéricos para string onde necessário.
  * - Preenche campos ausentes com valores default.
  */
-function mapConversation(row: unknown): Conversation {
+function mapConversation(row: any): Conversation {
   // Mapeia status do banco para o enum compartilhado
   const statusMap: Record<string, ConversationStatus> = {
     open: ConversationStatus.OPEN,
@@ -54,7 +54,7 @@ function mapConversation(row: unknown): Conversation {
     // Campos extras do cliente
     customerName: row.customerName || undefined,
     customerPhone: row.customerPhone || undefined,
-    customerAvatar: row.customerAvatar || undefined,
+    customerAvatar: row.customerAvatar || (row as any).photoUrl || undefined,
   };
 }
 
