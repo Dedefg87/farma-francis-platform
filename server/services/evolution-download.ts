@@ -54,7 +54,7 @@ async function getEvolutionConfig(): Promise<{ apiUrl: string; apiKey: string; i
         ? JSON.parse(config.config)
         : config.config;
 
-    const apiUrl = configData.apiUrl?.replace(/\\/$/, '');
+    const apiUrl = configData.apiUrl?.replace(/\/$/, '');
     const apiKey = configData.apiKey || configData.accessToken || configData.token;
     const instanceName = configData.instanceName || configData.instance || 'Meu';
 
