@@ -1,9 +1,13 @@
-Deploy trigger: 2026-07-16 22:45:00 -03
-Feature: Client profile picture display and lightbox enlargement
+Deploy trigger: 2026-07-16 23:05:00 -03
+Fix: Client profile pictures now resolve via Evolution API proxy instead of direct CDN fetch
 
-Changes:
-1. server/routers-inbox.ts - Merged photo from customers table with fallbacks
-2. server/services/profile-pic.ts - Implemented R2 profile picture downloader and publisher
-3. client/src/pages/Inbox.tsx - Added modal lightbox for magnifying avatars in CSS WhatsApp style
+Root cause: previous profile-pic.ts did fetch(pictureUrl) directly on WhatsApp CDN
+(pps.whatsapp.net), which is hotlink-protected and returns 403 even server-side.
+Now uses downloadWhatsAppMediaFromEvolution (Evolution instance proxy) to obtain
+the bytes, then uploads to R2 and stores the permanent public URL.
 
-This resolves dynamic WhatsApp CDN URL expiration errors, keeping profile pictures persistent on R2 and fully expandable/zoomable for agents!
+Lazy-loads on getConversations so ALL existing customers get their photo resolved
+retroactively the moment the inbox is opened.
+
+Note: the 404s in console are for OLD document PDFs (comprovantes) uploaded before
+the R2 fix — separate issue, not profile photos.
