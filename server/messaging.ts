@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 import { integrationSettings, messages } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { ingestOutboundConversationMessage } from "./db-messages-outbound";
 
 function normalizeWhatsAppNumber(value: string) {
   return value.replace(/\D/g, "");
@@ -317,6 +318,20 @@ export async function sendWhatsAppImage(params: {
         caption: params.caption,
       }),
     });
+    
+    // Also save to conversation_messages for visibility in chat
+    await ingestOutboundConversationMessage({
+      provider: "whatsapp",
+      toNumber: params.to,
+      fromUserId: 1,
+      messageType: "image",
+      messageText: params.caption || "[Image]",
+      mediaUrl: params.imageUrl,
+      mimeType: "image/jpeg",
+      fileName: params.imageUrl.split("/").pop() || "imagem.jpg",
+      externalId: result?.key?.id || null,
+    });
+    
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
 
@@ -369,6 +384,19 @@ export async function sendWhatsAppImage(params: {
       imageUrl: params.imageUrl,
       caption: params.caption,
     }),
+  });
+  
+  // Also save to conversation_messages for visibility in chat
+  await ingestOutboundConversationMessage({
+    provider: "whatsapp",
+    toNumber: params.to,
+    fromUserId: 1,
+    messageType: "image",
+    messageText: params.caption || "[Image]",
+    mediaUrl: params.imageUrl,
+    mimeType: "image/jpeg",
+    fileName: params.imageUrl.split("/").pop() || "imagem.jpg",
+    externalId: result.messages[0].id,
   });
 
   return {
@@ -486,6 +514,19 @@ export async function sendWhatsAppViewOnceMedia(params: {
       caption: params.caption,
       viewOnce: true,
     }),
+  });
+  
+  // Also save to conversation_messages for visibility in chat
+  await ingestOutboundConversationMessage({
+    provider: "whatsapp",
+    toNumber: params.to,
+    fromUserId: 1,
+    messageType: params.mediaType,
+    messageText: params.caption || `[View-once ${params.mediaType}]`,
+    mediaUrl: params.mediaUrl,
+    mimeType: params.mediaType === "video" ? "video/mp4" : "image/jpeg",
+    fileName: params.mediaUrl.split("/").pop() || `viewonce.${params.mediaType === 'video' ? 'mp4' : 'jpg'}`,
+    externalId: result.messages[0].id,
   });
 
   return {
@@ -744,6 +785,20 @@ export async function sendWhatsAppDocument(params: {
         caption: params.caption,
       }),
     });
+    
+    // Also save to conversation_messages for visibility in chat
+    await ingestOutboundConversationMessage({
+      provider: "whatsapp",
+      toNumber: params.to,
+      fromUserId: 1,
+      messageType: "document",
+      messageText: params.caption || params.filename,
+      mediaUrl: params.documentUrl,
+      mimeType: params.mimeType,
+      fileName: params.filename,
+      externalId: result?.key?.id || null,
+    });
+    
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
 
@@ -799,6 +854,19 @@ export async function sendWhatsAppDocument(params: {
       mimeType: params.mimeType,
       caption: params.caption,
     }),
+  });
+  
+  // Also save to conversation_messages for visibility in chat
+  await ingestOutboundConversationMessage({
+    provider: "whatsapp",
+    toNumber: params.to,
+    fromUserId: 1,
+    messageType: "document",
+    messageText: params.caption || params.filename,
+    mediaUrl: params.documentUrl,
+    mimeType: params.mimeType,
+    fileName: params.filename,
+    externalId: result.messages[0].id,
   });
 
   return {
@@ -953,6 +1021,20 @@ export async function sendWhatsAppMedia(params: {
         caption: params.caption,
       }),
     });
+    
+    // Also save to conversation_messages for visibility in chat
+    await ingestOutboundConversationMessage({
+      provider: "whatsapp",
+      toNumber: params.to,
+      fromUserId: 1,
+      messageType: params.mediaType,
+      messageText: params.caption || params.filename || `[${params.mediaType}]`,
+      mediaUrl: params.mediaUrl,
+      mimeType: params.mimeType,
+      fileName: params.filename,
+      externalId: result?.key?.id || null,
+    });
+    
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
 
@@ -1027,6 +1109,19 @@ export async function sendWhatsAppMedia(params: {
       mimeType: params.mimeType,
       caption: params.caption,
     }),
+  });
+  
+  // Also save to conversation_messages for visibility in chat
+  await ingestOutboundConversationMessage({
+    provider: "whatsapp",
+    toNumber: params.to,
+    fromUserId: 1,
+    messageType: params.mediaType,
+    messageText: params.caption || params.filename || `[${params.mediaType}]`,
+    mediaUrl: params.mediaUrl,
+    mimeType: params.mimeType,
+    fileName: params.filename,
+    externalId: result.messages[0].id,
   });
 
   return {
