@@ -237,15 +237,26 @@ export const messagesRouter = router({
       const userId = (ctx as any)?.user?.id;
       const agentName = (ctx as any)?.user?.name || "Atendente";
       
-      // Fetch position from employees table
+      // Fetch position from employees table using raw query
       let agentPosition = null;
+      let senderName = agentName;
+      
       if (userId) {
-        const employeeResult = await db.query.employees.findFirst({
-          where: eq(employees.userId, userId),
-          columns: { position: true },
-        });
-        if (employeeResult) {
-          agentPosition = employeeResult.position;
+        try {
+          const employeeResult = await db.execute(`
+            SELECT u.name as sender_name, e.position as sender_position
+            FROM users u
+            LEFT JOIN employees e ON u.id = e.user_id
+            WHERE u.id = ?
+          `, [userId]);
+          
+          const empRow = (employeeResult as any[])?.[0];
+          if (empRow) {
+            senderName = empRow.sender_name || agentName;
+            agentPosition = empRow.sender_position;
+          }
+        } catch (err) {
+          console.error("[messages.send] Error fetching employee:", err);
         }
       }
 
@@ -275,20 +286,7 @@ export const messagesRouter = router({
 
       // Notify via SSE - INCLUDE senderName and senderPosition
       const assignedTo = conv.assignedTo;
-      if (assignedTo) {
-        // Fetch agent details
-        const senderEmployee = await db.query.employees.findFirst({
-          where: eq(employees.userId, userId),
-          with: {
-            user: {
-              columns: { name: true },
-            },
-          },
-        });
-        
-        const senderName = senderEmployee?.user?.name || agentName;
-        const senderPosition = senderEmployee?.position || null;
-        
+      if (assignedTo && userId) {
         sseManager.emitToUser(String(assignedTo), {
           type: EVENTS.MESSAGE_NEW,
           data: {
@@ -298,7 +296,7 @@ export const messagesRouter = router({
               content: messageText,
               senderType: "agent",
               senderName,
-              senderPosition,
+              senderPosition: agentPosition,
               fileUrl,
               fileType,
               createdAt: new Date().toISOString(),
@@ -319,7 +317,7 @@ export const messagesRouter = router({
           conversationId,
           content: messageText,
           senderType: "agent",
-          senderName: agentName,
+          senderName,
           senderPosition: agentPosition,
           fileUrl,
           fileName,
