@@ -1,15 +1,14 @@
 /**
  * Evolution API Media Download Service
- *
+ * 
  * Downloads WhatsApp CDN media through Evolution API's proxy endpoints.
  * WhatsApp CDN URLs (mmg.whatsapp.net, pps.whatsapp.net) are hotlink-protected
  * and require authentication through the Evolution instance.
- *
- * KEY ENDPOINTS:
- * - /message/download/{instance}/{msgId} -> returns JSON {url, mediaUrl}
+ * 
+ * KEY ENDPOINTS (v2.x):
+ * - /message/download/{instanceName}/{messageId} -> returns JSON {url, mediaUrl}
+ * - /instance/fetchImage/{instanceName} -> POST {url} -> returns image buffer
  * - /chat/getBase64FromMediaMessage -> POST with messageKey, returns {base64, mimetype}
- *   (used for story replies where quotedMessage has no URL)
- * - /instance/fetchImage/{instance} -> proxy download of external URL
  */
 
 import { getDb } from '../db';
@@ -55,9 +54,9 @@ async function getEvolutionConfig(): Promise<{ apiUrl: string; apiKey: string; i
         ? JSON.parse(config.config)
         : config.config;
 
-    const apiUrl = configData.apiUrl?.replace(/\/$/, '');
-    const apiKey = configData.apiKey || configData.accessToken;
-    const instanceName = configData.instanceName;
+    const apiUrl = configData.apiUrl?.replace(/\\/$/, '');
+    const apiKey = configData.apiKey || configData.accessToken || configData.token;
+    const instanceName = configData.instanceName || configData.instance || 'Meu';
 
     if (!apiUrl || !apiKey || !instanceName) return null;
 
@@ -69,9 +68,8 @@ async function getEvolutionConfig(): Promise<{ apiUrl: string; apiKey: string; i
 }
 
 /**
- * Download story media via Evolution API /chat/getBase64FromMediaMessage endpoint.
+ * Download story media via Evolution API.
  * 
- * This is the CORRECT way to get story reply media from WhatsApp.
  * Story replies don't have URL/mediaKey in quotedMessage — only stanzaId + participant.
  * 
  * @param stanzaId - The original story message ID (from contextInfo.stanzaId)
@@ -97,14 +95,12 @@ export async function getStoryMediaViaBase64(
     const apiKey = config.apiKey;
     const inst = instanceName || config.instanceName;
 
-    const endpoint = `${apiUrl}/chat/getBase64FromMediaMessage`;
-    
-    // Build the payload matching what Evolution API expects
-    // The message.key structure MUST have:
-    // - remoteJid: 'status@broadcast' (stories are on status)
-    // - id: the stanzaId (original story message ID)
-    // - fromMe: true (the story was posted by the instance user)
-    // - participant: the LID of the person who posted (e.g., '84735929938087@lid')
+    // Try multiple endpoint formats for compatibility
+    const endpoints = [
+      `${apiUrl}/chat/getBase64FromMediaMessage`,
+      `${apiUrl}/api/chat/getBase64FromMediaMessage`,
+    ];
+
     const payload = {
       message: {
         key: {
@@ -117,63 +113,67 @@ export async function getStoryMediaViaBase64(
       },
     };
 
-    console.log(`[StoryMedia] 📤 Calling getBase64FromMediaMessage:`, {
-      endpoint: endpoint,
-      stanzaId,
-      participant,
-      hasQuotedMessage: !!quotedMessage,
-    });
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`[StoryMedia] 📤 Trying endpoint: ${endpoint}`);
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey,
-        'instance': inst,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30000),
-    });
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': apiKey,
+            'instance': inst,
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(30000),
+        });
 
-    console.log(`[StoryMedia] 📥 getBase64FromMediaMessage response status:`, response.status);
+        console.log(`[StoryMedia] 📥 Response status: ${response.status}`);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log(`[StoryMedia] ❌ HTTP ${response.status}:`, errorText.substring(0, 200));
-      return null;
-    }
+        if (response.ok) {
+          const result = await response.json();
+          console.log('[StoryMedia] 📥 Response keys:', Object.keys(result));
 
-    const result = await response.json();
-    console.log(`[StoryMedia] 📥 Response keys:`, Object.keys(result));
+          if (result?.base64) {
+            const buffer = Buffer.from(result.base64, 'base64');
+            console.log(`[StoryMedia] ✅ Buffer: ${buffer.length} bytes`);
+            return buffer;
+          }
 
-    // Evolution API returns { base64: "...", mimetype: "..." }
-    if (result?.base64) {
-      const buffer = Buffer.from(result.base64, 'base64');
-      console.log(`[StoryMedia] ✅ Buffer obtido: ${buffer.length} bytes, mime: ${result.mimetype || 'unknown'}`);
-      return buffer;
-    }
-
-    // If no base64, check if it returned a URL instead
-    if (result?.url || result?.mediaUrl) {
-      const mediaUrl = result.url || result.mediaUrl;
-      console.log(`[StoryMedia] 🔄 Got URL instead of base64, fetching: ${mediaUrl.substring(0, 80)}`);
-      
-      const mediaResponse = await fetch(mediaUrl, {
-        signal: AbortSignal.timeout(15000),
-      });
-      
-      if (mediaResponse.ok) {
-        const arrayBuffer = await mediaResponse.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        console.log(`[StoryMedia] ✅ Buffer from URL: ${buffer.length} bytes`);
-        return buffer;
+          if (result?.url || result?.mediaUrl) {
+            const mediaUrl = result.url || result.mediaUrl;
+            console.log(`[StoryMedia] 🔄 Fetching from URL: ${mediaUrl.substring(0, 80)}`);
+            
+            const mediaResponse = await fetch(mediaUrl, {
+              signal: AbortSignal.timeout(15000),
+            });
+            
+            if (mediaResponse.ok) {
+              const arrayBuffer = await mediaResponse.arrayBuffer();
+              const buffer = Buffer.from(arrayBuffer);
+              console.log(`[StoryMedia] ✅ Buffer from URL: ${buffer.length} bytes`);
+              return buffer;
+            }
+          }
+        }
+      } catch (err) {
+        console.log(`[StoryMedia] ⚠️ Endpoint ${endpoint} failed: ${err}`);
       }
     }
 
-    console.log(`[StoryMedia] ❌ No base64 or URL in response:`, JSON.stringify(result).substring(0, 200));
+    // Fallback: try jpegThumbnail
+    if ((quotedMessage as any).imageMessage?.jpegThumbnail) {
+      console.log('[StoryMedia] 📎 Using jpegThumbnail fallback');
+      const thumbBase64 = (quotedMessage as any).imageMessage.jpegThumbnail;
+      const buffer = Buffer.from(thumbBase64, 'base64');
+      console.log(`[StoryMedia] ✅ Thumbnail buffer: ${buffer.length} bytes`);
+      return buffer;
+    }
+
+    console.log('[StoryMedia] ❌ All endpoints failed');
     return null;
   } catch (err) {
-    console.error(`[StoryMedia] ❌ Error:`, err.message);
+    console.error('[StoryMedia] ❌ Error:', err);
     return null;
   }
 }
@@ -246,8 +246,6 @@ export async function downloadWhatsAppMediaFromEvolution(
     }
 
     // Method 2: Try /message/download/{instanceName}/{messageId} 
-    // This returns JSON with a URL to the media (already uploaded to MinIO/R2 by Evolution)
-    // Use the original story ID (stanzaId) and remoteJid 'status@broadcast'
     const messageId = params.messageKey?.id || 'unknown';
     const downloadUrl = `${apiUrl}/message/download/${instanceName}/${messageId}`;
     
