@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { conversationMessages, conversations } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
@@ -63,17 +63,22 @@ export const messagesRouter = router({
         file_name: z.string().optional(),
         file_type: z.string().optional(),
         file_size: z.number().optional(),
-      }).refine(data => {
+      }).refine(
+        data => {
           // Must have either conversation_id or (to + provider)
           return !!(data.conversation_id || (data.to && data.provider));
-        }, {
-          message: "Either conversation_id or (to + provider) is required"
-        })
+        },
+        {
+          message: "Either conversation_id or (to + provider) is required",
+        }
+      )
     )
     .mutation(async ({ input, ctx }) => {
       // Admin NÃO pode enviar mensagens ao cliente — usar sussurros (internalMessages)
-      if (ctx.user?.role === 'admin') {
-        throw new Error('Admin não pode enviar mensagens ao cliente. Use mensagens internas (sussurros) para orientar agentes.');
+      if (ctx.user?.role === "admin") {
+        throw new Error(
+          "Admin não pode enviar mensagens ao cliente. Use mensagens internas (sussurros) para orientar agentes."
+        );
       }
 
       const db = await getDb();
@@ -84,33 +89,7 @@ export const messagesRouter = router({
       const fileName = input.fileName ?? input.file_name ?? null;
       let fileType = input.fileType ?? input.file_type ?? null;
       const fileSize = input.fileSize ?? input.file_size ?? null;
-
-      // If fileUrl is a data URL (base64), upload to R2 first
-      // Evolution API requires a public URL or raw base64 for media
-      if (fileUrl && fileUrl.startsWith('data:')) {
-        try {
-          const { uploadToR2 } = await import('./r2-client.js');
-          // Extract base64 data and mime type
-          const mimeMatch = fileUrl.match(/^data:([^;]+);base64,(.*)$/s);
-          if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
-            const mimetype = mimeMatch[1];
-            const base64Data = mimeMatch[2];
-            const buffer = Buffer.from(base64Data, 'base64');
-            const ext = mimetype.includes('png') ? 'png' : mimetype.includes('webp') ? 'webp' : mimetype.includes('pdf') ? 'pdf' : 'jpg';
-            const r2Result = await uploadToR2(buffer, `messages/${input.conversation_id}_${Date.now()}.${ext}`, mimetype);
-            fileUrl = r2Result.url; // Replace data URL with R2 public URL
-            fileType = mimetype;
-            console.log('[messages.send] 📎 Uploaded media to R2:', r2Result.url);
-          }
-        } catch (r2Err: unknown) {
-          console.error('[messages.send] ⚠️ R2 upload failed, will try sending base64 directly:', r2Err.message);
-          // Fallback: extract raw base64 for Evolution API
-          const base64Match = fileUrl.match(/^data:[^;]+;base64,(.*)$/s);
-          if (base64Match) {
-            fileUrl = base64Match[1]; // Send raw base64 without data: prefix
-          }
-        }
-      }
+      const messageText = input.message ?? input.content ?? "";
 
       // Get conversation details
       // Support both old format (conversation_id) and new format (to + provider)
@@ -130,6 +109,54 @@ export const messagesRouter = router({
         conversationId = foundConv?.id;
       }
 
+      if (!conversationId) {
+        throw new Error("Conversation not found - cannot determine which conversation to add message to");
+      }
+
+      // If fileUrl is a data URL (base64), upload to R2 first
+      // Evolution API requires a public URL or raw base64 for media
+      if (fileUrl && fileUrl.startsWith("data:")) {
+        try {
+          const { uploadToR2 } = await import("./r2-client.js");
+          // Extract base64 data and mime type
+          const mimeMatch = fileUrl.match(/^data:([^;]+);base64,(.*)$/s);
+          if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
+            const mimetype = mimeMatch[1];
+            const base64Data = mimeMatch[2];
+            const buffer = Buffer.from(base64Data, "base64");
+            const ext =
+              mimetype.includes("png")
+                ? "png"
+                : mimetype.includes("webp")
+                ? "webp"
+                : mimetype.includes("pdf")
+                ? "pdf"
+                : "jpg";
+            const r2Result = await uploadToR2(
+              buffer,
+              `messages/${conversationId}_${Date.now()}.${ext}`,
+              mimetype
+            );
+            fileUrl = r2Result.url; // Replace data URL with R2 public URL
+            fileType = mimetype;
+            console.log(
+              "[messages.send] 📎 Uploaded media to R2:",
+              r2Result.url
+            );
+          }
+        } catch (r2Err: unknown) {
+          console.error(
+            "[messages.send] ⚠️ R2 upload failed, will try sending base64 directly:",
+            r2Err
+          );
+          // Fallback: extract raw base64 for Evolution API
+          const base64Match = fileUrl.match(/^data:[^;]+;base64,(.*)$/s);
+          if (base64Match) {
+            fileUrl = base64Match[1]; // Send raw base64 without data: prefix
+          }
+        }
+      }
+
       const [conv] = await db
         .select()
         .from(conversations)
@@ -145,22 +172,28 @@ export const messagesRouter = router({
           const { sendWhatsAppMessage } = await import("./messaging");
           const result = await sendWhatsAppMessage({
             to: conv.customerPhone,
-            message: input.content,
+            message: messageText,
             mediaUrl: fileUrl || undefined,
             caption: fileName || undefined,
           });
           externalId = result?.messageId || null;
-          console.log("[messages.send] ✅ Sent via Evolution API, externalId:", externalId);
+          console.log(
+            "[messages.send] ✅ Sent via Evolution API, externalId:",
+            externalId
+          );
         } catch (err: unknown) {
-          console.error("[messages.send] ❌ Failed to send via Evolution API:", err.message);
+          console.error(
+            "[messages.send] ❌ Failed to send via Evolution API:",
+            err
+          );
           // Continue to save message locally even if send fails
         }
       }
 
       // Save message in DB
       const insertResult = await db.insert(conversationMessages).values({
-        conversationId: conversationId,
-        content: input.content,
+        conversationId,
+        content: messageText,
         fileUrl,
         fileName,
         fileType,
@@ -170,14 +203,16 @@ export const messagesRouter = router({
         externalId,
       });
 
-      const rawId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
+      const rawId = Array.isArray(insertResult)
+        ? insertResult[0]?.insertId
+        : insertResult?.insertId || insertResult?.lastInsertRowid;
       const messageId = Number(rawId) || null;
 
       // Update conversation lastMessageAt
       await db
         .update(conversations)
         .set({ lastMessageAt: new Date() })
-        .where(eq(conversations.id, input.conversation_id));
+        .where(eq(conversations.id, conversationId));
 
       // Notify via SSE
       const assignedTo = conv.assignedTo;
@@ -185,10 +220,10 @@ export const messagesRouter = router({
         sseManager.emitToUser(String(assignedTo), {
           type: EVENTS.MESSAGE_NEW,
           data: {
-            conversationId: conversationId,
+            conversationId,
             message: {
               id: messageId,
-              content: input.content,
+              content: messageText,
               senderType: "agent",
               fileUrl,
               fileType,
