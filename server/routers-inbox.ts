@@ -201,15 +201,17 @@ export const inboxRouter = router({
 
         // 💾 Save outbound message to conversation history
         try {
-          const { ingestInboundConversationMessage } = await import('./db-messages');
-          await ingestInboundConversationMessage({
+          const { ingestOutboundConversationMessage } = await import('./db-messages-outbound');
+          await ingestOutboundConversationMessage({
             provider: "whatsapp",
-            fromNumber: input.to,
+            toNumber: input.to,
+            fromUserId: ctx.user?.id || 1,
             messageType: input.fileUrl ? 'image' : 'text',
             messageText: input.message,
             mediaUrl: input.fileUrl,
             fileName: input.fileName,
-            externalId: result?.messages?.[0]?.id || `outbound-${Date.now()}`,
+            mimeType: input.fileType,
+            externalId: result?.messageId || result?.messages?.[0]?.id || `outbound-${Date.now()}`,
             createdAt: new Date(),
           });
           console.log('[Inbox] Outbound message saved to conversation history');
