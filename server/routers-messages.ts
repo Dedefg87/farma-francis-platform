@@ -47,9 +47,9 @@ export const messagesRouter = router({
     .input(
       z.object({
         // Frontend sends these parameters
-        to: z.string(),
-        provider: z.enum(["whatsapp", "instagram"]),
-        message: z.string(),
+        to: z.string().optional(),
+        provider: z.enum(["whatsapp", "instagram"]).optional(),
+        message: z.string().optional(),
         customerId: z.number().optional(),
         fileUrl: z.string().optional(),
         fileName: z.string().optional(),
