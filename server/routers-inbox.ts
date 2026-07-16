@@ -118,6 +118,21 @@ export const inboxRouter = router({
                 const { findOrCreateCustomerByPhone } = await import('./db-messages.js');
                 const c = await findOrCreateCustomerByPhone(conv.fromNumber);
                 custId = c?.id ?? null;
+                // Link old received_messages to the customer so JOIN + photo update work
+                if (custId) {
+                  const db = await getDb();
+                  if (db) {
+                    await db
+                      .update(receivedMessages)
+                      .set({ customerId: custId })
+                      .where(
+                        and(
+                          eq(receivedMessages.fromNumber, conv.fromNumber),
+                          eq(receivedMessages.provider, conv.provider)
+                        )
+                      );
+                  }
+                }
               }
               if (!custId) return;
 

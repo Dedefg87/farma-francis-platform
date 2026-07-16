@@ -444,6 +444,21 @@ export async function ingestInboundConversationMessage(message: {
     });
   }
 
+  // 2b. CRITICAL: link received_messages to the customer so getConversations
+  // LEFT JOIN (customers.id = receivedMessages.customerId) and the profile-pic
+  // update resolve correctly. Without this, photos never show in the inbox.
+  if (customer?.id) {
+    await db
+      .update(receivedMessages)
+      .set({ customerId: customer.id })
+      .where(
+        and(
+          eq(receivedMessages.fromNumber, message.fromNumber),
+          eq(receivedMessages.provider, message.provider)
+        )
+      );
+  }
+
   const now = message.createdAt ?? new Date();
 
   // 3. Pick least loaded online agent
