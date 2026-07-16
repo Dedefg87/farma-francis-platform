@@ -64,7 +64,7 @@ export default function Inbox() {
       }
     );
 
-  const sendMessage = trpc.inbox.sendMessage.useMutation({
+  const sendMessage = trpc.messages.send.useMutation({
     onSuccess: () => {
       toast.success("Mensagem enviada!");
       setMessageText("");

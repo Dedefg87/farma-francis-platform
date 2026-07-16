@@ -46,19 +46,29 @@ export const messagesRouter = router({
   send: protectedProcedure
     .input(
       z.object({
-        conversation_id: z.coerce.number(),
-        content: z.string(),
-        file_url: z.string().optional(),
-        file_name: z.string().optional(),
-        file_type: z.string().optional(),
-        file_size: z.number().optional(),
-        // Frontend sends camelCase - accept both
+        // Frontend sends these parameters
+        to: z.string(),
+        provider: z.enum(["whatsapp", "instagram"]),
+        message: z.string(),
+        customerId: z.number().optional(),
         fileUrl: z.string().optional(),
         fileName: z.string().optional(),
         fileType: z.string().optional(),
         fileSize: z.number().optional(),
         viewOnce: z.boolean().optional(),
-      })
+        // Also accept snake_case
+        conversation_id: z.coerce.number().optional(),
+        content: z.string().optional(),
+        file_url: z.string().optional(),
+        file_name: z.string().optional(),
+        file_type: z.string().optional(),
+        file_size: z.number().optional(),
+      }).refine(data => {
+          // Must have either conversation_id or (to + provider)
+          return !!(data.conversation_id || (data.to && data.provider));
+        }, {
+          message: "Either conversation_id or (to + provider) is required"
+        })
     )
     .mutation(async ({ input, ctx }) => {
       // Admin NÃO pode enviar mensagens ao cliente — usar sussurros (internalMessages)
@@ -102,11 +112,28 @@ export const messagesRouter = router({
         }
       }
 
-      // Get conversation details to find the customer phone
+      // Get conversation details
+      // Support both old format (conversation_id) and new format (to + provider)
+      let conversationId = input.conversation_id;
+      if (!conversationId) {
+        // Find conversation by customer phone and provider
+        const [foundConv] = await db
+          .select()
+          .from(conversations)
+          .where(
+            and(
+              eq(conversations.customerPhone, input.to),
+              eq(conversations.channel, input.provider)
+            )
+          )
+          .limit(1);
+        conversationId = foundConv?.id;
+      }
+
       const [conv] = await db
         .select()
         .from(conversations)
-        .where(eq(conversations.id, input.conversation_id))
+        .where(eq(conversations.id, conversationId))
         .limit(1);
 
       if (!conv) throw new Error("Conversation not found");
@@ -132,7 +159,7 @@ export const messagesRouter = router({
 
       // Save message in DB
       const insertResult = await db.insert(conversationMessages).values({
-        conversationId: input.conversation_id,
+        conversationId: conversationId,
         content: input.content,
         fileUrl,
         fileName,
@@ -158,7 +185,7 @@ export const messagesRouter = router({
         sseManager.emitToUser(String(assignedTo), {
           type: EVENTS.MESSAGE_NEW,
           data: {
-            conversationId: input.conversation_id,
+            conversationId: conversationId,
             message: {
               id: messageId,
               content: input.content,
@@ -172,6 +199,6 @@ export const messagesRouter = router({
         });
       }
 
-      return { success: true, messageId, externalId };
+      return { success: true, messageId, externalId, conversationId };
     }),
 });
