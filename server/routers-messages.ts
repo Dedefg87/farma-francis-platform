@@ -34,13 +34,53 @@ export const messagesRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      const rows = await db
-        .select()
-        .from(conversationMessages)
-        .where(eq(conversationMessages.conversationId, input.conversation_id))
-        .orderBy(conversationMessages.createdAt);
+      // Buscar mensagens com nome e cargo do agente
+      const rows = await db.execute(`
+        SELECT 
+          cm.id,
+          cm.conversation_id,
+          cm.external_id,
+          cm.remote_jid,
+          cm.provider,
+          cm.sender_id,
+          cm.sender_type,
+          cm.content,
+          cm.file_url,
+          cm.file_name,
+          cm.file_type,
+          cm.file_size,
+          cm.read_at,
+          cm.created_at,
+          u.name as sender_name,
+          e.position as sender_position
+        FROM conversation_messages cm
+        LEFT JOIN users u ON cm.sender_id = u.id
+        LEFT JOIN employees e ON u.id = e.user_id
+        WHERE cm.conversation_id = ?
+        ORDER BY cm.created_at ASC
+      `, [input.conversation_id]);
 
-      return rows;
+      // Processar resultados para incluir sender_name e sender_position
+      if (!Array.isArray(rows)) return [];
+      
+      return rows.map((row: any) => ({
+        id: row.id,
+        conversationId: row.conversation_id,
+        externalId: row.external_id,
+        remoteJid: row.remote_jid,
+        provider: row.provider,
+        senderId: row.sender_id,
+        senderType: row.sender_type,
+        content: row.content,
+        fileUrl: row.file_url,
+        fileName: row.file_name,
+        fileType: row.file_type,
+        fileSize: row.file_size,
+        readAt: row.read_at,
+        createdAt: row.created_at,
+        senderName: row.sender_name,
+        senderPosition: row.sender_position,
+      }));
     }),
 
   send: protectedProcedure

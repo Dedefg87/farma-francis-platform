@@ -874,9 +874,14 @@ export default function Messages() {
                                     : "bg-gray-100 text-gray-900"
                                 }`}
                               >
-                                {/* DEBUG: Agent name display */}
+                                {/* Nome do remetente */}
                                 <p className="text-xs font-medium mb-1 opacity-75" data-testid="sender-name">
-                                  {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
+                                  {msg.senderType === "agent" 
+                                    ? msg.senderPosition 
+                                      ? `${msg.senderName || "Atendente"} - ${msg.senderPosition}`
+                                      : msg.senderName || "Atendente"
+                                    : msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")
+                                  }
                                 </p>
                                 {msg.content && msg.content !== "null" && (
                                   <p className="text-sm">{renderContentWithLinks(msg.content)}</p>

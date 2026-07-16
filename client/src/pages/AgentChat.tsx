@@ -459,7 +459,6 @@ export default function AgentChat() {
                 <div className="space-y-4">
                   {messages.map(message => {
                     const isAgent = message.senderType === "agent";
-                    const senderName = message.senderName || "Agente";
                     return (
                       <div
                         key={message.id}
@@ -498,7 +497,10 @@ export default function AgentChat() {
                           {/* Nome do agente acima da mensagem */}
                           {isAgent && (
                             <p className="text-xs font-semibold text-blue-100 mb-1">
-                              {senderName}
+                              {message.senderPosition 
+                                ? `${message.senderName || "Atendente"} - ${message.senderPosition}`
+                                : message.senderName || "Atendente"
+                              }
                             </p>
                           )}
                           {/* Texto da mensagem */}

@@ -1,3 +1,9 @@
-Deploy trigger: 2026-03-02 19:06:00 -03
+Deploy trigger: 2026-07-16 20:30:00 -03
 This file forces Railway to rebuild.
-test
+Agent message display with position - commit message
+server/routers-messages.ts - Added sender_position to messages.list query
+client/src/pages/AgentChat.tsx - Updated to show "Name - Position" format
+client/src/pages/AgentMessages.tsx - Updated to show "Name - Position" format
+client/src/pages/Messages.tsx - Updated to show "Name - Position" format
+shared/types/conversations.ts - Added senderPosition field to ConversationMessage type
+Deploy

@@ -1274,9 +1274,14 @@ export default function AgentMessages() {
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
-                        {/* Nome do remetente */}
+                        {/* Nome do remetente */}\arg_value>
                         <p className="text-xs font-bold mb-1 text-black">
-                          {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
+                          {msg.senderType === "agent" 
+                            ? msg.senderPosition 
+                              ? `${msg.senderName || "Atendente"} - ${msg.senderPosition}`
+                              : msg.senderName || "Atendente"
+                            : msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")
+                          }
                         </p>
                         {msg.content && msg.content !== "null" && (
                           <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
