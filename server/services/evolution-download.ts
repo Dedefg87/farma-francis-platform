@@ -6,8 +6,8 @@
  * and require authentication through the Evolution instance.
  * 
  * KEY ENDPOINTS (v2.x):
- * - /message/download/{instanceName}/{messageId} -> returns JSON {url, mediaUrl}
- * - /instance/fetchImage/{instanceName} -> POST {url} -> returns image buffer
+ * - /instance/messages/{instanceName}/{messageId} -> returns JSON {url, mediaUrl}
+ * - /instance/{instanceName} -> POST {url} -> returns image buffer
  * - /chat/getBase64FromMediaMessage -> POST with messageKey, returns {base64, mimetype}
  */
 
@@ -135,7 +135,10 @@ export async function getStoryMediaViaBase64(
           console.log('[StoryMedia] 📥 Response keys:', Object.keys(result));
 
           if (result?.base64) {
-            const buffer = Buffer.from(result.base64, 'base64');
+            const base64Str = typeof result.base64 === 'string' \
+              ? result.base64 \
+              : JSON.stringify(result.base64);\
+            const buffer = Buffer.from(base64Str, 'base64');\
             console.log(`[StoryMedia] ✅ Buffer: ${buffer.length} bytes`);
             return buffer;
           }
@@ -216,7 +219,7 @@ export async function downloadWhatsAppMediaFromEvolution(
     // Method 1: Try /instance/fetchImage (accepts URL directly for proxy download)
     if (params.url && params.url.length > 0) {
       console.log('🚨 [Evolution Download] Trying fetchImage endpoint...');
-      const fetchImageUrl = `${apiUrl}/instance/fetchImage/${instanceName}`;
+      const fetchImageUrl = `${apiUrl}/instance/${instanceName}`;
       
       const fetchResponse = await fetch(fetchImageUrl, {
         method: 'POST',
@@ -245,9 +248,9 @@ export async function downloadWhatsAppMediaFromEvolution(
       console.log('🚨 [Evolution Download] No URL provided, skipping fetchImage');
     }
 
-    // Method 2: Try /message/download/{instanceName}/{messageId} 
+    // Method 2: Try /instance/messages/{instanceName}/{messageId} 
     const messageId = params.messageKey?.id || 'unknown';
-    const downloadUrl = `${apiUrl}/message/download/${instanceName}/${messageId}`;
+    const downloadUrl = `${apiUrl}/instance/messages/${instanceName}/${messageId}`;
     
     console.log('🚨 [Evolution Download] Trying message/download endpoint:', downloadUrl);
     
