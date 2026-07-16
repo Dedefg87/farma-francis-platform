@@ -62,7 +62,7 @@ export const inboxRouter = router({
         .select({
           fromNumber: receivedMessages.fromNumber,
           fromName: receivedMessages.fromName,
-          fromProfilePic: sql<string | null>`MAX(${receivedMessages.fromProfilePic})`,
+          fromProfilePic: sql<string | null>`COALESCE(${customers.photoUrl}, MAX(${receivedMessages.fromProfilePic}))`,
           provider: receivedMessages.provider,
           lastMessage: receivedMessages.messageText,
           lastMessageType: receivedMessages.messageType,
@@ -71,7 +71,8 @@ export const inboxRouter = router({
           customerId: receivedMessages.customerId,
         })
         .from(receivedMessages)
-        .groupBy(receivedMessages.fromNumber, receivedMessages.provider)
+        .leftJoin(customers, eq(customers.id, receivedMessages.customerId))
+        .groupBy(receivedMessages.fromNumber, receivedMessages.provider, customers.photoUrl)
         .orderBy(desc(sql`MAX(${receivedMessages.timestamp})`))
         .limit(input.limit);
 

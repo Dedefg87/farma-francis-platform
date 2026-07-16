@@ -40,6 +40,7 @@ export default function Inbox() {
   const [selectedTagFilter, setSelectedTagFilter] = useState<number[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [enlargedPhoto, setEnlargedPhoto] = useState<{ url: string; name: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: conversations, refetch: refetchConversations } =
@@ -227,7 +228,19 @@ export default function Inbox() {
                 <div className="flex items-center gap-2">
                   {/* Foto do cliente (estilo WhatsApp) com badge do canal */}
                   <div className="relative flex-shrink-0">
-                    <Avatar className="w-9 h-9">
+                    <Avatar 
+                      className={`w-9 h-9 ${conv.fromProfilePic ? "cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-200" : ""}`}
+                      onClick={(e) => {
+                        if (conv.fromProfilePic) {
+                          e.stopPropagation();
+                          setEnlargedPhoto({
+                            url: conv.fromProfilePic,
+                            name: conv.fromName || conv.fromNumber,
+                          });
+                        }
+                      }}
+                      title={conv.fromProfilePic ? "Clique para ampliar a foto" : undefined}
+                    >
                       {conv.fromProfilePic && (
                         <AvatarImage
                           src={conv.fromProfilePic}
@@ -343,7 +356,18 @@ export default function Inbox() {
             <div className="p-4 border-b bg-background">
               <div className="flex items-center gap-3">
                 <div className="relative flex-shrink-0">
-                  <Avatar className="w-10 h-10">
+                  <Avatar 
+                    className={`w-10 h-10 ${selectedConversation.fromProfilePic ? "cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-200" : ""}`}
+                    onClick={() => {
+                      if (selectedConversation.fromProfilePic) {
+                        setEnlargedPhoto({
+                          url: selectedConversation.fromProfilePic,
+                          name: selectedConversation.fromName || selectedConversation.fromNumber,
+                        });
+                      }
+                    }}
+                    title={selectedConversation.fromProfilePic ? "Clique para ampliar a foto" : undefined}
+                  >
                     {selectedConversation.fromProfilePic && (
                       <AvatarImage
                         src={selectedConversation.fromProfilePic}
@@ -581,6 +605,54 @@ export default function Inbox() {
           </div>
         )}
       </div>
+
+      {/* Modal Lightbox para Ampliar Foto do Cliente (Estilo WhatsApp Web) */}
+      {enlargedPhoto && (
+        <div 
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+          onClick={() => setEnlargedPhoto(null)}
+        >
+          <div 
+            className="relative bg-background rounded-lg border border-border shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden cursor-default animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold text-lg truncate">
+                {enlargedPhoto.name}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full h-8 w-8 hover:bg-muted"
+                onClick={() => setEnlargedPhoto(null)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            {/* Modal Body */}
+            <div className="flex-1 p-6 flex items-center justify-center bg-zinc-950 min-h-[300px]">
+              <img
+                src={enlargedPhoto.url}
+                alt={enlargedPhoto.name}
+                className="max-w-full max-h-[50vh] object-contain rounded-md shadow-lg"
+              />
+            </div>
+            {/* Modal Footer */}
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
+              <Button
+                variant="outline"
+                onClick={() => window.open(enlargedPhoto.url, '_blank')}
+              >
+                Abrir em nova aba
+              </Button>
+              <Button onClick={() => setEnlargedPhoto(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
