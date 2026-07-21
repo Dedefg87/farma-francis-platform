@@ -507,12 +507,62 @@ router.get("/instagram", async (req: Request, res: Response) => {
  * Evolution API Webhook (POST)
  * Supports both /evolution and /evolution/:event (when webhook_by_events is true)
  */
-router.get("/whatsapp", async (req: Request, res: Response) => {
+router.post("/evolution", async (req: Request, res: Response) => {
   return handleEvolutionWebhook(req, res);
 });
 
-router.post("/evolution", async (req: Request, res: Response) => {
-  return handleEvolutionWebhook(req, res);
+// Keep the original WhatsApp verification route (was incorrectly overridden above)
+router.get("/whatsapp", async (req: Request, res: Response) => {
+  try {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    console.log("[WhatsApp Webhook] Verification request:", {
+      mode,
+      token: token ? "***" : undefined,
+    });
+
+    if (mode === "subscribe") {
+      // Get stored verify token from database
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).send("Database not available");
+      }
+
+      // Buscar configuração da tabela integration_settings
+      const config = await db
+        .select()
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "whatsapp_business"))
+        .limit(1);
+
+      if (config.length === 0) {
+        console.log("[WhatsApp Webhook] No configuration found");
+        return res.status(403).send("No configuration found");
+      }
+
+      // Parse config JSON
+      const configData =
+        typeof config[0].config === "string"
+          ? JSON.parse(config[0].config)
+          : config[0].config;
+      const storedToken = configData.webhookVerifyToken;
+
+      if (token === storedToken) {
+        console.log("[WhatsApp Webhook] Verification successful");
+        return res.status(200).send(challenge);
+      } else {
+        console.log("[WhatsApp Webhook] Token mismatch");
+        return res.status(403).send("Verification token mismatch");
+      }
+    }
+
+    res.status(400).send("Invalid verification request");
+  } catch (error) {
+    console.error("[WhatsApp Webhook] Verification error:", error);
+    res.status(500).send("Internal server error");
+  }
 });
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
