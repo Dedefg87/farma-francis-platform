@@ -1,3 +1,2 @@
 // DEPRECATED - This component is no longer used.
 // The actual node configuration panel is in NodeConfigPanel.tsx and N8NEditor.tsx
-{'status': 'unchanged', 'message': 'File unchanged since last read. The content from the earlier read_file result in this conversation is still current — refer to that instead of re-reading.', 'path': '/workspace/farma-francis-platform/client/src/pages/Automation/PropertySidebar.tsx', 'dedup': True, 'content_returned': False}

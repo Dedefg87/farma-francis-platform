@@ -117,7 +117,7 @@ export const leadsRouter = router({
   // Obter um lead por ID
   get: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
 
@@ -150,7 +150,12 @@ export const leadsRouter = router({
         .from(leads)
         .leftJoin(customers, eq(leads.customerId, customers.id))
         .leftJoin(users, eq(leads.assignedTo, users.id))
-        .where(eq(leads.id, input.id))
+        .where(
+          and(
+            eq(leads.id, input.id),
+            eq(leads.assignedTo, ctx.user.id) // Ensure the lead belongs to the current user
+          )
+        )
         .limit(1);
 
       return result[0] || null;
