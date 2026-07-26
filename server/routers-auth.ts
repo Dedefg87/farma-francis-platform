@@ -24,14 +24,42 @@ export const authRouter = router({
       z.object({
         username: z.string().min(1, "Username é obrigatório"),
         password: z.string().min(1, "Senha é obrigatória"),
+        cfTurnstileToken: z.string().optional(), // Token do Cloudflare Turnstile
       })
     )
     .mutation(async ({ input, ctx }) => {
       console.log("[LOGIN] INPUT RECEIVED:", input);
       console.log("[LOGIN] CTX USER:", ctx.user);
-      
+
       try {
-        const { username, password } = input;
+        const { username, password, cfTurnstileToken } = input;
+
+        // Validar token do Turnstile em produção
+        if (process.env.NODE_ENV === 'production' && process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY) {
+          if (!cfTurnstileToken) {
+            throw new Error("Token de segurança necessário");
+          }
+
+          // Verificar token com a API do Cloudflare
+          const formData = new URLSearchParams();
+          formData.append('secret', process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY);
+          formData.append('response', cfTurnstileToken);
+
+          const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            console.log("[LOGIN] Turnstile validation failed:", result);
+            throw new Error("Falha na validação de segurança. Por favor, tente novamente.");
+          }
+        }
+
+        console.log("[LOGIN] Turnstile validation successful");
+
         const db = await getDb();
 
         if (!db) throw new Error("Database unavailable");
@@ -40,12 +68,12 @@ export const authRouter = router({
         // NOTA: O banco Railway usa camelCase nas colunas
         const rawResult = await db.execute(
           sql`SELECT id, openId, name, email, passwordHash, loginMethod, role, createdAt, updatedAt, lastSignedIn, display_name
-              FROM users
-              WHERE name = ${username}
-              LIMIT 1`
+                FROM users
+                WHERE name = ${username}
+                LIMIT 1`
         );
         console.log("[LOGIN] DB Result raw:", JSON.stringify(rawResult).substring(0, 200));
-        
+
         const rows = (rawResult as any).rows ?? (rawResult as any)[0] ?? rawResult;
         const usersList = Array.isArray(rows) ? rows : [rows];
 
@@ -116,6 +144,7 @@ export const authRouter = router({
       name: ctx.user.name,
       username: ctx.user.username,
       role: ctx.user.role,
+      photo: ctx.user.photo, // Add photo field to user profile
     };
   }),
 
@@ -125,4 +154,3 @@ export const authRouter = router({
     return { success: true };
   }),
 });
-
