@@ -155,33 +155,11 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
               }
               className={notificationsMuted ? "text-gray-400" : "text-blue-600"}
             >
-              {notificationsMuted ? (
-                <BellOff className="w-5 h-5" />
-                    ) : (
-                      <Avatar className="w-8 h-8">
-                        <Avatar className="w-8 h-8">
-                          <AvatarFallback className="text-white font-semibold text-sm">
-                            { (user?.name ?? '').charAt(0).toUpperCase() || 'U' }
-                          </AvatarFallback>
-                        </Avatar>
-                      </Avatar>
-                    )
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1 transition hover:bg-gray-50 ${compact ? "px-1" : ""}`}
-                >
-                  {!compact && (
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">
-                        {user?.name}
-                      </p>
-                      <p className="text-xs text-gray-500">Agente</p>
-                    </div>
-                  )}
+{notificationsMuted ? (
+  <BellOff className="w-5 h-5" />
+) : (
+  <Bell className="w-5 h-5" />
+)}
                   <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
                     {user?.photo ? (
                       <Avatar className="w-8 h-8">
