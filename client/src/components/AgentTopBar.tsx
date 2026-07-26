@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
 import { hasSession } from "@/lib/auth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
@@ -182,7 +184,7 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
                       </Avatar>
                     ) : (
                       <AvatarFallback className="text-white font-semibold text-sm">
-                        {user?.name?.charAt(0).toUpperCase()}
+                        {(user?.name ?? '').charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     )}
                   </div>
