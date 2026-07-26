@@ -286,7 +286,14 @@ export async function downloadWhatsAppMediaFromEvolution(
 
     // Now download the actual media from the returned URL
     const mediaResponse = await fetch(mediaUrl, {
-      headers: { 'User-Agent': 'FarmaFrancisBot/1.0' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'sec-ch-ua': '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+      },
     });
 
     if (!mediaResponse.ok) {
