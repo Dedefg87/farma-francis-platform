@@ -157,9 +157,15 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
             >
               {notificationsMuted ? (
                 <BellOff className="w-5 h-5" />
-              ) : (
-                <Bell className="w-5 h-5" />
-              )}
+                    ) : (
+                      <Avatar className="w-8 h-8">
+                        <Avatar className="w-8 h-8">
+                          <AvatarFallback className="text-white font-semibold text-sm">
+                            { (user?.name ?? '').charAt(0).toUpperCase() || 'U' }
+                          </AvatarFallback>
+                        </Avatar>
+                      </Avatar>
+                    )
             </Button>
 
             <DropdownMenu>
@@ -182,7 +188,7 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
                         <AvatarImage src={user.photo} />
                       </Avatar>
                     ) : (
-                      <AvatarFallback className="text-white font-semibold text-sm">
+                      <Avatar className="w-8 h-8"><AvatarFallback className="text-white font-semibold text-sm">
                         {(user?.name ?? '').charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     )}
