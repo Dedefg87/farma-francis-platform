@@ -26,7 +26,7 @@ export function getCustomerInitials(phone: string): string {
  */
 async function getEvolutionConfig(): Promise<{
   apiUrl: string;
-  apiKey: ***
+  apiKey: string;
   instanceName: string;
 } | null> {
   try {
