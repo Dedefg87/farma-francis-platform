@@ -20,7 +20,6 @@ interface MobileSyncJob {
   mediaUrl?: string | null;
   mimeType?: string | null;
   messageTimestamp: number;
-  fileName?: string | null;
 }
 
 // Fila simples em memória (Railway roda instância única)
@@ -215,13 +214,6 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";
-  if (!content && job.messageType) {
-    const typeLabels: Record<string, string> = {
-      image: "[Imagem]", audio: "[Áudio]", video: "[Vídeo]",
-      document: "[Documento]", sticker: "[Sticker]", location: "[Localização]",
-    };
-    content = typeLabels[job.messageType] || "";
-  }
 
   // Inserir mensagem na tabela conversation_messages
   const insertResult = await db.insert(conversationMessages).values({
@@ -230,8 +222,8 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     senderType: "agent",
     content,
     fileUrl: job.mediaUrl || null,
-    fileName: job.fileName || null,
-    fileType: job.mimeType || null,
+    fileName: null,
+    fileType: job.messageType || null,
     fileSize: null,
     externalId: job.messageId,
     remoteJid: job.remoteJid,
@@ -240,15 +232,11 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   const messageDbId = insertResult.insertId as number;
 
   // Se houver mídia com URL temporária do WhatsApp, baixar via Evolution API e subir para R2
-  const shouldDownloadMedia =
+  if (
     job.mediaUrl &&
-    job.messageId &&
-    (job.mediaUrl.includes("mmg.whatsapp.net") || 
-     job.mediaUrl.includes("pps.whatsapp.net") ||
-     job.mediaUrl.includes("whatsapp.net") ||
-     job.mediaUrl.includes("whatsapp.com"));
-  
-  if (shouldDownloadMedia) {
+    job.mediaUrl.includes("mmg.whatsapp.net") &&
+    job.messageId
+  ) {
     try {
       console.log("[MobileSync][S3] Triggering Evolution download for R2 upload, messageId:", job.messageId);
       const dbForUpload = await getDb();
@@ -266,63 +254,41 @@ async function processMobileSyncJob(job: MobileSyncJob) {
             ? JSON.parse(configRecord.config)
             : configRecord.config;
 
-        const normalizedUrl = (configData.apiUrl as string).replace(/\/$/, "");
-        const instanceName = configData.instanceName as string;
-        
-        // Usar endpoint que retorna bytes brutos (não JSON)
-        const downloadUrl = `${normalizedUrl}/message/download/${instanceName}/${job.messageId}`;
-        
-        const response = await fetch(downloadUrl, {
-          headers: {
-            apikey: *** configData.apiKey,
-          },
-          signal: AbortSignal.timeout(30000),
-        });
+        // Obter a instância "Meu" ou a primeira
+        const instance = (configData.instances as any[])?.find((i: unknown) => i.name === "Meu") || (configData.instances as any[])?.[0];
 
-        if (response.ok) {
-          // Verificar content-type para saber se é bytes ou JSON
-          const contentType = response.headers.get('content-type') || '';
-          
-          if (contentType.includes('image') || contentType.includes('audio') || 
-              contentType.includes('video') || contentType.includes('octet-stream')) {
-            // Resposta é bytes brutos - fazer upload direto para R2
-            const buffer = await response.arrayBuffer();
-            const bufferData = Buffer.from(buffer);
-            
-            if (bufferData.length > 100) {
-              // Fazer upload para R2
-              const mime = contentType.split(';')[0]; // image/jpeg, audio/ogg, etc
-              const ext = mime.split('/')[1] || 'bin';
-              const fileName = `media-${Date.now()}.${ext}`;
-              
-              const r2Key = `evolution-api/${fileName}`;
-              
-              // Import dinâmico do módulo R2
-              const { uploadToR2 } = await import('./r2-client.js');
-              const r2Url = await uploadToR2(bufferData, r2Key, mime);
-              
-              if (r2Url) {
-                console.log("[MobileSync][S3] ✅ Uploaded to R2:", r2Url);
-                
-                await dbForUpload
-                  .update(conversationMessages)
-                  .set({ fileUrl: r2Url, fileType: mime })
-                  .where(eq(conversationMessages.id, messageDbId));
-                
-                console.log("[MobileSync][S3] ✅ Message updated with R2 URL");
-              }
+        if (instance?.url && instance?.apiKey) {
+          const normalizedUrl = (instance.url as string).replace(/\/$/, "");
+          const downloadUrl = `${normalizedUrl}/message/download/${job.messageId}`;
+          console.log("[MobileSync][S3] Calling Evolution download endpoint:", downloadUrl);
+
+          const response = await fetch(downloadUrl, {
+            headers: {
+              apikey: instance.apiKey as string,
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const r2Url = data?.url || data?.mediaUrl || null;
+            if (r2Url && r2Url.includes("r2.dev")) {
+              console.log("[MobileSync][S3] ✅ Got R2 URL, updating message:", r2Url);
+
+              await dbForUpload
+                .update(conversationMessages)
+                .set({ fileUrl: r2Url })
+                .where(eq(conversationMessages.id, messageDbId));
+
+              console.log("[MobileSync][S3] Message updated with R2 URL");
             }
           } else {
-            // Resposta é JSON - log de erro
-            const data = await response.json();
-            console.log("[MobileSync][S3] ❌ Unexpected JSON response:", data);
+            console.log("[MobileSync][S3] ❌ Download failed:", response.status, response.statusText);
           }
-        } else {
-          console.log("[MobileSync][S3] ❌ Download failed:", response.status, response.statusText);
         }
       }
     } catch (error) {
-      console.error("[MobileSync][S3] Error during R2 upload:", error);
+      console.log("[MobileSync][S3] Error during R2 upload:", error);
       // Non-critical - message still saved with original URL
     }
   }

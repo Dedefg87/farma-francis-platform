@@ -1,16 +1,10 @@
 /**
  * Profile Picture Service v2
  *
- * Downloads WhatsApp profile pictures.
- * Strategy:
- *   1) Direct fetch from WhatsApp CDN with WhatsApp-compatible User-Agent —
- *      WhatsApp profile pics are public for any WhatsApp client UA.
- *   2) Fallback: if direct download fails (privacy-restricted profile or CDN
- *      block), use Evolution API authenticated proxy.
- *
- * The resulting bytes are uploaded to R2 and the permanent URL is persisted
- * in customers.photoUrl. We NEVER point the UI at a raw WhatsApp CDN URL
- * because those expire and are hotlink-protected for generic clients.
+ * Downloads WhatsApp profile pictures using authenticated Evolution API proxy.
+ * The Evolution API instance has an authenticated WhatsApp session with cookies,
+ * so it can fetch images from the CDN. We NEVER fetch directly from WhatsApp CDN
+ * because we don't have the session cookies.
  */
 
 import { getDb } from '../db';
@@ -127,95 +121,172 @@ async function fetchProfileFromEvolution(phone: string): Promise<{
     return null;
   }
 }
+
 /**
- * Download bytes from a WhatsApp CDN URL via Evolution API proxy.
- *
- * CRITICAL FIX: WhatsApp CDN URLs (pps.whatsapp.net) require authentication.
- * Direct fetch NEVER works. Must use Evolution's authenticated proxy endpoint.
- *
- * Solution: Use Evolution's /chat/getBase64FromMediaMessage endpoint which
- * has access to the authenticated session and can fetch CDN resources.
+ * Download bytes from a WhatsApp CDN URL through Evolution API proxy.
+ * Evolution API has the authenticated session cookies needed to fetch from CDN.
+ * We request that Evolution returns the bytes directly (not just a URL).
  */
 async function downloadViaEvolutionProxy(url: string): Promise<Buffer | null> {
   const config = await getEvolutionConfig();
-  if (!config) {
-    console.error('[ProfilePic] ❌ No Evolution config available');
-    return null;
-  }
+  if (!config) return null;
 
   console.log(
-    '[ProfilePic] Downloading WhatsApp CDN URL via Evolution proxy:',
+    '[ProfilePic] Downloading via Evolution proxy:',
     url.substring(0, 80)
   );
 
-  // ============================================================
-  // Use Evolution's getBase64FromMediaMessage endpoint
-  // This endpoint has authenticated access to WhatsApp CDN
-  // ============================================================
+  // Método 1: POST /instance/{instance} com { url }
+  // Este endpoint pode retornar bytes diretamente ou uma URL interna
   try {
-    // Extrair o número do telefone da URL se possível
-    // Formato típico: https://pps.whatsapp.net/v/t61.24694-24/123456_789012_345678901234567_1234567890123456789_n.jpg?...
-    // Não podemos extrair o número da URL, então precisamos fazer uma abordagem diferente
-
-    // Estratégia: Fazer fetch proxy via Evolution
-    // Evolution tem endpoint para baixar mídia através de sua sessão autenticada
-    const proxyUrl = `${config.apiUrl}/chat/getBase64FromMediaMessage/${config.instanceName}`;
-
-    const res = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: {
-        apikey: ***
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: {
-          key: {
-            remoteJid: 'status@broadcast',
-            fromMe: false,
-          },
-          message: {
-            imageMessage: {
-              url: url,
-            },
-          },
+    const res = await fetch(
+      `${config.apiUrl}/instance/${config.instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: config.apiKey,
+          'Content-Type': 'application/json',
         },
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
+        body: JSON.stringify({ url }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
 
-    if (!res.ok) {
-      console.log('[ProfilePic] ❌ Proxy request failed:', res.status);
-      return null;
-    }
-
-    const data = await res.json();
-
-    // Se retornou base64 inline
-    const pic = data?.base64 || data?.picture || data?.profilePicture || null;
-    if (pic && pic.startsWith('data:')) {
-      const match = pic.match(/^data:([^;]+);base64,(.*)$/s);
-      if (match && match[2]) {
-        const buf = Buffer.from(match[2], 'base64');
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      
+      // Se retornou bytes diretamente (imagem/jpeg, etc)
+      if (!contentType.includes('application/json')) {
+        const arr = await res.arrayBuffer();
+        const buf = Buffer.from(arr);
         if (buf.length > 100) {
-          console.log('[ProfilePic] ✅ Got base64 from Evolution proxy:', buf.length, 'bytes');
+          console.log('[ProfilePic] ✅ Proxy returned bytes:', buf.length);
           return buf;
         }
       }
-    } else if (pic && !pic.startsWith('data:')) {
-      // Base64 puro sem data: prefix
-      const buf = Buffer.from(pic, 'base64');
-      if (buf.length > 100) {
-        console.log('[ProfilePic] ✅ Got base64 from Evolution proxy (raw):', buf.length, 'bytes');
-        return buf;
+      
+      // Se retornou JSON com URL interna, precisamos pedir para Evolution baixar essa URL também
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        
+        // Se tem base64 inline
+        if (data?.base64) {
+          console.log('[ProfilePic] ✅ Got base64 from proxy');
+          return Buffer.from(data.base64, 'base64');
+        }
+        
+        // Se tem URL interna, tentar baixar via outro endpoint do Evolution
+        const innerUrl = data?.url || data?.mediaUrl;
+        if (innerUrl && innerUrl.startsWith('http')) {
+          console.log('[ProfilePic] Trying to download inner URL via Evolution...');
+          return await downloadInnerUrlViaEvolution(innerUrl);
+        }
+      }
+    } else {
+      console.log('[ProfilePic] Proxy endpoint failed:', res.status);
+    }
+  } catch (err) {
+    console.log('[ProfilePic] Proxy method failed:', err);
+  }
+
+  // Método 2: /chat/fetchProfilePicture - endpoint específico para foto de perfil
+  try {
+    const res2 = await fetch(
+      `${config.apiUrl}/chat/fetchProfilePicture/${config.instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: config.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ number: url }),
+        signal: AbortSignal.timeout(20000),
+      }
+    );
+
+    if (res2.ok) {
+      const ct2 = res2.headers.get('content-type') || '';
+      
+      // Se retornou bytes
+      if (!ct2.includes('application/json')) {
+        const arr = await res2.arrayBuffer();
+        const buf = Buffer.from(arr);
+        if (buf.length > 100) {
+          console.log('[ProfilePic] ✅ fetchProfilePicture returned bytes:', buf.length);
+          return buf;
+        }
+      }
+      
+      if (ct2.includes('application/json')) {
+        const data2 = await res2.json();
+        if (data2?.base64) {
+          console.log('[ProfilePic] ✅ Got base64 from fetchProfilePicture');
+          return Buffer.from(data2.base64, 'base64');
+        }
+        
+        const innerUrl2 = data2?.url || data2?.mediaUrl;
+        if (innerUrl2 && innerUrl2.startsWith('http')) {
+          return await downloadInnerUrlViaEvolution(innerUrl2);
+        }
       }
     }
-
-    console.log('[ProfilePic] ❌ No valid base64 in response');
-    return null;
   } catch (err) {
-    console.error('[ProfilePic] ❌ Evolution proxy error:', err);
-    return null;
+    console.log('[ProfilePic] fetchProfilePicture endpoint failed:', err);
   }
+
+  return null;
+}
+
+/**
+ * Download an inner URL (could be another WhatsApp CDN URL or Evolution-internal URL)
+ * by asking Evolution to fetch it. We try the message/download endpoint which may
+ * have access to fetch internal URLs.
+ */
+async function downloadInnerUrlViaEvolution(
+  innerUrl: string
+): Promise<Buffer | null> {
+  const config = await getEvolutionConfig();
+  if (!config) return null;
+
+  // Tentar /message/download endpoint (usado para baixar mídia de mensagens)
+  try {
+    const res = await fetch(
+      `${config.apiUrl}/message/download/${config.instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: config.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: innerUrl }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
+
+    if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      
+      if (!contentType.includes('application/json')) {
+        const arr = await res.arrayBuffer();
+        const buf = Buffer.from(arr);
+        if (buf.length > 100) {
+          console.log('[ProfilePic] ✅ /message/download returned bytes:', buf.length);
+          return buf;
+        }
+      }
+      
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data?.base64) {
+          return Buffer.from(data.base64, 'base64');
+        }
+      }
+    }
+  } catch (err) {
+    console.log('[ProfilePic] /message/download failed:', err);
+  }
+
+  return null;
 }
 
 /**
