@@ -2001,9 +2001,18 @@ async function processEvolutionWebhook(body: unknown) {
       normalizedEvent === "messages_update" ||
       normalizedEvent === "messages.update"
     ) {
-      const status = body?.data?.status || body?.status;
-      console.log("[Evolution Webhook] Message status update ignored:", status);
-      return;
+      // Story reply detection for messages.update events
+      const msgUpdateCtx = body?.data?.contextInfo || body?.contextInfo || {};
+      const isStoryReplyUpdate = msgUpdateCtx.remoteJid === "status@broadcast" &&
+        (msgUpdateCtx.quotedMessage?.imageMessage || msgUpdateCtx.quotedMessage?.videoMessage);
+      if (isStoryReplyUpdate) {
+        console.log("[Evolution Webhook] 📖 Story reply detected in messages.update");
+        // Continuar processamento normal (não ignorar)
+      } else {
+        const status = body?.data?.status || body?.status;
+        console.log("[Evolution Webhook] Message status update ignored:", status);
+        return;
+      }
     }
 
     // Chats update - pode ser útil para atualizar status
