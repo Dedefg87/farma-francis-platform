@@ -274,7 +274,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
         
         const response = await fetch(downloadUrl, {
           headers: {
-            apikey: configData.apiKey,
+            apikey: ${configData.apiKey},
           },
           signal: AbortSignal.timeout(30000),
         });
