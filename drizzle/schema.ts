@@ -37,7 +37,6 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  photo: varchar("photo", { length: 500 }),
 });
 
 export type User = typeof users.$inferSelect;
@@ -147,9 +146,6 @@ export const tickets = mysqlTable("tickets", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
-export type Ticket = typeof tickets.$inferSelect;
-export type InsertTicket = typeof tickets.$inferInsert;
-
 /**
  * Approvals table for human approval system (pharmacists, etc.)
  */
@@ -183,7 +179,9 @@ export const accounts = mysqlTable("accounts", {
   city: varchar("city", { length: 100 }),
   state: varchar("state", { length: 2 }),
   zipCode: varchar("zip_code", { length: 10 }),
-  status: mysqlEnum("status", ["active", "inactive"]).default("active").notNull(),
+  status: mysqlEnum("status", ["active", "inactive"])
+    .default("active")
+    .notNull(),
   ownerUserId: int("owner_user_id").references(() => users.id),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -242,7 +240,9 @@ export const deals = mysqlTable("deals", {
   amountCents: int("amount_cents"),
   currency: varchar("currency", { length: 3 }).default("BRL"),
   closeDate: timestamp("close_date"),
-  status: mysqlEnum("status", ["open", "won", "lost"]).default("open").notNull(),
+  status: mysqlEnum("status", ["open", "won", "lost"])
+    .default("open")
+    .notNull(),
   ownerUserId: int("owner_user_id").references(() => users.id),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -257,8 +257,12 @@ export const crmTasks = mysqlTable("crm_tasks", {
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   dueAt: timestamp("due_at"),
-  status: mysqlEnum("status", ["open", "done", "cancelled"]).default("open").notNull(),
-  priority: mysqlEnum("priority", ["low", "medium", "high"]).default("medium").notNull(),
+  status: mysqlEnum("status", ["open", "done", "cancelled"])
+    .default("open")
+    .notNull(),
+  priority: mysqlEnum("priority", ["low", "medium", "high"])
+    .default("medium")
+    .notNull(),
   relatedEntityType: varchar("related_entity_type", { length: 40 }),
   relatedEntityId: int("related_entity_id"),
   assignedTo: int("assigned_to").references(() => users.id),
@@ -303,8 +307,8 @@ export const customFieldValues = mysqlTable("custom_field_values", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
-export type TicketComment = typeof ticketComments.$inferSelect;
-export type InsertTicketComment = typeof ticketComments.$inferInsert;
+export type Ticket = typeof tickets.$inferSelect;
+export type InsertTicket = typeof tickets.$inferInsert;
 
 /**
  * Ticket comments/notes
@@ -327,6 +331,7 @@ export const ticketComments = mysqlTable("ticket_comments", {
  * - crm_activities: timeline items (read model)
  * - frontend_telemetry_events: optional UI event capture (batched)
  */
+
 export const crmOutboxEvents = mysqlTable("crm_outbox_events", {
   id: int("id").autoincrement().primaryKey(),
   eventName: varchar("event_name", { length: 120 }).notNull(),
@@ -335,7 +340,9 @@ export const crmOutboxEvents = mysqlTable("crm_outbox_events", {
   actorUserId: int("actor_user_id").references(() => users.id),
   payloadJson: text("payload_json"),
   idempotencyKey: varchar("idempotency_key", { length: 120 }),
-  status: mysqlEnum("status", ["pending", "processed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "processed", "failed"])
+    .default("pending")
+    .notNull(),
   error: text("error"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   processedAt: timestamp("processed_at"),
@@ -377,6 +384,9 @@ export const frontendTelemetryEvents = mysqlTable("frontend_telemetry_events", {
   occurredAt: timestamp("occurred_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export type TicketComment = typeof ticketComments.$inferSelect;
+export type InsertTicketComment = typeof ticketComments.$inferInsert;
 
 /**
  * Interactions history (CRM timeline)
@@ -515,19 +525,11 @@ export const notifications = mysqlTable("notifications", {
   userId: int("user_id")
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
-  type: mysqlEnum("type", [
-    "system",
-    "ticket_assigned",
-    "ticket_closed",
-    "message_received",
-    "message_sent",
-    "reminder",
-    "workflow_triggered",
-  ]).notNull(),
-  title: varchar("title", { length: 255 }),
-  message: text("message"),
-  data: json("data"),
-  readAt: timestamp("read_at"),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content"),
+  type: mysqlEnum("type", ["ticket", "lead", "system", "goal"]).notNull(),
+  isRead: int("is_read").default(0).notNull(), // 0 = false, 1 = true
+  relatedId: int("related_id"), // ticket_id, lead_id, etc
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -535,55 +537,256 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
 
 /**
- * Workflow definitions
+ * AI chat history for assistant
  */
-export const workflows = mysqlTable("workflows", {
+export const aiChats = mysqlTable("ai_chats", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").references(() => users.id),
+  ticketId: int("ticket_id").references(() => tickets.id),
+  role: mysqlEnum("role", ["user", "assistant", "system"]).notNull(),
+  content: text("content").notNull(),
+  metadata: text("metadata"), // JSON for additional context
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type AiChat = typeof aiChats.$inferSelect;
+export type InsertAiChat = typeof aiChats.$inferInsert;
+
+/**
+ * Visual automation flows (N8N-style)
+ */
+export const visualFlows = mysqlTable("visual_flows", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  trigger: text("trigger").notNull(),
-  action: text("action").notNull(),
+  flowData: text("flow_data").notNull(), // JSON: {nodes: [], edges: []}
+  isActive: int("is_active").default(0).notNull(),
+  isTestMode: int("is_test_mode").default(0).notNull(), // Test mode flag
+  executionCount: int("execution_count").default(0).notNull(),
+  createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type VisualFlow = typeof visualFlows.$inferSelect;
+export type InsertVisualFlow = typeof visualFlows.$inferInsert;
+
+/**
+ * URA (Interactive Voice Response) menu configuration
+ */
+export const uraMenus = mysqlTable("ura_menus", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  welcomeMessage: text("welcome_message").notNull(),
+  menuData: text("menu_data").notNull(), // JSON: [{option: "1", label: "Vendas", action: "transfer", value: "dept_sales"}]
+  workingHours: text("working_hours"), // JSON: {start: "08:00", end: "18:00", days: [1,2,3,4,5]}
+  offHoursMessage: text("off_hours_message"),
   isActive: int("is_active").default(1).notNull(),
   createdBy: int("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
 
-export type Workflow = typeof workflows.$inferSelect;
-export type InsertWorkflow = typeof workflows.$inferInsert;
+export type UraMenu = typeof uraMenus.$inferSelect;
+export type InsertUraMenu = typeof uraMenus.$inferInsert;
 
 /**
- * Workflow runs
+ * API configurations for WhatsApp Business and Instagram
+ * Tokens are encrypted before storage
  */
-export const workflowRuns = mysqlTable("workflow_runs", {
+export const apiConfigurations = mysqlTable("api_configurations", {
   id: int("id").autoincrement().primaryKey(),
-  workflowId: int("workflow_id")
-    .references(() => workflows.id)
-    .notNull(),
-  triggerData: json("trigger_data"),
-  status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
-  startedAt: timestamp("started_at"),
-  completedAt: timestamp("completed_at"),
-  errorMessage: text("error_message"),
+  provider: mysqlEnum("provider", ["whatsapp", "instagram"]).notNull(),
+  token: text("token").notNull(), // Encrypted
+  phoneNumberId: varchar("phone_number_id", { length: 255 }), // WhatsApp only
+  pageId: varchar("page_id", { length: 255 }), // Instagram only
+  webhookUrl: varchar("webhook_url", { length: 512 }),
+  webhookVerifyToken: varchar("webhook_verify_token", { length: 255 }),
+  appSecret: varchar("app_secret", { length: 255 }), // For HMAC signature validation
+  isActive: int("is_active").default(1).notNull(),
+  lastTestedAt: timestamp("last_tested_at"),
+  testStatus: mysqlEnum("test_status", [
+    "success",
+    "failed",
+    "not_tested",
+  ]).default("not_tested"),
+  testMessage: text("test_message"),
   createdBy: int("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ApiConfiguration = typeof apiConfigurations.$inferSelect;
+export type InsertApiConfiguration = typeof apiConfigurations.$inferInsert;
+
+/**
+ * Received messages from WhatsApp and Instagram webhooks
+ * Stores all incoming messages for processing and history
+ */
+export const receivedMessages = mysqlTable("received_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  provider: mysqlEnum("provider", ["whatsapp", "instagram"]).notNull(),
+  externalId: varchar("external_id", { length: 255 }).notNull(), // Message ID from provider
+  fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone number or Instagram user ID
+  fromName: varchar("from_name", { length: 255 }), // Sender name if available
+  fromProfilePic: longtext("from_profile_pic"), // Sender profile picture URL (WhatsApp/Instagram)
+  messageType: mysqlEnum("message_type", [
+    "text",
+    "image",
+    "audio",
+    "video",
+    "document",
+    "location",
+    "contact",
+    "sticker",
+    "reaction",
+    "unknown",
+  ]).notNull(),
+  messageText: text("message_text"), // Text content
+  mediaUrl: longtext("media_url"), // URL for media files (can be base64 data URL)
+  mediaId: varchar("media_id", { length: 255 }), // Media ID from provider
+  mimeType: varchar("mime_type", { length: 100 }), // Media MIME type
+  caption: text("caption"), // Media caption
+  latitude: decimal("latitude", { precision: 10, scale: 8 }), // Location latitude
+  longitude: decimal("longitude", { precision: 11, scale: 8 }), // Location longitude
+  timestamp: text("timestamp").notNull(), // Unix timestamp from provider (stored as text)
+  rawPayload: longtext("raw_payload"), // Full JSON payload for debugging
+  processed: int("processed").default(0).notNull(), // 0 = pending, 1 = processed
+  processedAt: timestamp("processed_at"),
+  customerId: int("customer_id").references(() => customers.id), // Link to customer if identified
+  ticketId: int("ticket_id").references(() => tickets.id), // Link to ticket if created
+  automationFlowId: int("automation_flow_id").references(
+    () => automationFlows.id
+  ), // Flow that processed this message
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export type WorkflowRun = typeof workflowRuns.$inferSelect;
-export type InsertWorkflowRun = typeof workflowRuns.$inferInsert;
+export type ReceivedMessage = typeof receivedMessages.$inferSelect;
+export type InsertReceivedMessage = typeof receivedMessages.$inferInsert;
 
 /**
- * Workflow schedules
+ * Workflow Executions - Histórico de execuções de workflows
+ * Armazena cada execução com status, tempo, dados e logs
+ */
+export const workflowExecutions = mysqlTable("workflow_executions", {
+  id: int("id").autoincrement().primaryKey(),
+  workflowId: int("workflow_id")
+    .references(() => visualFlows.id)
+    .notNull(),
+  status: mysqlEnum("status", [
+    "running",
+    "success",
+    "error",
+    "waiting",
+    "canceled",
+  ]).notNull(),
+  mode: mysqlEnum("mode", [
+    "manual",
+    "trigger",
+    "webhook",
+    "schedule",
+  ]).notNull(),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  finishedAt: timestamp("finished_at"),
+  executionTime: int("execution_time"), // Milliseconds
+  error: text("error"), // Error message if failed
+  triggeredBy: int("triggered_by").references(() => users.id), // User who triggered (for manual)
+  triggerData: text("trigger_data"), // JSON with trigger input data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type WorkflowExecution = typeof workflowExecutions.$inferSelect;
+export type InsertWorkflowExecution = typeof workflowExecutions.$inferInsert;
+
+/**
+ * Execution Data - Dados de cada nó executado
+ * Armazena input, output, erro e tempo de cada nó
+ */
+export const executionData = mysqlTable("execution_data", {
+  id: int("id").autoincrement().primaryKey(),
+  executionId: int("execution_id")
+    .references(() => workflowExecutions.id)
+    .notNull(),
+  nodeId: varchar("node_id", { length: 255 }).notNull(), // ID do nó no workflow
+  nodeName: varchar("node_name", { length: 255 }).notNull(),
+  nodeType: varchar("node_type", { length: 100 }).notNull(),
+  status: mysqlEnum("status", ["success", "error", "skipped"]).notNull(),
+  startedAt: timestamp("started_at").notNull(),
+  finishedAt: timestamp("finished_at"),
+  executionTime: int("execution_time"), // Milliseconds
+  inputData: text("input_data"), // JSON with input
+  outputData: text("output_data"), // JSON with output
+  error: text("error"), // Error message if failed
+  retryCount: int("retry_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ExecutionData = typeof executionData.$inferSelect;
+export type InsertExecutionData = typeof executionData.$inferInsert;
+
+/**
+ * Workflow Credentials - Credenciais criptografadas
+ * Armazena credenciais de APIs de forma segura
+ */
+export const workflowCredentials = mysqlTable("workflow_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 100 }).notNull(), // http, oauth2, api_key, database, etc
+  data: text("data").notNull(), // Encrypted JSON with credentials
+  createdBy: int("created_by")
+    .references(() => users.id)
+    .notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type WorkflowCredential = typeof workflowCredentials.$inferSelect;
+export type InsertWorkflowCredential = typeof workflowCredentials.$inferInsert;
+
+/**
+ * Workflow Webhooks - URLs únicas para cada workflow
+ * Permite workflows serem acionados por webhooks externos
+ */
+export const workflowWebhooks = mysqlTable("workflow_webhooks", {
+  id: int("id").autoincrement().primaryKey(),
+  workflowId: int("workflow_id")
+    .references(() => visualFlows.id)
+    .notNull(),
+  webhookId: varchar("webhook_id", { length: 255 }).notNull().unique(), // UUID único
+  path: varchar("path", { length: 255 }).notNull(), // /webhook/abc123
+  method: mysqlEnum("method", [
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+  ]).notNull(),
+  isActive: int("is_active").default(1).notNull(),
+  lastTriggeredAt: timestamp("last_triggered_at"),
+  triggerCount: int("trigger_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type WorkflowWebhook = typeof workflowWebhooks.$inferSelect;
+export type InsertWorkflowWebhook = typeof workflowWebhooks.$inferInsert;
+
+/**
+ * Workflow Schedules - Agendamentos com cron
+ * Permite workflows serem executados automaticamente
  */
 export const workflowSchedules = mysqlTable("workflow_schedules", {
   id: int("id").autoincrement().primaryKey(),
   workflowId: int("workflow_id")
-    .references(() => workflows.id)
+    .references(() => visualFlows.id)
     .notNull(),
-  cronExpression: varchar("cron_expression", { length: 100 }).notNull(),
+  cronExpression: varchar("cron_expression", { length: 255 }).notNull(), // 0 0 * * * *
+  timezone: varchar("timezone", { length: 100 })
+    .default("America/Sao_Paulo")
+    .notNull(),
   isActive: int("is_active").default(1).notNull(),
+  lastRunAt: timestamp("last_run_at"),
   nextRunAt: timestamp("next_run_at"),
-  createdBy: int("created_by").references(() => users.id),
+  runCount: int("run_count").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -689,8 +892,7 @@ export const agentPauses = mysqlTable("agent_pauses", {
   agentId: int("agent_id")
     .references(() => users.id)
     .notNull(),
-  pauseType: mysqlEnum("pause_type", ["lunch", "snack", "bathroom", "other"])
-    .notNull(),
+  pauseType: mysqlEnum("pause_type", ["lunch", "snack", "bathroom", "other"]).notNull(),
   durationMinutes: int("duration_minutes"),
   startedAt: timestamp("started_at").defaultNow().notNull(),
   endedAt: timestamp("ended_at"),
@@ -1007,10 +1209,9 @@ export type InsertCustomerTag = typeof customerTags.$inferInsert;
  */
 export const surveyResponses = mysqlTable("survey_responses", {
   id: int("id").autoincrement().primaryKey(),
-  conversationId: int("conversation_id")
-    .references(() => conversations.id, {
-      onDelete: "set null",
-    }),
+  conversationId: int("conversation_id").references(() => conversations.id, {
+    onDelete: "set null",
+  }),
   customerId: int("customer_id")
     .references(() => customers.id, { onDelete: "cascade" })
     .notNull(),
@@ -1020,9 +1221,6 @@ export const surveyResponses = mysqlTable("survey_responses", {
   agentId: int("agent_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
-
-export type SurveyResponse = typeof surveyResponses.$inferSelect;
-export type InsertSurveyResponse = typeof surveyResponses.$inferInsert;
 
 /**
  * CRM - Scripts/Templates (mensagens prontas)
@@ -1041,6 +1239,9 @@ export const crmScripts = mysqlTable("crm_scripts", {
 
 export type CrmScript = typeof crmScripts.$inferSelect;
 export type InsertCrmScript = typeof crmScripts.$inferInsert;
+
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type InsertSurveyResponse = typeof surveyResponses.$inferInsert;
 
 /**
  * Broadcast Lists - Listas de Transmissão
@@ -1285,9 +1486,60 @@ export type BabyShowerWithdrawal = typeof babyShowerWithdrawals.$inferSelect;
 export type InsertBabyShowerWithdrawal =
   typeof babyShowerWithdrawals.$inferInsert;
 
+// broadcast membership tracking
+export const broadcastMembersSent = mysqlTable("broadcast_members_sent", {
+  id: int("id").primaryKey().autoincrement(),
+  broadcastMessageId: int("message_id").notNull(),
+  customerId: int("customer_id").notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at"),
+  deliveredAt: timestamp("delivered_at"),
+  readAt: timestamp("read_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type BroadcastMemberSent = typeof broadcastMembersSent.$inferSelect;
+export type InsertBroadcastMemberSent =
+  typeof broadcastMembersSent.$inferInsert;
+
+// webhook idempotency table
+export const processedWebhookMessages = mysqlTable("processed_webhook_messages", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  processedAt: timestamp("processed_at").defaultNow().notNull(),
+  provider: varchar("provider", { length: 16 }),
+});
+
+export type ProcessedWebhookMessage = typeof processedWebhookMessages.$inferSelect;
+export type InsertProcessedWebhookMessage =
+  typeof processedWebhookMessages.$inferInsert;
+
+export * from './schema_logs';
+
+
 /**
- * ============================================================
- * SCHEMA LOGS (para versionamento)
- * ============================================================
+ * STORY CACHE - Cache de stories para correlacionar replies
+ * Quando alguém responde a um story, a Evolution API NÃO envia contextInfo
+ * Guardamos o story original e correlacionamos replies pelo timestamp (+/- 2 minutos)
  */
-export * from "./schema_logs";
+export const storyCache = mysqlTable("story_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  storyId: varchar("story_id", { length: 255 }).notNull(), // message.key.id do story
+  remoteJid: varchar("remote_jid", { length: 255 }).notNull(), // Quem enviou o story
+  fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone normalizado
+  fromName: varchar("from_name", { length: 255 }),
+  mediaUrl: longtext("media_url"), // URL da mídia no R2
+  rawUrl: longtext("raw_url"), // URL original antes do download
+  mediaType: mysqlEnum("media_type", ["image", "video", "audio", "document", "text"]).notNull(),
+  caption: text("caption"),
+  mimeType: varchar("mime_type", { length: 100 }),
+  fileName: varchar("file_name", { length: 255 }),
+  fileSize: int("file_size"),
+  messageTimestamp: int("message_timestamp").notNull(), // Unix timestamp
+  expiresAt: timestamp("expires_at").notNull(), // Stories expiram em 24h
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type StoryCache = typeof storyCache.$inferSelect;
+export type InsertStoryCache = typeof storyCache.$inferInsert;
