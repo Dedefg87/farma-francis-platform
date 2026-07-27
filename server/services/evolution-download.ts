@@ -329,3 +329,88 @@ export async function downloadGenericMedia(
 }
 
 export { isWhatsAppCdnUrl, downloadWithValidation } from './media-validator';
+/**
+ * Download story media using multiple strategies.
+ * Consolidates logic for handling story replies (status@broadcast).
+ */
+export async function downloadStoryMedia(
+  contextInfo: {
+    stanzaId: string;
+    participant?: string;
+    quotedMessage?: any;
+  },
+  messageId: string,
+  instanceName?: string
+): Promise<Buffer | null> {
+  console.log('[downloadStoryMedia] Attempting to download story media:', {
+    stanzaId: contextInfo.stanzaId,
+    participant: contextInfo.participant,
+    messageId
+  });
+
+  if (!contextInfo) {
+    console.log('[downloadStoryMedia] ❌ Missing contextInfo');
+    return null;
+  }
+
+  const { stanzaId, participant, quotedMessage } = contextInfo;
+
+  // Strategy 1: Try getStoryMediaViaBase64 endpoint
+  if (stanzaId && participant) {
+    const buffer1 = await getStoryMediaViaBase64(
+      stanzaId,
+      participant,
+      quotedMessage || {},
+      instanceName
+    );
+    
+    if (buffer1 && buffer1.length > 0) {
+      console.log('[downloadStoryMedia] ✅ Success via getStoryMediaViaBase64');
+      return buffer1;
+    }
+  }
+
+  // Strategy 2: Extract mediaKey and directPath from quotedMessage
+  const quotedMessageAny = quotedMessage as any;
+  const imageMessage = quotedMessageAny?.imageMessage;
+  const videoMessage = quotedMessageAny?.videoMessage;
+  const mediaMessage = imageMessage || videoMessage;
+
+  if (mediaMessage?.mediaKey && mediaMessage?.directPath) {
+    console.log('[downloadStoryMedia] Found mediaKey and directPath, attempting download');
+    
+    try {
+      const config = await getEvolutionConfig();
+      if (config) {
+        // Try to download using evolution-download
+        const buffer = await downloadWhatsAppMediaFromEvolution({
+          url: '',
+          mediaKey: mediaMessage.mediaKey,
+          directPath: mediaMessage.directPath
+        });
+        
+        if (buffer && buffer.length > 0) {
+          console.log('[downloadStoryMedia] ✅ Success via mediaKey/directPath');
+          return buffer;
+        }
+      }
+    } catch (error) {
+      console.log('[downloadStoryMedia] mediaKey/directPath download failed:', error);
+    }
+  }
+
+  // Strategy 3: Try jpegThumbnail fallback (low quality but better than nothing)
+  if (imageMessage?.jpegThumbnail) {
+    console.log('[downloadStoryMedia] Using jpegThumbnail fallback (low quality)');
+    try {
+      const buffer = Buffer.from(imageMessage.jpegThumbnail, 'base64');
+      console.log('[downloadStoryMedia] ✅ Success via jpegThumbnail fallback, size:', buffer.length);
+      return buffer;
+    } catch (error) {
+      console.log('[downloadStoryMedia] jpegThumbnail fallback failed:', error);
+    }
+  }
+
+  console.log('[downloadStoryMedia] ❌ All strategies failed');
+  return null;
+}
