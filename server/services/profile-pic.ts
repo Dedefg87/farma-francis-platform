@@ -83,7 +83,7 @@ async function fetchProfileFromEvolution(phone: string): Promise<{
       {
         method: 'POST',
         headers: {
-          apikey: ${config.apiKey},
+          apikey: config.apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ number }),
@@ -164,7 +164,7 @@ async function downloadViaEvolutionProxy(url: string): Promise<Buffer | null> {
     const res = await fetch(proxyUrl, {
       method: 'POST',
       headers: {
-        apikey: ${config.apiKey},
+          apikey: config.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
