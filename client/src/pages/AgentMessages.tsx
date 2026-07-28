@@ -1475,8 +1475,14 @@ export default function AgentMessages() {
                   <Input
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    onKeyPress={e => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Digite sua mensagem..."
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && !e.altKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                      // Alt+Enter permite nova linha (comportamento padrão do textarea)
+                    }}
+                    placeholder="Digite sua mensagem... (Alt+Enter para nova linha)"
                     className="flex-1"
                   />
 
