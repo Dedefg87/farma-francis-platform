@@ -198,150 +198,159 @@ export const messagesRouter = router({
                   if (base64Match) return base64Match[1];
                 }
               }
-              
               // For ANY non-R2, non-data URL (Evolution internal, WhatsApp CDN, etc.):
-              // Try to construct full URL and download via Cloudflare proxy
-              try {
-                console.log("[messages.forward] Non-R2 URL, attempting to download media...");
-                const { getDb } = await import("./db");
-                const { integrationSettings } = await import("../drizzle/schema");
-                const { eq } = await import("drizzle-orm");
-                const db2 = await getDb();
-                if (db2) {
-                  const [config] = await db2
-                    .select()
-                    .from(integrationSettings)
-                    .where(eq(integrationSettings.integrationType, "evolution_api"))
-                    .limit(1);
-                  if (config) {
-                    const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
+                            // Try to construct full URL and download via Cloudflare proxy
+                            try {
+                              console.log("[messages.forward] Non-R2 URL, attempting to download media...");
+                              console.log("[messages.forward] mediaUrl:", mediaUrl);
+                              console.log("[messages.forward] originalMsg.externalId:", originalMsg.externalId);
+                              console.log("[messages.forward] mimetype:", mimetype);
+                              const { getDb } = await import("./db");
+                              const { integrationSettings } = await import("../drizzle/schema");
+                              const { eq } = await import("drizzle-orm");
+                              const db2 = await getDb();
+                              if (db2) {
+                                const [config] = await db2
+                                  .select()
+                                  .from(integrationSettings)
+                                  .where(eq(integrationSettings.integrationType, "evolution_api"))
+                                  .limit(1);
+                                if (config) {
+                                  const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
+                                  console.log("[messages.forward] Config found, keys:", Object.keys(configData));
                     
-                    // Try multiple URL formats from config
-                    const possibleUrls: string[] = [];
+                                  // Try multiple URL formats from config
+                                  const possibleUrls: string[] = [];
                     
-                    // Format 1: direct apiUrl from config (whatsapp.ts, messaging.ts use this)
-                    if (configData.apiUrl) {
-                      possibleUrls.push(configData.apiUrl.replace(/\/$/, ""));
-                    }
+                                  // Format 1: direct apiUrl from config (whatsapp.ts, messaging.ts use this)
+                                  if (configData.apiUrl) {
+                                    possibleUrls.push(configData.apiUrl.replace(/\/$/, ""));
+                                  }
                     
-                    // Format 2: from instances array (db-messages-ingest-clean.ts uses this)
-                    const instances = configData.instances || [];
-                    for (const inst of instances) {
-                      if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
-                      if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
-                    }
+                                  // Format 2: from instances array (db-messages-ingest-clean.ts uses this)
+                                  const instances = configData.instances || [];
+                                  for (const inst of instances) {
+                                    if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
+                                    if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
+                                  }
                     
-                    // Format 3: from settings
-                    const settings = (config as any).settings ? (typeof (config as any).settings === "string" ? JSON.parse((config as any).settings) : (config as any).settings) : null;
-                    if (settings?.instances) {
-                      for (const inst of settings.instances) {
-                        if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
-                        if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
-                      }
-                    }
+                                  // Format 3: from settings
+                                  const settings = (config as any).settings ? (typeof (config as any).settings === "string" ? JSON.parse((config as any).settings) : (config as any).settings) : null;
+                                  if (settings?.instances) {
+                                    for (const inst of settings.instances) {
+                                      if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
+                                      if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
+                                    }
+                                  }
                     
-                    // Deduplicate and try each URL
-                    const uniqueUrls = [...new Set(possibleUrls)];
-                    const apiKey = configData.apiKey || configData.accessToken || "";
+                                  // Deduplicate and try each URL
+                                  const uniqueUrls = [...new Set(possibleUrls)];
+                                  const apiKey = configData.apiKey || configData.accessToken || "";
+                                  console.log("[messages.forward] Trying base URLs:", uniqueUrls);
+                                  console.log("[messages.forward] Has apiKey:", !!apiKey);
                     
-                    for (const baseUrl of uniqueUrls) {
-                      // Construct full URL from relative path
-                      if (!mediaUrl.startsWith("http")) {
-                        const fullUrl = `${baseUrl}/${mediaUrl.replace(/^\//, "")}`;
-                        console.log("[messages.forward] Trying to download:", fullUrl.substring(0, 120));
+                                  for (const baseUrl of uniqueUrls) {
+                                    // Construct full URL from relative path
+                                    if (!mediaUrl.startsWith("http")) {
+                                      const fullUrl = `${baseUrl}/${mediaUrl.replace(/^\//, "")}`;
+                                      console.log("[messages.forward] Trying to download:", fullUrl.substring(0, 120));
                         
-                        // Try with API key (Evolution requires auth)
-                        try {
-                          const resp = await fetch(fullUrl, {
-                            headers: apiKey ? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
-                            signal: AbortSignal.timeout(15000),
-                          });
-                          if (resp.ok) {
-                            const ctype = resp.headers.get("content-type") || "";
-                            if (!ctype.includes("json") && !ctype.includes("text/html") && !ctype.includes("text/plain")) {
-                              const buf = Buffer.from(await resp.arrayBuffer());
-                              if (buf.length > 0) {
-                                const detectedMime = ctype || mimetype;
-                                const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
-                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
-                                console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
-                                return r2Result.url;
-                              }
-                            }
-                          }
-                        } catch (_e) {
-                          // Try next URL variant
-                        }
-                      } else if (mediaUrl.startsWith("http")) {
-                        // Already a full URL, try to download directly
-                        try {
-                          const resp = await fetch(mediaUrl, {
-                            headers: apiKey ? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
-                            signal: AbortSignal.timeout(15000),
-                          });
-                          if (resp.ok) {
-                            const ctype = resp.headers.get("content-type") || "";
-                            if (!ctype.includes("json") && !ctype.includes("text")) {
-                              const buf = Buffer.from(await resp.arrayBuffer());
-                              if (buf.length > 0) {
-                                const detectedMime = ctype || mimetype;
-                                const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
-                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
-                                console.log("[messages.forward] ✅ Direct download + R2 upload:", r2Result.url);
-                                return r2Result.url;
-                              }
-                            }
-                          }
-                        } catch (_e) {}
-                      }
-                    }
+                                      // Try with API key (Evolution requires auth)
+                                      try {
+                                        const resp = await fetch(fullUrl, {
+                                          headers: apiKey ? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
+                                          signal: AbortSignal.timeout(15000),
+                                        });
+                                        console.log("[messages.forward] Response status:", resp.status, "content-type:", resp.headers.get("content-type"));
+                                        if (resp.ok) {
+                                          const ctype = resp.headers.get("content-type") || "";
+                                          if (!ctype.includes("json") && !ctype.includes("text/html") && !ctype.includes("text/plain")) {
+                                            const buf = Buffer.from(await resp.arrayBuffer());
+                                            if (buf.length > 0) {
+                                              const detectedMime = ctype || mimetype;
+                                              const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
+                                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
+                                              console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
+                                              return r2Result.url;
+                                            }
+                                          }
+                                        }
+                                      } catch (_e) {
+                                        console.log("[messages.forward] Fetch error:", _e);
+                                        // Try next URL variant
+                                      }
+                                    } else if (mediaUrl.startsWith("http")) {
+                                      // Already a full URL, try to download directly
+                                      try {
+                                        const resp = await fetch(mediaUrl, {
+                                          headers: apiKey ? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
+                                          signal: AbortSignal.timeout(15000),
+                                        });
+                                        console.log("[messages.forward] Direct download status:", resp.status);
+                                        if (resp.ok) {
+                                          const ctype = resp.headers.get("content-type") || "";
+                                          if (!ctype.includes("json") && !ctype.includes("text")) {
+                                            const buf = Buffer.from(await resp.arrayBuffer());
+                                            if (buf.length > 0) {
+                                              const detectedMime = ctype || mimetype;
+                                              const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
+                                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
+                                              console.log("[messages.forward] ✅ Direct download + R2 upload:", r2Result.url);
+                                              return r2Result.url;
+                                            }
+                                          }
+                                        }
+                                      } catch (_e) {}
+                                    }
+                                  }
                     
-                    // Last resort: try /message/download endpoint (used by webhook)
-                    if (originalMsg.externalId) {
-                      for (const baseUrl of uniqueUrls) {
-                        const dlUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
-                        console.log("[messages.forward] Trying /message/download:", dlUrl.substring(0, 120));
-                        try {
-                          const resp = await fetch(dlUrl, {
-                            headers: { apikey: apiKey },
-                            signal: AbortSignal.timeout(15000),
-                          });
-                          if (resp.ok) {
-                            const ctype = resp.headers.get("content-type") || "";
-                            if (ctype.includes("json")) {
-                              const data = await resp.json();
-                              const u = data?.url || data?.mediaUrl || "";
-                              if (u) {
-                                const mediaResp = await fetch(u, {
-                                  headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,video/*,audio/*,*/*'},
-                                  signal: AbortSignal.timeout(30000),
-                                });
-                                if (mediaResp.ok) {
-                                  const buf = Buffer.from(await mediaResp.arrayBuffer());
-                                  if (buf.length > 0) {
-                                    const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                                    const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                    console.log("[messages.forward] ✅ /message/download + R2 upload:", r2Result.url);
-                                    return r2Result.url;
+                                  // Last resort: try /message/download endpoint (used by webhook)
+                                  if (originalMsg.externalId) {
+                                    for (const baseUrl of uniqueUrls) {
+                                      const dlUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
+                                      console.log("[messages.forward] Trying /message/download:", dlUrl.substring(0, 120));
+                                      try {
+                                        const resp = await fetch(dlUrl, {
+                                          headers: { apikey: apiKey },
+                                          signal: AbortSignal.timeout(15000),
+                                        });
+                                        console.log("[messages.forward] /message/download status:", resp.status);
+                                        if (resp.ok) {
+                                          const ctype = resp.headers.get("content-type") || "";
+                                          if (ctype.includes("json")) {
+                                            const data = await resp.json();
+                                            const u = data?.url || data?.mediaUrl || "";
+                                            if (u) {
+                                              const mediaResp = await fetch(u, {
+                                                headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,video/*,audio/*,*/*'},
+                                                signal: AbortSignal.timeout(30000),
+                                              });
+                                              if (mediaResp.ok) {
+                                                const buf = Buffer.from(await mediaResp.arrayBuffer());
+                                                if (buf.length > 0) {
+                                                  const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                                                  const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                                                  console.log("[messages.forward] ✅ /message/download + R2 upload:", r2Result.url);
+                                                  return r2Result.url;
+                                                }
+                                              }
+                                            }
+                                          } else {
+                                            const buf = Buffer.from(await resp.arrayBuffer());
+                                            if (buf.length > 0) {
+                                              const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                                              console.log("[messages.forward] ✅ /message/download raw + R2 upload:", r2Result.url);
+                                              return r2Result.url;
+                                            }
+                                          }
+                                        }
+                                      } catch (_e) {}
+                                    }
                                   }
                                 }
                               }
-                            } else {
-                              const buf = Buffer.from(await resp.arrayBuffer());
-                              if (buf.length > 0) {
-                                const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                console.log("[messages.forward] ✅ /message/download raw + R2 upload:", r2Result.url);
-                                return r2Result.url;
-                              }
-                            }
-                          }
-                        } catch (_e) {}
-                      }
-                    }
-                  }
-                }
-              } catch (downloadErr) {
+                            } catch (downloadErr) {
                 console.error("[messages.forward] All download strategies failed:", downloadErr);
               }
               
