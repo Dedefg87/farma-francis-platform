@@ -1825,16 +1825,16 @@ export default function AgentMessages() {
                                       ) : recentContacts.length > 0 ? (
                                         recentContacts.map(contact => (
                                           <SelectItem 
-                                            key={contact.phone} 
-                                            value={contact.phone}
+                                            key={contact.customerPhone} 
+                                            value={contact.customerPhone}
                                           >
                                             <div className="flex items-center gap-2">
                                               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                                                {contact.name?.charAt(0)?.toUpperCase() || 'C'}
+                                                {contact.customerName?.charAt(0)?.toUpperCase() || 'C'}
                                               </div>
                                               <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate">{contact.name}</div>
-                                                <div className="text-xs text-gray-500 truncate">{contact.phone}</div>
+                                                <div className="text-sm font-medium truncate">{contact.customerName}</div>
+                                                <div className="text-xs text-gray-500 truncate">{contact.customerPhone}</div>
                                               </div>
                                               <span className="text-xs text-gray-400">
                                                 {contact.channel === 'whatsapp' ? '📱' : '📷'} {contact.lastMessageAt ? new Date(contact.lastMessageAt).toLocaleDateString('pt-BR') : 'Sem data'}
@@ -1849,7 +1849,7 @@ export default function AgentMessages() {
                                       )}
                                     </SelectGroup>
                                     <SelectSeparator />
-                                    <SelectItem value="manual">
+                                    <SelectItem value="__manual__">
                                       <div className="flex items-center gap-2 text-blue-600">
                                         <Plus className="w-4 h-4" />
                                         <span>Inserir número manualmente</span>
@@ -1860,7 +1860,7 @@ export default function AgentMessages() {
                               </div>
                               
                               {/* Input manual quando selecionado "Inserir número manualmente" */}
-                              {forwardTargetCustomerPhone === "manual" && (
+                              {forwardTargetCustomerPhone === "__manual__" && (
                                 <div className="space-y-2 mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                                   <label className="block text-sm font-medium text-gray-700">Telefone do cliente (com DDD)</label>
                                   <Input
