@@ -1543,3 +1543,44 @@ export const storyCache = mysqlTable("story_cache", {
 
 export type StoryCache = typeof storyCache.$inferSelect;
 export type InsertStoryCache = typeof storyCache.$inferInsert;
+
+/**
+ * REMINDERS - Sistema de Lembretes para Atendentes
+ * Exibidos no login como pop-up com priorização inteligente
+ */
+export const reminders = mysqlTable("reminders", {
+  id: int("id").autoincrement().primaryKey(),
+  agentId: int("agent_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(), // Atendente responsável
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(), // Cliente relacionado
+  type: mysqlEnum("type", [
+    "aniversario",
+    "medicamento_vencendo",
+    "follow_up",
+    "renovacao",
+    "custom"
+  ]).notNull(),
+  priority: mysqlEnum("priority", ["critica", "alta", "media", "baixa"]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  eventDate: date("event_date").notNull(), // Data do evento (aniversário, vencimento, etc)
+  daysBefore: int("days_before").default(0), // Para medicamentos: dias antes do vencimento
+  metadata: json("metadata"), // Dados extras: { medicamento: "Dipirona", quantidade: 2, dosagem: "500mg" }
+  status: mysqlEnum("status", ["pendente", "dispensado", "adiado", "expirado"]).default("pendente").notNull(),
+  snoozedUntil: timestamp("snoozed_until"), // Para lembretes adiados
+  dismissedAt: timestamp("dismissed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Reminder = typeof reminders.$inferSelect;
+export type InsertReminder = typeof reminders.$inferInsert;
+
+// Índices para performance
+// CREATE INDEX idx_reminders_agent_status ON reminders(agent_id, status);
+// CREATE INDEX idx_reminders_customer ON reminders(customer_id);
+// CREATE INDEX idx_reminders_event_date ON reminders(event_date);
+// CREATE INDEX idx_reminders_snoozed ON reminders(snoozed_until);

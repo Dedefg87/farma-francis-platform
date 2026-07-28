@@ -23,6 +23,7 @@ import { migrationRouter } from "../routers-migration";
 import { pausesRouter } from "../routers-pauses";
 import { queuesRouter } from "../routers-queues";
 import { quickRepliesRouter } from "../routers-quick-replies";
+import { remindersRouter } from "../routers-reminders";
 import { surveyRouter } from "../routers-survey";
 import { systemRouter } from "../routers-system";
 import { tagsRouter } from "../routers-tags";
@@ -58,6 +59,7 @@ export const appRouter = router({
   pauses: pausesRouter,
   queues: queuesRouter,
   quickReplies: quickRepliesRouter,
+  reminders: remindersRouter,
   survey: surveyRouter,
   system: systemRouter,
   tags: tagsRouter,
