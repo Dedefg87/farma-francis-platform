@@ -170,14 +170,54 @@ export const messagesRouter = router({
 
         try {
           if (provider === "whatsapp") {
-            const { sendWhatsAppMessage } = await import("./messaging");
-            const result = await sendWhatsAppMessage({
-              to: input.targetCustomerPhone,
-              message: customerContent,
-              mediaUrl: originalMsg.fileUrl || undefined,
-              caption: originalMsg.fileName || undefined,
-            });
-            externalMessageId = result?.messageId || null;
+            const { sendWhatsAppMessage, sendWhatsAppImage, sendWhatsAppViewOnceMedia } = await import("./messaging");
+            
+            if (originalMsg.fileUrl) {
+              const fileType = originalMsg.fileType || "";
+              if (fileType.startsWith("image/")) {
+                // Enviar como imagem usando o endpoint correto de mídia
+                const result = await sendWhatsAppImage({
+                  to: input.targetCustomerPhone,
+                  imageUrl: originalMsg.fileUrl,
+                  caption: customerContent,
+                });
+                externalMessageId = result?.messageId || null;
+              } else if (fileType.startsWith("video/")) {
+                // Enviar como vídeo
+                const result = await sendWhatsAppViewOnceMedia({
+                  to: input.targetCustomerPhone,
+                  mediaUrl: originalMsg.fileUrl,
+                  mediaType: "video",
+                  caption: customerContent,
+                });
+                externalMessageId = result?.messageId || null;
+              } else if (fileType.startsWith("audio/")) {
+                // Enviar como áudio
+                const result = await sendWhatsAppViewOnceMedia({
+                  to: input.targetCustomerPhone,
+                  mediaUrl: originalMsg.fileUrl,
+                  mediaType: "audio",
+                  caption: customerContent,
+                });
+                externalMessageId = result?.messageId || null;
+              } else {
+                // Documento - enviar como texto com link
+                const { sendWhatsAppMessage } = await import("./messaging");
+                const result = await sendWhatsAppMessage({
+                  to: input.targetCustomerPhone,
+                  message: customerContent,
+                });
+                externalMessageId = result?.messageId || null;
+              }
+            } else {
+              // Apenas texto
+              const { sendWhatsAppMessage } = await import("./messaging");
+              const result = await sendWhatsAppMessage({
+                to: input.targetCustomerPhone,
+                message: customerContent,
+              });
+              externalMessageId = result?.messageId || null;
+            }
           } else if (provider === "instagram") {
             const { sendInstagramMessage } = await import("./messaging");
             const result = await sendInstagramMessage({
