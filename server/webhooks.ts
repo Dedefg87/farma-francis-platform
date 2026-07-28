@@ -1653,6 +1653,17 @@ async function processEvolutionWebhook(body: unknown) {
                                                         const isStoryReply = contextInfo.remoteJid === 'status@broadcast' && 
                                                           (contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage);
       
+                                                        // 🔬 INSTRUMENTAÇÃO STORY_RAW - capturar payload real (caminho upsert)
+                                                        console.log("[STORY_RAW][UPSERT] event:", eventName,
+                                                          "| messageType:", messageType,
+                                                          "| ctxRemoteJid:", contextInfo?.remoteJid,
+                                                          "| hasQuoted:", !!contextInfo?.quotedMessage,
+                                                          "| hasQuotedImg:", !!contextInfo?.quotedMessage?.imageMessage,
+                                                          "| hasQuotedVid:", !!contextInfo?.quotedMessage?.videoMessage,
+                                                          "| stanzaId:", contextInfo?.stanzaId,
+                                                          "| isStoryReply:", isStoryReply);
+                                                        console.log("[STORY_RAW][UPSERT] bodyPreview:", JSON.stringify(body).slice(0, 800));
+
                                                         if (isStoryReply) {
                                                           console.log("[Evolution Webhook] 📖 Story reply detected:", { messageId, stanzaId: contextInfo.stanzaId });
                                                           
@@ -2005,6 +2016,14 @@ async function processEvolutionWebhook(body: unknown) {
       const msgUpdateCtx = body?.data?.contextInfo || body?.contextInfo || {};
       const isStoryReplyUpdate = msgUpdateCtx.remoteJid === "status@broadcast" &&
         (msgUpdateCtx.quotedMessage?.imageMessage || msgUpdateCtx.quotedMessage?.videoMessage);
+      // 🔬 INSTRUMENTAÇÃO STORY_RAW - capturar payload real para diagnostico definitivo
+      console.log("[STORY_RAW][UPDATE] event:", eventName,
+        "| dataKeys:", body?.data ? Object.keys(body.data).join(",") : "none",
+        "| ctxKeys:", msgUpdateCtx ? Object.keys(msgUpdateCtx).join(",") : "none",
+        "| ctxRemoteJid:", msgUpdateCtx?.remoteJid,
+        "| hasQuoted:", !!msgUpdateCtx?.quotedMessage,
+        "| isStoryReplyUpdate:", isStoryReplyUpdate);
+      console.log("[STORY_RAW][UPDATE] bodyPreview:", JSON.stringify(body).slice(0, 800));
       if (isStoryReplyUpdate) {
         console.log("[Evolution Webhook] 📖 Story reply detected in messages.update");
         // Continuar processamento normal (não ignorar)
