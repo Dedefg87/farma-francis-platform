@@ -208,7 +208,7 @@ export const messagesRouter = router({
                   const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
                   const buffer = await downloadWhatsAppMediaFromEvolution({
                     url: mediaUrl,
-                    messageKey: { id: originalMsg.externalId || "", remoteJid: conv.remoteJid || "", fromMe: false }
+                    messageKey: { id: originalMsg.externalId || "", remoteJid: originalMsg.remoteJid || "", fromMe: false }
                   });
                   if (buffer && buffer.length > 0) {
                     const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
