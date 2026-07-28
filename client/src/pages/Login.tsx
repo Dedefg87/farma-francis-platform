@@ -71,6 +71,12 @@ export default function Login() {
         ...(isProduction && siteKey && token ? { cfTurnstileToken: token } : {})
       });
       
+      // Salvar token no localStorage com chave exata "jti"
+      localStorage.setItem('jti', result.token);
+      
+      // Invalidar cache do auth.me para forçar recarregamento
+      await utils.auth.me.invalidate();
+      
       // Redirecionar para a página inicial ou painel após login bem-sucedido
       setLocation('/');
     } catch (err) {
