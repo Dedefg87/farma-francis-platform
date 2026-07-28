@@ -14,6 +14,7 @@ import { BroadcastListManager } from "@/components/BroadcastListManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -1472,18 +1473,19 @@ export default function AgentMessages() {
                     )}
                   </div>
 
-                  <Input
+                  <Textarea
                     value={message}
                     onChange={e => setMessage(e.target.value)}
                     onKeyDown={e => {
-                      if (e.key === "Enter" && !e.altKey) {
+                      if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleSendMessage();
                       }
-                      // Alt+Enter permite nova linha (comportamento padrão do textarea)
+                      // Shift+Enter permite nova linha (comportamento padrão do textarea)
                     }}
-                    placeholder="Digite sua mensagem... (Alt+Enter para nova linha)"
-                    className="flex-1"
+                    placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                    className="flex-1 min-h-[44px] max-h-48 resize-none"
+                    rows={1}
                   />
 
                   <Button
