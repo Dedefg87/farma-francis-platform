@@ -171,37 +171,67 @@ export const messagesRouter = router({
         try {
           if (provider === "whatsapp") {
             const { sendWhatsAppMessage, sendWhatsAppImage, sendWhatsAppViewOnceMedia } = await import("./messaging");
+            const { uploadToR2, isR2Url } = await import("./r2-client.js");
             
+            // Helper to ensure media URL is accessible via Evolution API (upload to R2 if needed)
+            const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise<string> => {
+              // If already R2 URL, use as-is
+              if (isR2Url(mediaUrl)) return mediaUrl;
+              
+              // If data URL (base64), upload to R2
+              if (mediaUrl.startsWith("data:")) {
+                try {
+                  const mimeMatch = mediaUrl.match(/^data:([^;]+);base64,(.*)$/s);
+                  if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
+                    const buffer = Buffer.from(mimeMatch[2], "base64");
+                    const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : "jpg";
+                    const r2Result = await uploadToR2(
+                      buffer,
+                      `messages/forward_${Date.now()}.${ext}`,
+                      mimetype
+                    );
+                    return r2Result.url;
+                  }
+                } catch (r2Err) {
+                  console.error("[messages.forward] R2 upload failed for data URL:", r2Err);
+                  // Fallback to raw base64
+                  const base64Match = mediaUrl.match(/^data:[^;]+;base64,(.*)$/s);
+                  if (base64Match) return base64Match[1];
+                }
+              }
+              
+              return mediaUrl;
+            };
+
             if (originalMsg.fileUrl) {
               const fileType = originalMsg.fileType || "";
+              // Ensure media URL is publicly accessible
+              const publicMediaUrl = await ensurePublicMediaUrl(originalMsg.fileUrl, fileType);
+              
               if (fileType.startsWith("image/")) {
-                // Enviar como imagem usando o endpoint correto de mídia
                 const result = await sendWhatsAppImage({
                   to: input.targetCustomerPhone,
-                  imageUrl: originalMsg.fileUrl,
+                  imageUrl: publicMediaUrl,
                   caption: customerContent,
                 });
                 externalMessageId = result?.messageId || null;
               } else if (fileType.startsWith("video/")) {
-                // Enviar como vídeo
                 const result = await sendWhatsAppViewOnceMedia({
                   to: input.targetCustomerPhone,
-                  mediaUrl: originalMsg.fileUrl,
+                  mediaUrl: publicMediaUrl,
                   mediaType: "video",
                   caption: customerContent,
                 });
                 externalMessageId = result?.messageId || null;
               } else if (fileType.startsWith("audio/")) {
-                // Enviar como áudio
                 const result = await sendWhatsAppViewOnceMedia({
                   to: input.targetCustomerPhone,
-                  mediaUrl: originalMsg.fileUrl,
+                  mediaUrl: publicMediaUrl,
                   mediaType: "audio",
                   caption: customerContent,
                 });
                 externalMessageId = result?.messageId || null;
               } else {
-                // Documento - enviar como texto com link
                 const { sendWhatsAppMessage } = await import("./messaging");
                 const result = await sendWhatsAppMessage({
                   to: input.targetCustomerPhone,
@@ -210,7 +240,6 @@ export const messagesRouter = router({
                 externalMessageId = result?.messageId || null;
               }
             } else {
-              // Apenas texto
               const { sendWhatsAppMessage } = await import("./messaging");
               const result = await sendWhatsAppMessage({
                 to: input.targetCustomerPhone,
