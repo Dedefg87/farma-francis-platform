@@ -11,6 +11,7 @@ import {
   ConversationStatus,
   ConversationChannel,
 } from "@shared/types/conversations";
+import { closeConversation } from "./chatbot";
 
 /**
  * Helper: Converte uma row do Drizzle para o tipo Conversation compartilhado.
@@ -493,34 +494,42 @@ export const conversationsRouter = router({
     }),
 
   /**
-   * Fecha uma conversa com um motivo.
-   */
-  close: protectedProcedure
-    .input(
-      z.object({
-        conversationId: z.number(),
-        reason: z.enum(["venda", "orcamento", "conversa_anterior", "engano"]),
-      })
-    )
-    .mutation(async ({ input }): Promise<{ success: boolean }> => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
+     * Fecha uma conversa com um motivo.
+     */
+    close: protectedProcedure
+      .input(
+        z.object({
+          conversationId: z.number(),
+          reason: z.enum(["venda", "orcamento", "conversa_anterior", "engano"]),
+        })
+      )
+      .mutation(async ({ input }): Promise<{ success: boolean }> => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
 
-      console.log(`[conversations.close] Closing conversation ${input.conversationId} with reason ${input.reason}`);
+        console.log(`[conversations.close] Closing conversation ${input.conversationId} with reason ${input.reason}`);
 
-      await db
-        .update(conversations)
-        .set({ status: "closed", closeReason: input.reason, closedAt: new Date() })
-        .where(eq(conversations.id, input.conversationId));
+        await db
+          .update(conversations)
+          .set({ status: "closed", closeReason: input.reason, closedAt: new Date() })
+          .where(eq(conversations.id, input.conversationId));
 
-      console.log(`[conversations.close] Conversation ${input.conversationId} closed successfully`);
+        console.log(`[conversations.close] Conversation ${input.conversationId} closed successfully`);
 
-      return { success: true };
-    }),
+        // Chamar a função do chatbot para enviar mensagem de fechamento/pesquisa
+        try {
+          await closeConversation(input.conversationId, input.reason, true); // skipDbUpdate=true pois já atualizamos acima
+        } catch (chatbotError) {
+          console.error("[conversations.close] Error calling chatbot closeConversation:", chatbotError);
+          // Não falha o request principal se o chatbot falhar
+        }
 
-  /**
-   * Exclui uma conversa permanentemente.
-   */
+        return { success: true };
+      }),
+
+    /**
+     * Exclui uma conversa permanentemente.
+     */
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
