@@ -194,49 +194,90 @@ export const messagesRouter = router({
                   }
                 } catch (r2Err) {
                   console.error("[messages.forward] R2 upload failed for data URL:", r2Err);
-                  // Fallback to raw base64
                   const base64Match = mediaUrl.match(/^data:[^;]+;base64,(.*)$/s);
                   if (base64Match) return base64Match[1];
                 }
               }
               
-              // If WhatsApp CDN URL or other authenticated URL, download via Evolution API and re-upload to R2
-              const { isWhatsAppCdnUrl } = await import("./services/evolution-download");
-              if (isWhatsAppCdnUrl(mediaUrl)) {
+              // For ANY non-R2, non-data URL (WhatsApp CDN, Evolution internal, etc.):
+              // Try to download via Evolution API /message/download/{messageId} and upload to R2
+              if (originalMsg.externalId) {
                 try {
-                  console.log("[messages.forward] WhatsApp CDN URL detected, downloading via Evolution API...");
-                  const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-                  const buffer = await downloadWhatsAppMediaFromEvolution({
-                    url: mediaUrl,
-                    messageKey: { id: originalMsg.externalId || "", remoteJid: originalMsg.remoteJid || "", fromMe: false }
-                  });
-                  if (!buffer || buffer.length === 0) {
-                    throw new Error("Failed to download media from Evolution API - buffer is empty");
+                  console.log("[messages.forward] Non-R2 URL, downloading via Evolution API /message/download...");
+                  // Get Evolution API config directly
+                  const { getDb } = await import("./db");
+                  const { integrationSettings } = await import("../drizzle/schema");
+                  const { eq } = await import("drizzle-orm");
+                  const db2 = await getDb();
+                  if (db2) {
+                    const [config] = await db2
+                      .select()
+                      .from(integrationSettings)
+                      .where(eq(integrationSettings.integrationType, "evolution_api"))
+                      .limit(1);
+                    if (config) {
+                      const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
+                      const apiUrl = (configData.apiUrl || "").replace(/\/$/, "");
+                      const apiKey = configData.apiKey || configData.accessToken || "";
+                      const downloadUrl = `${apiUrl}/message/download/${originalMsg.externalId}`;
+                      
+                      console.log("[messages.forward] Calling Evolution download:", downloadUrl);
+                      const downloadResponse = await fetch(downloadUrl, {
+                        headers: { apikey: apiKey },
+                        signal: AbortSignal.timeout(15000),
+                      });
+                      
+                      if (downloadResponse.ok) {
+                        const contentType = downloadResponse.headers.get("content-type") || "";
+                        
+                        if (contentType.includes("json") || contentType.includes("text")) {
+                          // Evolution returned JSON with URL
+                          const data = await downloadResponse.json();
+                          const urlFromResponse = data?.url || data?.mediaUrl || "";
+                          if (urlFromResponse && urlFromResponse.includes("r2.dev")) {
+                            console.log("[messages.forward] Got R2 URL from Evolution download:", urlFromResponse);
+                            return urlFromResponse;
+                          }
+                          // Download buffer from returned URL and upload to R2
+                          if (urlFromResponse) {
+                            const mediaResponse = await fetch(urlFromResponse, {
+                              headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,video/*,audio/*,*/*'},
+                              signal: AbortSignal.timeout(30000),
+                            });
+                            if (mediaResponse.ok) {
+                              const buf = Buffer.from(await mediaResponse.arrayBuffer());
+                              if (buf.length > 0) {
+                                const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                                console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
+                                return r2Result.url;
+                              }
+                            }
+                          }
+                        } else {
+                          // Evolution returned raw media buffer
+                          const buf = Buffer.from(await downloadResponse.arrayBuffer());
+                          if (buf.length > 0) {
+                            const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                            const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                            console.log("[messages.forward] ✅ Downloaded raw media and uploaded to R2:", r2Result.url);
+                            return r2Result.url;
+                          }
+                        }
+                      } else {
+                        console.error("[messages.forward] Evolution download failed:", downloadResponse.status);
+                      }
+                    }
                   }
-                  const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                  const r2Result = await uploadToR2(
-                    buffer,
-                    `messages/forward_${Date.now()}.${ext}`,
-                    mimetype
-                  );
-                  console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
-                  return r2Result.url;
                 } catch (downloadErr) {
-                  console.error("[messages.forward] Failed to download WhatsApp CDN media:", downloadErr);
-                  // Don't fall back to CDN URL - throw error to prevent sending invalid URL to Evolution API
-                  throw new Error(`Cannot forward WhatsApp CDN media: ${downloadErr instanceof Error ? downloadErr.message : "Download failed"}`);
+                  console.error("[messages.forward] Failed to download via Evolution API:", downloadErr);
                 }
+              } else {
+                console.warn("[messages.forward] No externalId available, cannot download via Evolution API");
               }
               
-              // If not a WhatsApp CDN URL and not data URL, check if it's already a public URL
-              // For safety, only allow R2 URLs and data URLs (which we handle above)
-              // If it's any other URL (like local/private), throw error
-              if (!mediaUrl.startsWith("https://pub-") && !mediaUrl.startsWith("data:")) {
-                console.warn("[messages.forward] Non-R2 URL detected, may not be accessible by Evolution API:", mediaUrl);
-                // Still try to use it, but log warning
-              }
-              
-              return mediaUrl;
+              // If we reach here, we couldn't convert the URL - throw error
+              throw new Error("Cannot forward media: no valid public URL or base64 available. The media must be re-uploaded to R2 first.");
             };
 
             if (originalMsg.fileUrl) {
