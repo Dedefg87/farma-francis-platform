@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { conversationMessages, conversations, users, employees } from "../drizzle/schema";
+import { conversationMessages, conversations, users, employees, internalMessages } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { sseManager, EVENTS } from "./_core/sse";
+import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
 
 export const messagesRouter = router({
   /**
@@ -26,6 +27,106 @@ export const messagesRouter = router({
       }
 
       return { success: true };
+    }),
+
+  /**
+   * Encaminha uma mensagem (texto, imagem, documento, etc.) para outro atendente.
+   * O atendente de destino receberá a mensagem como sussurro (mensagem interna).
+   */
+  forward: protectedProcedure
+    .input(
+      z.object({
+        messageId: z.number(),
+        targetAgentId: z.number(), // ID do atendente destino
+      })
+    )
+    .mutation(async ({ input, ctx }): Promise<{ success: boolean; internalMessageId?: number }> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Buscar a mensagem original
+      const [originalMsg] = await db
+        .select()
+        .from(conversationMessages)
+        .where(eq(conversationMessages.id, input.messageId))
+        .limit(1);
+
+      if (!originalMsg) {
+        throw new Error("Mensagem original não encontrada");
+      }
+
+      // Buscar a conversa para contexto
+      const [conv] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, originalMsg.conversationId))
+        .limit(1);
+
+      if (!conv) {
+        throw new Error("Conversa não encontrada");
+      }
+
+      // Buscar nome do atendente remetente
+      const [senderUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, ctx.user.id))
+        .limit(1);
+
+      const senderName = senderUser?.name || "Atendente";
+
+      // Criar conteúdo da mensagem encaminhada
+      let forwardContent = `📤 **Mensagem encaminhada por ${senderName}**\n\n`;
+      
+      if (originalMsg.content && originalMsg.content !== "null") {
+        forwardContent += `💬 ${originalMsg.content}\n\n`;
+      }
+
+      if (originalMsg.fileUrl) {
+        const fileType = originalMsg.fileType || "";
+        if (fileType.startsWith("image/")) {
+          forwardContent += `🖼️ [Imagem encaminhada](${originalMsg.fileUrl})\n`;
+        } else if (fileType.startsWith("audio/")) {
+          forwardContent += `🎵 [Áudio encaminhado](${originalMsg.fileUrl})\n`;
+        } else if (fileType.startsWith("video/")) {
+          forwardContent += `🎬 [Vídeo encaminhado](${originalMsg.fileUrl})\n`;
+        } else {
+          forwardContent += `📎 [Documento encaminhado](${originalMsg.fileUrl})\n`;
+        }
+        if (originalMsg.fileName) {
+          forwardContent += `📄 ${originalMsg.fileName}\n`;
+        }
+      }
+
+      forwardContent += `\n🔗 Conversa: #${conv.id} - ${conv.customerName || conv.customerPhone}`;
+
+      // Salvar como mensagem interna (sussurro) para o atendente destino
+      const insertResult = await db.insert(internalMessages).values({
+        conversationId: originalMsg.conversationId,
+        senderId: ctx.user.id,
+        recipientId: input.targetAgentId,
+        content: forwardContent,
+        createdAt: new Date(),
+      });
+
+      const rawId = Array.isArray(insertResult)
+        ? insertResult[0]?.insertId
+        : insertResult?.insertId || insertResult?.lastInsertRowid;
+      const internalMessageId = Number(rawId) || null;
+
+      // Notificar via SSE o atendente destino
+      if (internalMessageId) {
+        sseManager.emitToUser(String(input.targetAgentId), EVENTS.INTERNAL_MESSAGE, {
+          messageId: internalMessageId,
+          conversationId: originalMsg.conversationId,
+          senderId: ctx.user.id,
+          senderName,
+          content: forwardContent,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      return { success: true, internalMessageId };
     }),
 
   list: protectedProcedure

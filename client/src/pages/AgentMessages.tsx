@@ -71,6 +71,7 @@ import {
   Megaphone,
   Keyboard,
   Trash2,
+  Send,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -161,6 +162,9 @@ export default function AgentMessages() {
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
+  const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
+  const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
@@ -571,6 +575,19 @@ export default function AgentMessages() {
     },
     onError: error => {
       toast.error(`Erro ao excluir mensagem: ${error.message}`);
+    },
+  });
+
+  // Forward message mutation
+  const forwardMessageMutation = trpc.messages.forward.useMutation({
+    onSuccess: () => {
+      toast.success("Mensagem encaminhada com sucesso!");
+      setShowForwardDialog(false);
+      setForwardMessageId(null);
+      setForwardTargetAgentId("");
+    },
+    onError: error => {
+      toast.error(`Erro ao encaminhar: ${error.message}`);
     },
   });
 
@@ -1274,6 +1291,18 @@ export default function AgentMessages() {
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
+                        {/* Forward button - appears on hover */}
+                        <button
+                          onClick={() => {
+                            setForwardMessageId(msg.id);
+                            setShowForwardDialog(true);
+                          }}
+                          className="absolute -top-2 -right-10 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-600 z-10"
+                          title="Encaminhar mensagem"
+                          disabled={forwardMessageMutation.isPending}
+                        >
+                          <Send className="w-3 h-3" />
+                        </button>
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderType === "agent" 
@@ -1710,10 +1739,59 @@ export default function AgentMessages() {
                 Encerrar Todas
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                      </DialogContent>
+                    </Dialog>
 
-{showQuickReplies && (
+                    <Dialog open={showForwardDialog} onOpenChange={setShowForwardDialog}>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Encaminhar mensagem</DialogTitle>
+                          <DialogDescription>Selecione o atendente que receberá a mensagem encaminhada</DialogDescription>
+                        </DialogHeader>
+                        <Select value={forwardTargetAgentId} onValueChange={setForwardTargetAgentId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione um atendente" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {loggedAgents && loggedAgents.length > 0 ? (
+                              loggedAgents.map(agent => (
+                                <SelectItem key={agent.id} value={String(agent.id)}>
+                                  {agent.name || `Agente ${agent.id}`}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>
+                                Nenhum atendente logado
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <DialogFooter>
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              if (
+                                !forwardTargetAgentId ||
+                                forwardTargetAgentId === "none" ||
+                                !forwardMessageId
+                              ) {
+                                toast.error("Selecione um atendente");
+                                return;
+                              }
+                              forwardMessageMutation.mutate({
+                                messageId: forwardMessageId,
+                                targetAgentId: Number(forwardTargetAgentId),
+                              });
+                            }}
+                            disabled={forwardMessageMutation.isPending}
+                          >
+                            Encaminhar
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                  {showQuickReplies && (
         <QuickRepliesModal
           open={showQuickReplies}
           onClose={() => setShowQuickReplies(false)}
