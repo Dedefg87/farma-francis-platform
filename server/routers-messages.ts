@@ -210,19 +210,30 @@ export const messagesRouter = router({
                     url: mediaUrl,
                     messageKey: { id: originalMsg.externalId || "", remoteJid: originalMsg.remoteJid || "", fromMe: false }
                   });
-                  if (buffer && buffer.length > 0) {
-                    const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                    const r2Result = await uploadToR2(
-                      buffer,
-                      `messages/forward_${Date.now()}.${ext}`,
-                      mimetype
-                    );
-                    console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
-                    return r2Result.url;
+                  if (!buffer || buffer.length === 0) {
+                    throw new Error("Failed to download media from Evolution API - buffer is empty");
                   }
+                  const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                  const r2Result = await uploadToR2(
+                    buffer,
+                    `messages/forward_${Date.now()}.${ext}`,
+                    mimetype
+                  );
+                  console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
+                  return r2Result.url;
                 } catch (downloadErr) {
                   console.error("[messages.forward] Failed to download WhatsApp CDN media:", downloadErr);
+                  // Don't fall back to CDN URL - throw error to prevent sending invalid URL to Evolution API
+                  throw new Error(`Cannot forward WhatsApp CDN media: ${downloadErr instanceof Error ? downloadErr.message : "Download failed"}`);
                 }
+              }
+              
+              // If not a WhatsApp CDN URL and not data URL, check if it's already a public URL
+              // For safety, only allow R2 URLs and data URLs (which we handle above)
+              // If it's any other URL (like local/private), throw error
+              if (!mediaUrl.startsWith("https://pub-") && !mediaUrl.startsWith("data:")) {
+                console.warn("[messages.forward] Non-R2 URL detected, may not be accessible by Evolution API:", mediaUrl);
+                // Still try to use it, but log warning
               }
               
               return mediaUrl;
