@@ -123,7 +123,7 @@ export const conversationsRouter = router({
       const limit = input?.limit || 20;
 
       // Buscar conversas recentes agrupadas por cliente (pegar a mais recente de cada cliente)
-      const rows = await db.execute(sql`
+      const [rows] = await db.execute(sql`
         SELECT 
           c.id as customer_id,
           c.name as customer_name,
