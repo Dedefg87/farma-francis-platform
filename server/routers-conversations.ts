@@ -100,6 +100,83 @@ export const conversationsRouter = router({
     }),
 
   /**
+   * Lista contatos recentes para encaminhamento de mensagens.
+   * Retorna clientes únicos com última interação, telefone e canal.
+   */
+  recentContacts: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().default(20),
+      }).optional()
+    )
+    .query(async ({ input }): Promise<Array<{
+      customerId: number;
+      customerName: string;
+      customerPhone: string;
+      channel: string;
+      lastMessageAt: Date | null;
+      lastMessagePreview: string | null;
+    }>> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const limit = input?.limit || 20;
+
+      // Buscar conversas recentes agrupadas por cliente (pegar a mais recente de cada cliente)
+      const rows = await db.execute(sql`
+        SELECT 
+          c.id as customer_id,
+          c.name as customer_name,
+          c.phone as customer_phone,
+          conv.channel,
+          conv.last_message_at,
+          (
+            SELECT cm.content 
+            FROM conversation_messages cm 
+            WHERE cm.conversation_id = conv.id 
+            ORDER BY cm.created_at DESC 
+            LIMIT 1
+          ) as last_message_preview
+        FROM conversations conv
+        INNER JOIN customers c ON conv.customer_id = c.id
+        WHERE conv.status IN ('open', 'assigned', 'closed')
+          AND c.phone IS NOT NULL
+          AND c.phone != ''
+        ORDER BY conv.last_message_at DESC
+        LIMIT ${limit}
+      `);
+
+      const contacts = (rows as any[]).map(row => ({
+        customerId: row.customer_id,
+        customerName: row.customer_name,
+        customerPhone: row.customer_phone,
+        channel: row.channel,
+        lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
+        lastMessagePreview: row.last_message_preview,
+      }));
+
+      // Deduplicar por telefone (manter o mais recente)
+      const uniqueContacts = new Map();
+      for (const contact of contacts) {
+        const key = contact.customerPhone.replace(/\D/g, '').slice(-8); // últimos 8 dígitos
+        if (!uniqueContacts.has(key) || 
+            (contact.lastMessageAt && uniqueContacts.get(key).lastMessageAt && 
+             contact.lastMessageAt > uniqueContacts.get(key).lastMessageAt)) {
+          uniqueContacts.set(key, contact);
+        }
+      }
+
+      return Array.from(uniqueContacts.values())
+        .sort((a, b) => {
+          if (!a.lastMessageAt && !b.lastMessageAt) return 0;
+          if (!a.lastMessageAt) return 1;
+          if (!b.lastMessageAt) return -1;
+          return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+        })
+        .slice(0, limit);
+    }),
+
+  /**
    * Lista todas as conversas atribuídas ao agente logado.
    */
   list: protectedProcedure

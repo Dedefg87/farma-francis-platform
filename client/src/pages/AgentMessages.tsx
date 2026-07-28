@@ -168,6 +168,7 @@ export default function AgentMessages() {
   const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
   const [forwardTargetCustomerPhone, setForwardTargetCustomerPhone] = useState<string>("");
   const [forwardTargetProvider, setForwardTargetProvider] = useState<"whatsapp" | "instagram">("whatsapp");
+  const [manualPhoneInput, setManualPhoneInput] = useState<string>("");
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
@@ -187,6 +188,12 @@ export default function AgentMessages() {
   const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
   const queryClient = useQueryClient();
+
+  // Buscar contatos recentes para o dropdown de encaminhar para cliente
+  const { data: recentContacts = [], isLoading: loadingRecentContacts } = trpc.conversations.recentContacts.useQuery(
+    { limit: 30 },
+    { enabled: true }
+  );
 
   // DEBUG: Log component mount
   useEffect(() => {
@@ -1796,24 +1803,82 @@ export default function AgentMessages() {
                           {/* Destino: Cliente */}
                           {forwardTargetType === "customer" && (
                             <div className="space-y-2 p-3 bg-green-50 rounded-lg border border-green-200">
-                              <label className="block text-sm font-medium text-gray-700">Telefone do cliente (com DDD)</label>
-                              <Input
-                                type="tel"
-                                placeholder="Ex: 5511999999999"
-                                value={forwardTargetCustomerPhone}
-                                onChange={e => setForwardTargetCustomerPhone(e.target.value)}
-                                className="w-full"
-                              />
-                              <label className="block text-sm font-medium text-gray-700 mt-2">Canal</label>
-                              <Select value={forwardTargetProvider} onValueChange={setForwardTargetProvider}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione o canal" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="whatsapp">📱 WhatsApp</SelectItem>
-                                  <SelectItem value="instagram">📷 Instagram</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <label className="block text-sm font-medium text-gray-700">Selecionar cliente</label>
+                              <div className="relative">
+                                <Select
+                                  value={forwardTargetCustomerPhone}
+                                  onValueChange={setForwardTargetCustomerPhone}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Digite para buscar ou selecione um cliente recente..." />
+                                  </SelectTrigger>
+                                  <SelectContent position="popper">
+                                    <SelectGroup>
+                                      <label className="px-2 py-1.5 text-xs text-gray-500 font-medium">Clientes recentes (últimas interações)</label>
+                                      {loadingRecentContacts ? (
+                                        <SelectItem value="" disabled>
+                                          Carregando...
+                                        </SelectItem>
+                                      ) : recentContacts.length > 0 ? (
+                                        recentContacts.map(contact => (
+                                          <SelectItem 
+                                            key={contact.phone} 
+                                            value={contact.phone}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                                                {contact.name?.charAt(0)?.toUpperCase() || 'C'}
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">{contact.name}</div>
+                                                <div className="text-xs text-gray-500 truncate">{contact.phone}</div>
+                                              </div>
+                                              <span className="text-xs text-gray-400">
+                                                {contact.channel === 'whatsapp' ? '📱' : '📷'} {contact.lastMessageAt ? new Date(contact.lastMessageAt).toLocaleDateString('pt-BR') : 'Sem data'}
+                                              </span>
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <SelectItem value="" disabled>
+                                          Nenhum cliente recente encontrado
+                                        </SelectItem>
+                                      )}
+                                    </SelectGroup>
+                                    <SelectSeparator />
+                                    <SelectItem value="manual">
+                                      <div className="flex items-center gap-2 text-blue-600">
+                                        <Plus className="w-4 h-4" />
+                                        <span>Inserir número manualmente</span>
+                                      </div>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              {/* Input manual quando selecionado "Inserir número manualmente" */}
+                              {forwardTargetCustomerPhone === "manual" && (
+                                <div className="space-y-2 mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <label className="block text-sm font-medium text-gray-700">Telefone do cliente (com DDD)</label>
+                                  <Input
+                                    type="tel"
+                                    placeholder="Ex: 5511999999999"
+                                    value={manualPhoneInput}
+                                    onChange={e => setManualPhoneInput(e.target.value)}
+                                    className="w-full"
+                                  />
+                                  <label className="block text-sm font-medium text-gray-700 mt-2">Canal</label>
+                                  <Select value={forwardTargetProvider} onValueChange={setForwardTargetProvider}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione o canal" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="whatsapp">📱 WhatsApp</SelectItem>
+                                      <SelectItem value="instagram">📷 Instagram</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
