@@ -80,35 +80,20 @@ export const remindersRouter = router({
             reminders: [],
           });
         }
-      }
-    })
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
-
-      const agentId = ctx.user.id;
-
-      // Verificar se o lembrete pertence ao atendente
-      const [reminder] = await db
-        .select()
-        .from(reminders)
-        .where(and(eq(reminders.id, input.id), eq(reminders.agentId, agentId)))
-        .limit(1);
-
-      if (!reminder) {
-        throw new Error("Lembrete não encontrado");
+        grouped.get(customerId).reminders.push({
+          id: row.reminder.id,
+          type: row.reminder.type,
+          priority: row.reminder.priority,
+          title: row.reminder.title,
+          description: row.reminder.description,
+          eventDate: row.reminder.eventDate.toISOString(),
+          status: row.reminder.status,
+          snoozedUntil: row.reminder.snoozedUntil?.toISOString(),
+          metadata: row.reminder.metadata,
+        });
       }
 
-      await db
-        .update(reminders)
-        .set({
-          status: "dispensado",
-          dismissedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(reminders.id, input.id));
-
-      return { success: true };
+      return Array.from(grouped.values());
     }),
 
   /**
@@ -181,7 +166,23 @@ export const remindersRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await ctx.db
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const agentId = ctx.user.id;
+
+      // Verificar se o lembrete pertence ao atendente
+      const [reminder] = await db
+        .select()
+        .from(reminders)
+        .where(and(eq(reminders.id, input.id), eq(reminders.agentId, agentId)))
+        .limit(1);
+
+      if (!reminder) {
+        throw new Error("Lembrete não encontrado");
+      }
+
+      await db
         .update(reminders)
         .set({
           status: "dispensado",
