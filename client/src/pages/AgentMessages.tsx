@@ -1819,9 +1819,9 @@ export default function AgentMessages() {
                                     <SelectGroup>
                                       <label className="px-2 py-1.5 text-xs text-gray-500 font-medium">Clientes recentes (últimas interações)</label>
                                       {loadingRecentContacts ? (
-                                        <SelectItem value="" disabled>
+                                        <div className="px-2 py-1.5 text-xs text-gray-500">
                                           Carregando...
-                                        </SelectItem>
+                                        </div>
                                       ) : recentContacts.length > 0 ? (
                                         recentContacts.map(contact => (
                                           <SelectItem 
@@ -1843,9 +1843,9 @@ export default function AgentMessages() {
                                           </SelectItem>
                                         ))
                                       ) : (
-                                        <SelectItem value="" disabled>
+                                        <div className="px-2 py-1.5 text-xs text-gray-500">
                                           Nenhum cliente recente encontrado
-                                        </SelectItem>
+                                        </div>
                                       )}
                                     </SelectGroup>
                                     <SelectSeparator />
