@@ -30,19 +30,27 @@ export const messagesRouter = router({
     }),
 
   /**
-   * Encaminha uma mensagem (texto, imagem, documento, etc.) para outro atendente.
-   * O atendente de destino receberá a mensagem como sussurro (mensagem interna).
+   * Encaminha uma mensagem (texto, imagem, documento, etc.) para outro atendente OU para um cliente.
+   * - Se targetAgentId: atendente recebe como sussurro (mensagem interna)
+   * - Se targetCustomerPhone: cliente recebe via WhatsApp/Instagram
    */
   forward: protectedProcedure
     .input(
       z.object({
         messageId: z.number(),
-        targetAgentId: z.number(), // ID do atendente destino
+        targetAgentId: z.number().optional(), // ID do atendente destino
+        targetCustomerPhone: z.string().optional(), // Telefone do cliente destino
+        targetProvider: z.enum(["whatsapp", "instagram"]).optional(), // Canal para envio ao cliente
       })
     )
-    .mutation(async ({ input, ctx }): Promise<{ success: boolean; internalMessageId?: number }> => {
+    .mutation(async ({ input, ctx }): Promise<{ success: boolean; internalMessageId?: number; externalMessageId?: string }> => {
       const db = await getDb();
       if (!db) throw new Error("Database not available");
+
+      // Validar: deve ter pelo menos um destino
+      if (!input.targetAgentId && !input.targetCustomerPhone) {
+        throw new Error("Informe targetAgentId ou targetCustomerPhone");
+      }
 
       // Buscar a mensagem original
       const [originalMsg] = await db
@@ -100,33 +108,94 @@ export const messagesRouter = router({
 
       forwardContent += `\n🔗 Conversa: #${conv.id} - ${conv.customerName || conv.customerPhone}`;
 
-      // Salvar como mensagem interna (sussurro) para o atendente destino
-      const insertResult = await db.insert(internalMessages).values({
-        conversationId: originalMsg.conversationId,
-        senderId: ctx.user.id,
-        recipientId: input.targetAgentId,
-        content: forwardContent,
-        createdAt: new Date(),
-      });
-
-      const rawId = Array.isArray(insertResult)
-        ? insertResult[0]?.insertId
-        : insertResult?.insertId || insertResult?.lastInsertRowid;
-      const internalMessageId = Number(rawId) || null;
-
-      // Notificar via SSE o atendente destino
-      if (internalMessageId) {
-        sseManager.emitToUser(String(input.targetAgentId), EVENTS.INTERNAL_MESSAGE, {
-          messageId: internalMessageId,
+      // OPÇÃO 1: Encaminhar para outro ATENDENTE (mensagem interna/sussurro)
+      if (input.targetAgentId) {
+        // Salvar como mensagem interna (sussurro) para o atendente destino
+        const insertResult = await db.insert(internalMessages).values({
           conversationId: originalMsg.conversationId,
           senderId: ctx.user.id,
-          senderName,
+          recipientId: input.targetAgentId,
           content: forwardContent,
-          createdAt: new Date().toISOString(),
+          createdAt: new Date(),
         });
+
+        const rawId = Array.isArray(insertResult)
+          ? insertResult[0]?.insertId
+          : insertResult?.insertId || insertResult?.lastInsertRowid;
+        const internalMessageId = Number(rawId) || null;
+
+        // Notificar via SSE o atendente destino
+        if (internalMessageId) {
+          sseManager.emitToUser(String(input.targetAgentId), EVENTS.INTERNAL_MESSAGE, {
+            messageId: internalMessageId,
+            conversationId: originalMsg.conversationId,
+            senderId: ctx.user.id,
+            senderName,
+            content: forwardContent,
+            createdAt: new Date().toISOString(),
+          });
+        }
+
+        return { success: true, internalMessageId };
       }
 
-      return { success: true, internalMessageId };
+      // OPÇÃO 2: Encaminhar para um CLIENTE (via WhatsApp/Instagram)
+      if (input.targetCustomerPhone) {
+        const provider = input.targetProvider || conv.channel || "whatsapp";
+        let externalMessageId: string | null = null;
+
+        // Preparar conteúdo para envio ao cliente (sem metadados internos)
+        let customerContent = `📤 Mensagem encaminhada:\n\n`;
+        
+        if (originalMsg.content && originalMsg.content !== "null") {
+          customerContent += `${originalMsg.content}\n\n`;
+        }
+
+        if (originalMsg.fileUrl) {
+          const fileType = originalMsg.fileType || "";
+          if (fileType.startsWith("image/")) {
+            customerContent += `[Imagem]\n`;
+          } else if (fileType.startsWith("audio/")) {
+            customerContent += `[Áudio]\n`;
+          } else if (fileType.startsWith("video/")) {
+            customerContent += `[Vídeo]\n`;
+          } else {
+            customerContent += `[Documento]\n`;
+          }
+          if (originalMsg.fileName) {
+            customerContent += `${originalMsg.fileName}\n`;
+          }
+          customerContent += `${originalMsg.fileUrl}\n`;
+        }
+
+        try {
+          if (provider === "whatsapp") {
+            const { sendWhatsAppMessage } = await import("./messaging");
+            const result = await sendWhatsAppMessage({
+              to: input.targetCustomerPhone,
+              message: customerContent,
+              mediaUrl: originalMsg.fileUrl || undefined,
+              caption: originalMsg.fileName || undefined,
+            });
+            externalMessageId = result?.messageId || null;
+          } else if (provider === "instagram") {
+            const { sendInstagramMessage } = await import("./messaging");
+            const result = await sendInstagramMessage({
+              to: input.targetCustomerPhone,
+              message: customerContent,
+              mediaUrl: originalMsg.fileUrl || undefined,
+            });
+            externalMessageId = result?.messageId || null;
+          }
+        } catch (sendError) {
+          console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
+          throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
+        }
+
+        return { success: true, externalMessageId };
+      }
+
+      throw new Error("Destino inválido");
     }),
 
   list: protectedProcedure

@@ -164,7 +164,10 @@ export default function AgentMessages() {
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
+  const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
   const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
+  const [forwardTargetCustomerPhone, setForwardTargetCustomerPhone] = useState<string>("");
+  const [forwardTargetProvider, setForwardTargetProvider] = useState<"whatsapp" | "instagram">("whatsapp");
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
@@ -585,6 +588,7 @@ export default function AgentMessages() {
       setShowForwardDialog(false);
       setForwardMessageId(null);
       setForwardTargetAgentId("");
+      setForwardTargetCustomerPhone("");
     },
     onError: error => {
       toast.error(`Erro ao encaminhar: ${error.message}`);
@@ -1746,42 +1750,107 @@ export default function AgentMessages() {
                       <DialogContent className="max-w-md">
                         <DialogHeader>
                           <DialogTitle>Encaminhar mensagem</DialogTitle>
-                          <DialogDescription>Selecione o atendente que receberá a mensagem encaminhada</DialogDescription>
+                          <DialogDescription>Escolha o destino para encaminhar a mensagem</DialogDescription>
                         </DialogHeader>
-                        <Select value={forwardTargetAgentId} onValueChange={setForwardTargetAgentId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione um atendente" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {loggedAgents && loggedAgents.length > 0 ? (
-                              loggedAgents.map(agent => (
-                                <SelectItem key={agent.id} value={String(agent.id)}>
-                                  {agent.name || `Agente ${agent.id}`}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="none" disabled>
-                                Nenhum atendente logado
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
+                        
+                        {/* Tipo de destino */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Encaminhar para</label>
+                            <Select value={forwardTargetType} onValueChange={setForwardTargetType}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo de destino" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="agent">👤 Outro atendente (sussurro interno)</SelectItem>
+                                <SelectItem value="customer">📱 Cliente (WhatsApp/Instagram)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Destino: Atendente */}
+                          {forwardTargetType === "agent" && (
+                            <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <label className="block text-sm font-medium text-gray-700">Atendente destino</label>
+                              <Select value={forwardTargetAgentId} onValueChange={setForwardTargetAgentId}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione um atendente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {loggedAgents && loggedAgents.length > 0 ? (
+                                    loggedAgents.map(agent => (
+                                      <SelectItem key={agent.id} value={String(agent.id)}>
+                                        {agent.name || `Agente ${agent.id}`}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>
+                                      Nenhum atendente logado
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
+                          {/* Destino: Cliente */}
+                          {forwardTargetType === "customer" && (
+                            <div className="space-y-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                              <label className="block text-sm font-medium text-gray-700">Telefone do cliente (com DDD)</label>
+                              <Input
+                                type="tel"
+                                placeholder="Ex: 5511999999999"
+                                value={forwardTargetCustomerPhone}
+                                onChange={e => setForwardTargetCustomerPhone(e.target.value)}
+                                className="w-full"
+                              />
+                              <label className="block text-sm font-medium text-gray-700 mt-2">Canal</label>
+                              <Select value={forwardTargetProvider} onValueChange={setForwardTargetProvider}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o canal" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="whatsapp">📱 WhatsApp</SelectItem>
+                                  <SelectItem value="instagram">📷 Instagram</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                        
                         <DialogFooter>
                           <Button
                             variant="destructive"
                             onClick={() => {
-                              if (
-                                !forwardTargetAgentId ||
-                                forwardTargetAgentId === "none" ||
-                                !forwardMessageId
-                              ) {
-                                toast.error("Selecione um atendente");
-                                return;
+                              if (!forwardMessageId) return;
+                              
+                              if (forwardTargetType === "agent") {
+                                if (
+                                  !forwardTargetAgentId ||
+                                  forwardTargetAgentId === "none"
+                                ) {
+                                  toast.error("Selecione um atendente");
+                                  return;
+                                }
+                                forwardMessageMutation.mutate({
+                                  messageId: forwardMessageId,
+                                  targetAgentId: Number(forwardTargetAgentId),
+                                });
+                              } else if (forwardTargetType === "customer") {
+                                if (!forwardTargetCustomerPhone.trim()) {
+                                  toast.error("Informe o telefone do cliente");
+                                  return;
+                                }
+                                if (!forwardTargetProvider) {
+                                  toast.error("Selecione o canal (WhatsApp/Instagram)");
+                                  return;
+                                }
+                                forwardMessageMutation.mutate({
+                                  messageId: forwardMessageId,
+                                  targetCustomerPhone: forwardTargetCustomerPhone.replace(/\D/g, ""),
+                                  targetProvider: forwardTargetProvider,
+                                });
                               }
-                              forwardMessageMutation.mutate({
-                                messageId: forwardMessageId,
-                                targetAgentId: Number(forwardTargetAgentId),
-                              });
                             }}
                             disabled={forwardMessageMutation.isPending}
                           >
