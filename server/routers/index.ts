@@ -36,7 +36,7 @@ import { businessHoursRouter } from "../routers-business-hours";
 export const appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
-  customers: customersRouter,
+  crm: customersRouter,
   employees: employeesRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
@@ -63,7 +63,7 @@ export const appRouter = router({
   tags: tagsRouter,
   telemetry: telemetryRouter,
   test: testRouter,
-    approvals: approvalsRouter,
+  approvals: approvalsRouter,
   internalMessages: internalMessagesRouter,
   tickets: ticketsRouter,
   businessHours: businessHoursRouter,
