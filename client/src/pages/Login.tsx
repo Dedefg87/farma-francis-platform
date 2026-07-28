@@ -53,20 +53,22 @@ export default function Login() {
         throw new Error('Por favor, preencha todos os campos');
       }
 
-      // In production, require Turnstile token; in dev, we can skip if not configured
+      // Turnstile é OPCIONAL: só exige o desafio se a chave estiver configurada.
+      // Sem siteKey (meta tag ausente), o login prossegue apenas com usuário/senha,
+      // que o backend valida de qualquer forma. Evita travar o acesso em produção.
       const isProduction = import.meta.env.MODE === 'production';
       if (isProduction && !siteKey) {
-        throw new Error('Configuração de segurança não encontrada');
+        console.warn('[Login] Turnstile não configurado (sem site key) — prosseguindo sem desafio de segurança');
       }
-      if (isProduction && !token) {
+      if (isProduction && siteKey && !token) {
         throw new Error('Por favor, complete o desafio de segurança');
       }
 
-      // Chamar mutation de login com o token do Turnstile (se em produção)
+      // Chamar mutation de login com o token do Turnstile (só quando há siteKey+token)
       const result = await loginMutation.mutateAsync({ 
         username, 
         password,
-        ...(isProduction && { cfTurnstileToken: token })
+        ...(isProduction && siteKey && token ? { cfTurnstileToken: token } : {})
       });
       
       // Redirecionar para a página inicial ou painel após login bem-sucedido
