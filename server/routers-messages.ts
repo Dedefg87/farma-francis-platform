@@ -199,8 +199,8 @@ export const messagesRouter = router({
                 }
               }
               
-              // For ANY non-R2, non-data URL (WhatsApp CDN, Evolution internal, etc.):
-              // Try to download and upload to R2
+              // For ANY non-R2, non-data URL (Evolution internal, WhatsApp CDN, etc.):
+              // Try to construct full URL and download via Cloudflare proxy
               try {
                 console.log("[messages.forward] Non-R2 URL, attempting to download media...");
                 const { getDb } = await import("./db");
@@ -215,129 +215,128 @@ export const messagesRouter = router({
                     .limit(1);
                   if (config) {
                     const configData = typeof config.config === "string" ? JSON.parse(config.config) : config.config;
-                    const apiUrl = (configData.apiUrl || "").replace(/\/$/, "");
+                    
+                    // Try multiple URL formats from config
+                    const possibleUrls: string[] = [];
+                    
+                    // Format 1: direct apiUrl from config (whatsapp.ts, messaging.ts use this)
+                    if (configData.apiUrl) {
+                      possibleUrls.push(configData.apiUrl.replace(/\/$/, ""));
+                    }
+                    
+                    // Format 2: from instances array (db-messages-ingest-clean.ts uses this)
+                    const instances = configData.instances || [];
+                    for (const inst of instances) {
+                      if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
+                      if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
+                    }
+                    
+                    // Format 3: from settings
+                    const settings = (config as any).settings ? (typeof (config as any).settings === "string" ? JSON.parse((config as any).settings) : (config as any).settings) : null;
+                    if (settings?.instances) {
+                      for (const inst of settings.instances) {
+                        if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
+                        if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
+                      }
+                    }
+                    
+                    // Deduplicate and try each URL
+                    const uniqueUrls = [...new Set(possibleUrls)];
                     const apiKey = configData.apiKey || configData.accessToken || "";
-                    const instanceName = configData.instanceName || configData.instance || "Meu";
                     
-                    // Strategy 1: Try to construct full URL from stored relative path
-                    // The stored URL is like: evolution-api/UUID/.../image.jpg
-                    // We need to prepend the Evolution API base URL
-                    if (!mediaUrl.startsWith("http://") && !mediaUrl.startsWith("https://")) {
-                      const fullUrl = `${apiUrl}/${mediaUrl}`;
-                      console.log("[messages.forward] Attempting proxy download via Evolution API:", fullUrl.substring(0, 100));
-                      
-                      // Try Evolution API proxy download endpoint
-                      const proxyResponse = await fetch(`${apiUrl}/instance/${instanceName}`, {
-                        method: "POST",
-                        headers: { apikey: apiKey, "Content-Type": "application/json" },
-                        body: JSON.stringify({ url: fullUrl }),
-                        signal: AbortSignal.timeout(30000),
-                      });
-                      
-                      if (proxyResponse.ok) {
-                        const contentType = proxyResponse.headers.get("content-type") || "";
-                        if (contentType.includes("json")) {
-                          // Proxy returned JSON URL
-                          const data = await proxyResponse.json();
-                          const urlFromResponse = data?.url || data?.mediaUrl || "";
-                          if (urlFromResponse) {
-                            const mediaResponse = await fetch(urlFromResponse, {
-                              headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,video/*,audio/*,*/*'},
-                              signal: AbortSignal.timeout(30000),
-                            });
-                            if (mediaResponse.ok) {
-                              const buf = Buffer.from(await mediaResponse.arrayBuffer());
+                    for (const baseUrl of uniqueUrls) {
+                      // Construct full URL from relative path
+                      if (!mediaUrl.startsWith("http")) {
+                        const fullUrl = `${baseUrl}/${mediaUrl.replace(/^\//, "")}`;
+                        console.log("[messages.forward] Trying to download:", fullUrl.substring(0, 120));
+                        
+                        // Try with API key (Evolution requires auth)
+                        try {
+                          const resp = await fetch(fullUrl, {
+                            headers: apiKey ? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
+                            signal: AbortSignal.timeout(15000),
+                          });
+                          if (resp.ok) {
+                            const ctype = resp.headers.get("content-type") || "";
+                            if (!ctype.includes("json") && !ctype.includes("text/html") && !ctype.includes("text/plain")) {
+                              const buf = Buffer.from(await resp.arrayBuffer());
                               if (buf.length > 0) {
-                                const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                console.log("[messages.forward] ✅ Proxy download + R2 upload success:", r2Result.url);
+                                const detectedMime = ctype || mimetype;
+                                const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
+                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
+                                console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
                                 return r2Result.url;
                               }
                             }
                           }
-                        } else {
-                          // Proxy returned raw media
-                          const buf = Buffer.from(await proxyResponse.arrayBuffer());
-                          if (buf.length > 0) {
-                            const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                            const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                            console.log("[messages.forward] ✅ Proxy raw download + R2 upload success:", r2Result.url);
-                            return r2Result.url;
-                          }
+                        } catch (_e) {
+                          // Try next URL variant
                         }
-                      } else {
-                        console.error("[messages.forward] Proxy download failed:", proxyResponse.status);
-                      }
-                    }
-                    
-                    // Strategy 2: Try to download directly (if it's a full URL)
-                    if (mediaUrl.startsWith("http://") || mediaUrl.startsWith("https://")) {
-                      try {
-                        const directResponse = await fetch(mediaUrl, {
-                          headers: {
-                            apikey: apiKey,
-                            'User-Agent': 'Mozilla/5.0',
-                            'Accept': 'image/*,video/*,audio/*,*/*',
-                          },
-                          signal: AbortSignal.timeout(30000),
-                        });
-                        if (directResponse.ok) {
-                          const contentType = directResponse.headers.get("content-type") || "";
-                          if (!contentType.includes("json") && !contentType.includes("text")) {
-                            const buf = Buffer.from(await directResponse.arrayBuffer());
-                            if (buf.length > 0) {
-                              const detectedMime = contentType || mimetype;
-                              const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
-                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
-                              console.log("[messages.forward] ✅ Direct download + R2 upload success:", r2Result.url);
-                              return r2Result.url;
+                      } else if (mediaUrl.startsWith("http")) {
+                        // Already a full URL, try to download directly
+                        try {
+                          const resp = await fetch(mediaUrl, {
+                            headers: apiKey ? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
+                            signal: AbortSignal.timeout(15000),
+                          });
+                          if (resp.ok) {
+                            const ctype = resp.headers.get("content-type") || "";
+                            if (!ctype.includes("json") && !ctype.includes("text")) {
+                              const buf = Buffer.from(await resp.arrayBuffer());
+                              if (buf.length > 0) {
+                                const detectedMime = ctype || mimetype;
+                                const ext = detectedMime.includes("png") ? "png" : detectedMime.includes("webp") ? "webp" : detectedMime.includes("pdf") ? "pdf" : detectedMime.includes("video") ? "mp4" : detectedMime.includes("audio") ? "ogg" : "jpg";
+                                const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
+                                console.log("[messages.forward] ✅ Direct download + R2 upload:", r2Result.url);
+                                return r2Result.url;
+                              }
                             }
                           }
-                        }
-                      } catch (directErr) {
-                        console.error("[messages.forward] Direct download failed:", directErr);
+                        } catch (_e) {}
                       }
                     }
                     
-                    // Strategy 3: Try /message/download if we have externalId
+                    // Last resort: try /message/download endpoint (used by webhook)
                     if (originalMsg.externalId) {
-                      const downloadUrl = `${apiUrl}/message/download/${originalMsg.externalId}`;
-                      console.log("[messages.forward] Trying /message/download endpoint:", downloadUrl);
-                      const dlResponse = await fetch(downloadUrl, {
-                        headers: { apikey: apiKey },
-                        signal: AbortSignal.timeout(15000),
-                      });
-                      if (dlResponse.ok) {
-                        const contentType = dlResponse.headers.get("content-type") || "";
-                        if (contentType.includes("json")) {
-                          const data = await dlResponse.json();
-                          const urlFromResponse = data?.url || data?.mediaUrl || "";
-                          if (urlFromResponse) {
-                            const mediaResponse = await fetch(urlFromResponse, {
-                              headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,video/*,audio/*,*/*'},
-                              signal: AbortSignal.timeout(30000),
-                            });
-                            if (mediaResponse.ok) {
-                              const buf = Buffer.from(await mediaResponse.arrayBuffer());
+                      for (const baseUrl of uniqueUrls) {
+                        const dlUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
+                        console.log("[messages.forward] Trying /message/download:", dlUrl.substring(0, 120));
+                        try {
+                          const resp = await fetch(dlUrl, {
+                            headers: { apikey: apiKey },
+                            signal: AbortSignal.timeout(15000),
+                          });
+                          if (resp.ok) {
+                            const ctype = resp.headers.get("content-type") || "";
+                            if (ctype.includes("json")) {
+                              const data = await resp.json();
+                              const u = data?.url || data?.mediaUrl || "";
+                              if (u) {
+                                const mediaResp = await fetch(u, {
+                                  headers: {'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,video/*,audio/*,*/*'},
+                                  signal: AbortSignal.timeout(30000),
+                                });
+                                if (mediaResp.ok) {
+                                  const buf = Buffer.from(await mediaResp.arrayBuffer());
+                                  if (buf.length > 0) {
+                                    const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                                    const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                                    console.log("[messages.forward] ✅ /message/download + R2 upload:", r2Result.url);
+                                    return r2Result.url;
+                                  }
+                                }
+                              }
+                            } else {
+                              const buf = Buffer.from(await resp.arrayBuffer());
                               if (buf.length > 0) {
                                 const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
                                 const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                console.log("[messages.forward] ✅ /message/download + R2 upload:", r2Result.url);
+                                console.log("[messages.forward] ✅ /message/download raw + R2 upload:", r2Result.url);
                                 return r2Result.url;
                               }
                             }
                           }
-                        } else {
-                          const buf = Buffer.from(await dlResponse.arrayBuffer());
-                          if (buf.length > 0) {
-                            const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                            const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                            console.log("[messages.forward] ✅ /message/download raw + R2 upload:", r2Result.url);
-                            return r2Result.url;
-                          }
-                        }
-                      } else {
-                        console.error("[messages.forward] /message/download failed:", dlResponse.status);
+                        } catch (_e) {}
                       }
                     }
                   }
