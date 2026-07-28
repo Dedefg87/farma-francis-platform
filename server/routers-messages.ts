@@ -200,6 +200,31 @@ export const messagesRouter = router({
                 }
               }
               
+              // If WhatsApp CDN URL or other authenticated URL, download via Evolution API and re-upload to R2
+              const { isWhatsAppCdnUrl } = await import("./services/evolution-download");
+              if (isWhatsAppCdnUrl(mediaUrl)) {
+                try {
+                  console.log("[messages.forward] WhatsApp CDN URL detected, downloading via Evolution API...");
+                  const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+                  const buffer = await downloadWhatsAppMediaFromEvolution({
+                    url: mediaUrl,
+                    messageKey: { id: originalMsg.externalId || "", remoteJid: conv.remoteJid || "", fromMe: false }
+                  });
+                  if (buffer && buffer.length > 0) {
+                    const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                    const r2Result = await uploadToR2(
+                      buffer,
+                      `messages/forward_${Date.now()}.${ext}`,
+                      mimetype
+                    );
+                    console.log("[messages.forward] ✅ Downloaded and uploaded to R2:", r2Result.url);
+                    return r2Result.url;
+                  }
+                } catch (downloadErr) {
+                  console.error("[messages.forward] Failed to download WhatsApp CDN media:", downloadErr);
+                }
+              }
+              
               return mediaUrl;
             };
 
