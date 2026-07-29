@@ -356,16 +356,24 @@ export const messagesRouter = router({
                 });
                 externalMessageId = result?.messageId || null;
               }
-          } else if (provider === "instagram") {
-            const { sendInstagramMessage } = await import("./messaging");
-            const result = await sendInstagramMessage({
-              to: input.targetCustomerPhone,
-              message: customerContent,
-              mediaUrl: originalMsg.fileUrl || undefined,
-            });
-            externalMessageId = result?.messageId || null;
-          }
-          return { success: true, externalMessageId };
+            } else if (provider === "instagram") {
+              const { sendInstagramMessage } = await import("./messaging");
+              const result = await sendInstagramMessage({
+                to: input.targetCustomerPhone,
+                message: customerContent,
+                mediaUrl: originalMsg.fileUrl || undefined,
+              });
+              externalMessageId = result?.messageId || null;
+            } else {
+              // Fallback: send text-only message for other providers
+              const { sendWhatsAppMessage } = await import("./messaging");
+              const result = await sendWhatsAppMessage({
+                to: input.targetCustomerPhone,
+                message: customerContent,
+              });
+              externalMessageId = result?.messageId || null;
+            }
+            return { success: true, externalMessageId };
         } catch (sendError) {
           console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
           throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
