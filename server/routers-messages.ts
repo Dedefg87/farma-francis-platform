@@ -168,217 +168,201 @@ export const messagesRouter = router({
           customerContent += `${originalMsg.fileUrl}\n`;
         }
 
-        try {
-          if (provider === "whatsapp") {
-            const { sendWhatsAppMessage, sendWhatsAppImage, sendWhatsAppViewOnceMedia } = await import("./messaging");
-            const { uploadToR2, isR2Url } = await import("./r2-client.js");
+        if (provider === "whatsapp") {
+          const { sendWhatsAppMessage, sendWhatsAppImage, sendWhatsAppViewOnceMedia } = await import("./messaging");
+          const { uploadToR2, isR2Url } = await import("./r2-client.js");
+          
+          // Helper para obter URL pública da mídia
+          const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise<string> => {
+            // Se já for URL do R2, usar como está
+            if (isR2Url(mediaUrl)) return mediaUrl;
             
-            // Helper to ensure media URL is accessible via Evolution API (upload to R2 if needed)
-            const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise<string> => {
-              // If already R2 URL, use as-is
-              if (isR2Url(mediaUrl)) return mediaUrl;
-              
-              // If data URL (base64), upload to R2
-              if (mediaUrl.startsWith("data:")) {
-                try {
-                  const mimeMatch = mediaUrl.match(/^data:([^;]+);base64,(.*)$/s);
-                  if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
-                    const buffer = Buffer.from(mimeMatch[2], "base64");
-                    const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : "jpg";
-                    const r2Result = await uploadToR2(
-                      buffer,
-                      `messages/forward_${Date.now()}.${ext}`,
-                      mimetype
-                    );
-                    return r2Result.url;
-                  }
-                } catch (r2Err) {
-                  console.error("[messages.forward] R2 upload failed for data URL:", r2Err);
-                  const base64Match = mediaUrl.match(/^data:[^;]+;base64,(.*)$/s);
-                  if (base64Match) return base64Match[1];
+            // Se for data URL (base64), fazer upload para R2
+            if (mediaUrl.startsWith("data:")) {
+              try {
+                const mimeMatch = mediaUrl.match(/^data:([^;]+);base64,(.*)$/s);
+                if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
+                  const buffer = Buffer.from(mimeMatch[2], "base64");
+                  const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : "jpg";
+                  const r2Result = await uploadToR2(buffer, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                  return r2Result.url;
                 }
+              } catch (r2Err) {
+                console.error("[messages.forward] R2 upload failed for data URL:", r2Err);
+                const base64Match = mediaUrl.match(/^data:[^;]+;base64,(.*)$/s);
+                if (base64Match) return base64Match[1];
               }
-              // For ANY non-R2, non-data URL (Evolution internal, WhatsApp CDN, etc.):
-                            // Try to construct full URL and download via Cloudflare proxy
-                            // For ANY non-R2, non-data URL (Evolution internal, WhatsApp CDN, etc.):
-                            // Try to construct full URL and download via Cloudflare proxy
-                            try {
-                              console.log("[messages.forward] Non-R2 URL, attempting to download media...");
-                              console.log("[messages.forward] mediaUrl:", mediaUrl);
-                              console.log("[messages.forward] originalMsg.externalId:", originalMsg.externalId);
-                              console.log("[messages.forward] mimetype:", mimetype);
-                              const { getDb } = await import("./db");
-                              const { integrationSettings } = await import("../drizzle/schema");
-                              const { eq } = await import("drizzle-orm");
-                              const db2 = await getDb();
-                              if (db2) {
-                                const [config] = await db2
-                                  .select()
-                                  .from(integrationSettings)
-                                  .where(eq(integrationSettings.integrationType, "evolution_api"))
-                                  .limit(1);
-                                if (config) {
-                                  const configData = typeof config.config === "string"? JSON.parse(config.config) : config.config;
-                                  console.log("[messages.forward] Config found, keys:", Object.keys(configData));
-                    
-                                  // Try multiple URL formats from config
-                                  const possibleUrls: string[] = [];
-                                  if (configData.apiUrl) {
-                                    possibleUrls.push(configData.apiUrl.replace(/\/$/, ""));
-                                  }
-                                  const instances = configData.instances || [];
-                                  for (const inst of instances) {
-                                    if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
-                                    if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
-                                  }
-                                  const settings = (config as any).settings? (typeof (config as any).settings === "string"? JSON.parse((config as any).settings) : (config as any).settings) : null;
-                                  if (settings?.instances) {
-                                    for (const inst of settings.instances) {
-                                      if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
-                                      if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
-                                    }
-                                  }
-                    
-                                  const uniqueUrls = [...new Set(possibleUrls)];
-                                  const apiKey = configData.apiKey || configData.accessToken || "";
-                                  console.log("[messages.forward] Trying base URLs:", uniqueUrls);
-                    
-                                  for (const baseUrl of uniqueUrls) {
-                                    // Strategy: If it's a relative path, we need to download via Evolution API endpoints
-                                    if (!mediaUrl.startsWith("http")) {
-                                      // 1. Tenta o endpoint de download direto usando o externalId
-                                      if (originalMsg.externalId) {
-                                        console.log(`[messages.forward] Attempting /message/download/${originalMsg.externalId} via ${baseUrl}`);
-                                        const downloadUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
-                                        const resp = await fetch(downloadUrl, {
-                                          headers: { apikey: apiKey },
-                                          signal: AbortSignal.timeout(15000),
-                                        });
-                          
-                                        if (resp.ok) {
-                                          const ctype = resp.headers.get("content-type") || "";
-                                          if (ctype.includes("json")) {
-                                            const data = await resp.json();
-                                            const actualMediaUrl = data?.url || data?.mediaUrl;
-                                            if (actualMediaUrl) {
-                                              console.log("[messages.forward] Evolution returned JSON URL:", actualMediaUrl);
-                                              const mediaResp = await fetch(actualMediaUrl, {
-                                                headers: { 'User-Agent': 'Mozilla/5.0' },
-                                                signal: AbortSignal.timeout(20000),
-                                              });
-                                              if (mediaResp.ok) {
-                                                const buf = Buffer.from(await mediaResp.arrayBuffer());
-                                                if (buf.length > 0) {
-                                                  const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
-                                                  const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                                  return r2Result.url;
-                                                }
-                                              }
-                                            }
-                                          } else {
-                                            // Caso venha o buffer direto
-                                            const buf = Buffer.from(await resp.arrayBuffer());
-                                            if (buf.length > 0) {
-                                              const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
-                                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                              return r2Result.url;
-                                            }
-                                          }
-                                        }
-                                      }
-                                    } else {
-                                      // É uma URL completa (HTTP), tenta download direto
-                                      const resp = await fetch(mediaUrl, {
-                                        headers: apiKey? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
-                                        signal: AbortSignal.timeout(15000),
-                                      });
-                                      if (resp.ok) {
-                                        const ctype = resp.headers.get("content-type") || "";
-                                        if (!ctype.includes("json") &&!ctype.includes("text/html") &&!ctype.includes("text/plain")) {
-                                          const buf = Buffer.from(await resp.arrayBuffer());
-                                          if (buf.length > 0) {
-                                            const detectedMime = ctype || mimetype;
-                                            const ext = detectedMime.includes("png")? "png" : detectedMime.includes("webp")? "webp" : detectedMime.includes("pdf")? "pdf" : detectedMime.includes("video")? "mp4" : detectedMime.includes("audio")? "ogg" : "jpg";
-                                            const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
-                                            console.log("[messages.forward] ✅ Direct download + R2 success:", r2Result.url);
-                                            return r2Result.url;
-                                          }
-                                        }
-                                      }
-                                    }
-                                  }
+            }
+            
+            // Para URLs não-R2, tentar download via Evolution API
+            const { getDb: getDb2 } = await import("./db");
+            const { integrationSettings } = await import("../drizzle/schema");
+            const { eq: eq2 } = await import("drizzle-orm");
+            const db2 = await getDb2();
+            
+            if (db2) {
+              const [config] = await db2
+                .select()
+                .from(integrationSettings)
+                .where(eq2(integrationSettings.integrationType, "evolution_api"))
+                .limit(1);
+              if (config) {
+                const configData = typeof config.config === "string"? JSON.parse(config.config) : config.config;
+                const possibleUrls: string[] = [];
+                
+                if (configData.apiUrl) {
+                  possibleUrls.push(configData.apiUrl.replace(/\/$/, ""));
+                }
+                const instances = configData.instances || [];
+                for (const inst of instances) {
+                  if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
+                  if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
+                }
+                const settings = (config as any).settings? (typeof (config as any).settings === "string"? JSON.parse((config as any).settings) : (config as any).settings) : null;
+                if (settings?.instances) {
+                  for (const inst of settings.instances) {
+                    if (inst?.url) possibleUrls.push(inst.url.replace(/\/$/, ""));
+                    if (inst?.instanceUrl) possibleUrls.push(inst.instanceUrl.replace(/\/$/, ""));
+                  }
+                }
+                
+                const uniqueUrls = [...new Set(possibleUrls)];
+                const apiKey = configData.apiKey || configData.accessToken || "";
+                
+                for (const baseUrl of uniqueUrls) {
+                  // Se for URL relativa, usar endpoint /message/download
+                  if (!mediaUrl.startsWith("http")) {
+                    if (originalMsg.externalId) {
+                      const downloadUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
+                      try {
+                        const resp = await fetch(downloadUrl, {
+                          headers: { apikey: apiKey },
+                          signal: AbortSignal.timeout(15000),
+                        });
+                        
+                        if (resp.ok) {
+                          const ctype = resp.headers.get("content-type") || "";
+                          if (ctype.includes("json")) {
+                            const data = await resp.json();
+                            const actualMediaUrl = data?.url || data?.mediaUrl;
+                            if (actualMediaUrl) {
+                              const mediaResp = await fetch(actualMediaUrl, {
+                                headers: { 'User-Agent': 'Mozilla/5.0' },
+                                signal: AbortSignal.timeout(20000),
+                              });
+                              if (mediaResp.ok) {
+                                const buf = Buffer.from(await mediaResp.arrayBuffer());
+                                if (buf.length > 0) {
+                                  const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
+                                  const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                                  return r2Result.url;
                                 }
                               }
-                            } catch (err) {
-                              console.error("[messages.forward] Critical error during media download strategy:", err);
-                              throw err;
                             }
-                console.error("[messages.forward] All download strategies failed:", downloadErr);
+                          } else {
+                            // Caso venha o buffer direto
+                            const buf = Buffer.from(await resp.arrayBuffer());
+                            if (buf.length > 0) {
+                              const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
+                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                              return r2Result.url;
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.error("[messages.forward] Download error:", e);
+                      }
+                    }
+                  } else {
+                    // URL completa (HTTP), tentar download direto
+                    try {
+                      const resp = await fetch(mediaUrl, {
+                        headers: apiKey? { apikey: apiKey, 'User-Agent': 'Mozilla/5.0' } : { 'User-Agent': 'Mozilla/5.0' },
+                        signal: AbortSignal.timeout(15000),
+                      });
+                      if (resp.ok) {
+                        const ctype = resp.headers.get("content-type") || "";
+                        if (!ctype.includes("json") && !ctype.includes("text/html") && !ctype.includes("text/plain")) {
+                          const buf = Buffer.from(await resp.arrayBuffer());
+                          if (buf.length > 0) {
+                            const detectedMime = ctype || mimetype;
+                            const ext = detectedMime.includes("png")? "png" : detectedMime.includes("webp")? "webp" : detectedMime.includes("pdf")? "pdf" : detectedMime.includes("video")? "mp4" : detectedMime.includes("audio")? "ogg" : "jpg";
+                            const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, detectedMime);
+                            return r2Result.url;
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      console.error("[messages.forward] Direct download error:", e);
+                    }
+                  }
+                }
               }
-              
-              // If we reach here, we couldn't convert the URL - throw error
-              throw new Error("Cannot forward media: no valid public URL or base64 available. The media must be re-uploaded to R2 first.");
-            };
-
-            if (originalMsg.fileUrl) {
-              const fileType = originalMsg.fileType || "";
-              // Ensure media URL is publicly accessible
-              const publicMediaUrl = await ensurePublicMediaUrl(originalMsg.fileUrl, fileType);
-              
-              if (fileType.startsWith("image/")) {
-                const result = await sendWhatsAppImage({
-                  to: input.targetCustomerPhone,
-                  imageUrl: publicMediaUrl,
-                  caption: customerContent,
-                });
-                externalMessageId = result?.messageId || null;
-              } else if (fileType.startsWith("video/")) {
-                const result = await sendWhatsAppViewOnceMedia({
-                  to: input.targetCustomerPhone,
-                  mediaUrl: publicMediaUrl,
-                  mediaType: "video",
-                  caption: customerContent,
-                });
-                externalMessageId = result?.messageId || null;
-              } else if (fileType.startsWith("audio/")) {
-                const result = await sendWhatsAppViewOnceMedia({
-                  to: input.targetCustomerPhone,
-                  mediaUrl: publicMediaUrl,
-                  mediaType: "audio",
-                  caption: customerContent,
-                });
-                externalMessageId = result?.messageId || null;
-              } else {
-                const { sendWhatsAppMessage } = await import("./messaging");
-                const result = await sendWhatsAppMessage({
-                  to: input.targetCustomerPhone,
-                  message: customerContent,
-                });
-                externalMessageId = result?.messageId || null;
-              }
-            } else if (provider === "instagram") {
-              const { sendInstagramMessage } = await import("./messaging");
-              const result = await sendInstagramMessage({
+            }
+          }
+          
+          // Enviar mensagem ao cliente
+          if (originalMsg.fileUrl) {
+            const fileType = originalMsg.fileType || "";
+            const publicMediaUrl = await ensurePublicMediaUrl(originalMsg.fileUrl, fileType);
+            
+            if (fileType.startsWith("image/")) {
+              const result = await sendWhatsAppImage({
                 to: input.targetCustomerPhone,
-                message: customerContent,
-                mediaUrl: originalMsg.fileUrl || undefined,
+                imageUrl: publicMediaUrl,
+                caption: customerContent,
+              });
+              externalMessageId = result?.messageId || null;
+            } else if (fileType.startsWith("video/")) {
+              const result = await sendWhatsAppViewOnceMedia({
+                to: input.targetCustomerPhone,
+                mediaUrl: publicMediaUrl,
+                mediaType: "video",
+                caption: customerContent,
+              });
+              externalMessageId = result?.messageId || null;
+            } else if (fileType.startsWith("audio/")) {
+              const result = await sendWhatsAppViewOnceMedia({
+                to: input.targetCustomerPhone,
+                mediaUrl: publicMediaUrl,
+                mediaType: "audio",
+                caption: customerContent,
               });
               externalMessageId = result?.messageId || null;
             } else {
-              // Fallback: send text-only message for other providers
-              const { sendWhatsAppMessage } = await import("./messaging");
               const result = await sendWhatsAppMessage({
                 to: input.targetCustomerPhone,
                 message: customerContent,
               });
               externalMessageId = result?.messageId || null;
             }
-            return { success: true, externalMessageId };
-        } catch (sendError) {
-          console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
-          throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
+          } else {
+            const result = await sendWhatsAppMessage({
+              to: input.targetCustomerPhone,
+              message: customerContent,
+            });
+            externalMessageId = result?.messageId || null;
+          }
+        } else if (provider === "instagram") {
+          const result = await sendInstagramMessage({
+            to: input.targetCustomerPhone,
+            message: customerContent,
+            mediaUrl: originalMsg.fileUrl || undefined,
+          });
+          externalMessageId = result?.messageId || null;
+        } else {
+          const result = await sendWhatsAppMessage({
+            to: input.targetCustomerPhone,
+            message: customerContent,
+          });
+          externalMessageId = result?.messageId || null;
         }
-      }),
+
+        return { success: true, externalMessageId };
+      }
+
+      throw new Error("Destino inválido");
+    }),
 
   list: protectedProcedure
     .input(z.object({ conversation_id: z.coerce.number() }))
@@ -503,182 +487,43 @@ export const messagesRouter = router({
       }
 
       if (!conversationId) {
-        throw new Error("Conversation not found - cannot determine which conversation to add message to");
+        throw new Error("Conversa não encontrada");
       }
 
-      // Get agent info for sender name and position - DO THIS BEFORE SENDING
-      const userId = (ctx as any)?.user?.id;
-      const agentName = (ctx as any)?.user?.name || "Atendente";
-      
-      // Fetch position from employees table
-      let agentPosition = null;
-      let senderName = agentName;
-      
-      if (userId) {
-        try {
-          const [employee] = await db.select()
-            .from(employees)
-            .where(eq(employees.userId, userId))
-            .limit(1);
-          
-          if (employee) {
-            agentPosition = employee.position;
-          }
-          
-          // Also get user name
-          const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          if (user?.name) {
-            senderName = user.name;
-          }
-        } catch (err) {
-          console.error("[messages.send] Error fetching employee:", err);
-        }
-      }
-
-      // If fileUrl is a data URL (base64), upload to R2 first
-      // Evolution API requires a public URL or raw base64 for media
-      if (fileUrl && fileUrl.startsWith("data:")) {
-        try {
-          const { uploadToR2 } = await import("./r2-client.js");
-          // Extract base64 data and mime type
-          const mimeMatch = fileUrl.match(/^data:([^;]+);base64,(.*)$/s);
-          if (mimeMatch && mimeMatch[1] && mimeMatch[2]) {
-            const mimetype = mimeMatch[1];
-            const base64Data = mimeMatch[2];
-            const buffer = Buffer.from(base64Data, "base64");
-            const ext =
-              mimetype.includes("png")
-                ? "png"
-                : mimetype.includes("webp")
-                ? "webp"
-                : mimetype.includes("pdf")
-                ? "pdf"
-                : "jpg";
-            const r2Result = await uploadToR2(
-              buffer,
-              `messages/${conversationId}_${Date.now()}.${ext}`,
-              mimetype
-            );
-            fileUrl = r2Result.url; // Replace data URL with R2 public URL
-            fileType = mimetype;
-            console.log(
-              "[messages.send] 📎 Uploaded media to R2:",
-              r2Result.url
-            );
-          }
-        } catch (r2Err: unknown) {
-          console.error(
-            "[messages.send] ⚠️ R2 upload failed, will try sending base64 directly:",
-            r2Err
-          );
-          // Fallback: extract raw base64 for Evolution API
-          const base64Match = fileUrl.match(/^data:[^;]+;base64,(.*)$/s);
-          if (base64Match) {
-            fileUrl = base64Match[1]; // Send raw base64 without data: prefix
-          }
-        }
-      }
-
+      // Get the customer phone and provider
       const [conv] = await db
         .select()
         .from(conversations)
         .where(eq(conversations.id, conversationId))
         .limit(1);
 
-      if (!conv) throw new Error("Conversation not found");
+      const customerPhone = conv?.customerPhone || input.to;
+      const provider = input.provider || conv?.channel || "whatsapp";
 
-      // Send via Evolution API if WhatsApp - NOW WITH SENDER INFO
-      let externalId: string | null = null;
-      if (conv.channel === "whatsapp" && conv.customerPhone) {
-        try {
-          const { sendWhatsAppMessage } = await import("./messaging");
-          const result = await sendWhatsAppMessage({
-            to: conv.customerPhone,
-            message: messageText,
-            mediaUrl: fileUrl || undefined,
-            caption: fileName || undefined,
-            senderName,
-            senderPosition: agentPosition,
-          });
-          externalId = result?.messageId || null;
-          console.log(
-            "[messages.send] ✅ Sent via Evolution API, externalId:",
-            externalId
-          );
-        } catch (err: unknown) {
-          console.error(
-            "[messages.send] ❌ Failed to send via Evolution API:",
-            err
-          );
-          // Continue to save message locally even if send fails
-        }
+      // Build the message content
+      let content = messageText;
+      if (!content && fileUrl) {
+        content = `[Mídia enviada: ${fileName || fileUrl}]`;
       }
 
-      // Save message in DB
-      const insertResult = await db.insert(conversationMessages).values({
-        conversationId,
-        content: messageText,
-        fileUrl,
-        fileName,
-        fileType,
-        fileSize,
-        senderId: userId || null,
-        senderType: "agent",
-        externalId,
-      });
-
-      const rawId = Array.isArray(insertResult)
-        ? insertResult[0]?.insertId
-        : insertResult?.insertId || insertResult?.lastInsertRowid;
-      const messageId = Number(rawId) || null;
-
-      // Update conversation lastMessageAt
-      await db
-        .update(conversations)
-        .set({ lastMessageAt: new Date() })
-        .where(eq(conversations.id, conversationId));
-
-      // Notify via SSE - INCLUDE senderName and senderPosition
-      const assignedTo = conv.assignedTo;
-      if (assignedTo) {
-        sseManager.emitToUser(String(assignedTo), {
-          type: EVENTS.MESSAGE_NEW,
-          data: {
-            conversationId,
-            message: {
-              id: messageId,
-              content: messageText,
-              senderType: "agent",
-              senderName,
-              senderPosition: agentPosition,
-              fileUrl,
-              fileType,
-              createdAt: new Date().toISOString(),
-            },
-          },
-          timestamp: Date.now(),
+      // Send the message
+      if (provider === "whatsapp") {
+        const { sendWhatsAppMessage } = await import("./messaging");
+        const result = await sendWhatsAppMessage({
+          to: customerPhone,
+          message: content,
         });
+        return { success: true, messageId: result?.messageId };
+      } else if (provider === "instagram") {
+        const { sendInstagramMessage } = await import("./messaging");
+        const result = await sendInstagramMessage({
+          to: customerPhone,
+          message: content,
+          mediaUrl: fileUrl || undefined,
+        });
+        return { success: true, messageId: result?.messageId };
       }
 
-      // Return full message with sender info
-      return { 
-        success: true, 
-        messageId, 
-        externalId, 
-        conversationId,
-        message: {
-          id: messageId,
-          conversationId,
-          content: messageText,
-          senderType: "agent",
-          senderName,
-          senderPosition: agentPosition,
-          fileUrl,
-          fileName,
-          fileType,
-          fileSize,
-          createdAt: new Date().toISOString(),
-        }
-      };
+      throw new Error("Provider não suportado");
     }),
 });
