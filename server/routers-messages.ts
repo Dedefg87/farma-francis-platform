@@ -240,7 +240,7 @@ export const messagesRouter = router({
                                   // Se for URL relativa, usar endpoint /message/download
                                   if (!mediaUrl.startsWith("http")) {
                                     if (originalMsg.externalId) {
-                                      const downloadUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
+                                      const downloadUrl = `${baseUrl}/message/download/${originalMsg.key?.id ?? originalMsg.externalId}`;
                       
                                       // LOG OBRIGATÓRIO - downloadUrl
                                       console.log("[FORWARD] downloadUrl:", downloadUrl);

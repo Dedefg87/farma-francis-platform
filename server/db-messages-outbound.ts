@@ -111,7 +111,7 @@ export async function ingestOutboundConversationMessage(message: {
   // 4. Insert message into conversation_messages
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
-    externalId: message.externalId || null,
+    externalId: (message.externalId || message.key?.id) ?? null,
     senderId: message.fromUserId,
     senderType: "agent",
     content,
