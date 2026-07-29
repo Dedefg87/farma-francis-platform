@@ -365,16 +365,12 @@ export const messagesRouter = router({
             });
             externalMessageId = result?.messageId || null;
           }
-  } catch (sendError) {
-    console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
-    throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
-  }
-}
-        return { success: true, externalMessageId };
-      }
-
-      throw new Error("Destino inválido");
-    }),
+          return { success: true, externalMessageId };
+        } catch (sendError) {
+          console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
+          throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
+        }
+      }),
 
   list: protectedProcedure
     .input(z.object({ conversation_id: z.coerce.number() }))
