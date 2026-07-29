@@ -356,14 +356,6 @@ export const messagesRouter = router({
                 });
                 externalMessageId = result?.messageId || null;
               }
-            } else {
-              const { sendWhatsAppMessage } = await import("./messaging");
-              const result = await sendWhatsAppMessage({
-                to: input.targetCustomerPhone,
-                message: customerContent,
-              });
-              externalMessageId = result?.messageId || null;
-            }
           } else if (provider === "instagram") {
             const { sendInstagramMessage } = await import("./messaging");
             const result = await sendInstagramMessage({
@@ -373,11 +365,11 @@ export const messagesRouter = router({
             });
             externalMessageId = result?.messageId || null;
           }
-        } catch (sendError) {
-          console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
-          throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
-        }
-
+  } catch (sendError) {
+    console.error("[messages.forward] Erro ao enviar para cliente:", sendError);
+    throw new Error(`Falha ao encaminhar para cliente: ${sendError instanceof Error ? sendError.message : "Erro desconhecido"}`);
+  }
+}
         return { success: true, externalMessageId };
       }
 
