@@ -592,7 +592,7 @@ export async function ingestInboundConversationMessage(message: {
 
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
-    externalId: message.externalId || null,
+    externalId: (message.key?.id as string) ?? null,
     senderId: null,
     senderType: "customer",
     content: buildInboundContent(message),
