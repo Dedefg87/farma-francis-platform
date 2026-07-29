@@ -63,6 +63,13 @@ export const messagesRouter = router({
         throw new Error("Mensagem original não encontrada");
       }
 
+      // LOG OBRIGATÓRIO - originalMsg
+      console.log("[FORWARD] originalMsg:", originalMsg);
+      console.log("[FORWARD] originalMsg.fileUrl:", originalMsg.fileUrl);
+      console.log("[FORWARD] originalMsg.fileType:", originalMsg.fileType);
+      console.log("[FORWARD] originalMsg.externalId:", originalMsg.externalId);
+      console.log("[FORWARD] originalMsg.content:", originalMsg.content);
+
       // Buscar a conversa para contexto
       const [conv] = await db
         .select()
@@ -230,50 +237,69 @@ export const messagesRouter = router({
                 const apiKey = configData.apiKey || configData.accessToken || "";
                 
                 for (const baseUrl of uniqueUrls) {
-                  // Se for URL relativa, usar endpoint /message/download
-                  if (!mediaUrl.startsWith("http")) {
-                    if (originalMsg.externalId) {
-                      const downloadUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
-                      try {
-                        const resp = await fetch(downloadUrl, {
-                          headers: { apikey: apiKey },
-                          signal: AbortSignal.timeout(15000),
-                        });
+                                  // Se for URL relativa, usar endpoint /message/download
+                                  if (!mediaUrl.startsWith("http")) {
+                                    if (originalMsg.externalId) {
+                                      const downloadUrl = `${baseUrl}/message/download/${originalMsg.externalId}`;
+                      
+                                      // LOG OBRIGATÓRIO - downloadUrl
+                                      console.log("[FORWARD] downloadUrl:", downloadUrl);
+                      
+                                      try {
+                                        const resp = await fetch(downloadUrl, {
+                                          headers: { apikey: apiKey },
+                                          signal: AbortSignal.timeout(15000),
+                                        });
                         
-                        if (resp.ok) {
-                          const ctype = resp.headers.get("content-type") || "";
-                          if (ctype.includes("json")) {
-                            const data = await resp.json();
-                            const actualMediaUrl = data?.url || data?.mediaUrl;
-                            if (actualMediaUrl) {
-                              const mediaResp = await fetch(actualMediaUrl, {
-                                headers: { 'User-Agent': 'Mozilla/5.0' },
-                                signal: AbortSignal.timeout(20000),
-                              });
-                              if (mediaResp.ok) {
-                                const buf = Buffer.from(await mediaResp.arrayBuffer());
-                                if (buf.length > 0) {
-                                  const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
-                                  const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                                  return r2Result.url;
-                                }
-                              }
-                            }
-                          } else {
-                            // Caso venha o buffer direto
-                            const buf = Buffer.from(await resp.arrayBuffer());
-                            if (buf.length > 0) {
-                              const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
-                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
-                              return r2Result.url;
-                            }
-                          }
-                        }
-                      } catch (e) {
-                        console.error("[messages.forward] Download error:", e);
-                      }
-                    }
-                  } else {
+                                        // LOG OBRIGATÓRIO - downloadResponse
+                                        console.log("[FORWARD] downloadResponse status:", resp.status);
+                        
+                                        if (resp.ok) {
+                                          const ctype = resp.headers.get("content-type") || "";
+                                          if (ctype.includes("json")) {
+                                            const data = await resp.json();
+                                            // LOG OBRIGATÓRIO - downloadResponse body
+                                            console.log("[FORWARD] downloadResponse body:", data);
+                                            const actualMediaUrl = data?.url || data?.mediaUrl;
+                                            if (actualMediaUrl) {
+                                              const mediaResp = await fetch(actualMediaUrl, {
+                                                headers: { 'User-Agent': 'Mozilla/5.0' },
+                                                signal: AbortSignal.timeout(20000),
+                                              });
+                                              if (mediaResp.ok) {
+                                                const buf = Buffer.from(await mediaResp.arrayBuffer());
+                                                if (buf.length > 0) {
+                                                  const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
+                                                  const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                                  
+                                                  // LOG OBRIGATÓRIO - uploadToR2 result
+                                                  console.log("[FORWARD] uploadToR2 result:", r2Result);
+                                  
+                                                  return r2Result.url;
+                                                }
+                                              }
+                                            }
+                                          } else {
+                                            // Caso venha o buffer direto
+                                            const buf = Buffer.from(await resp.arrayBuffer());
+                                            if (buf.length > 0) {
+                                              const ext = mimetype.includes("png")? "png" : mimetype.includes("webp")? "webp" : mimetype.includes("pdf")? "pdf" : mimetype.includes("video")? "mp4" : mimetype.includes("audio")? "ogg" : "jpg";
+                                              const r2Result = await uploadToR2(buf, `messages/forward_${Date.now()}.${ext}`, mimetype);
+                              
+                                              // LOG OBRIGATÓRIO - uploadToR2 result
+                                              console.log("[FORWARD] uploadToR2 result (direct buffer):", r2Result);
+                              
+                                              return r2Result.url;
+                                            }
+                                          }
+                                        }
+                                      } catch (e) {
+                                        console.error("[messages.forward] Download error:", e);
+                                      }
+                                    } else {
+                                      console.log("[FORWARD] originalMsg.externalId is NULL or undefined - cannot download");
+                                    }
+                                  } else {
                     // URL completa (HTTP), tentar download direto
                     try {
                       const resp = await fetch(mediaUrl, {
@@ -305,6 +331,17 @@ export const messagesRouter = router({
           if (originalMsg.fileUrl) {
             const fileType = originalMsg.fileType || "";
             const publicMediaUrl = await ensurePublicMediaUrl(originalMsg.fileUrl, fileType);
+            
+            // LOG OBRIGATÓRIO - publicMediaUrl final
+            console.log("[FORWARD] publicMediaUrl returned by ensurePublicMediaUrl:", publicMediaUrl);
+            
+            // LOG OBRIGATÓRIO - payload que será enviado
+            const payloadToSend = {
+              to: input.targetCustomerPhone,
+              imageUrl: publicMediaUrl,
+              caption: customerContent,
+            };
+            console.log("[FORWARD] payload to sendWhatsAppImage:", JSON.stringify(payloadToSend, null, 2));
             
             if (fileType.startsWith("image/")) {
               const result = await sendWhatsAppImage({

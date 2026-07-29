@@ -121,6 +121,9 @@ export async function ingestOutboundConversationMessage(message: {
     fileSize: message.fileSize || null,
     createdAt: message.createdAt || new Date(),
   });
+  
+  // LOG para depurar problemas com externalId (obrigatório para investigação)
+  console.log("[DB-INSERT] externalId gravado (insertion):", message.externalId ? "PRESENTE - " + message.externalId : "NULL (erro)");
 
   const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
   const messageDbId = Number(rawMessageId) || undefined;
