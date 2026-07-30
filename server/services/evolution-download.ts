@@ -329,9 +329,11 @@ export async function downloadGenericMedia(
 }
 
 export { isWhatsAppCdnUrl, downloadWithValidation } from './media-validator';
+
 /**
  * Download story media using multiple strategies.
  * Consolidates logic for handling story replies (status@broadcast).
+ * Implements robust fallback chain for Evolution API v2.3.7
  */
 export async function downloadStoryMedia(
   contextInfo: {
@@ -341,7 +343,7 @@ export async function downloadStoryMedia(
   },
   messageId: string,
   instanceName?: string
-): Promise<Buffer | null> {
+): Promise<{ buffer: Buffer; mimetype: string; isThumbnail?: boolean } | null> {
   console.log('[downloadStoryMedia] Attempting to download story media:', {
     stanzaId: contextInfo.stanzaId,
     participant: contextInfo.participant,
@@ -354,63 +356,208 @@ export async function downloadStoryMedia(
   }
 
   const { stanzaId, participant, quotedMessage } = contextInfo;
-
-  // Strategy 1: Try getStoryMediaViaBase64 endpoint
-  if (stanzaId && participant) {
-    const buffer1 = await getStoryMediaViaBase64(
-      stanzaId,
-      participant,
-      quotedMessage || {},
-      instanceName
-    );
-    
-    if (buffer1 && buffer1.length > 0) {
-      console.log('[downloadStoryMedia] ✅ Success via getStoryMediaViaBase64');
-      return buffer1;
-    }
+  const config = await getEvolutionConfig();
+  if (!config) {
+    console.log('[downloadStoryMedia] ❌ No Evolution API config found');
+    return null;
   }
 
-  // Strategy 2: Extract mediaKey and directPath from quotedMessage
-  const quotedMessageAny = quotedMessage as any;
-  const imageMessage = quotedMessageAny?.imageMessage;
-  const videoMessage = quotedMessageAny?.videoMessage;
-  const mediaMessage = imageMessage || videoMessage;
+  const apiUrl = config.apiUrl;
+  const apiKey = config.apiKey;
+  const inst = instanceName || config.instanceName;
 
-  if (mediaMessage?.mediaKey && mediaMessage?.directPath) {
-    console.log('[downloadStoryMedia] Found mediaKey and directPath, attempting download');
-    
+  // ============================================
+  // TENTATIVA 1: quotedMessage completo via getBase64FromMediaMessage
+  // ============================================
+  if (quotedMessage && (quotedMessage.imageMessage || quotedMessage.videoMessage)) {
+    console.log('[downloadStoryMedia] 📤 Tentativa 1: getBase64FromMediaMessage com quotedMessage');
     try {
-      const config = await getEvolutionConfig();
-      if (config) {
-        // Try to download using evolution-download
-        const buffer = await downloadWhatsAppMediaFromEvolution({
-          url: '',
-          mediaKey: mediaMessage.mediaKey,
-          directPath: mediaMessage.directPath
-        });
-        
-        if (buffer && buffer.length > 0) {
-          console.log('[downloadStoryMedia] ✅ Success via mediaKey/directPath');
-          return buffer;
+      const payload = {
+        message: {
+          key: {
+            remoteJid: 'status@broadcast',
+            id: stanzaId,
+            fromMe: true,
+            participant: participant,
+          },
+          message: quotedMessage,
+        },
+      };
+
+      const endpoints = [
+        `${apiUrl}/chat/getBase64FromMediaMessage`,
+        `${apiUrl}/api/chat/getBase64FromMediaMessage`,
+      ];
+
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': apiKey,
+              'instance': inst,
+            },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(30000),
+          });
+
+          console.log(`[downloadStoryMedia] 📥 ${endpoint} status: ${response.status}`);
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log('[downloadStoryMedia] 📥 Response keys:', Object.keys(result));
+
+            if (result?.base64) {
+              const base64Str = typeof result.base64 === 'string' ? result.base64 : JSON.stringify(result.base64);
+              const buffer = Buffer.from(base64Str, 'base64');
+              const isImage = !!quotedMessage.imageMessage;
+              const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+              console.log(`[downloadStoryMedia] ✅ Tentativa 1 sucesso: ${buffer.length} bytes`);
+              return { buffer, mimetype: mimeType };
+            }
+
+            if (result?.url || result?.mediaUrl) {
+              const mediaUrl = result.url || result.mediaUrl;
+              console.log(`[downloadStoryMedia] 🔄 Fetching from returned URL: ${mediaUrl.substring(0, 80)}`);
+              const mediaResponse = await fetch(mediaUrl, { signal: AbortSignal.timeout(15000) });
+              if (mediaResponse.ok) {
+                const arrayBuffer = await mediaResponse.arrayBuffer();
+                const buffer = Buffer.from(arrayBuffer);
+                const isImage = !!quotedMessage.imageMessage;
+                const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+                console.log(`[downloadStoryMedia] ✅ Tentativa 1 via URL: ${buffer.length} bytes`);
+                return { buffer, mimetype: mimeType };
+              }
+            }
+          }
+        } catch (err) {
+          console.log(`[downloadStoryMedia] ⚠️ Endpoint ${endpoint} failed: ${err}`);
         }
       }
-    } catch (error) {
-      console.log('[downloadStoryMedia] mediaKey/directPath download failed:', error);
+    } catch (err) {
+      console.log('[downloadStoryMedia] ⚠️ Tentativa 1 falhou:', err);
     }
   }
 
-  // Strategy 3: Try jpegThumbnail fallback (low quality but better than nothing)
-  if (imageMessage?.jpegThumbnail) {
-    console.log('[downloadStoryMedia] Using jpegThumbnail fallback (low quality)');
+  // ============================================
+  // TENTATIVA 2: Buscar mensagem completa via stanzaId
+  // ============================================
+  if (stanzaId && participant) {
+    console.log('[downloadStoryMedia] 📤 Tentativa 2: getMessageById via stanzaId');
     try {
-      const buffer = Buffer.from(imageMessage.jpegThumbnail, 'base64');
-      console.log('[downloadStoryMedia] ✅ Success via jpegThumbnail fallback, size:', buffer.length);
-      return buffer;
-    } catch (error) {
-      console.log('[downloadStoryMedia] jpegThumbnail fallback failed:', error);
+      const msgResponse = await fetch(
+        `${apiUrl}/chat/getMessageById/${inst}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': apiKey,
+          },
+          body: JSON.stringify({
+            message: {
+              key: {
+                remoteJid: 'status@broadcast',
+                id: stanzaId,
+                fromMe: true,
+                participant: participant,
+              }
+            }
+          }),
+        }
+      );
+
+      if (msgResponse.ok) {
+        const msgData = await msgResponse.json();
+        console.log('[downloadStoryMedia] 📥 getMessageById response:', Object.keys(msgData));
+        
+        if (msgData?.message) {
+          const fullMessage = msgData.message;
+          if (fullMessage.imageMessage || fullMessage.videoMessage) {
+            // Tentar getBase64FromMediaMessage com mensagem completa
+            const payload = {
+              message: {
+                key: {
+                  remoteJid: 'status@broadcast',
+                  id: stanzaId,
+                  fromMe: true,
+                  participant: participant,
+                },
+                message: fullMessage,
+              },
+            };
+
+            const endpoints = [
+              `${apiUrl}/chat/getBase64FromMediaMessage`,
+              `${apiUrl}/api/chat/getBase64FromMediaMessage`,
+            ];
+
+            for (const endpoint of endpoints) {
+              try {
+                const response = await fetch(endpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': apiKey,
+                    'instance': inst,
+                  },
+                  body: JSON.stringify(payload),
+                  signal: AbortSignal.timeout(30000),
+                });
+
+                if (response.ok) {
+                  const result = await response.json();
+                  if (result?.base64) {
+                    const base64Str = typeof result.base64 === 'string' ? result.base64 : JSON.stringify(result.base64);
+                    const buffer = Buffer.from(base64Str, 'base64');
+                    const isImage = !!fullMessage.imageMessage;
+                    const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+                    console.log(`[downloadStoryMedia] ✅ Tentativa 2 sucesso: ${buffer.length} bytes`);
+                    return { buffer, mimetype: mimeType };
+                  }
+                  if (result?.url || result?.mediaUrl) {
+                    const mediaUrl = result.url || result.mediaUrl;
+                    const mediaResponse = await fetch(mediaUrl, { signal: AbortSignal.timeout(15000) });
+                    if (mediaResponse.ok) {
+                      const arrayBuffer = await mediaResponse.arrayBuffer();
+                      const buffer = Buffer.from(arrayBuffer);
+                      const isImage = !!fullMessage.imageMessage;
+                      const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+                      console.log(`[downloadStoryMedia] ✅ Tentativa 2 via URL: ${buffer.length} bytes`);
+                      return { buffer, mimetype: mimeType };
+                    }
+                  }
+                }
+              } catch (err) {
+                console.log(`[downloadStoryMedia] ⚠️ Endpoint ${endpoint} failed: ${err}`);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.log('[downloadStoryMedia] ⚠️ Tentativa 2 falhou:', err);
     }
   }
 
-  console.log('[downloadStoryMedia] ❌ All strategies failed');
+  // ============================================
+  // TENTATIVA 3: thumbnail (jpegThumbnail) fallback
+  // ============================================
+  const thumbnail =
+    quotedMessage?.imageMessage?.jpegThumbnail ||
+    quotedMessage?.videoMessage?.jpegThumbnail;
+
+  if (thumbnail) {
+    console.log('[downloadStoryMedia] 📎 Tentativa 3: Usando jpegThumbnail fallback');
+    try {
+      const buffer = Buffer.from(thumbnail, 'base64');
+      console.log(`[downloadStoryMedia] ✅ Thumbnail buffer: ${buffer.length} bytes`);
+      return { buffer, mimetype: 'image/jpeg', isThumbnail: true };
+    } catch (error) {
+      console.log('[downloadStoryMedia] ⚠️ Thumbnail fallback falhou:', error);
+    }
+  }
+
+  console.log('[downloadStoryMedia] ❌ Todas as tentativas falharam');
   return null;
 }

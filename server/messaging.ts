@@ -2,6 +2,65 @@ import { getDb } from "./db";
 import { integrationSettings, messages } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { ingestOutboundConversationMessage } from "./db-messages-outbound";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+
+// S3 Client para R2 (uso interno - download de mídia para base64)
+const s3Client = new S3Client({
+  region: "auto",
+  endpoint: "https://816a5ff9c45a435c3a40b4fc262c914c.r2.cloudflarestorage.com",
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY || "",
+    secretAccessKey: process.env.S3_SECRET_KEY || "",
+  },
+});
+
+/**
+ * Extrai a key do R2 de uma URL (pública .r2.dev ou interna .cloudflarestorage.com)
+ */
+function extractR2Key(url: string): string | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    if (parts.length < 2) return null;
+    // Remove o primeiro segmento (bucket name) e junta o resto
+    return parts.slice(1).join("/");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Baixa mídia do R2 e retorna como base64 puro (sem prefixo data:)
+ * Usado para enviar mídia à Evolution API que não acessa URLs do R2
+ */
+async function getMediaAsBase64(fileKey: string): Promise<{ base64: string; mimetype: string }> {
+  const command = new GetObjectCommand({
+    Bucket: "farmafranciswhatsappmedia",
+    Key: fileKey,
+  });
+
+  const response = await s3Client.send(command);
+
+  // Ler stream do corpo (compatível com qualquer versão SDK v3)
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of response.Body as any) {
+    chunks.push(chunk);
+  }
+  const buffer = Buffer.concat(chunks.map(c => Buffer.from(c)));
+
+  const base64 = buffer.toString("base64");
+  const mimetype = response.ContentType || "application/octet-stream";
+
+  // Validação de tamanho - Evolution limita ~5MB
+  const MAX_BASE64_SIZE = 5 * 1024 * 1024;
+  if (base64.length > MAX_BASE64_SIZE) {
+    throw new Error(`Mídia muito grande (${(base64.length / 1024 / 1024).toFixed(1)}MB). Limite: 5MB.`);
+  }
+
+  return { base64, mimetype };
+}
 
 function normalizeWhatsAppNumber(value: string) {
   return value.replace(/\D/g, "");
@@ -300,6 +359,23 @@ export async function sendWhatsAppImage(params: {
 
   const evolutionConfig = await getEvolutionConfig();
   if (evolutionConfig) {
+    // Converter mídia do R2 para base64 puro (Evolution não acessa URLs do R2)
+    let mediaBase64: string;
+    let mediaMimetype: string;
+
+    try {
+      const fileKey = extractR2Key(params.imageUrl);
+      if (!fileKey) {
+        throw new Error(`Não foi possível extrair key do R2 da URL: ${params.imageUrl}`);
+      }
+      const media = await getMediaAsBase64(fileKey);
+      mediaBase64 = media.base64;
+      mediaMimetype = media.mimetype;
+    } catch (err) {
+      console.error("[sendWhatsAppImage] Erro ao converter para base64:", err);
+      throw new Error(`Falha ao preparar mídia para Evolution API: ${(err as Error).message}`);
+    }
+
     // Usar endpoint correto de mídia para enviar imagem (não como texto!)
     const response = await fetch(
       `${evolutionConfig.apiUrl}/message/sendMedia/${evolutionConfig.instanceName}`,
@@ -312,9 +388,9 @@ export async function sendWhatsAppImage(params: {
         body: JSON.stringify({
           number: normalizeWhatsAppNumber(params.to),
           mediatype: "image",
-          media: params.imageUrl,
+          media: mediaBase64, // base64 puro, sem prefixo data:
           caption: finalCaption,
-          mimetype: "image/jpeg",
+          mimetype: mediaMimetype,
         }),
       }
     );
@@ -336,7 +412,7 @@ export async function sendWhatsAppImage(params: {
         caption: finalCaption,
       }),
     });
-    
+
     // Also save to conversation_messages for visibility in chat
     await ingestOutboundConversationMessage({
       provider: "whatsapp",
@@ -345,11 +421,11 @@ export async function sendWhatsAppImage(params: {
       messageType: "image",
       messageText: finalCaption,
       mediaUrl: params.imageUrl,
-      mimeType: "image/jpeg",
+      mimeType: mediaMimetype,
       fileName: params.imageUrl.split("/").pop() || "imagem.jpg",
       externalId: result?.key?.id || null,
     });
-    
+
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
 
@@ -403,7 +479,7 @@ export async function sendWhatsAppImage(params: {
       caption: finalCaption,
     }),
   });
-  
+
   // Also save to conversation_messages for visibility in chat
   await ingestOutboundConversationMessage({
     provider: "whatsapp",
@@ -445,7 +521,7 @@ export async function sendInstagramMessage(params: {
   }
 
   const messageText = params.message;
-  
+
   const body = {
     messaging_product: "instagram",
     recipient_id: params.to,
@@ -754,6 +830,23 @@ export async function sendWhatsAppViewOnceMedia(params: {
 
   const evolutionConfig = await getEvolutionConfig();
   if (evolutionConfig) {
+    // Converter mídia do R2 para base64 puro
+    let mediaBase64: string;
+    let mediaMimetype: string;
+
+    try {
+      const fileKey = extractR2Key(params.mediaUrl);
+      if (!fileKey) {
+        throw new Error(`Não foi possível extrair key do R2 da URL: ${params.mediaUrl}`);
+      }
+      const media = await getMediaAsBase64(fileKey);
+      mediaBase64 = media.base64;
+      mediaMimetype = media.mimetype;
+    } catch (err) {
+      console.error("[sendWhatsAppViewOnceMedia] Erro ao converter para base64:", err);
+      throw new Error(`Falha ao preparar mídia para Evolution API: ${(err as Error).message}`);
+    }
+
     // Usar endpoint correto de mídia para view-once
     const response = await fetch(
       `${evolutionConfig.apiUrl}/message/sendMedia/${evolutionConfig.instanceName}`,
@@ -766,9 +859,9 @@ export async function sendWhatsAppViewOnceMedia(params: {
         body: JSON.stringify({
           number: normalizeWhatsAppNumber(params.to),
           mediatype: params.mediaType,
-          media: params.mediaUrl,
+          media: mediaBase64, // base64 puro
           caption: finalCaption,
-          mimetype: params.mediaType === "image" ? "image/jpeg" : "video/mp4",
+          mimetype: mediaMimetype,
         }),
       }
     );

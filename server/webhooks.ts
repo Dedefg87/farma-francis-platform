@@ -1686,17 +1686,18 @@ async function processEvolutionWebhook(body: unknown) {
                                                             const ext = isImage ? 'jpg' : 'mp4';
                                                             
                                                             const mediaBuffer = await downloadStoryMedia(storyContext, messageId, data.instance || 'Meu');
-                                                            
-                                                            if (mediaBuffer && mediaBuffer.length > 0) {
-                                                              const fileName = `story-${originalStoryId}-${Date.now()}.${ext}`;
-                                                              const uploadResult = await uploadToR2(mediaBuffer, fileName, mimeType);
-                                                              mediaUrl = uploadResult.url;
-                                                              messageType = isImage ? 'image' : 'video';
-                                                              console.log("[Evolution Webhook] ✅ Story media uploaded:", { 
-                                                                url: mediaUrl?.substring(0, 80), 
-                                                                size: mediaBuffer.length,
-                                                                mime: mimeType 
-                                                              });
+
+                                                                                                                        if (mediaBuffer) {
+                                                                                                                          const fileName = `story-${originalStoryId}-${Date.now()}.${ext}`;
+                                                                                                                          const uploadResult = await uploadToR2(mediaBuffer.buffer, fileName, mediaBuffer.mimetype);
+                                                                                                                          mediaUrl = uploadResult.url;
+                                                                                                                          messageType = isImage ? 'image' : 'video';
+                                                                                                                          console.log("[Evolution Webhook] ✅ Story media uploaded:", { 
+                                                                                                                            url: mediaUrl?.substring(0, 80), 
+                                                                                                                            size: mediaBuffer.buffer.length,
+                                                                                                                            mime: mediaBuffer.mimetype,
+                                                                                                                            isThumbnail: mediaBuffer.isThumbnail
+                                                                                                                          });
                                                               
                                                               // Salvar no cache para futuras replies
                                                               try {
@@ -1808,22 +1809,61 @@ async function processEvolutionWebhook(body: unknown) {
           // mediaKey + directPath que permitem download autenticado.
           // ============================================================
           let fromMeMediaUrl = mediaUrl || null;
+          let isThumbnail = false;
+          
+          // Tentar baixar mídia para mensagens fromMe (outbound)
           if (
             !fromMeMediaUrl &&
             (messageType === 'image' || messageType === 'video' || messageType === 'audio' || messageType === 'document') &&
-            (mediaKey || directPath || rawUrl)
+            (mediaKey || directPath || rawUrl || quotedMessage)
           ) {
             try {
-              console.log("[Evolution Webhook] fromMe media missing URL, attempting download via mediaKey/directPath");
+              console.log("[Evolution Webhook] fromMe media missing URL, attempting download via multiple strategies");
+              
+              // ESTRATÉGIA 1: downloadWhatsAppMediaFromEvolution com mediaKey/directPath
               const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
               const { uploadToR2 } = await import("./r2-client");
-
-              const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+              
+              let mediaBuffer: Buffer | null = null;
+              let detectedMime = parsed.mimeType || 'application/octet-stream';
+              
+              mediaBuffer = await downloadWhatsAppMediaFromEvolution({
                 url: rawUrl || "",
                 messageKey: { id: messageId, remoteJid, fromMe: true },
                 ...(mediaKey && { mediaKey: String(mediaKey) }),
                 ...(directPath && { directPath: String(directPath) }),
               });
+              
+              // ESTRATÉGIA 2: Se não funcionou, tentar downloadStoryMedia (para stories enviados por nós)
+              if (!mediaBuffer && quotedMessage) {
+                console.log("[Evolution Webhook] 🔄 Tentando downloadStoryMedia para fromMe");
+                const { downloadStoryMedia } = await import("./services/evolution-download");
+                
+                const contextInfo = data?.contextInfo || data?.message?.contextInfo || {};
+                const result = await downloadStoryMedia({
+                  stanzaId: contextInfo.stanzaId || messageId,
+                  participant: contextInfo.participant || data?.key?.participant || '',
+                  quotedMessage: quotedMessage,
+                }, messageId, data.instance || 'Meu');
+                
+                if (result) {
+                  mediaBuffer = result.buffer;
+                  detectedMime = result.mimetype;
+                  isThumbnail = result.isThumbnail || false;
+                }
+              }
+              
+              // ESTRATÉGIA 3: thumbnail fallback
+              if (!mediaBuffer && quotedMessage) {
+                const quotedAny = quotedMessage as any;
+                const thumbnail = quotedAny?.imageMessage?.jpegThumbnail || quotedAny?.videoMessage?.jpegThumbnail;
+                if (thumbnail) {
+                  mediaBuffer = Buffer.from(thumbnail, 'base64');
+                  detectedMime = 'image/jpeg';
+                  isThumbnail = true;
+                  console.log("[Evolution Webhook] 📎 Usando thumbnail fallback para fromMe");
+                }
+              }
 
               if (mediaBuffer && mediaBuffer.length > 0) {
                 const extMap: Record<string, string> = {
@@ -1831,14 +1871,15 @@ async function processEvolutionWebhook(body: unknown) {
                 };
                 const ext = parsed.fileName?.split('.').pop() || extMap[messageType] || 'bin';
                 const fromMeFileName = parsed.fileName || `sent-${messageId}.${ext}`;
-                const fromMeMime = parsed.mimeType || 'application/octet-stream';
+                const fromMeMime = detectedMime;
 
                 const uploadResult = await uploadToR2(mediaBuffer, fromMeFileName, fromMeMime);
                 fromMeMediaUrl = cleanR2Url(uploadResult.url);
                 console.log("[Evolution Webhook] ✅ fromMe media uploaded to R2:", {
                   url: fromMeMediaUrl,
                   etag: uploadResult.etag,
-                  size: uploadResult.size
+                  size: uploadResult.size,
+                  isThumbnail
                 });
               } else {
                 console.log("[Evolution Webhook] ⚠️ fromMe download returned empty buffer");
