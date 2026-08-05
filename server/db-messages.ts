@@ -402,21 +402,32 @@ export async function ingestInboundConversationMessage(message: {
     return null;
   }
 
-  // 0. Deduplicação: verificar se mensagem já foi processada
+  // 0. Deduplicação: verificar se mensagem já foi processada (com TTL de 24h)
   if (message.externalId) {
+    const TTL_HOURS = 24;
+    const cutoffTime = new Date(Date.now() - TTL_HOURS * 60 * 60 * 1000);
+    
     const existing = await db
       .select()
       .from(processedWebhookMessages)
-      .where(eq(processedWebhookMessages.id, message.externalId))
+      .where(
+        and(
+          eq(processedWebhookMessages.id, message.externalId),
+          sql`${processedWebhookMessages.processedAt} > ${cutoffTime.toISOString().slice(0, 19).replace('T', ' ')}`
+        )
+      )
       .limit(1);
 
     if (existing.length > 0) {
-      console.log(`[Webhook] Duplicate message ignored: ${message.externalId}`);
+      console.log(`[Webhook] Duplicate message ignored (within TTL): ${message.externalId}`);
       return null;
     }
 
     // Marcar como processada
-    await db.insert(processedWebhookMessages).values({ id: message.externalId });
+    await db.insert(processedWebhookMessages).values({ 
+      id: message.externalId,
+      provider: message.provider 
+    });
     console.log(`[Webhook] New message registered: ${message.externalId}`);
   }
 
