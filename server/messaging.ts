@@ -17,25 +17,80 @@ const s3Client = new S3Client({
 /**
  * Extrai a key do R2 de uma URL (pública .r2.dev ou interna .cloudflarestorage.com)
  */
-function extractR2Key(url: string): string | null {
-  if (!url) return null;
-
-  try {
-    const parsed = new URL(url);
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    if (parts.length < 2) return null;
-    // Remove o primeiro segmento (bucket name) e junta o resto
-    return parts.slice(1).join("/");
-  } catch {
-    return null;
+function extractR2Key(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  if (url.includes(".r2.") || url.includes("r2.cloudflarestorage.com") || url.includes(".r2.dev") || url.includes("pub-33c481f0a9e94adb8870472308f49471.r2.dev")) {
+    try {
+      const parsed = new URL(url);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts.length < 2) return null;
+      return parts.slice(1).join("/");
+    } catch {
+      return null;
+    }
   }
+  // Non-R2 paths (e.g. evolution-api/...): return as-is so getMediaAsBase64 can handle them
+  if (!url.startsWith("http") && !url.startsWith("data:")) return url;
+  // HTTP URLs: return as-is, getMediaAsBase64 will fetch via HTTP
+  return url;
 }
 
 /**
  * Baixa mídia do R2 e retorna como base64 puro (sem prefixo data:)
  * Usado para enviar mídia à Evolution API que não acessa URLs do R2
  */
-async function getMediaAsBase64(fileKey: string): Promise<{ base64: string; mimetype: string }> {
+async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mimetype: string }> {
+  if (!urlOrKey) throw new Error("Media URL or key is empty");
+  // Handle data: URLs
+  if (urlOrKey.startsWith("data:")) {
+    const m = urlOrKey.match(/^data:([^;]+);base64,(.*)$/s);
+    if (m) return { base64: m[2], mimetype: m[1] };
+  }
+  // Determine R2 key from URL or path
+  let r2Key: string | null = null;
+  if (urlOrKey.includes(".r2.dev") || urlOrKey.includes("r2.cloudflarestorage.com")) {
+    try { r2Key = new URL(urlOrKey).pathname.split("/").filter(Boolean).join("/"); } catch {}
+  } else if (!urlOrKey.startsWith("http") && !urlOrKey.startsWith("data:")) {
+    r2Key = urlOrKey;
+  }
+  // Try R2 first (with and without URL decoding)
+  if (r2Key) {
+    const keysToTry = [r2Key];
+    try { const decoded = decodeURIComponent(r2Key); if (decoded !== r2Key) keysToTry.push(decoded); } catch {}
+    for (const key of keysToTry) {
+      try {
+        const command = new GetObjectCommand({ Bucket: "farmafranciswhatsappmedia", Key: key });
+        const response = await s3Client.send(command);
+        const chunks: Buffer[] = [];
+        for await (const chunk of response.Body as any) { chunks.push(Buffer.from(chunk)); }
+        const buffer = Buffer.concat(chunks);
+        const base64 = buffer.toString("base64");
+        const mimetype = response.ContentType || "application/octet-stream";
+        const MAX_BASE64_SIZE = 5 * 1024 * 1024;
+        if (base64.length > MAX_BASE64_SIZE) {
+          throw new Error("Mídia muito grande (" + (base64.length / 1024 / 1024).toFixed(1) + "MB). Limite: 5MB.");
+        }
+        return { base64, mimetype };
+      } catch (e: any) {
+        console.log("[getMediaAsBase64] R2 failed for key: " + String(key).substring(0, 80) + " - " + String(e.message || e).substring(0, 100));
+      }
+    }
+  }
+  // Fallback: fetch via HTTP
+  if (urlOrKey.startsWith("http")) {
+    const response = await fetch(urlOrKey, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const base64 = buffer.toString("base64");
+    const mimetype = response.headers.get("content-type") || "application/octet-stream";
+    if (base64.length > 5 * 1024 * 1024) throw new Error("Media too large");
+    return { base64, mimetype };
+  }
+  throw new Error("Could not fetch media: " + String(urlOrKey).substring(0, 100));
+}> {
   const command = new GetObjectCommand({
     Bucket: "farmafranciswhatsappmedia",
     Key: fileKey,

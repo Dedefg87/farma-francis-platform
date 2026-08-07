@@ -297,7 +297,8 @@ export const messagesRouter = router({
                                         console.error("[messages.forward] Download error:", e);
                                       }
                                     } else {
-                                      console.log("[FORWARD] originalMsg.externalId is NULL or undefined - cannot download");
+                                      console.log("[FORWARD] externalId NULL - returning mediaUrl as fallback");
+                                      return mediaUrl;
                                     }
                                   } else {
                     // URL completa (HTTP), tentar download direto
