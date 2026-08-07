@@ -8,6 +8,8 @@ const s3Client = new S3Client({
     accessKeyId: 'debc3a713faeb6d442dab499221ba42f',
     secretAccessKey: 'c82abdafb97bf0d1a39e66644c86cacbe373cb6aa2b852ea5786726070a0513c',
   },
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 export interface UploadResult {
