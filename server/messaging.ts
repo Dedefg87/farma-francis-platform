@@ -1046,4 +1046,3 @@ export async function getSentMessages(params: {
 
   return await query;
 }
-    else if (rawMessageType === 'extendedTextMessage') typeToSave = 'text';
