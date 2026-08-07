@@ -1679,6 +1679,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                               participant: contextInfo.participant || data?.key?.participant || data?.participant || '',
                                                               mediaKey: quotedImage?.mediaKey || contextInfo.quotedMessage?.videoMessage?.mediaKey || null,
                                                               directPath: quotedImage?.directPath || contextInfo.quotedMessage?.videoMessage?.directPath || null,
+                                                              quotedMessage: contextInfo.quotedMessage || null,
                                                             };
                                                             
                                                             const originalStoryId = storyContext.stanzaId;
