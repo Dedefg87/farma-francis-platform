@@ -409,7 +409,7 @@ export async function sendWhatsAppImage(params: {
   if (!db) throw new Error("Database not available");
 
   // Build caption with sender identification if provided
-  let finalCaption = params.caption || "[Image]";
+  let finalCaption = params.caption || "";
   if (params.senderName) {
     const senderLabel = params.senderPosition
       ? `${params.senderName} - ${params.senderPosition}`
@@ -449,7 +449,7 @@ export async function sendWhatsAppImage(params: {
           number: normalizeWhatsAppNumber(params.to),
           mediatype: "image",
           media: mediaBase64, // base64 puro, sem prefixo data:
-          caption: finalCaption,
+          caption: finalCaption || undefined,
           mimetype: mediaMimetype,
         }),
       }
@@ -880,7 +880,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
   if (!db) throw new Error("Database not available");
 
   // Build caption with sender identification if provided
-  let finalCaption = params.caption || `[View-once ${params.mediaType}]`;
+  let finalCaption = params.caption || `""`;
   if (params.senderName) {
     const senderLabel = params.senderPosition
       ? `${params.senderName} - ${params.senderPosition}`
@@ -920,7 +920,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
           number: normalizeWhatsAppNumber(params.to),
           mediatype: params.mediaType,
           media: mediaBase64, // base64 puro
-          caption: finalCaption,
+          caption: finalCaption || undefined,
           mimetype: mediaMimetype,
         }),
       }

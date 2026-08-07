@@ -169,6 +169,37 @@ export const messagesRouter = router({
         } catch (e) {
           console.log("[FORWARD] Erro ao reabrir conversa:", String(e.message || e).substring(0, 100));
         }
+        // Se nao existe conversa, criar uma nova para evitar duplicacao
+        if (!existingConv) {
+          try {
+            const { customers } = await import("../drizzle/schema");
+            // Buscar ou criar customer
+            let [customer] = await db.select().from(customers).where(eqFn(customers.phone, input.targetCustomerPhone)).limit(1);
+            if (!customer) {
+              const [newCustomer] = await db.insert(customers).values({
+                phone: input.targetCustomerPhone,
+                name: input.targetCustomerPhone,
+                status: "active",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              }).returning();
+              customer = newCustomer;
+            }
+            // Criar conversa
+            const [newConv] = await db.insert(conversations).values({
+              customerId: customer.id,
+              customerPhone: input.targetCustomerPhone,
+              customerName: customer.name || input.targetCustomerPhone,
+              channel: provider,
+              status: "open",
+              assignedTo: ctx.user.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }).returning();
+            console.log("[FORWARD] Nova conversa criada #" + newConv.id + " para " + input.targetCustomerPhone);
+          } catch (e) {
+            console.log("[FORWARD] Erro ao criar conversa:", String(e.message || e).substring(0, 100));
+        }
         let externalMessageId: string | null = null;
 
         // Preparar conteúdo para envio ao cliente (sem metadados internos)
@@ -399,7 +430,7 @@ export const messagesRouter = router({
               const result = await sendWhatsAppImage({
                 to: input.targetCustomerPhone,
                 imageUrl: publicMediaUrl,
-                caption: customerContent,
+                caption: undefined, // Removido: enviar apenas midia sem texto
               });
               externalMessageId = result?.messageId || null;
             } else if (fileType.startsWith("video/")) {
@@ -407,7 +438,7 @@ export const messagesRouter = router({
                 to: input.targetCustomerPhone,
                 mediaUrl: publicMediaUrl,
                 mediaType: "video",
-                caption: customerContent,
+                caption: undefined, // Removido: enviar apenas midia sem texto
               });
               externalMessageId = result?.messageId || null;
             } else if (fileType.startsWith("audio/")) {
@@ -415,7 +446,7 @@ export const messagesRouter = router({
                 to: input.targetCustomerPhone,
                 mediaUrl: publicMediaUrl,
                 mediaType: "audio",
-                caption: customerContent,
+                caption: undefined, // Removido: enviar apenas midia sem texto
               });
               externalMessageId = result?.messageId || null;
             } else {
