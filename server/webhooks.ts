@@ -889,9 +889,7 @@ async function processWhatsAppWebhook(body: unknown) {
               timestamp,
               rawPayload: JSON.stringify(message),
               processed: 0,
-            }).onConflict({
-              target: [receivedMessages.provider, receivedMessages.externalId],
-            }).doNothing();
+              });
           } catch (e: unknown) {
             if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
               throw e;
@@ -1150,9 +1148,7 @@ async function processInstagramWebhook(body: unknown) {
             timestamp,
             rawPayload: JSON.stringify(event),
             processed: 0,
-          }).onConflict({
-            target: [receivedMessages.provider, receivedMessages.externalId],
-          }).doNothing();
+            });
         } catch (e: unknown) {
           // Se erro de duplicidade e onConflict não suportado ou falhou, ignorar silenciosamente
           if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
@@ -1712,7 +1708,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                                   mediaType: messageType,
                                                                   caption: messageText || null,
                                                                   messageTimestamp: Math.floor(messageTimestamp),
-                                                                }).onConflict({ target: [storyCache.storyId] }).doUpdate({ mediaUrl, updatedAt: new Date() });
+                                                                });});
                                                                 console.log("[Evolution Webhook] ✅ Story cached for future replies:", originalStoryId);
                                                               } catch (cacheErr) {
                                                                 console.error("[Evolution Webhook] ❌ Failed to cache story:", cacheErr);
