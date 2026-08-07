@@ -154,7 +154,7 @@ export const messagesRouter = router({
         try {
           const { conversations } = await import("../drizzle/schema");
           const { eq: eqFn } = await import("drizzle-orm");
-          const [existingConv] = await db
+          let existingConv: any = null;
             .select()
             .from(conversations)
             .where(eqFn(conversations.customerPhone, input.targetCustomerPhone))
