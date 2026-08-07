@@ -367,6 +367,36 @@ export async function downloadStoryMedia(
   const inst = instanceName || config.instanceName;
 
   // ============================================
+  // ============================================
+  // TENTATIVA 0: Download direto da URL do quotedMessage via proxy Evolution API
+  // ============================================
+  if (quotedMessage?.imageMessage?.url || quotedMessage?.videoMessage?.url) {
+    const directUrl = quotedMessage.imageMessage?.url || quotedMessage.videoMessage?.url;
+    const isImage = !!quotedMessage.imageMessage;
+    const mimeType = isImage ? "image/jpeg" : "video/mp4";
+    console.log("[downloadStoryMedia] 📤 Tentativa 0: Download direto da URL:", directUrl.substring(0, 80));
+    try {
+      // Usar proxy da Evolution API para baixar URL do WhatsApp CDN
+      const proxyResponse = await fetch(`${apiUrl}/instance/${inst}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: apiKey },
+        body: JSON.stringify({ url: directUrl }),
+        signal: AbortSignal.timeout(20000),
+      });
+      console.log("[downloadStoryMedia] 📥 Proxy response status:", proxyResponse.status);
+      if (proxyResponse.ok) {
+        const arrayBuffer = await proxyResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        if (buffer.length > 0) {
+          console.log("[downloadStoryMedia] ✅ Tentativa 0 sucesso: " + buffer.length + " bytes");
+          return { buffer, mimetype: mimeType };
+        }
+      }
+    } catch (err) {
+      console.log("[downloadStoryMedia] ⚠️ Tentativa 0 falhou:", err);
+    }
+  }
+
   // TENTATIVA 1: quotedMessage completo via getBase64FromMediaMessage
   // ============================================
   if (quotedMessage && (quotedMessage.imageMessage || quotedMessage.videoMessage)) {
