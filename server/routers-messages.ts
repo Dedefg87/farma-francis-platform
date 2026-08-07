@@ -200,6 +200,7 @@ export const messagesRouter = router({
           } catch (e) {
             console.log("[FORWARD] Erro ao criar conversa:", String(e.message || e).substring(0, 100));
         }
+        }
         let externalMessageId: string | null = null;
 
         // Preparar conteúdo para envio ao cliente (sem metadados internos)
