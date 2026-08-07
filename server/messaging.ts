@@ -9,8 +9,8 @@ const s3Client = new S3Client({
   region: "auto",
   endpoint: "https://816a5ff9c45a435c3a40b4fc262c914c.r2.cloudflarestorage.com",
   credentials: {
-    accessKeyId: process.env.S3_ACCESS_KEY || "",
-    secretAccessKey: process.env.S3_SECRET_KEY || "",
+    accessKeyId: "debc3a713faeb6d442dab499221ba42f",
+    secretAccessKey: "c82abdafb97bf0d1a39e66644c86cacbe373cb6aa2b852ea5786726070a0513c",
   },
 });
 
@@ -88,6 +88,36 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
     const mimetype = response.headers.get("content-type") || "application/octet-stream";
     if (base64.length > 5 * 1024 * 1024) throw new Error("Media too large");
     return { base64, mimetype };
+  }
+  // Fallback: try fetching from Evolution API server (for files not in R2)
+  if (urlOrKey.startsWith("evolution-api/") || urlOrKey.includes("evolution-api/")) {
+    try {
+      const config = await getEvolutionConfig();
+      if (config) {
+        const decodedPath = urlOrKey.includes("%40") ? decodeURIComponent(urlOrKey) : urlOrKey;
+        const fetchUrl = config.apiUrl + "/" + decodedPath;
+        console.log("[getMediaAsBase64] Trying Evolution API:", fetchUrl.substring(0, 100));
+        const evoResp = await fetch(fetchUrl, {
+          headers: { "apikey": config.apiKey, "User-Agent": "Mozilla/5.0" },
+          signal: AbortSignal.timeout(15000)
+        });
+        console.log("[getMediaAsBase64] Evolution API response:", evoResp.status);
+        if (evoResp.ok) {
+          const ctype = evoResp.headers.get("content-type") || "";
+          if (!ctype.includes("text/html") && !ctype.includes("text/plain") && !ctype.includes("application/json")) {
+            const buf = Buffer.from(await evoResp.arrayBuffer());
+            if (buf.length > 0 && buf.length < 10 * 1024 * 1024) {
+              const b64 = buf.toString("base64");
+              const mt = ctype || "application/octet-stream";
+              console.log("[getMediaAsBase64] Got media from Evolution API:", buf.length, "bytes");
+              return { base64: b64, mimetype: mt };
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.log("[getMediaAsBase64] Evolution API fallback failed:", String(e.message || e).substring(0, 100));
+    }
   }
   throw new Error("Could not fetch media: " + String(urlOrKey).substring(0, 100));
 }
