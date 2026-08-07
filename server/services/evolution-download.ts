@@ -166,7 +166,7 @@ export async function getStoryMediaViaBase64(
     if ((quotedMessage as any).imageMessage?.jpegThumbnail) {
       console.log('[StoryMedia] 📎 Using jpegThumbnail fallback');
       const thumbBase64 = (quotedMessage as any).imageMessage.jpegThumbnail;
-      const buffer = typeof thumbBase64 === 'string' ? Buffer.from(thumbBase64, 'base64') : Buffer.from(Object.values(thumbBase64) as number[]);
+      const buffer = typeof thumbBase64 === 'string' ? Buffer.from(thumbBase64, 'base64') : Buffer.from(Object.values(thumbBase64));
       console.log(`[StoryMedia] ✅ Thumbnail buffer: ${buffer.length} bytes`);
       return buffer;
     }
@@ -550,7 +550,7 @@ export async function downloadStoryMedia(
   if (thumbnail) {
     console.log('[downloadStoryMedia] 📎 Tentativa 3: Usando jpegThumbnail fallback');
     try {
-      const buffer = typeof thumbnail === 'string' ? Buffer.from(thumbnail, 'base64') : Buffer.from(Object.values(thumbnail) as number[]);
+      const buffer = typeof thumbnail === 'string' ? Buffer.from(thumbnail, 'base64') : Buffer.from(Object.values(thumbnail));
       console.log(`[downloadStoryMedia] ✅ Thumbnail buffer: ${buffer.length} bytes`);
       return { buffer, mimetype: 'image/jpeg', isThumbnail: true };
     } catch (error) {
