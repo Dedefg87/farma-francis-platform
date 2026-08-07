@@ -149,6 +149,26 @@ export const messagesRouter = router({
       // OPÇÃO 2: Encaminhar para um CLIENTE (via WhatsApp/Instagram)
       if (input.targetCustomerPhone) {
         const provider = input.targetProvider || conv.channel || "whatsapp";
+
+        // Reabrir conversa se estiver fechada
+        try {
+          const { conversations } = await import("../drizzle/schema");
+          const { eq: eqFn } = await import("drizzle-orm");
+          const [existingConv] = await db
+            .select()
+            .from(conversations)
+            .where(eqFn(conversations.customerPhone, input.targetCustomerPhone))
+            .limit(1);
+          if (existingConv && existingConv.status === "closed") {
+            await db
+              .update(conversations)
+              .set({ status: "open", updatedAt: new Date() })
+              .where(eqFn(conversations.id, existingConv.id));
+            console.log("[FORWARD] Conversa #" + existingConv.id + " reaberta");
+          }
+        } catch (e) {
+          console.log("[FORWARD] Erro ao reabrir conversa:", String(e.message || e).substring(0, 100));
+        }
         let externalMessageId: string | null = null;
 
         // Preparar conteúdo para envio ao cliente (sem metadados internos)
@@ -371,7 +391,7 @@ export const messagesRouter = router({
             const payloadToSend = {
               to: input.targetCustomerPhone,
               imageUrl: publicMediaUrl,
-              caption: customerContent,
+              caption: undefined, // Removido: enviar apenas a imagem sem texto
             };
             console.log("[FORWARD] payload to sendWhatsAppImage:", JSON.stringify(payloadToSend, null, 2));
             
