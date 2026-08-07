@@ -150,11 +150,12 @@ export const messagesRouter = router({
       if (input.targetCustomerPhone) {
         const provider = input.targetProvider || conv.channel || "whatsapp";
 
-        // Reabrir conversa se estiver fechada
+        // Reabrir conversa se estiver fechada + criar se nao existir
+        let existingConv: any = null;
         try {
-          const { conversations } = await import("../drizzle/schema");
+          const { conversations, customers } = await import("../drizzle/schema");
           const { eq: eqFn } = await import("drizzle-orm");
-          let existingConv: any = null;
+          [existingConv] = await db
             .select()
             .from(conversations)
             .where(eqFn(conversations.customerPhone, input.targetCustomerPhone))
@@ -166,14 +167,7 @@ export const messagesRouter = router({
               .where(eqFn(conversations.id, existingConv.id));
             console.log("[FORWARD] Conversa #" + existingConv.id + " reaberta");
           }
-        } catch (e) {
-          console.log("[FORWARD] Erro ao reabrir conversa:", String(e.message || e).substring(0, 100));
-        }
-        // Se nao existe conversa, criar uma nova para evitar duplicacao
-        if (!existingConv) {
-          try {
-            const { customers } = await import("../drizzle/schema");
-            // Buscar ou criar customer
+          if (!existingConv) {
             let [customer] = await db.select().from(customers).where(eqFn(customers.phone, input.targetCustomerPhone)).limit(1);
             if (!customer) {
               const [newCustomer] = await db.insert(customers).values({
@@ -185,7 +179,6 @@ export const messagesRouter = router({
               }).returning();
               customer = newCustomer;
             }
-            // Criar conversa
             const [newConv] = await db.insert(conversations).values({
               customerId: customer.id,
               customerPhone: input.targetCustomerPhone,
@@ -197,10 +190,11 @@ export const messagesRouter = router({
               updatedAt: new Date(),
             }).returning();
             console.log("[FORWARD] Nova conversa criada #" + newConv.id + " para " + input.targetCustomerPhone);
-          } catch (e) {
-            console.log("[FORWARD] Erro ao criar conversa:", String(e.message || e).substring(0, 100));
+          }
+        } catch (e) {
+          console.log("[FORWARD] Erro ao reabrir/criar conversa:", String(e.message || e).substring(0, 100));
         }
-        }
+
         let externalMessageId: string | null = null;
 
         // Preparar conteúdo para envio ao cliente (sem metadados internos)
