@@ -90,32 +90,6 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
     return { base64, mimetype };
   }
   throw new Error("Could not fetch media: " + String(urlOrKey).substring(0, 100));
-}> {
-  const command = new GetObjectCommand({
-    Bucket: "farmafranciswhatsappmedia",
-    Key: fileKey,
-  });
-
-  const response = await s3Client.send(command);
-
-  // Ler stream do corpo (compatível com qualquer versão SDK v3)
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of response.Body as any) {
-    chunks.push(chunk);
-  }
-  const buffer = Buffer.concat(chunks.map(c => Buffer.from(c)));
-
-  const base64 = buffer.toString("base64");
-  const mimetype = response.ContentType || "application/octet-stream";
-
-  // Validação de tamanho - Evolution limita ~5MB
-  const MAX_BASE64_SIZE = 5 * 1024 * 1024;
-  if (base64.length > MAX_BASE64_SIZE) {
-    throw new Error(`Mídia muito grande (${(base64.length / 1024 / 1024).toFixed(1)}MB). Limite: 5MB.`);
-  }
-
-  return { base64, mimetype };
-}
 
 function normalizeWhatsAppNumber(value: string) {
   return value.replace(/\D/g, "");
