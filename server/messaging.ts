@@ -90,6 +90,7 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
     return { base64, mimetype };
   }
   throw new Error("Could not fetch media: " + String(urlOrKey).substring(0, 100));
+}
 
 function normalizeWhatsAppNumber(value: string) {
   return value.replace(/\D/g, "");
