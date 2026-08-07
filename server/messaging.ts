@@ -325,6 +325,16 @@ export async function sendWhatsAppMessage(params: {
       messageId: result?.key?.id || null,
       status: "sent",
     });
+
+      // Also save to conversation_messages for visibility in chat
+      await ingestOutboundConversationMessage({
+        provider: "whatsapp",
+        toNumber: params.to,
+        fromUserId: 1,
+        messageType: "text",
+        messageText: finalMessage,
+        externalId: result?.key?.id || null,
+      });
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
 
@@ -1036,3 +1046,4 @@ export async function getSentMessages(params: {
 
   return await query;
 }
+    else if (rawMessageType === 'extendedTextMessage') typeToSave = 'text';

@@ -1279,6 +1279,7 @@ if (message.conversation) {
     else if (rawMessageType === 'videoMessage') typeToSave = 'video';
     else if (rawMessageType === 'documentMessage') typeToSave = 'document';
     else if (rawMessageType === 'conversation') typeToSave = 'text';
+    else if (rawMessageType === 'extendedTextMessage') typeToSave = 'text';
     else if (rawMessageType === 'stickerMessage') typeToSave = 'sticker';
     else if (rawMessageType === 'locationMessage') typeToSave = 'location';
     else if (rawMessageType === 'contactMessage') typeToSave = 'contact';
@@ -1744,7 +1745,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                                 }
                                                               } else {
                                                                 console.log("[Evolution Webhook] ⚠️ No cached story found, saving text only");
-                                                                messageType = 'extendedTextMessage';
+                                                                messageType = 'text';
                                                                 if (messageText) {
                                                                   messageText = `📸 Respondeu ao seu story:\n${messageText}`;
                                                                 }
