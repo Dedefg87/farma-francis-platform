@@ -297,7 +297,38 @@ export const messagesRouter = router({
                                         console.error("[messages.forward] Download error:", e);
                                       }
                                     } else {
-                                      console.log("[FORWARD] externalId NULL - returning mediaUrl as fallback");
+                                      // externalId is null - try fetching media directly from Evolution API server
+                                      try {
+                                        const decodedUrl = mediaUrl.includes("%40") ? decodeURIComponent(mediaUrl) : mediaUrl;
+                                        for (const baseUrl of uniqueUrls) {
+                                          try {
+                                            const directUrl = baseUrl + "/" + decodedUrl;
+                                            console.log("[FORWARD] Trying direct fetch from Evolution API:", directUrl.substring(0, 100));
+                                            const mediaResp = await fetch(directUrl, {
+                                              headers: { apikey: apiKey, "User-Agent": "Mozilla/5.0" },
+                                              signal: AbortSignal.timeout(15000)
+                                            });
+                                            console.log("[FORWARD] Direct fetch response:", mediaResp.status);
+                                            if (mediaResp.ok) {
+                                              const ctype = mediaResp.headers.get("content-type") || "";
+                                              if (!ctype.includes("text/html") && !ctype.includes("text/plain")) {
+                                                const buf = Buffer.from(await mediaResp.arrayBuffer());
+                                                if (buf.length > 0) {
+                                                  const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
+                                                  const r2Result = await uploadToR22(buf, "messages/forward_" + Date.now() + "." + ext, mimetype);
+                                                  console.log("[FORWARD] Uploaded to R2 from Evolution API:", r2Result.url);
+                                                  return r2Result.url;
+                                                }
+                                              }
+                                            }
+                                          } catch (e) {
+                                            console.log("[FORWARD] Direct fetch failed:", String(e.message || e).substring(0, 100));
+                                          }
+                                        }
+                                      } catch (e) {
+                                        console.log("[FORWARD] Evolution API fallback error:", String(e.message || e).substring(0, 100));
+                                      }
+                                      console.log("[FORWARD] All media fetch attempts failed - returning mediaUrl");
                                       return mediaUrl;
                                     }
                                   } else {
