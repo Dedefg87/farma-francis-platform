@@ -567,7 +567,14 @@ export async function ingestInboundConversationMessage(message: {
 
   // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  const fileUrlToSave = message.mediaUrl || null;
+  let fileUrlToSave = message.mediaUrl || null;
+// Reconstruct full R2 URL if it is a relative path (webhook cleans it)
+if (fileUrlToSave && !fileUrlToSave.startsWith("http")) {
+  const r2Base = process.env.R2_PUBLIC_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  const key = fileUrlToSave.startsWith("media/") ? fileUrlToSave : "media/" + fileUrlToSave;
+  fileUrlToSave = r2Base + "/" + key;
+  console.log("[ingestOutbound] Reconstructed full R2 URL:", fileUrlToSave);
+}
 
   // 8. Insert conversation message — guard contra duplicata por externalId
   let duplicateCheck;
@@ -908,7 +915,19 @@ export async function ingestOutboundConversationMessage(message: {
   }
 
   // 3. Insert message into conversation_messages
-  const insertResult = await db.insert(conversationMessages).values({
+  // IDEMPOTENCY: skip if outbound message with same externalId already exists
+  const outboundExtId = message2.key?.id || message2.messageId || null;
+  if (outboundExtId) {
+    const existingOut = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, outboundExtId), eq(conversationMessages.provider, "whatsapp")))
+      .limit(1);
+    if (existingOut.length > 0) {
+      console.log("[ingestOutbound] ⏭️ Skipping duplicate outbound message:", outboundExtId);
+      return null;
+    }
+  }
+    const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId || null,
     senderId: message.fromUserId,
