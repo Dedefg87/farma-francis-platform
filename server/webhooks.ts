@@ -23,6 +23,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
+  ingestOutboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
 
@@ -1929,7 +1930,27 @@ async function processEvolutionWebhook(body: unknown) {
           } catch (e) {
             // Erro ao enfileirar (raro), ignora silenciosamente
           }
-          return;
+          // 🎯 Salvar mensagem outbound na conversa (mensagens enviadas do celular)
+          try {
+            await ingestOutboundConversationMessage({
+              provider: "whatsapp",
+              toNumber: fromNumber,
+              fromUserId: 1,
+              messageType: messageType as any,
+              messageText: messageText || null,
+              caption: caption || null,
+              mediaUrl: fromMeMediaUrl || mediaUrl || null,
+              mediaId: parsed.mediaId || null,
+              mimeType: mimeType || null,
+              fileName: parsed.fileName || null,
+              fileSize: parsed.fileSize || null,
+              externalId: messageId,
+              createdAt: new Date(messageTimestamp * 1000),
+            });
+            console.log("[Evolution Webhook] ✅ Outbound message ingested:", messageId);
+          } catch (outboundErr) {
+            console.error("[Evolution Webhook] ❌ Failed to ingest outbound:", outboundErr);
+          }
         }
 
         // ==============================================
