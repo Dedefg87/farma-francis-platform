@@ -1708,7 +1708,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                                   mediaType: messageType,
                                                                   caption: messageText || null,
                                                                   messageTimestamp: Math.floor(messageTimestamp),
-                                                                });});
+                                                                });
                                                                 console.log("[Evolution Webhook] ✅ Story cached for future replies:", originalStoryId);
                                                               } catch (cacheErr) {
                                                                 console.error("[Evolution Webhook] ❌ Failed to cache story:", cacheErr);
