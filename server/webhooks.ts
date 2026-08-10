@@ -1683,7 +1683,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                             
                                                             const originalStoryId = storyContext.stanzaId;
                                                             const isImage = !!quotedImage;
-                                                            const storyOverrideMime = isImage ? 'image/jpeg' : 'video/mp4';
+                                                            storyOverrideMime = isImage ? 'image/jpeg' : 'video/mp4';
                                                             const ext = isImage ? 'jpg' : 'mp4';
                                                             
                                                             const mediaBuffer = await downloadStoryMedia(storyContext, messageId, data.instance || 'Meu');
@@ -2021,7 +2021,7 @@ async function processEvolutionWebhook(body: unknown) {
             caption,
             mediaUrl: storyOverrideUrl || mediaUrl || null,
             mediaId: parsed.mediaId || null,
-            mimeType,
+            mimeType: storyOverrideMime || mimeType,
             fileName: parsed.fileName,
             fileSize: parsed.fileSize,
             externalId: messageId,
