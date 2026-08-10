@@ -2137,7 +2137,17 @@ async function processEvolutionWebhook(body: unknown) {
           }
         
           // Buscar mensagem completa na Evolution API
-          const fullMsg = await fetchMessageFromEvolution(updateKeyId);
+                    let fullMsg: any = null;
+                    await new Promise(r => setTimeout(r, 500));
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                      fullMsg = await fetchMessageFromEvolution(updateKeyId);
+                      if (fullMsg) {
+                        if (attempt > 0) console.log("[Evolution Webhook] ✅ Message fetched on retry:", attempt + 1);
+                        break;
+                      }
+                      console.log("[Evolution Webhook] ⏳ Media not ready, retry in 500ms (attempt " + (attempt + 1) + "/3)");
+                      await new Promise(r => setTimeout(r, 500));
+                    }
           if (!fullMsg) {
             console.log("[Evolution Webhook] Could not fetch full message from API, skipping");
             return;
