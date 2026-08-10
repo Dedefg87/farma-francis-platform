@@ -1996,7 +1996,7 @@ async function processEvolutionWebhook(body: unknown) {
               fromProfilePic: profilePic || existing.fromProfilePic,
               messageText: messageText || existing.messageText,
               mediaUrl: mediaUrl || existing.mediaUrl,
-              mimeType: mimeType || existing.mimeType: storyOverrideMime || mimeType,
+              mimeType: storyOverrideMime || mimeType || existing.mimeType,
               caption: caption || existing.caption,
             })
             .where(eq(receivedMessages.id, existing.id));
