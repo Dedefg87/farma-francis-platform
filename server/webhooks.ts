@@ -2143,10 +2143,10 @@ async function processEvolutionWebhook(body: unknown) {
         
           // Extrair dados da mensagem
           const msgKey = fullMsg.key || {};
-          const remoteJidAlt = fullMsg.key?.remoteJidAlt || msgKey.remoteJidAlt || msgKey.remoteJid || body?.data?.remoteJid;
-          const toNumber = normalizeInboundNumber(remoteJidAlt);
+          const jidToUse = fullMsg.key?.remoteJidAlt || msgKey.remoteJidAlt || msgKey.remoteJid || body?.data?.remoteJid || "";
+          const toNumber = normalizeInboundNumber(jidToUse);
           if (!toNumber) {
-            console.log("[Evolution Webhook] Could not normalize number:", remoteJidAlt);
+            console.log("[Evolution Webhook] Could not normalize number:", jidToUse);
             return;
           }
         
