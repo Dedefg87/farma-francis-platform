@@ -647,6 +647,7 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
 }
 
 async function processEvolutionWebhookAsync(req: Request) {
+  const body = req.body;
   try {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
