@@ -1630,11 +1630,13 @@ async function processEvolutionWebhook(body: unknown) {
                 const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
 
                 const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
-                messageType = parsed.type as any; // DECLARAR ANTES DO STORY REPLY
+                let messageType = parsed.type as any; // DECLARAR ANTES DO STORY REPLY
                 let messageText = parsed.text;
                 const caption = parsed.caption;
                 let mediaUrl = parsed.mediaUrl; // DECLARAR ANTES DO STORY REPLY
-                let mimeType: string | undefined;
+                let storyOverrideType: string | null = null;
+                let storyOverrideMime: string | null = null;
+                let storyOverrideUrl: string | null = null;
 
                 // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
                 const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
@@ -1681,7 +1683,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                             
                                                             const originalStoryId = storyContext.stanzaId;
                                                             const isImage = !!quotedImage;
-                                                            mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+                                                            const storyOverrideMime = isImage ? 'image/jpeg' : 'video/mp4';
                                                             const ext = isImage ? 'jpg' : 'mp4';
                                                             
                                                             const mediaBuffer = await downloadStoryMedia(storyContext, messageId, data.instance || 'Meu');
@@ -1689,8 +1691,8 @@ async function processEvolutionWebhook(body: unknown) {
                                                                                                                         if (mediaBuffer) {
                                                                                                                           const fileName = `story-${originalStoryId}-${Date.now()}.${ext}`;
                                                                                                                           const uploadResult = await uploadToR2(mediaBuffer.buffer, fileName, mediaBuffer.mimetype);
-                                                                                                                          mediaUrl = uploadResult.url;
-                                                                                                                          messageType = isImage ? 'image' : 'video';
+                                                                                                                          storyOverrideUrl = uploadResult.url;
+                                                                                                                          storyOverrideType = isImage ? 'image' : 'video';
                                                                                                                           console.log("[Evolution Webhook] ✅ Story media uploaded:", { 
                                                                                                                             url: mediaUrl?.substring(0, 80), 
                                                                                                                             size: mediaBuffer.buffer.length,
@@ -1704,8 +1706,8 @@ async function processEvolutionWebhook(body: unknown) {
                                                                   storyId: originalStoryId,
                                                                   remoteJid: remoteJid || '',
                                                                   fromNumber,
-                                                                  mediaUrl: mediaUrl,
-                                                                  rawUrl: mediaUrl,
+                                                                  mediaUrl: storyOverrideUrl,
+                                                                  rawUrl: storyOverrideUrl,
                                                                   mediaType: messageType,
                                                                   caption: messageText || null,
                                                                   messageTimestamp: Math.floor(messageTimestamp),
@@ -1733,8 +1735,8 @@ async function processEvolutionWebhook(body: unknown) {
                                                               
                                                               if (cachedStory?.[0]) {
                                                                 console.log("[Evolution Webhook] ✅ Story resolved from cache:", cachedStory[0].storyId);
-                                                                mediaUrl = cachedStory[0].mediaUrl;
-                                                                messageType = cachedStory[0].mediaType as any;
+                                                                storyOverrideUrl = cachedStory[0].mediaUrl;
+                                                                storyOverrideType = cachedStory[0].mediaType as any;
                                                                 if (messageType === 'text' || messageType === 'unknown') {
                                                                   messageType = 'image';
                                                                 }
@@ -1753,7 +1755,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                             console.error("[Evolution Webhook] ❌ Story processing error:", storyErr);
                                                           }
                                                         }
-        if (!mimeType) mimeType = parsed.mimeType;
+        const mimeType = parsed.mimeType;
        
                 // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN (COM VALIDAÇÃO ROBUSTA)
                 if (parsed.needsDownload && parsed.rawUrl && !mediaUrl) {
@@ -1994,7 +1996,7 @@ async function processEvolutionWebhook(body: unknown) {
               fromProfilePic: profilePic || existing.fromProfilePic,
               messageText: messageText || existing.messageText,
               mediaUrl: mediaUrl || existing.mediaUrl,
-              mimeType: mimeType || existing.mimeType,
+              mimeType: mimeType || existing.mimeType: storyOverrideMime || mimeType,
               caption: caption || existing.caption,
             })
             .where(eq(receivedMessages.id, existing.id));
@@ -2014,10 +2016,10 @@ async function processEvolutionWebhook(body: unknown) {
             provider: "whatsapp",
             fromNumber,
             fromName: pushName || null,
-            messageType,
+            messageType: storyOverrideType || messageType,
             messageText,
             caption,
-            mediaUrl: mediaUrl || null,
+            mediaUrl: storyOverrideUrl || mediaUrl || null,
             mediaId: parsed.mediaId || null,
             mimeType,
             fileName: parsed.fileName,
