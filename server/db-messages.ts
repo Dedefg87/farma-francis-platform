@@ -838,19 +838,6 @@ export async function ingestOutboundConversationMessage(message: {
   if (!found) {
     const variants = generatePhoneVariants(customer.phone);
     for (const variant of variants) {
-      let found = await findConversationByPhone(db, customer.phone, conversations);
-      
-      // Try Brazilian phone variants if not found
-      if (!found) {
-        const variants = generatePhoneVariants(customer.phone);
-        for (const variant of variants) {
-          found = await findConversationByPhone(db, variant, conversations);
-          if (found) {
-            console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
-            break;
-          }
-        }
-      }
       if (found) {
         console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
         break;
