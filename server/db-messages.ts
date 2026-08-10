@@ -832,12 +832,14 @@ export async function ingestOutboundConversationMessage(message: {
   }
 
   // 2. Find existing conversation or create new one
-  let found = await findConversationByPhone(db, customer.phone, conversations);
+  let found = await findConversationByPhone(db, customer.phone, conversations, customers);
   
   // Try phone variants if not found (Brazilian number normalization)
   if (!found) {
     const variants = generatePhoneVariants(customer.phone);
     for (const variant of variants) {
+
+      found = await findConversationByPhone(db, variant, conversations, customers);
       if (found) {
         console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
         break;
