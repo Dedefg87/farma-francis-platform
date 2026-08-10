@@ -601,6 +601,19 @@ export async function ingestInboundConversationMessage(message: {
 
   console.log(`[EvolutionDeduplication] Nova mensagem, processando: ${message.externalId || 'sem externalId'}`);
 
+  // IDEMPOTENCY: skip if message with same externalId + provider already exists
+  const externalIdToCheck = (message.key?.id as string) ?? null;
+  if (externalIdToCheck) {
+    const existing = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, externalIdToCheck), eq(conversationMessages.provider, message.provider || "whatsapp")))
+      .limit(1);
+    if (existing.length > 0) {
+      console.log(`[EvolutionDeduplication] ⏭️ Skipping duplicate message: ${externalIdToCheck}`);
+      return null;
+    }
+  }
+  
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: (message.key?.id as string) ?? null,
