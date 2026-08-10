@@ -838,7 +838,19 @@ export async function ingestOutboundConversationMessage(message: {
   if (!found) {
     const variants = generatePhoneVariants(customer.phone);
     for (const variant of variants) {
-      found = await findConversationByPhone(db, variant, conversations);
+      let found = await findConversationByPhone(db, customer.phone, conversations);
+      
+      // Try Brazilian phone variants if not found
+      if (!found) {
+        const variants = generatePhoneVariants(customer.phone);
+        for (const variant of variants) {
+          found = await findConversationByPhone(db, variant, conversations);
+          if (found) {
+            console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
+            break;
+          }
+        }
+      }
       if (found) {
         console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
         break;
@@ -858,6 +870,20 @@ export async function ingestOutboundConversationMessage(message: {
       status: "open",
       assignedTo: message.fromUserId || null,
     }).returning();
+    // Create conversation if still not found
+    if (!found) {
+      console.log("[ingestOutbound] ⚠️ No conversation found for", customer.phone, "→ creating new one");
+      const [newConv] = await db.insert(conversations).values({
+        customerId: customer.id,
+        customerName: customer.name || null,
+        customerPhone: customer.phone,
+        channel: message.provider || "whatsapp",
+        status: "open",
+        assignedTo: message.fromUserId || null,
+      }).returning();
+      found = { conversationId: newConv.id };
+    }
+    
     found = { conversationId: newConv.id };
   }
   
