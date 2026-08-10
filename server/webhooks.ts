@@ -1951,6 +1951,7 @@ async function processEvolutionWebhook(body: unknown) {
           } catch (outboundErr) {
             console.error("[Evolution Webhook] ❌ Failed to ingest outbound:", outboundErr);
           }
+          return;
         }
 
         // ==============================================
