@@ -247,23 +247,22 @@ export async function downloadWhatsAppMediaFromEvolution(
     }
 
     // Method 2: Try /instance/messages/{instanceName}/{messageId} 
-    const messageId = params.messageKey?.id || 'unknown';
-    const downloadUrl = `${apiUrl}/instance/messages/${instanceName}/${messageId}`;
+    // Method 2: Use getBase64FromMediaMessage with correct endpoint
+    const downloadUrl = `${apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
     
-    console.log('🚨 [Evolution Download] Trying message/download endpoint:', downloadUrl);
+    console.log("🚨 [Evolution Download] Trying getBase64FromMediaMessage endpoint:", downloadUrl);
     
     const downloadResponse = await fetch(downloadUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey,
-        },
-        body: JSON.stringify({
-          message: {
-            key: params.messageKey,
-          },
-        }),
+        "Content-Type": "application/json",
+        apikey: apiKey,
       },
+      body: JSON.stringify({
+        message: {
+          key: params.messageKey,
+        },
+      }),
     });
 
     console.log('🚨 [Evolution Download] message/download response status:', downloadResponse.status);
