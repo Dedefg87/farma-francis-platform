@@ -692,7 +692,7 @@ async function processEvolutionWebhookAsync(req: Request) {
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
     // Aceitar variações de eventos de mensagem
-    const allowedEvents = ["messages_upsert", "messages_update"];
+    const allowedEvents = ["messages_upsert", "messages_update", "send_message"];
     
     // Ignorar TUDO que não for mensagem nova
     if (!allowedEvents.includes(normalizedEvent)) {
@@ -1598,7 +1598,7 @@ async function processEvolutionWebhook(body: unknown) {
     }
 
     // Evento de mensagens
-    if (normalizedEvent === "messages_upsert" || normalizedEvent === "messages.upsert") {
+    if (normalizedEvent === "messages_upsert" || normalizedEvent === "messages.upsert" || normalizedEvent === "send_message" || normalizedEvent === "send.message") {
       try {
         const data = body?.data || body;
         const messageData = data?.message || data?.messages?.[0] || body || {};
@@ -1613,7 +1613,7 @@ async function processEvolutionWebhook(body: unknown) {
         }
         const remoteJid = key?.remoteJid || data?.remoteJid || messageData?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
         const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName || body?.sender?.name || body?.sender?.pushName || body?.data?.sender?.name;
-        const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
+        const fromMe = (normalizedEvent === "send_message" || normalizedEvent === "send.message") ? true : (key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe);
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
         const rawMessageType = data?.messageType || null; // PRIORITY: Evolution API message type
 
