@@ -97,8 +97,8 @@ export async function getStoryMediaViaBase64(
 
     // Try multiple endpoint formats for compatibility
     const endpoints = [
-      `${apiUrl}/chat/getBase64FromMediaMessage`,
-      `${apiUrl}/api/chat/getBase64FromMediaMessage`,
+      `${apiUrl}/chat/getBase64FromMediaMessage/${inst}`,
+      `${apiUrl}/chat/getBase64FromMediaMessage/${inst}`,
     ];
 
     const payload = {
@@ -377,7 +377,7 @@ export async function downloadStoryMedia(
     console.log("[downloadStoryMedia] 📤 Tentativa 0: Download direto da URL:", directUrl.substring(0, 80));
     try {
       // Usar proxy da Evolution API para baixar URL do WhatsApp CDN
-      const proxyResponse = await fetch(`${apiUrl}/instance/${inst}`, {
+      const proxyResponse = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${inst}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: apiKey },
         body: JSON.stringify({ url: directUrl }),
@@ -415,8 +415,8 @@ export async function downloadStoryMedia(
       };
 
       const endpoints = [
-        `${apiUrl}/chat/getBase64FromMediaMessage`,
-        `${apiUrl}/api/chat/getBase64FromMediaMessage`,
+        `${apiUrl}/chat/getBase64FromMediaMessage/${inst}`,
+        `${apiUrl}/chat/getBase64FromMediaMessage/${inst}`,
       ];
 
       for (const endpoint of endpoints) {
