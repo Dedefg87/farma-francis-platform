@@ -635,6 +635,7 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
     // Usar Promise.resolve para garantir que erros sejam capturados
     setImmediate(() => {
       processEvolutionWebhookAsync(req).catch((err) => {
+        const body = req.body;
         console.error("🔴 [Evolution Webhook] Background CRASH:", err?.message || String(err));
         if (err?.stack) console.error("🔴 [Evolution Webhook] STACK:", err.stack);
       });
