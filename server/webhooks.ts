@@ -1630,10 +1630,11 @@ async function processEvolutionWebhook(body: unknown) {
                 const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
 
                 const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
-                let messageType = parsed.type; // DECLARAR ANTES DO STORY REPLY
+                messageType = parsed.type as any; // DECLARAR ANTES DO STORY REPLY
                 let messageText = parsed.text;
                 const caption = parsed.caption;
                 let mediaUrl = parsed.mediaUrl; // DECLARAR ANTES DO STORY REPLY
+                let mimeType: string | undefined;
 
                 // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
                 const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
@@ -1680,7 +1681,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                             
                                                             const originalStoryId = storyContext.stanzaId;
                                                             const isImage = !!quotedImage;
-                                                            const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
+                                                            mimeType = isImage ? 'image/jpeg' : 'video/mp4';
                                                             const ext = isImage ? 'jpg' : 'mp4';
                                                             
                                                             const mediaBuffer = await downloadStoryMedia(storyContext, messageId, data.instance || 'Meu');
@@ -1752,7 +1753,7 @@ async function processEvolutionWebhook(body: unknown) {
                                                             console.error("[Evolution Webhook] ❌ Story processing error:", storyErr);
                                                           }
                                                         }
-        const mimeType = parsed.mimeType;
+        if (!mimeType) mimeType = parsed.mimeType;
        
                 // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN (COM VALIDAÇÃO ROBUSTA)
                 if (parsed.needsDownload && parsed.rawUrl && !mediaUrl) {
