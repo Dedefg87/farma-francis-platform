@@ -567,7 +567,14 @@ export async function ingestInboundConversationMessage(message: {
 
   // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  let fileUrlToSave = message.mediaUrl || null;
+  let fileUrlToSave = message2.mediaUrl || null;
+// FIX: Reconstruct full R2 URL if webhook cleaned it to a relative path
+if (fileUrlToSave && !fileUrlToSave.startsWith("http") && !fileUrlToSave.startsWith("evolution-api")) {
+  const r2Base = process.env.R2_PUBLIC_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+  const key = fileUrlToSave.startsWith("media/") ? fileUrlToSave : "media/" + fileUrlToSave;
+  fileUrlToSave = r2Base + "/" + key;
+  console.log("[ingestOutbound] Reconstructed full R2 URL:", fileUrlToSave);
+}
 // Reconstruct full R2 URL if it is a relative path (webhook cleans it)
 if (fileUrlToSave && !fileUrlToSave.startsWith("http")) {
   const r2Base = process.env.R2_PUBLIC_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
