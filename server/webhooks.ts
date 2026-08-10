@@ -647,6 +647,7 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
 }
 
 async function processEvolutionWebhookAsync(req: Request) {
+  const body = req.body;
   console.log("[WEBHOOK_DIAG] processEvolutionWebhook called at", new Date().toISOString(), "| body.event:", body?.event, "| body.data:", JSON.stringify(body?.data || {}).substring(0, 200));
   try {
     const body = req.body;
@@ -2147,7 +2148,7 @@ async function processEvolutionWebhook(body: unknown) {
         
           // Extrair dados da mensagem
           const msgKey = fullMsg.key || {};
-          const remoteJidAlt = msgKey.remoteJidAlt || msgKey.remoteJid || body?.data?.remoteJid;
+          const remoteJidAlt = fullMsg.key?.remoteJidAlt || msgKey.remoteJidAlt || msgKey.remoteJid || body?.data?.remoteJid;
           const toNumber = normalizeInboundNumber(remoteJidAlt);
           if (!toNumber) {
             console.log("[Evolution Webhook] Could not normalize number:", remoteJidAlt);
