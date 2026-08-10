@@ -2121,9 +2121,91 @@ async function processEvolutionWebhook(body: unknown) {
         console.log("[Evolution Webhook] 📖 Story reply detected in messages.update");
         // Continuar processamento normal (não ignorar)
       } else {
-        const status = body?.data?.status || body?.status;
-        console.log("[Evolution Webhook] Message status update ignored:", status);
-        return;
+        // 🎯 Detectar mensagens fromMe (enviadas do celular) e buscar conteúdo completo
+        const updateFromMe = body?.data?.fromMe === true || body?.data?.fromMe === "true" || body?.data?.fromMe === 1;
+        const updateStatus = body?.data?.status || body?.status;
+        const updateKeyId = body?.data?.keyId || body?.data?.key?.id;
+        
+        if (updateFromMe && updateKeyId && (updateStatus === "DELIVERY_ACK" || updateStatus === 3 || updateStatus === "READ" || updateStatus === 4)) {
+          console.log("[Evolution Webhook] 📤 fromMe message detected in messages.update, key:", updateKeyId, "status:", updateStatus);
+        
+          // Verificar se já existe no banco
+          const existingUpdate = await getReceivedMessageByExternalId(updateKeyId, "whatsapp");
+          if (existingUpdate) {
+            console.log("[Evolution Webhook] Message already exists in DB:", updateKeyId);
+            return;
+          }
+        
+          // Buscar mensagem completa na Evolution API
+          const fullMsg = await fetchMessageFromEvolution(updateKeyId);
+          if (!fullMsg) {
+            console.log("[Evolution Webhook] Could not fetch full message from API, skipping");
+            return;
+          }
+        
+          // Extrair dados da mensagem
+          const msgKey = fullMsg.key || {};
+          const remoteJidAlt = msgKey.remoteJidAlt || msgKey.remoteJid || body?.data?.remoteJid;
+          const toNumber = normalizeInboundNumber(remoteJidAlt);
+          if (!toNumber) {
+            console.log("[Evolution Webhook] Could not normalize number:", remoteJidAlt);
+            return;
+          }
+        
+          const msgType = fullMsg.messageType || "conversation";
+          const msgContent = fullMsg.message || {};
+        
+          // Extrair texto/caption/mídia baseado no tipo
+          let msgText: string | null = null;
+          let caption: string | null = null;
+          let mediaUrl: string | null = null;
+          let mimeType: string | null = null;
+          let fileName: string | null = null;
+        
+          if (msgContent.conversation) {
+            msgText = msgContent.conversation;
+          } else if (msgContent.extendedTextMessage?.text) {
+            msgText = msgContent.extendedTextMessage.text;
+          } else if (msgContent.imageMessage) {
+            caption = msgContent.imageMessage.caption || null;
+            mimeType = msgContent.imageMessage.mimetype || "image/jpeg";
+          } else if (msgContent.videoMessage) {
+            caption = msgContent.videoMessage.caption || null;
+            mimeType = msgContent.videoMessage.mimetype || "video/mp4";
+          } else if (msgContent.audioMessage) {
+            mimeType = msgContent.audioMessage.mimetype || "audio/ogg";
+          } else if (msgContent.documentMessage) {
+            caption = msgContent.documentMessage.caption || null;
+            mimeType = msgContent.documentMessage.mimetype || "application/octet-stream";
+            fileName = msgContent.documentMessage.fileName || null;
+          }
+        
+          // Salvar como outbound
+          try {
+            await ingestOutboundConversationMessage({
+              provider: "whatsapp",
+              toNumber: toNumber,
+              fromUserId: 1,
+              messageType: msgType as any,
+              messageText: msgText,
+              caption: caption,
+              mediaUrl: mediaUrl,
+              mediaId: fullMsg.id || null,
+              mimeType: mimeType,
+              fileName: fileName,
+              fileSize: null,
+              externalId: updateKeyId,
+              createdAt: fullMsg.messageTimestamp ? new Date(fullMsg.messageTimestamp * 1000) : new Date(),
+            });
+            console.log("[Evolution Webhook] ✅ Outbound message ingested from messages.update:", updateKeyId, "to:", toNumber);
+          } catch (outboundErr) {
+            console.error("[Evolution Webhook] ❌ Failed to ingest outbound from update:", outboundErr);
+          }
+          return;
+        } else {
+          console.log("[Evolution Webhook] Message status update ignored:", updateStatus, "fromMe:", updateFromMe);
+          return;
+        }
       }
     }
 
