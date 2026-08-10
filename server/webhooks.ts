@@ -692,6 +692,35 @@ async function processEvolutionWebhookAsync(req: Request) {
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
     // Aceitar variações de eventos de mensagem
+  // Fetch full message from Evolution API by message ID
+  async function fetchMessageFromEvolution(messageId: string): Promise<any> {
+    try {
+      const EVO_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
+      const EVO_KEY = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
+      const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
+      const response = await fetch(`${EVO_URL}/chat/findMessages/${EVO_INSTANCE}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "apikey": EVO_KEY },
+        body: JSON.stringify({ where: { key: { id: messageId } }, limit: 1 }),
+      });
+      if (!response.ok) {
+        console.log("[Evolution Webhook] fetchMessageFromEvolution failed:", response.status);
+        return null;
+      }
+      const data = await response.json();
+      const records = data?.messages?.records || data?.records || [];
+      if (records.length === 0) {
+        console.log("[Evolution Webhook] fetchMessageFromEvolution: no records found for", messageId);
+        return null;
+      }
+      console.log("[Evolution Webhook] fetchMessageFromEvolution: found message, type:", records[0].messageType);
+      return records[0];
+    } catch (err) {
+      console.error("[Evolution Webhook] fetchMessageFromEvolution error:", err);
+      return null;
+    }
+  }
+
     const allowedEvents = ["messages_upsert", "messages_update", "send_message"];
     
     // Ignorar TUDO que não for mensagem nova
