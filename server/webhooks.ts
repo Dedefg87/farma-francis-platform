@@ -2182,6 +2182,44 @@ async function processEvolutionWebhook(body: unknown) {
         
           // Salvar como outbound
           try {
+            // 🎯 Baixar mídia se for imagem/vídeo/áudio/documento
+            const isMediaMsg = msgType === "imageMessage" || msgType === "videoMessage" || msgType === "audioMessage" || msgType === "documentMessage";
+            if (isMediaMsg) {
+              try {
+                const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+                const { uploadToR2 } = await import("./r2-client");
+            
+                const msgObj = fullMsg.message || {};
+                const mediaObj = msgObj.imageMessage || msgObj.videoMessage || msgObj.audioMessage || msgObj.documentMessage || {};
+                const rawMediaUrl = mediaObj.url || null;
+                const mediaKeyVal = mediaObj.mediaKey || null;
+                const directPathVal = mediaObj.directPath || null;
+            
+                if (rawMediaUrl || mediaKeyVal || directPathVal) {
+                  console.log("[Evolution Webhook] Downloading outbound media:", msgType, "key:", updateKeyId);
+                  const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                    url: rawMediaUrl || "",
+                    messageKey: { id: updateKeyId, remoteJid: remoteJidAlt || body?.data?.remoteJid, fromMe: true },
+                    ...(mediaKeyVal && { mediaKey: String(mediaKeyVal) }),
+                    ...(directPathVal && { directPath: String(directPathVal) }),
+                  });
+            
+                  if (mediaBuffer && mediaBuffer.length > 0) {
+                    const extMap: Record<string, string> = { imageMessage: "jpg", videoMessage: "mp4", audioMessage: "ogg", documentMessage: "pdf" };
+                    const ext = fileName ? (fileName.split(".").pop() || extMap[msgType]) : extMap[msgType] || "bin";
+                    const mediaFileName = fileName || `sent-${updateKeyId}.${ext}`;
+                    const uploadResult = await uploadToR2(mediaBuffer, mediaFileName, mimeType || "application/octet-stream");
+                    mediaUrl = cleanR2Url(uploadResult.url);
+                    console.log("[Evolution Webhook] ✅ Outbound media uploaded to R2:", mediaUrl);
+                  } else {
+                    console.log("[Evolution Webhook] ⚠️ Outbound media download returned empty");
+                  }
+                }
+              } catch (mediaErr) {
+                console.error("[Evolution Webhook] ❌ Outbound media download failed:", mediaErr);
+              }
+            }
+
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: toNumber,
