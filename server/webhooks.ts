@@ -2186,34 +2186,45 @@ async function processEvolutionWebhook(body: unknown) {
             const isMediaMsg = msgType === "imageMessage" || msgType === "videoMessage" || msgType === "audioMessage" || msgType === "documentMessage";
             if (isMediaMsg) {
               try {
-                const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
                 const { uploadToR2 } = await import("./r2-client");
             
-                const msgObj = fullMsg.message || {};
-                const mediaObj = msgObj.imageMessage || msgObj.videoMessage || msgObj.audioMessage || msgObj.documentMessage || {};
-                const rawMediaUrl = mediaObj.url || null;
-                const mediaKeyVal = mediaObj.mediaKey || null;
-                const directPathVal = mediaObj.directPath || null;
+                // Usar getBase64FromMediaMessage da Evolution API com formato correto
+                const EVO_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
+                const EVO_KEY = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
+                const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
             
-                if (rawMediaUrl || mediaKeyVal || directPathVal) {
-                  console.log("[Evolution Webhook] Downloading outbound media:", msgType, "key:", updateKeyId);
-                  const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
-                    url: rawMediaUrl || "",
-                    messageKey: { id: updateKeyId, remoteJid: remoteJidAlt || body?.data?.remoteJid, fromMe: true },
-                    ...(mediaKeyVal && { mediaKey: String(mediaKeyVal) }),
-                    ...(directPathVal && { directPath: String(directPathVal) }),
-                  });
+                console.log("[Evolution Webhook] Downloading outbound media via getBase64:", msgType, "key:", updateKeyId);
             
-                  if (mediaBuffer && mediaBuffer.length > 0) {
+                const mediaResponse = await fetch(`${EVO_URL}/chat/getBase64FromMediaMessage/${EVO_INSTANCE}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "apikey": EVO_KEY },
+                  body: JSON.stringify({
+                    message: {
+                      key: fullMsg.key,
+                      message: fullMsg.message,
+                      messageTimestamp: fullMsg.messageTimestamp,
+                    },
+                    key: fullMsg.key,
+                  }),
+                });
+            
+                if (mediaResponse.ok) {
+                  const mediaData = await mediaResponse.json();
+                  if (mediaData.base64) {
+                    const mediaBuffer = Buffer.from(mediaData.base64, "base64");
+                    console.log("[Evolution Webhook] Media downloaded:", mediaBuffer.length, "bytes, type:", mediaData.mimetype);
+            
                     const extMap: Record<string, string> = { imageMessage: "jpg", videoMessage: "mp4", audioMessage: "ogg", documentMessage: "pdf" };
                     const ext = fileName ? (fileName.split(".").pop() || extMap[msgType]) : extMap[msgType] || "bin";
                     const mediaFileName = fileName || `sent-${updateKeyId}.${ext}`;
-                    const uploadResult = await uploadToR2(mediaBuffer, mediaFileName, mimeType || "application/octet-stream");
+                    const uploadResult = await uploadToR2(mediaBuffer, mediaFileName, mediaData.mimetype || mimeType || "application/octet-stream");
                     mediaUrl = cleanR2Url(uploadResult.url);
                     console.log("[Evolution Webhook] ✅ Outbound media uploaded to R2:", mediaUrl);
                   } else {
-                    console.log("[Evolution Webhook] ⚠️ Outbound media download returned empty");
+                    console.log("[Evolution Webhook] ⚠️ No base64 in media response");
                   }
+                } else {
+                  console.log("[Evolution Webhook] ⚠️ getBase64 failed:", mediaResponse.status);
                 }
               } catch (mediaErr) {
                 console.error("[Evolution Webhook] ❌ Outbound media download failed:", mediaErr);
