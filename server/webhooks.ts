@@ -527,7 +527,6 @@ router.get("/instagram", async (req: Request, res: Response) => {
  */
 router.get("/instagram", async (req: Request, res: Response) => {
   try {
-    const body = req.body;
 
     logWebhookSummary("Instagram", body);
 
@@ -647,10 +646,7 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
 }
 
 async function processEvolutionWebhookAsync(req: Request) {
-  const body = req.body;
-  console.log("[WEBHOOK_DIAG] processEvolutionWebhook called at", new Date().toISOString(), "| body.event:", body?.event, "| body.data:", JSON.stringify(body?.data || {}).substring(0, 200));
   try {
-    const body = req.body;
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
     // LOG SIMPLES - sem objetos complexos para evitar crash
@@ -2103,7 +2099,6 @@ async function processEvolutionWebhook(body: unknown) {
     }
 
     // Messages update - status updates like READ, DELIVERY_ACK - ignore
-      console.log("[WEBHOOK_DIAG] Checking messages.update, normalizedEvent =", normalizedEvent);
     if (
       normalizedEvent === "messages_update" ||
       normalizedEvent === "messages.update"
