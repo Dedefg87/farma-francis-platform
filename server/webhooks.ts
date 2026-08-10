@@ -153,6 +153,35 @@ function normalizeBrazilianNumber(value: string): string {
  * Limpa URL do R2 para obter apenas o caminho relativo dentro do bucket.
  * Remove query string, nome do bucket e deixa o path (ex: evolution-api/.../file.jpg)
  */
+// Fetch full message from Evolution API by message ID
+async function fetchMessageFromEvolution(messageId: string): Promise<any> {
+  try {
+    const EVO_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
+    const EVO_KEY = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
+    const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
+    const response = await fetch(`${EVO_URL}/chat/findMessages/${EVO_INSTANCE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": EVO_KEY },
+      body: JSON.stringify({ where: { key: { id: messageId } }, limit: 1 }),
+    });
+    if (!response.ok) {
+      console.log("[Evolution Webhook] fetchMessageFromEvolution failed:", response.status);
+      return null;
+    }
+    const data = await response.json();
+    const records = data?.messages?.records || data?.records || [];
+    if (records.length === 0) {
+      console.log("[Evolution Webhook] fetchMessageFromEvolution: no records found for", messageId);
+      return null;
+    }
+    console.log("[Evolution Webhook] fetchMessageFromEvolution: found message, type:", records[0].messageType);
+    return records[0];
+  } catch (err) {
+    console.error("[Evolution Webhook] fetchMessageFromEvolution error:", err);
+    return null;
+  }
+}
+
 function cleanR2Url(url: string | null | undefined): string | null {
   console.log("[cleanR2Url] Input URL:", url?.substring(0, 120));
   if (!url) return null;
@@ -692,35 +721,6 @@ async function processEvolutionWebhookAsync(req: Request) {
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
     // Aceitar variações de eventos de mensagem
-  // Fetch full message from Evolution API by message ID
-  async function fetchMessageFromEvolution(messageId: string): Promise<any> {
-    try {
-      const EVO_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
-      const EVO_KEY = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
-      const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
-      const response = await fetch(`${EVO_URL}/chat/findMessages/${EVO_INSTANCE}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "apikey": EVO_KEY },
-        body: JSON.stringify({ where: { key: { id: messageId } }, limit: 1 }),
-      });
-      if (!response.ok) {
-        console.log("[Evolution Webhook] fetchMessageFromEvolution failed:", response.status);
-        return null;
-      }
-      const data = await response.json();
-      const records = data?.messages?.records || data?.records || [];
-      if (records.length === 0) {
-        console.log("[Evolution Webhook] fetchMessageFromEvolution: no records found for", messageId);
-        return null;
-      }
-      console.log("[Evolution Webhook] fetchMessageFromEvolution: found message, type:", records[0].messageType);
-      return records[0];
-    } catch (err) {
-      console.error("[Evolution Webhook] fetchMessageFromEvolution error:", err);
-      return null;
-    }
-  }
-
     const allowedEvents = ["messages_upsert", "messages_update", "send_message"];
     
     // Ignorar TUDO que não for mensagem nova
@@ -2182,28 +2182,22 @@ async function processEvolutionWebhook(body: unknown) {
         
           // Salvar como outbound
           try {
-            // 🎯 Baixar mídia se for imagem/vídeo/áudio/documento
+            // 🎯 Baixar mídia via getBase64FromMediaMessage (formato correto)
             const isMediaMsg = msgType === "imageMessage" || msgType === "videoMessage" || msgType === "audioMessage" || msgType === "documentMessage";
             if (isMediaMsg) {
               try {
                 const { uploadToR2 } = await import("./r2-client");
-            
-                // Usar getBase64FromMediaMessage da Evolution API com formato correto
-                const EVO_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
-                const EVO_KEY = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
-                const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
+                const EVO_URL2 = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
+                const EVO_KEY2 = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
+                const EVO_INSTANCE2 = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
             
                 console.log("[Evolution Webhook] Downloading outbound media via getBase64:", msgType, "key:", updateKeyId);
             
-                const mediaResponse = await fetch(`${EVO_URL}/chat/getBase64FromMediaMessage/${EVO_INSTANCE}`, {
+                const mediaResponse = await fetch(`${EVO_URL2}/chat/getBase64FromMediaMessage/${EVO_INSTANCE2}`, {
                   method: "POST",
-                  headers: { "Content-Type": "application/json", "apikey": EVO_KEY },
+                  headers: { "Content-Type": "application/json", "apikey": EVO_KEY2 },
                   body: JSON.stringify({
-                    message: {
-                      key: fullMsg.key,
-                      message: fullMsg.message,
-                      messageTimestamp: fullMsg.messageTimestamp,
-                    },
+                    message: { key: fullMsg.key, message: fullMsg.message, messageTimestamp: fullMsg.messageTimestamp },
                     key: fullMsg.key,
                   }),
                 });
@@ -2212,8 +2206,7 @@ async function processEvolutionWebhook(body: unknown) {
                   const mediaData = await mediaResponse.json();
                   if (mediaData.base64) {
                     const mediaBuffer = Buffer.from(mediaData.base64, "base64");
-                    console.log("[Evolution Webhook] Media downloaded:", mediaBuffer.length, "bytes, type:", mediaData.mimetype);
-            
+                    console.log("[Evolution Webhook] Media downloaded:", mediaBuffer.length, "bytes");
                     const extMap: Record<string, string> = { imageMessage: "jpg", videoMessage: "mp4", audioMessage: "ogg", documentMessage: "pdf" };
                     const ext = fileName ? (fileName.split(".").pop() || extMap[msgType]) : extMap[msgType] || "bin";
                     const mediaFileName = fileName || `sent-${updateKeyId}.${ext}`;
@@ -2221,7 +2214,7 @@ async function processEvolutionWebhook(body: unknown) {
                     mediaUrl = cleanR2Url(uploadResult.url);
                     console.log("[Evolution Webhook] ✅ Outbound media uploaded to R2:", mediaUrl);
                   } else {
-                    console.log("[Evolution Webhook] ⚠️ No base64 in media response");
+                    console.log("[Evolution Webhook] ⚠️ No base64 in response");
                   }
                 } else {
                   console.log("[Evolution Webhook] ⚠️ getBase64 failed:", mediaResponse.status);
