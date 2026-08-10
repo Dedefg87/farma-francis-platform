@@ -1755,7 +1755,7 @@ async function processEvolutionWebhook(body: unknown) {
         const mimeType = parsed.mimeType;
        
                 // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN (COM VALIDAÇÃO ROBUSTA)
-                if (parsed.needsDownload && parsed.rawUrl) {
+                if (parsed.needsDownload && parsed.rawUrl && !mediaUrl) {
                   try {
                     const { downloadWhatsAppMediaFromEvolution, downloadGenericMedia, isWhatsAppCdnUrl } = await import("./services/evolution-download");
                     const { uploadToR2 } = await import("./r2-client");

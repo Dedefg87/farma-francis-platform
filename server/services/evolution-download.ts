@@ -217,7 +217,7 @@ export async function downloadWhatsAppMediaFromEvolution(
     // Method 1: Try /instance/fetchImage (accepts URL directly for proxy download)
     if (params.url && params.url.length > 0) {
       console.log('🚨 [Evolution Download] Trying fetchImage endpoint...');
-      const fetchImageUrl = `${apiUrl}/instance/${instanceName}`;
+      const fetchImageUrl = `${apiUrl}/chat/getBase64FromMediaMessage/${instanceName}`;
       
       const fetchResponse = await fetch(fetchImageUrl, {
         method: 'POST',
@@ -253,9 +253,16 @@ export async function downloadWhatsAppMediaFromEvolution(
     console.log('🚨 [Evolution Download] Trying message/download endpoint:', downloadUrl);
     
     const downloadResponse = await fetch(downloadUrl, {
-      method: 'GET',
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'apikey': apiKey,
+        },
+        body: JSON.stringify({
+          message: {
+            key: params.messageKey,
+          },
+        }),
       },
     });
 
