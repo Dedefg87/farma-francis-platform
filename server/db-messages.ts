@@ -567,7 +567,7 @@ export async function ingestInboundConversationMessage(message: {
 
   // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  let fileUrlToSave = message2.mediaUrl || null;
+  let fileUrlToSave = message.mediaUrl || null;
 
   // 8. Insert conversation message — guard contra duplicata por externalId
   let duplicateCheck;
