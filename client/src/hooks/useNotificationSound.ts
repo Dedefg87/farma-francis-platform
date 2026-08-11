@@ -95,6 +95,64 @@ export function useNotificationSound() {
           oscillator.stop(now + 0.1);
           break;
 
+        case "suave":
+          // Suave - tom baixo e delicado, discreto
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(440, now);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.2, now + 0.05);
+          gainNode.gain.linearRampToValueAtTime(0, now + 0.6);
+          oscillator.start(now);
+          oscillator.stop(now + 0.6);
+          break;
+        case "marimba":
+          // Marimba - notas curtas tipo xilofone
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(880, now);
+          oscillator.frequency.setValueAtTime(660, now + 0.12);
+          oscillator.frequency.setValueAtTime(990, now + 0.24);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.35, now + 0.01);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+          oscillator.start(now);
+          oscillator.stop(now + 0.4);
+          break;
+        case "melodia":
+          // Melodia - sequência curta e agradável de 4 notas
+          oscillator.frequency.setValueAtTime(523, now); // C5
+          oscillator.frequency.setValueAtTime(659, now + 0.12); // E5
+          oscillator.frequency.setValueAtTime(784, now + 0.24); // G5
+          oscillator.frequency.setValueAtTime(1047, now + 0.36); // C6
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.3, now + 0.05);
+          gainNode.gain.linearRampToValueAtTime(0.2, now + 0.4);
+          gainNode.gain.linearRampToValueAtTime(0, now + 0.55);
+          oscillator.start(now);
+          oscillator.stop(now + 0.55);
+          break;
+        case "digital":
+          // Digital - bipe moderno e limpo
+          oscillator.type = "square";
+          oscillator.frequency.setValueAtTime(1200, now);
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.15, now + 0.01);
+          gainNode.gain.linearRampToValueAtTime(0, now + 0.15);
+          oscillator.start(now);
+          oscillator.stop(now + 0.15);
+          break;
+        case "triplo":
+          // Triplo - três tons suaves ascendentes
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(392, now); // G4
+          oscillator.frequency.setValueAtTime(494, now + 0.12); // B4
+          oscillator.frequency.setValueAtTime(587, now + 0.24); // D5
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.25, now + 0.04);
+          gainNode.gain.linearRampToValueAtTime(0.15, now + 0.28);
+          gainNode.gain.linearRampToValueAtTime(0, now + 0.45);
+          oscillator.start(now);
+          oscillator.stop(now + 0.45);
+          break;
         default:
           // Default ding
           oscillator.frequency.setValueAtTime(800, now);
