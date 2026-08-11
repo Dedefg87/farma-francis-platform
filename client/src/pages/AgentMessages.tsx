@@ -73,6 +73,7 @@ import {
   Keyboard,
   Trash2,
   Send,
+  CornerUpLeft,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -168,6 +169,7 @@ export default function AgentMessages() {
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
+  const [replyToMsg, setReplyToMsg] = useState<{ id: number; content: string } | null>(null);
   const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
   const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
   const [forwardTargetCustomerPhone, setForwardTargetCustomerPhone] = useState<string>("");
@@ -856,7 +858,9 @@ export default function AgentMessages() {
       sendMessageMutation.mutate({
         conversation_id: selectedConversationId,
         content: message,
+        replyToMessageId: replyToMsg?.id ?? undefined,
       });
+      setReplyToMsg(null);
     }
   };
 
@@ -1306,6 +1310,16 @@ export default function AgentMessages() {
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
+                        {/* Reply button - appears on hover */}
+                        <button
+                          onClick={() => {
+                            setReplyToMsg({ id: msg.id, content: msg.content || "" });
+                          }}
+                          className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-green-600 z-10"
+                          title="Responder mensagem"
+                        >
+                          <CornerUpLeft className="w-3 h-3" />
+                        </button>
                         {/* Forward button - appears on hover */}
                         <button
                           onClick={() => {
@@ -1324,6 +1338,13 @@ export default function AgentMessages() {
                         </p>
                         {msg.content && msg.content !== "null" && (
                           <p className="text-sm">{renderContentWithLinks((msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
+                        )}
+                        {msg.reaction && (
+                          <div className="mt-1 text-lg leading-none">
+                            <span className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm">
+                              {msg.reaction}
+                            </span>
+                          </div>
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
