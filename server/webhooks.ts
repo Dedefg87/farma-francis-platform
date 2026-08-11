@@ -23,7 +23,6 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
-  // FIX: Determinar o agente responsável pela conversa (em vez de usar fromUserId: 1 fixo)
 
 // Import debug module
 let debugModule: unknown = null;
