@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { renderContentWithLinks } from "@/utils/text-format";
 import { SoundSelector } from "@/components/SoundSelector";
+import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -878,7 +879,7 @@ export default function Messages() {
                                 <p className="text-xs font-medium mb-1 opacity-75" data-testid="sender-name">
                                   {msg.senderType === "agent" 
                                     ? msg.senderPosition 
-                                      ? `${msg.senderName || "Atendente"} - ${msg.senderPosition}`
+                                      ? `${msg.senderName || "Atendente"}`
                                       : msg.senderName || "Atendente"
                                     : msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")
                                   }
@@ -937,8 +938,13 @@ export default function Messages() {
                                           className="max-w-full rounded-lg max-h-64"
                                         />
                                       </div>
-                                    ) : (
-                                      <a
+                                                                        ) : (msg.fileType === "application/pdf" || msg.fileType?.includes("officedocument") || msg.fileType === "application/msword" || msg.fileType === "application/vnd.ms-excel" || msg.fileType === "application/vnd.ms-powerpoint") ? (
+                                      <PDFPreview
+                                      fileUrl={getImageSrc(msg.fileUrl, msg.id)}
+                                      fileName={msg.fileName}
+                                      fileType={msg.fileType}
+                                    />
+                                    ) : (                                      <a
                                         href={getImageSrc(msg.fileUrl, msg.id)}
                                         target="_blank"
                                         rel="noopener noreferrer"

@@ -48,6 +48,7 @@ function getMimeType(
   return fileType || "";
 }
 
+<<<<<<< HEAD
 import {
   MessageSquare,
   Clock,

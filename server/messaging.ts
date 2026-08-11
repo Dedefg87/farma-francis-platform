@@ -174,19 +174,10 @@ async function getEvolutionConfig() {
   }
 }
 
-async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string }) {
+async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string; remoteJid?: string }) {
   const config = await getEvolutionConfig();
   if (!config) {
     throw new Error("Evolution API configuration not found or incomplete");
-  }
-
-  const payload: any = {
-    number: normalizeWhatsAppNumber(params.to),
-    text: params.message,
-  };
-
-  if (params.replyToMessageId) {
-    payload.context = { id: params.replyToMessageId };
   }
 
   const response = await fetch(
@@ -197,53 +188,24 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
         apikey: config.apiKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Evolution API error: ${response.status} - ${error}`);
-  }
-
-  const result = await response.json();
-  return result;
-}
-
-/**
- * Send a reaction (emoji) to a WhatsApp message via Evolution API
- */
-export async function sendWhatsAppReaction(params: {
-  to: string;
-  emoji: string;
-  messageId: string; // Evolution message ID (external ID)
-}) {
-  const config = await getEvolutionConfig();
-  if (!config) {
-    throw new Error("Evolution API configuration not found or incomplete");
-  }
-
-  const response = await fetch(
-    `${config.apiUrl}/message/sendReaction/${config.instanceName}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: config.apiKey,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({
         number: normalizeWhatsAppNumber(params.to),
-        reaction: {
-          emoji: params.emoji,
-          messageId: params.messageId,
-        },
+        text: params.message,
+        ...(params.replyToMessageId && params.remoteJid ? {
+          quoted: {
+            key: {
+              id: params.replyToMessageId,
+              remoteJid: params.remoteJid,
+            },
+          },
+        } : {}),
       }),
     }
   );
 
   if (!response.ok) {
     const error = await response.text();
-    throw new Error(`Evolution API reaction error: ${response.status} - ${error}`);
+    throw new Error(`Evolution API error: ${response.status} - ${error}`);
   }
 
   const result = await response.json();
@@ -340,8 +302,8 @@ export async function sendWhatsAppMessage(params: {
   // Build message with sender identification if provided
   let finalMessage = params.message;
   if (params.senderName) {
-    const senderLabel = String(params.senderName).split("*").join("");
-    finalMessage = `*${senderLabel}*\n${params.message}`;
+    const senderLabel = String(params.senderName).trim().split("*").join("").split("_").join("").split("~").join("");
+    finalMessage = `*${senderLabel}:*\n${finalMessage}`;
   }
 
   // If mediaUrl is provided, send media message
@@ -364,12 +326,11 @@ export async function sendWhatsAppMessage(params: {
     const result = await sendEvolutionText({
       to: params.to,
       message: finalMessage,
-      replyToMessageId: params.replyToMessageId,
     });
     await db.insert(messages).values({
       channel: "whatsapp",
       direction: "outbound",
-      content: finalMessage,
+      content: params.message,
       messageId: result?.key?.id || null,
       status: "sent",
     });
@@ -382,7 +343,7 @@ export async function sendWhatsAppMessage(params: {
         fromUserName: params.senderName || null,
         fromUserPosition: params.senderPosition || null,
         messageType: "text",
-        messageText: finalMessage,
+        messageText: params.message,
         externalId: result?.key?.id || null,
       });
     return { success: true, messageId: result?.key?.id || null, to: params.to };
@@ -439,7 +400,7 @@ export async function sendWhatsAppMessage(params: {
   await db.insert(messages).values({
     channel: "whatsapp",
     direction: "outbound",
-    content: finalMessage,
+    content: params.message,
     messageId: result.messages[0].id,
     status: "sent",
   });
@@ -463,7 +424,6 @@ export async function sendWhatsAppImage(params: {
   imageUrl: string;
   caption?: string;
   senderId?: string | number;
-  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -473,8 +433,8 @@ export async function sendWhatsAppImage(params: {
   // Build caption with sender identification if provided
   let finalCaption = params.caption || "";
   if (params.senderName) {
-    const senderLabel = String(params.senderName).split("*").join("");
-    finalCaption = `*${senderLabel}*\n${params.caption || "[Image]"}`;
+    const senderLabel = String(params.senderName).trim().split("*").join("").split("_").join("").split("~").join("");
+    finalCaption = `*${senderLabel}:*\n${finalMessage}`;
   }
 
   const evolutionConfig = await getEvolutionConfig();
@@ -934,7 +894,6 @@ export async function sendWhatsAppViewOnceMedia(params: {
   mediaType: "image" | "video";
   caption?: string;
   senderId?: string | number;
-  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -944,8 +903,8 @@ export async function sendWhatsAppViewOnceMedia(params: {
   // Build caption with sender identification if provided
   let finalCaption = params.caption || `""`;
   if (params.senderName) {
-    const senderLabel = String(params.senderName).split("*").join("");
-    finalCaption = `*${senderLabel}*\n${params.caption || `[View-once ${params.mediaType}]`}`;
+    const senderLabel = String(params.senderName).trim().split("*").join("").split("_").join("").split("~").join("");
+    finalCaption = `*${senderLabel}:*\n${finalMessage}`;
   }
 
   const evolutionConfig = await getEvolutionConfig();
@@ -1095,4 +1054,33 @@ export async function getSentMessages(params: {
   }
 
   return await query;
+}
+/**
+ * Send a reaction to a WhatsApp message (Evolution API)
+ */
+export async function sendReaction(params: { to: string; messageId: string; remoteJid: string; emoji: string }) {
+  const config = await getEvolutionConfig();
+  if (!config) {
+    throw new Error("Evolution API configuration not found or incomplete");
+  }
+  const response = await fetch(
+    `${config.apiUrl}/message/sendReaction/${config.instanceName}`,
+    {
+      method: "POST",
+      headers: { apikey: config.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number: normalizeWhatsAppNumber(params.to),
+        reactionMessage: {
+          key: { id: params.messageId, remoteJid: params.remoteJid },
+          reaction: params.emoji,
+        },
+      }),
+    }
+  );
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Evolution API sendReaction error: ${response.status} - ${error}`);
+  }
+  const result = await response.json();
+  return result;
 }

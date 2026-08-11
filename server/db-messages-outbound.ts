@@ -57,6 +57,8 @@ export async function ingestOutboundConversationMessage(message: {
   fileName?: string | null;
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
+  reaction?: string | null; // Emoji de reação
+  replyToMessageId?: string | null; // Mensagem respondida
   createdAt?: Date;
 }) {
   console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
@@ -119,6 +121,8 @@ export async function ingestOutboundConversationMessage(message: {
     fileName: message.fileName || null,
     fileType: message.mimeType || null,
     fileSize: message.fileSize || null,
+    reaction: message.reaction || null,
+    replyToMessageId: message.replyToMessageId || null,
     createdAt: message.createdAt || new Date(),
   });
   

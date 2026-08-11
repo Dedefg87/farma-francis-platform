@@ -498,7 +498,7 @@ export default function AgentChat() {
                           {isAgent && (
                             <p className="text-xs font-semibold text-blue-100 mb-1">
                               {message.senderPosition 
-                                ? `${message.senderName || "Atendente"} - ${message.senderPosition}`
+                                ? `${message.senderName || "Atendente"}`
                                 : message.senderName || "Atendente"
                               }
                             </p>
