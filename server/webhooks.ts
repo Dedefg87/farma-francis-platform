@@ -1959,12 +1959,19 @@ async function processEvolutionWebhook(body: unknown) {
           } catch (e) {
             // Erro ao enfileirar (raro), ignora silenciosamente
           }
+                    // FIX: Determinar agente responsável pela conversa (em vez de fromUserId: 1)
+                    let outboundAgentId: number | null = null;
+                    try {
+                      const [oc] = await db.select({ assignedTo: conversations.assignedTo }).from(conversations).where(eq(conversations.customerPhone, fromNumber)).limit(1);
+                      outboundAgentId = oc?.assignedTo ?? null;
+                    } catch (e) { outboundAgentId = null; }
+          
           // 🎯 Salvar mensagem outbound na conversa (mensagens enviadas do celular)
           try {
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: fromNumber,
-              fromUserId: 1,
+              fromUserId: outboundAgentId ?? 1,
               messageType: messageType as any,
               messageText: messageText || null,
               caption: caption || null,
@@ -2237,7 +2244,7 @@ async function processEvolutionWebhook(body: unknown) {
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: toNumber,
-              fromUserId: 1,
+              fromUserId: outboundAgentId ?? 1,
               messageType: msgType as any,
               messageText: msgText,
               caption: caption,

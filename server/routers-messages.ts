@@ -450,11 +450,18 @@ export const messagesRouter = router({
                 const [senderEmp] = await db.select().from(employees).where(eq(employees.userId, ctx.user?.id)).limit(1);
                 const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
                 const senderPosition = senderEmp?.position || null;
-        const result = await sendWhatsAppMessage({
-          to: customerPhone,
-          message: content,
-          senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
-          senderName: senderName,
+                // FIX: Incluir nome e cargo do agente logado nas respostas
+                const [senderUser] = await db.select().from(users).where(eq(users.id, ctx.user?.id)).limit(1);
+                const [senderEmp] = await db.select().from(employees).where(eq(employees.userId, ctx.user?.id)).limit(1);
+                const senderName = senderUser?.displayName || senderUser?.name || null;
+                const senderPosition = senderEmp?.position || null;
+                const result = await sendWhatsAppMessage({
+                  to: customerPhone,
+                  message: content,
+                  senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
+                  senderName: senderName,
+                  senderPosition: senderPosition,
+                });
           senderPosition: senderPosition,
         });
             }
