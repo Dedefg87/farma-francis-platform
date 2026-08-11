@@ -563,6 +563,7 @@ export const messagesRouter = router({
         file_name: z.string().optional(),
         file_type: z.string().optional(),
         file_size: z.number().optional(),
+        replyToMessageId: z.number().optional(), // ID da mensagem original para citar (responder)
       }).refine(
         data => {
           // Must have either conversation_id or (to + provider)
@@ -586,6 +587,7 @@ export const messagesRouter = router({
 
       // Normalize camelCase/snake_case from frontend
       let fileUrl = input.fileUrl ?? input.file_url ?? null;
+      const replyToMessageId = input.replyToMessageId ?? null;
       const fileName = input.fileName ?? input.file_name ?? null;
       let fileType = input.fileType ?? input.file_type ?? null;
       const fileSize = input.fileSize ?? input.file_size ?? null;
