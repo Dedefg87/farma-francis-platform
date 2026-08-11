@@ -23,6 +23,13 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
+  // FIX: Determinar o agente responsável pela conversa (em vez de usar fromUserId: 1 fixo)
+  let outboundAgentId: number | null = null;
+  try {
+    const [outboundConv] = await db.select({ assignedTo: conversations.assignedTo }).from(conversations).where(eq(conversations.customerPhone, fromNumber)).limit(1);
+    outboundAgentId = outboundConv?.assignedTo ?? null;
+  } catch (e) { outboundAgentId = null; }
+  
   ingestOutboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
@@ -1964,7 +1971,7 @@ async function processEvolutionWebhook(body: unknown) {
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: fromNumber,
-              fromUserId: 1,
+              fromUserId: outboundAgentId ?? 1,
               messageType: messageType as any,
               messageText: messageText || null,
               caption: caption || null,
@@ -2237,7 +2244,7 @@ async function processEvolutionWebhook(body: unknown) {
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: toNumber,
-              fromUserId: 1,
+              fromUserId: outboundAgentId ?? 1,
               messageType: msgType as any,
               messageText: msgText,
               caption: caption,
