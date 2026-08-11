@@ -284,6 +284,7 @@ export async function sendWhatsAppMessage(params: {
   replyToMessageId?: string;
   mediaUrl?: string;
   caption?: string;
+  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -332,7 +333,7 @@ export async function sendWhatsAppMessage(params: {
       await ingestOutboundConversationMessage({
         provider: "whatsapp",
         toNumber: params.to,
-        fromUserId: 1,
+        fromUserId: params.senderId ?? 1,
         messageType: "text",
         messageText: finalMessage,
         externalId: result?.key?.id || null,
@@ -414,6 +415,7 @@ export async function sendWhatsAppImage(params: {
   to: string;
   imageUrl: string;
   caption?: string;
+  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -489,7 +491,7 @@ export async function sendWhatsAppImage(params: {
     await ingestOutboundConversationMessage({
       provider: "whatsapp",
       toNumber: params.to,
-      fromUserId: 1,
+      fromUserId: params.senderId ?? 1,
       messageType: "image",
       messageText: finalCaption,
       mediaUrl: params.imageUrl,
@@ -556,7 +558,7 @@ export async function sendWhatsAppImage(params: {
   await ingestOutboundConversationMessage({
     provider: "whatsapp",
     toNumber: params.to,
-    fromUserId: 1,
+    fromUserId: params.senderId ?? 1,
     messageType: "image",
     messageText: finalCaption,
     mediaUrl: params.imageUrl,
@@ -885,6 +887,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
   mediaUrl: string;
   mediaType: "image" | "video";
   caption?: string;
+  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -1005,7 +1008,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
   await ingestOutboundConversationMessage({
     provider: "whatsapp",
     toNumber: params.to,
-    fromUserId: 1,
+    fromUserId: params.senderId ?? 1,
     messageType: params.mediaType,
     messageText: finalCaption,
     mediaUrl: params.mediaUrl,

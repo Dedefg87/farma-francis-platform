@@ -445,15 +445,18 @@ export const messagesRouter = router({
               });
               externalMessageId = result?.messageId || null;
             } else {
-                      // FIX: Incluir nome do agente logado nas respostas ao cliente
-                      const senderName = ctx.user?.name || null;
-                      const senderPosition = ctx.user?.role || null;
-                      const result = await sendWhatsAppMessage({
-                        to: customerPhone,
-                        message: content,
-                        senderName: senderName,
-                        senderPosition: senderPosition,
-                      });
+        // FIX: Incluir nome e cargo do agente logado nas respostas ao cliente
+        const [senderUser] = await db.select().from(users).where(eq(users.id, ctx.user?.id)).limit(1);
+        const [senderEmp] = await db.select().from(employees).where(eq(employees.userId, ctx.user?.id)).limit(1);
+        const senderName = senderUser?.name || ctx.user?.name || null;
+        const senderPosition = senderEmp?.position || null;
+        const result = await sendWhatsAppMessage({
+          to: customerPhone,
+          message: content,
+          senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
+          senderName: senderName,
+          senderPosition: senderPosition,
+        });
             }
           } else {
             const result = await sendWhatsAppMessage({
