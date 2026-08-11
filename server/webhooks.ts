@@ -23,7 +23,14 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
-} from "../drizzle/schema";
+  ingestOutboundConversationMessage,
+  findOrCreateCustomerByPhone,
+} from "./db-messages";
+
+import { enqueueMobileSyncJob } from "./queue/mobile-sync";
+import crypto from "crypto";
+import { sseManager, EVENTS } from "./_core/sse";
+import { formatPhoneBR } from "./utils/phone";
 
 // Import debug module
 let debugModule: unknown = null;
@@ -1957,7 +1964,7 @@ async function processEvolutionWebhook(body: unknown) {
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: fromNumber,
-              fromUserId: outboundAgentId ?? 1,
+              fromUserId: 1,
               messageType: messageType as any,
               messageText: messageText || null,
               caption: caption || null,
@@ -2230,7 +2237,7 @@ async function processEvolutionWebhook(body: unknown) {
             await ingestOutboundConversationMessage({
               provider: "whatsapp",
               toNumber: toNumber,
-              fromUserId: outboundAgentId ?? 1,
+              fromUserId: 1,
               messageType: msgType as any,
               messageText: msgText,
               caption: caption,
