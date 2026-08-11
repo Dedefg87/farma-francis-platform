@@ -1323,7 +1323,7 @@ export default function AgentMessages() {
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
                         {msg.content && msg.content !== "null" && (
-                          <p className="text-sm">{renderContentWithLinks(msg.content.replace(/^*[^*\n]**\n?/, ""))}</p>
+                          <p className="text-sm">{renderContentWithLinks((msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
