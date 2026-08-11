@@ -446,10 +446,10 @@ export const messagesRouter = router({
               externalMessageId = result?.messageId || null;
             } else {
         // FIX: Incluir nome e cargo do agente logado nas respostas ao cliente
-        const [senderUser] = await db.select().from(users).where(eq(users.id, ctx.user?.id)).limit(1);
-        const [senderEmp] = await db.select().from(employees).where(eq(employees.userId, ctx.user?.id)).limit(1);
-        const senderName = senderUser?.name || ctx.user?.name || null;
-        const senderPosition = senderEmp?.position || null;
+                const [senderUser] = await db.select().from(users).where(eq(users.id, ctx.user?.id)).limit(1);
+                const [senderEmp] = await db.select().from(employees).where(eq(employees.userId, ctx.user?.id)).limit(1);
+                const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
+                const senderPosition = senderEmp?.position || null;
         const result = await sendWhatsAppMessage({
           to: customerPhone,
           message: content,
