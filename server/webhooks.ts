@@ -24,20 +24,6 @@ import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
   // FIX: Determinar o agente responsável pela conversa (em vez de usar fromUserId: 1 fixo)
-  let outboundAgentId: number | null = null;
-  try {
-    const [outboundConv] = await db.select({ assignedTo: conversations.assignedTo }).from(conversations).where(eq(conversations.customerPhone, fromNumber)).limit(1);
-    outboundAgentId = outboundConv?.assignedTo ?? null;
-  } catch (e) { outboundAgentId = null; }
-  
-  ingestOutboundConversationMessage,
-  findOrCreateCustomerByPhone,
-} from "./db-messages";
-
-import { enqueueMobileSyncJob } from "./queue/mobile-sync";
-import crypto from "crypto";
-import { sseManager, EVENTS } from "./_core/sse";
-import { formatPhoneBR } from "./utils/phone";
 
 // Import debug module
 let debugModule: unknown = null;
