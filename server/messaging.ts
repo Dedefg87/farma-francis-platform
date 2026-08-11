@@ -295,7 +295,7 @@ export async function sendWhatsAppMessage(params: {
   // Build message with sender identification if provided
   let finalMessage = params.message;
   if (params.senderName) {
-    const senderLabel = params.senderName;
+    const senderLabel = String(params.senderName).split("*").join("");
     finalMessage = `*${senderLabel}*\n${params.message}`;
   }
 
@@ -425,7 +425,7 @@ export async function sendWhatsAppImage(params: {
   // Build caption with sender identification if provided
   let finalCaption = params.caption || "";
   if (params.senderName) {
-    const senderLabel = params.senderName;
+    const senderLabel = String(params.senderName).split("*").join("");
     finalCaption = `*${senderLabel}*\n${params.caption || "[Image]"}`;
   }
 
@@ -896,7 +896,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
   // Build caption with sender identification if provided
   let finalCaption = params.caption || `""`;
   if (params.senderName) {
-    const senderLabel = params.senderName;
+    const senderLabel = String(params.senderName).split("*").join("");
     finalCaption = `*${senderLabel}*\n${params.caption || `[View-once ${params.mediaType}]`}`;
   }
 
