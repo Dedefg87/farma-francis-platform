@@ -445,11 +445,15 @@ export const messagesRouter = router({
               });
               externalMessageId = result?.messageId || null;
             } else {
-              const result = await sendWhatsAppMessage({
-                to: input.targetCustomerPhone,
-                message: customerContent,
-              });
-              externalMessageId = result?.messageId || null;
+                      // FIX: Incluir nome do agente logado nas respostas ao cliente
+                      const senderName = ctx.user?.name || null;
+                      const senderPosition = ctx.user?.role || null;
+                      const result = await sendWhatsAppMessage({
+                        to: customerPhone,
+                        message: content,
+                        senderName: senderName,
+                        senderPosition: senderPosition,
+                      });
             }
           } else {
             const result = await sendWhatsAppMessage({
