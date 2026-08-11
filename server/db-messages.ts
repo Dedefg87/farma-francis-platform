@@ -352,6 +352,10 @@ function buildInboundContent(message: {
   if (message.caption?.trim()) return message.caption;
 
   switch (message.messageType) {
+    case "reaction":
+      // Reações são salvas apenas como campo `reaction` na mensagem original,
+      // mas se chegar aqui como mensagem isolada, mostra o emoji
+      return message.messageText || "";
     case "image":
       return "[Imagem]";
     case "audio":
@@ -367,8 +371,6 @@ function buildInboundContent(message: {
       return ""; // Sticker é renderizado como imagem no frontend
     case "extendedTextMessage":
       return "[Resposta a Status]";
-    case "reaction":
-      return "[Reacao]";
     case "contact":
       return "[Contato]";
     default:

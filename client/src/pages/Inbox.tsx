@@ -14,6 +14,8 @@ import {
   Sparkles,
   Paperclip,
   X,
+  Reply,
+  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AudioTranscription } from "@/components/AudioTranscription";
@@ -22,6 +24,7 @@ import { SentimentBadge } from "@/components/SentimentBadge";
 import { TagManager } from "@/components/TagManager";
 import { TagFilter } from "@/components/TagFilter";
 import { useConversationTags } from "@/hooks/useConversationTags";
+import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Inbox() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
@@ -80,6 +83,26 @@ export default function Inbox() {
   const markAsRead = trpc.inbox.markAsRead.useMutation({
     onSuccess: () => {
       refetchConversations();
+    },
+  });
+
+  const replyToMessage = trpc.messages.reply.useMutation({
+    onSuccess: () => {
+      toast.success("Resposta enviada!");
+      refetchHistory();
+      refetchConversations();
+    },
+    onError: error => {
+      toast.error(`Erro ao responder: ${error.message}`);
+    },
+  });
+
+  const reactToMessage = trpc.messages.react.useMutation({
+    onSuccess: () => {
+      refetchHistory();
+    },
+    onError: error => {
+      toast.error(`Erro ao reagir: ${error.message}`);
     },
   });
 
@@ -519,19 +542,49 @@ export default function Inbox() {
                           {msg.mediaUrl && msg.messageType === "document" && (
                             <div className="mb-2 p-2 bg-blue-50 rounded flex items-center gap-2">
                               <Paperclip className="w-4 h-4 text-blue-600" />
-                              <a
-                                href={msg.mediaUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-600 underline"
-                              >
-                                📊 Documento anexo
-                              </a>
+                              <iframe
+                                src={msg.mediaUrl}
+                                className="w-full h-64 rounded border border-blue-200"
+                                title="Visualizar documento"
+                              />
                             </div>
                           )}
                           <p className="text-sm whitespace-pre-wrap">
                             {msg.content}
                           </p>
+                          {msg.reaction && (
+                            <span className="text-base ml-1">{msg.reaction}</span>
+                          )}
+                          <div className="flex gap-1 mt-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1 text-xs"
+                              onClick={() => {
+                                const content = prompt("Resposta:");
+                                if (content) {
+                                  replyToMessage.mutate({
+                                    replyToId: msg.externalId,
+                                    content,
+                                  });
+                                }
+                              }}
+                            >
+                              <Reply className="w-3 h-3 mr-1" />
+                              Responder
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1 text-xs"
+                              onClick={() => reactToMessage.mutate({
+                                messageId: msg.externalId,
+                                emoji: "❤️",
+                              })}
+                            >
+                              <Heart className="w-3 h-3 text-red-500" />
+                            </Button>
+                          </div>
                           <span className="text-xs opacity-70 mt-1 block">
                             {formatTimestamp(msg.timestamp)}
                           </span>

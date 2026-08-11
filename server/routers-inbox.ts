@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
-import { receivedMessages, messages, customers } from "../drizzle/schema";
+import { receivedMessages, messages, customers, conversationMessages, conversations, users, employees } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
 
@@ -168,59 +168,39 @@ export const inboxRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      // Get received messages
-      const received = await db
+      // Buscar conversa pelo número do cliente
+      const [conv] = await db
         .select()
-        .from(receivedMessages)
-        .where(
-          and(
-            eq(receivedMessages.fromNumber, input.fromNumber),
-            eq(receivedMessages.provider, input.provider)
-          )
-        )
-        .orderBy(desc(receivedMessages.timestamp))
-        .limit(input.limit);
+        .from(conversations)
+        .where(eq(conversations.customerPhone, input.fromNumber))
+        .limit(1);
 
-      // Get sent messages
-      const sent = await db
+      if (!conv) return [];
+
+      // Buscar mensagens da conversa usando a nova tabela conversation_messages
+      const msgs = await db
         .select()
-        .from(messages)
-        .where(
-          and(
-            eq(messages.channel, input.provider),
-            eq(messages.direction, "outbound")
-          )
-        )
-        .orderBy(desc(messages.createdAt))
-        .limit(input.limit);
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, conv.id))
+        .orderBy(conversationMessages.createdAt);
 
-      // Merge and sort by timestamp
-      const allMessages = [
-        ...received.map(msg => ({
-          id: `received-${msg.id}`,
-          direction: "inbound" as const,
-          content: msg.messageText || "[Media]",
-          messageType: msg.messageType,
-          mediaUrl: msg.mediaUrl,
-          timestamp: Number(msg.timestamp),
-          createdAt: msg.createdAt,
-          fromName: msg.fromName,
-          processed: msg.processed === 1,
-        })),
-        ...sent.map(msg => ({
-          id: `sent-${msg.id}`,
-          direction: "outbound" as const,
-          content: msg.content,
-          messageType: msg.metadata ? (() => { try { const m = JSON.parse(msg.metadata); return m.fileType || "text"; } catch { return "text"; } })() : "text",
-          mediaUrl: msg.metadata ? (() => { try { const m = JSON.parse(msg.metadata); return m.mediaUrl || null; } catch { return null; } })() : null,
-          timestamp: msg.createdAt.getTime(),
-          createdAt: msg.createdAt,
-          fromName: null,
-          processed: true,
-        })),
-      ].sort((a, b) => b.timestamp - a.timestamp);
-
-      return allMessages;
+      // Enriquecer com nome/cargo do agente (senderName/senderPosition já vêm do DB agora)
+      return msgs.map(msg => ({
+        id: `cm-${msg.id}`,
+        direction: msg.senderType === "agent" ? "outbound" : "inbound",
+        content: msg.content || (msg.messageType === "reaction" ? msg.reaction || "" : ""),
+        messageType: msg.messageType,
+        mediaUrl: msg.fileUrl,
+        timestamp: msg.createdAt instanceof Date ? msg.createdAt.getTime() : new Date(msg.createdAt).getTime(),
+        createdAt: msg.createdAt,
+        fromName: msg.fromName || null,
+        senderId: msg.senderId,
+        senderName: msg.senderName || null,
+        senderPosition: msg.senderPosition || null,
+        reaction: msg.reaction || null,
+        externalId: msg.externalId,
+        processed: true,
+      }));
     }),
 
   /**
