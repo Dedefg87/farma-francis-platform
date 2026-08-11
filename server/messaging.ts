@@ -285,6 +285,7 @@ export async function sendWhatsAppMessage(params: {
   mediaUrl?: string;
   caption?: string;
   senderId?: string | number;
+  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -415,6 +416,7 @@ export async function sendWhatsAppImage(params: {
   to: string;
   imageUrl: string;
   caption?: string;
+  senderId?: string | number;
   senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
@@ -887,6 +889,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
   mediaUrl: string;
   mediaType: "image" | "video";
   caption?: string;
+  senderId?: string | number;
   senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
