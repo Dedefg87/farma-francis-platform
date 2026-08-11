@@ -872,6 +872,9 @@ async function processWhatsAppWebhook(body: unknown) {
               break;
             case "reaction":
               messageText = message.reaction?.emoji || null;
+              // Capturar ID da mensagem original + emoji para atualizar a coluna reaction
+              reactionTargetId = message.reaction?.key?.id || null;
+              reactionEmoji = message.reaction?.emoji || null;
               break;
             case "contact":
               messageText = JSON.stringify(message.contacts || []);
@@ -880,13 +883,33 @@ async function processWhatsAppWebhook(body: unknown) {
               console.log(`[WhatsApp] Unknown message type: ${type}`);
           }
 
+          
+          // 🎯 REAÇÃO: atualizar a mensagem original em vez de criar mensagem "[Reacao]"
+          if (messageType === "reaction" && reactionTargetId && reactionEmoji) {
+            try {
+              const target = await db.query.conversationMessages.findFirst({
+                where: (cm, { eq }) => eq(cm.externalId, reactionTargetId),
+              });
+              if (target) {
+                await db.update(conversationMessages).set({ reaction: reactionEmoji }).where(eq(conversationMessages.id, target.id));
+                console.log("[Webhook] ✅ Reação " + reactionEmoji + " aplicada à mensagem " + reactionTargetId);
+              } else {
+                console.log("[Webhook] ⚠️ Mensagem original " + reactionTargetId + " não encontrada para reação");
+              }
+            } catch (reactionErr) {
+              console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
+            }
+            // UPDATE_REACTION
+            return;
+          }
+
           const existing = await getReceivedMessageByExternalId(
             messageId,
             "whatsapp"
           );
           if (existing) {
             console.log(`[WhatsApp] Duplicate message ${messageId} ignored`);
-            continue;
+            return;
           }
 
           // Save to database (idempotent - ignore duplicates)
@@ -1150,7 +1173,27 @@ async function processInstagramWebhook(body: unknown) {
           console.warn("[Instagram] Could not resolve profile pic:", (picErr as Error).message);
         }
 
-        const existing = await getReceivedMessageByExternalId(
+        
+          // 🎯 REAÇÃO: atualizar a mensagem original em vez de criar mensagem "[Reacao]"
+          if (messageType === "reaction" && reactionTargetId && reactionEmoji) {
+            try {
+              const target = await db.query.conversationMessages.findFirst({
+                where: (cm, { eq }) => eq(cm.externalId, reactionTargetId),
+              });
+              if (target) {
+                await db.update(conversationMessages).set({ reaction: reactionEmoji }).where(eq(conversationMessages.id, target.id));
+                console.log("[Webhook] ✅ Reação " + reactionEmoji + " aplicada à mensagem " + reactionTargetId);
+              } else {
+                console.log("[Webhook] ⚠️ Mensagem original " + reactionTargetId + " não encontrada para reação");
+              }
+            } catch (reactionErr) {
+              console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
+            }
+            // UPDATE_REACTION
+            continue;
+          }
+
+          const existing = await getReceivedMessageByExternalId(
           messageId,
           "instagram"
         );
@@ -1589,6 +1632,13 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     fileName,
     fileSize,
     isStoryReply: !!quotedMessage,
+    // Extract reaction data if present (Evolution API sends reactionMessage with key.id + emoji)
+    reactionTargetId: message && typeof message === 'object' && 'reaction' in message
+      ? (message as any).reaction?.key?.id || null
+      : null,
+    reactionEmoji: message && typeof message === 'object' && 'reaction' in message
+      ? (message as any).reaction?.emoji || null
+      : null,
     // Campos extras que podem ser úteis
     ...(base64 && { base64 }),
     ...(mediaKey && { mediaKey }),
@@ -1660,7 +1710,9 @@ async function processEvolutionWebhook(body: unknown) {
                 const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
 
                 const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
-                let messageType = parsed.type as any; // DECLARAR ANTES DO STORY REPLY
+                let messageType = parsed.type as any;
+                let reactionTargetId = parsed.reactionTargetId || null;
+                let reactionEmoji = parsed.reactionEmoji || null;
                 let messageText = parsed.text;
                 const caption = parsed.caption;
                 let mediaUrl = parsed.mediaUrl; // DECLARAR ANTES DO STORY REPLY
@@ -2008,7 +2060,27 @@ async function processEvolutionWebhook(body: unknown) {
         // 🎯 IDEMPOTÊNCIA - UPSERT com ID único
         // ==============================================
         // Verificar se já existe (mais seguro que simples insert)
-        const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+        
+          // 🎯 REAÇÃO: atualizar a mensagem original em vez de criar mensagem "[Reacao]"
+          if (messageType === "reaction" && reactionTargetId && reactionEmoji) {
+            try {
+              const target = await db.query.conversationMessages.findFirst({
+                where: (cm, { eq }) => eq(cm.externalId, reactionTargetId),
+              });
+              if (target) {
+                await db.update(conversationMessages).set({ reaction: reactionEmoji }).where(eq(conversationMessages.id, target.id));
+                console.log("[Webhook] ✅ Reação " + reactionEmoji + " aplicada à mensagem " + reactionTargetId);
+              } else {
+                console.log("[Webhook] ⚠️ Mensagem original " + reactionTargetId + " não encontrada para reação");
+              }
+            } catch (reactionErr) {
+              console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
+            }
+            // UPDATE_REACTION
+            return;
+          }
+
+          const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
 
         // Buscar foto de perfil do cliente (Evolution API, com cache)
         let profilePic: string | null = null;
