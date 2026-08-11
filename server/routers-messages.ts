@@ -631,9 +631,27 @@ export const messagesRouter = router({
       // Send the message
       if (provider === "whatsapp") {
         const { sendWhatsAppMessage } = await import("./messaging");
+
+        // Buscar nome e cargo do agente logado para identificar no chat
+        const [senderUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, ctx.user?.id))
+          .limit(1);
+        const [senderEmp] = await db
+          .select()
+          .from(employees)
+          .where(eq(employees.userId, ctx.user?.id))
+          .limit(1);
+        const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
+        const senderPosition = senderEmp?.position || null;
+
         const result = await sendWhatsAppMessage({
           to: customerPhone,
           message: content,
+          senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
+          senderName,
+          senderPosition,
         });
         return { success: true, messageId: result?.messageId };
       } else if (provider === "instagram") {
