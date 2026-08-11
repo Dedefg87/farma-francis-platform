@@ -174,10 +174,19 @@ async function getEvolutionConfig() {
   }
 }
 
-async function sendEvolutionText(params: { to: string; message: string }) {
+async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string }) {
   const config = await getEvolutionConfig();
   if (!config) {
     throw new Error("Evolution API configuration not found or incomplete");
+  }
+
+  const payload: any = {
+    number: normalizeWhatsAppNumber(params.to),
+    text: params.message,
+  };
+
+  if (params.replyToMessageId) {
+    payload.context = { id: params.replyToMessageId };
   }
 
   const response = await fetch(
@@ -188,16 +197,53 @@ async function sendEvolutionText(params: { to: string; message: string }) {
         apikey: config.apiKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        number: normalizeWhatsAppNumber(params.to),
-        text: params.message,
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
   if (!response.ok) {
     const error = await response.text();
     throw new Error(`Evolution API error: ${response.status} - ${error}`);
+  }
+
+  const result = await response.json();
+  return result;
+}
+
+/**
+ * Send a reaction (emoji) to a WhatsApp message via Evolution API
+ */
+export async function sendWhatsAppReaction(params: {
+  to: string;
+  emoji: string;
+  messageId: string; // Evolution message ID (external ID)
+}) {
+  const config = await getEvolutionConfig();
+  if (!config) {
+    throw new Error("Evolution API configuration not found or incomplete");
+  }
+
+  const response = await fetch(
+    `${config.apiUrl}/message/sendReaction/${config.instanceName}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: config.apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        number: normalizeWhatsAppNumber(params.to),
+        reaction: {
+          emoji: params.emoji,
+          messageId: params.messageId,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Evolution API reaction error: ${response.status} - ${error}`);
   }
 
   const result = await response.json();
@@ -285,7 +331,6 @@ export async function sendWhatsAppMessage(params: {
   mediaUrl?: string;
   caption?: string;
   senderId?: string | number;
-  senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
 }) {
@@ -319,6 +364,7 @@ export async function sendWhatsAppMessage(params: {
     const result = await sendEvolutionText({
       to: params.to,
       message: finalMessage,
+      replyToMessageId: params.replyToMessageId,
     });
     await db.insert(messages).values({
       channel: "whatsapp",

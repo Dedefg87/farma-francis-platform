@@ -666,4 +666,108 @@ export const messagesRouter = router({
 
       throw new Error("Provider não suportado");
     }),
+
+  /**
+   * Responder a uma mensagem específica (reply/context)
+   * - replyToId: externalId (Evolution message ID) da mensagem original
+   */
+  reply: protectedProcedure
+    .input(
+      z.object({
+        replyToId: z.string().min(1),
+        content: z.string().min(1),
+        conversation_id: z.coerce.number().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Find conversation + customer phone
+      let conversationId = input.conversation_id;
+      if (!conversationId) {
+        const [msg] = await db
+          .select()
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, input.replyToId))
+          .limit(1);
+        conversationId = msg?.conversationId;
+      }
+      if (!conversationId) throw new Error("Conversa não encontrada");
+
+      const [conv] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .limit(1);
+      if (!conv) throw new Error("Conversa não encontrada");
+
+      const [senderUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, ctx.user?.id))
+        .limit(1);
+      const [senderEmp] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.userId, ctx.user?.id))
+        .limit(1);
+      const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
+      const senderPosition = senderEmp?.position || null;
+
+      const { sendWhatsAppMessage } = await import("./messaging");
+      const result = await sendWhatsAppMessage({
+        to: conv.customerPhone,
+        message: input.content,
+        replyToMessageId: input.replyToId,
+        senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
+        senderName,
+        senderPosition,
+      });
+      return { success: true, messageId: result?.messageId };
+    }),
+
+  /**
+   * Reagir a uma mensagem com emoji (ex: ❤️, 👍, 😂)
+   * - messageId: externalId (Evolution message ID) da mensagem
+   */
+  react: protectedProcedure
+    .input(
+      z.object({
+        messageId: z.string().min(1),
+        emoji: z.string().min(1).max(10),
+        conversation_id: z.coerce.number().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Find conversation + customer phone
+      let conversationId = input.conversation_id;
+      if (!conversationId) {
+        const [msg] = await db
+          .select()
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, input.messageId))
+          .limit(1);
+        conversationId = msg?.conversationId;
+      }
+      if (!conversationId) throw new Error("Conversa não encontrada");
+
+      const [conv] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .limit(1);
+      if (!conv) throw new Error("Conversa não encontrada");
+
+      const { sendWhatsAppReaction } = await import("./messaging");
+      const result = await sendWhatsAppReaction({
+        to: conv.customerPhone,
+        emoji: input.emoji,
+        messageId: input.messageId,
+      });
+      return { success: true, result };
+    }),
 });
