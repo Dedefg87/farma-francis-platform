@@ -23,6 +23,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
+} from "../drizzle/schema";
 
 // Import debug module
 let debugModule: unknown = null;
