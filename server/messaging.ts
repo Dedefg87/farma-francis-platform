@@ -333,6 +333,8 @@ export async function sendWhatsAppMessage(params: {
         provider: "whatsapp",
         toNumber: params.to,
         fromUserId: params.senderId ?? 1,
+        fromUserName: params.senderName || null,
+        fromUserPosition: params.senderPosition || null,
         messageType: "text",
         messageText: finalMessage,
         externalId: result?.key?.id || null,

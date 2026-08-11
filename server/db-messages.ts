@@ -813,6 +813,8 @@ export async function ingestOutboundConversationMessage(message: {
   provider: "whatsapp" | "instagram";
   toNumber: string;
   fromUserId: number; // ID do agente que enviou
+  fromUserName?: string | null; // Nome do agente
+  fromUserPosition?: string | null; // Cargo do agente
   messageType: string;
   messageText?: string | null;
   caption?: string | null;
@@ -933,6 +935,8 @@ export async function ingestOutboundConversationMessage(message: {
     conversationId,
     externalId: message.externalId || null,
     senderId: message.fromUserId,
+    senderName: message.fromUserName || null,
+    senderPosition: message.fromUserPosition || null,
     senderType: "agent",
     content: message.messageText || message.caption || buildInboundContent({
       messageType: message.messageType,
