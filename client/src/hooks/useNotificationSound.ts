@@ -153,6 +153,19 @@ export function useNotificationSound() {
           oscillator.start(now);
           oscillator.stop(now + 0.45);
           break;
+        case "whatsapp":
+          // WhatsApp - bipe duplo característico (nota aguda + grave)
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(880, now); // A5
+          oscillator.frequency.setValueAtTime(660, now + 0.09); // E5
+          gainNode.gain.setValueAtTime(0, now);
+          gainNode.gain.linearRampToValueAtTime(0.4, now + 0.02);
+          gainNode.gain.linearRampToValueAtTime(0.2, now + 0.1);
+          gainNode.gain.linearRampToValueAtTime(0.35, now + 0.12);
+          gainNode.gain.linearRampToValueAtTime(0, now + 0.35);
+          oscillator.start(now);
+          oscillator.stop(now + 0.35);
+          break;
         default:
           // Default ding
           oscillator.frequency.setValueAtTime(800, now);
