@@ -1320,15 +1320,10 @@ export default function AgentMessages() {
                         </button>
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
-                          {msg.senderType === "agent" 
-                            ? msg.senderPosition 
-                              ? `${msg.senderName || "Atendente"} - ${msg.senderPosition}`
-                              : msg.senderName || "Atendente"
-                            : msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")
-                          }
+                          {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
                         {msg.content && msg.content !== "null" && (
-                          <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
+                          <p className="text-sm">{renderContentWithLinks(msg.content.replace(/^*[^*\n]**\n?/, ""))}</p>
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
