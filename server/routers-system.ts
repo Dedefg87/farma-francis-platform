@@ -35,24 +35,22 @@ export const systemRouter = router({
       if (!db) throw new Error("Database not available");
 
       // ✅ Aplicar: adicionar reply_to_external_id + reaction
-      // MySQL não suporta IF NOT EXISTS em ALTER TABLE, então usamos try/catch
-      try {
+      // ✅ Verificar quais colunas já existem antes de tentar adicionar
+      const [cols] = await db.execute(sql`SHOW COLUMNS FROM conversation_messages`);
+      const existingCols = cols.map((c: any) => c.Field || c.field || Object.values(c)[0]).map((s: string) => s.toLowerCase());
+      console.log("[migrate] Existing columns:", existingCols);
+      
+      if (!existingCols.includes("reply_to_external_id")) {
         await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN reply_to_external_id VARCHAR(255) NULL`);
         console.log("✅ reply_to_external_id added");
-      } catch (e: any) {
-        if (!e.message?.includes("Duplicate column") && !e.message?.includes("exists")) {
-          throw e; // Re-throw unexpected errors
-        }
+      } else {
         console.log("ℹ️ reply_to_external_id já existe");
       }
       
-      try {
+      if (!existingCols.includes("reaction")) {
         await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN reaction VARCHAR(10) NULL`);
         console.log("✅ reaction added");
-      } catch (e: any) {
-        if (!e.message?.includes("Duplicate column") && !e.message?.includes("exists")) {
-          throw e;
-        }
+      } else {
         console.log("ℹ️ reaction já existe");
       }
       

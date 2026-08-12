@@ -18396,22 +18396,19 @@ var systemRouter = router({
   migrate: publicProcedure.mutation(async () => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    try {
+    const [cols] = await db.execute(import_drizzle_orm42.sql`SHOW COLUMNS FROM conversation_messages`);
+    const existingCols = cols.map((c) => c.Field || c.field || Object.values(c)[0]).map((s) => s.toLowerCase());
+    console.log("[migrate] Existing columns:", existingCols);
+    if (!existingCols.includes("reply_to_external_id")) {
       await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN reply_to_external_id VARCHAR(255) NULL`);
       console.log("\u2705 reply_to_external_id added");
-    } catch (e) {
-      if (!e.message?.includes("Duplicate column") && !e.message?.includes("exists")) {
-        throw e;
-      }
+    } else {
       console.log("\u2139\uFE0F reply_to_external_id j\xE1 existe");
     }
-    try {
+    if (!existingCols.includes("reaction")) {
       await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN reaction VARCHAR(10) NULL`);
       console.log("\u2705 reaction added");
-    } catch (e) {
-      if (!e.message?.includes("Duplicate column") && !e.message?.includes("exists")) {
-        throw e;
-      }
+    } else {
       console.log("\u2139\uFE0F reaction j\xE1 existe");
     }
     return { success: true, message: "Migration applied: reply + reaction columns" };
