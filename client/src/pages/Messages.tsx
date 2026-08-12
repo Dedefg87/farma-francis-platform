@@ -896,7 +896,7 @@ export default function Messages() {
                               className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[70%] rounded-lg p-3 group ${\
+                                className={`max-w-[70%] rounded-lg p-3 group ${
                                   msg.senderType === "agent"
                                     ? "bg-indigo-600 text-white"
                                     : "bg-gray-100 text-gray-900"
