@@ -55,6 +55,22 @@ export const systemRouter = router({
         }
       }
       
-      return { success: true, message: "Migration applied: reply + reaction + sender columns" };
+      return { 
+        success: true, 
+        message: "Migration applied: reply + reaction + sender columns",
+        cols: existingCols
+      };
+    }),
+  
+  // ✅ Endpoint: verificar schema real do MySQL
+  dbSchema: publicProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const [cols] = await db.execute(sql`SHOW COLUMNS FROM conversation_messages`);
+      return cols.map((c: any) => ({
+        Field: c.Field || c.field,
+        Type: c.Type || c.type
+      }));
     }),
 });
