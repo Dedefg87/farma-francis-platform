@@ -47,8 +47,6 @@ function getMimeType(
   // Fallback para o fileType do banco
   return fileType || "";
 }
-
-<<<<<<< HEAD
 import {
   MessageSquare,
   Clock,
