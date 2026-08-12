@@ -2199,19 +2199,21 @@ async function processEvolutionWebhook(body: unknown) {
         if (updateFromMe && updateKeyId && (updateStatus === "DELIVERY_ACK" || updateStatus === 3 || updateStatus === "READ" || updateStatus === 4)) {
           console.log("[Evolution Webhook] 📤 fromMe message detected in messages.update, key:", updateKeyId, "status:", updateStatus);
         
+          // ✅ Proteção idempotente: verificar conversation_messages PRIMEIRO (antes de qualquer ingestOutbound)
+          const existingConv = await db.query.conversationMessages.findFirst({
+            where: (cm, { eq }) => eq(cm.externalId, updateKeyId),
+          });
+          if (existingConv) {
+            console.log("[Evolution Webhook] Message already in conversation_messages, skipping:", updateKeyId);
+            return;
+          }
+        
           // Verificar se já existe no banco (tanto em receivedMessages quanto conversationMessages)
           const existingUpdate = await getReceivedMessageByExternalId(updateKeyId, "whatsapp");
           if (existingUpdate) {
             console.log("[Evolution Webhook] Message already exists in DB:", updateKeyId);
             return;
           }
-
-          // ✅ NOVA VERIFICAÇÃO: Evitar inserção duplicada em conversation_messages
-          const existingConv = await db.query.conversationMessages.findFirst({
-            where: (cm, { eq }) => eq(cm.externalId, updateKeyId),
-          });
-          if (existingConv) {
-            console.log("[Evolution Webhook] ⚠️ Outbound message already in conversation_messages, skipping ingest:", updateKeyId);
             return;
           }
         
