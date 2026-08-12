@@ -18397,21 +18397,23 @@ var systemRouter = router({
     const db = await getDb();
     if (!db) throw new Error("Database not available");
     const [cols] = await db.execute(import_drizzle_orm42.sql`SHOW COLUMNS FROM conversation_messages`);
-    const existingCols = cols.map((c) => c.Field || c.field || Object.values(c)[0]).map((s) => s.toLowerCase());
+    const existingCols = cols.map((c) => (c.Field || c.field || Object.values(c)[0]).toLowerCase());
     console.log("[migrate] Existing columns:", existingCols);
-    if (!existingCols.includes("reply_to_external_id")) {
-      await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN reply_to_external_id VARCHAR(255) NULL`);
-      console.log("\u2705 reply_to_external_id added");
-    } else {
-      console.log("\u2139\uFE0F reply_to_external_id j\xE1 existe");
+    const columnsToAdd = [
+      { name: "reply_to_external_id", def: "VARCHAR(255) NULL" },
+      { name: "reaction", def: "VARCHAR(10) NULL" },
+      { name: "sender_name", def: "VARCHAR(255) NULL" },
+      { name: "sender_position", def: "VARCHAR(255) NULL" }
+    ];
+    for (const { name, def } of columnsToAdd) {
+      if (!existingCols.includes(name)) {
+        await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN ${import_drizzle_orm42.sql.raw(`${name} ${def}`)}`);
+        console.log(`\u2705 ${name} added`);
+      } else {
+        console.log(`\u2139\uFE0F ${name} j\xE1 existe`);
+      }
     }
-    if (!existingCols.includes("reaction")) {
-      await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN reaction VARCHAR(10) NULL`);
-      console.log("\u2705 reaction added");
-    } else {
-      console.log("\u2139\uFE0F reaction j\xE1 existe");
-    }
-    return { success: true, message: "Migration applied: reply + reaction columns" };
+    return { success: true, message: "Migration applied: reply + reaction + sender columns" };
   })
 });
 

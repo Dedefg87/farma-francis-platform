@@ -34,26 +34,27 @@ export const systemRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // ✅ Aplicar: adicionar reply_to_external_id + reaction
-      // ✅ Verificar quais colunas já existem antes de tentar adicionar
+      // ✅ Verificar quais colunas já existem
       const [cols] = await db.execute(sql`SHOW COLUMNS FROM conversation_messages`);
-      const existingCols = cols.map((c: any) => c.Field || c.field || Object.values(c)[0]).map((s: string) => s.toLowerCase());
+      const existingCols = cols.map((c: any) => (c.Field || c.field || Object.values(c)[0]).toLowerCase());
       console.log("[migrate] Existing columns:", existingCols);
       
-      if (!existingCols.includes("reply_to_external_id")) {
-        await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN reply_to_external_id VARCHAR(255) NULL`);
-        console.log("✅ reply_to_external_id added");
-      } else {
-        console.log("ℹ️ reply_to_external_id já existe");
+      const columnsToAdd = [
+        { name: "reply_to_external_id", def: "VARCHAR(255) NULL" },
+        { name: "reaction", def: "VARCHAR(10) NULL" },
+        { name: "sender_name", def: "VARCHAR(255) NULL" },
+        { name: "sender_position", def: "VARCHAR(255) NULL" },
+      ];
+
+      for (const { name, def } of columnsToAdd) {
+        if (!existingCols.includes(name)) {
+          await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN ${sql.raw(`${name} ${def}`)}`);
+          console.log(`✅ ${name} added`);
+        } else {
+          console.log(`ℹ️ ${name} já existe`);
+        }
       }
       
-      if (!existingCols.includes("reaction")) {
-        await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN reaction VARCHAR(10) NULL`);
-        console.log("✅ reaction added");
-      } else {
-        console.log("ℹ️ reaction já existe");
-      }
-      
-      return { success: true, message: "Migration applied: reply + reaction columns" };
+      return { success: true, message: "Migration applied: reply + reaction + sender columns" };
     }),
 });
