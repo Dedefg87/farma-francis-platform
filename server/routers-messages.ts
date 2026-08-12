@@ -753,4 +753,38 @@ export const messagesRouter = router({
 
       return { success: true, messageId: result?.messageId };
     }),
+  
+  /**
+   * React to a message with an emoji
+   */
+  react: protectedProcedure
+    .input(
+      z.object({
+        messageId: z.string(),
+        emoji: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Update reaction on the target message
+      await db
+        .update(conversationMessages)
+        .set({ reaction: input.emoji })
+        .where(eq(conversationMessages.externalId, input.messageId));
+
+      // Also send reaction via Evolution API
+      try {
+        const { sendWhatsAppReaction } = await import("./messaging");
+        await sendWhatsAppReaction({
+          to: input.messageId,
+          emoji: input.emoji,
+        });
+      } catch (e) {
+        console.error("[messages.react] Failed to send Evolution reaction:", e);
+      }
+
+      return { success: true };
+    }),
 });

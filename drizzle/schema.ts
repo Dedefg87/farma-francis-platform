@@ -955,6 +955,8 @@ export const conversationMessages = mysqlTable("conversation_messages", {
   provider: mysqlEnum("provider", ["whatsapp", "instagram"]).default("whatsapp"),
   senderId: int("sender_id").references(() => users.id), // ID do agente (null se for cliente)
   senderType: mysqlEnum("sender_type", ["agent", "customer"]).notNull(),
+  senderName: varchar("sender_name", { length: 255 }), // ✅ Nome do remetente
+  senderPosition: varchar("sender_position", { length: 255 }), // ✅ Cargo do remetente
   content: text("content").notNull(),
   // Campos de anexo
   fileUrl: longtext("file_url"), // Can contain base64 data URLs

@@ -1096,6 +1096,10 @@ var init_schema = __esm({
       senderId: (0, import_mysql_core2.int)("sender_id").references(() => users.id),
       // ID do agente (null se for cliente)
       senderType: (0, import_mysql_core2.mysqlEnum)("sender_type", ["agent", "customer"]).notNull(),
+      senderName: (0, import_mysql_core2.varchar)("sender_name", { length: 255 }),
+      // ✅ Nome do remetente
+      senderPosition: (0, import_mysql_core2.varchar)("sender_position", { length: 255 }),
+      // ✅ Cargo do remetente
       content: (0, import_mysql_core2.text)("content").notNull(),
       // Campos de anexo
       fileUrl: (0, import_mysql_core2.longtext)("file_url"),
@@ -17424,6 +17428,29 @@ var messagesRouter = router({
       console.error("[messages.reply] Failed to save outbound:", saveErr);
     }
     return { success: true, messageId: result?.messageId };
+  }),
+  /**
+   * React to a message with an emoji
+   */
+  react: protectedProcedure.input(
+    import_zod21.z.object({
+      messageId: import_zod21.z.string(),
+      emoji: import_zod21.z.string().min(1)
+    })
+  ).mutation(async ({ input }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.update(conversationMessages).set({ reaction: input.emoji }).where((0, import_drizzle_orm35.eq)(conversationMessages.externalId, input.messageId));
+    try {
+      const { sendWhatsAppReaction } = await Promise.resolve().then(() => (init_messaging(), messaging_exports));
+      await sendWhatsAppReaction({
+        to: input.messageId,
+        emoji: input.emoji
+      });
+    } catch (e) {
+      console.error("[messages.react] Failed to send Evolution reaction:", e);
+    }
+    return { success: true };
   })
 });
 
