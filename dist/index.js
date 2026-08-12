@@ -18391,6 +18391,14 @@ var systemRouter = router({
       import_drizzle_orm42.sql`UPDATE conversations SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE status IN ('open', 'assigned')`
     );
     return { closed: result.affectedRows || 0 };
+  }),
+  // ✅ Endpoint temporário para aplicar migration
+  migrate: publicProcedure.mutation(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_external_id VARCHAR(255) NULL`);
+    await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reaction VARCHAR(10) NULL`);
+    return { success: true, message: "Migration applied: reply + reaction columns added" };
   })
 });
 
@@ -20744,22 +20752,29 @@ ${messageText}`;
           } catch (e) {
           }
           try {
-            await ingestOutboundConversationMessage({
-              provider: "whatsapp",
-              toNumber: fromNumber,
-              fromUserId: 1,
-              messageType: messageType2,
-              messageText: messageText || null,
-              caption: caption || null,
-              mediaUrl: fromMeMediaUrl || mediaUrl || null,
-              mediaId: parsed.mediaId || null,
-              mimeType: mimeType || null,
-              fileName: parsed.fileName || null,
-              fileSize: parsed.fileSize || null,
-              externalId: messageId,
-              createdAt: new Date(messageTimestamp * 1e3)
+            const existingOutbound = await db.query.conversationMessages.findFirst({
+              where: (cm, { eq: eq50 }) => eq50(cm.externalId, messageId)
             });
-            console.log("[Evolution Webhook] \u2705 Outbound message ingested:", messageId);
+            if (existingOutbound) {
+              console.log("[Evolution Webhook] \u2705 Outbound already exists in conversation_messages, skipping:", messageId);
+            } else {
+              await ingestOutboundConversationMessage({
+                provider: "whatsapp",
+                toNumber: fromNumber,
+                fromUserId: 1,
+                messageType: messageType2,
+                messageText: messageText || null,
+                caption: caption || null,
+                mediaUrl: fromMeMediaUrl || mediaUrl || null,
+                mediaId: parsed.mediaId || null,
+                mimeType: mimeType || null,
+                fileName: parsed.fileName || null,
+                fileSize: parsed.fileSize || null,
+                externalId: messageId,
+                createdAt: new Date(messageTimestamp * 1e3)
+              });
+              console.log("[Evolution Webhook] \u2705 Outbound message ingested:", messageId);
+            }
           } catch (outboundErr) {
             console.error("[Evolution Webhook] \u274C Failed to ingest outbound:", outboundErr);
           }
@@ -20892,16 +20907,16 @@ ${messageText}`;
         const updateKeyId = body2?.data?.keyId || body2?.data?.key?.id;
         if (updateFromMe && updateKeyId && (updateStatus === "DELIVERY_ACK" || updateStatus === 3 || updateStatus === "READ" || updateStatus === 4)) {
           console.log("[Evolution Webhook] \u{1F4E4} fromMe message detected in messages.update, key:", updateKeyId, "status:", updateStatus);
-          const existingUpdate = await getReceivedMessageByExternalId(updateKeyId, "whatsapp");
-          if (existingUpdate) {
-            console.log("[Evolution Webhook] Message already exists in DB:", updateKeyId);
-            return;
-          }
           const existingConv = await db.query.conversationMessages.findFirst({
             where: (cm, { eq: eq50 }) => eq50(cm.externalId, updateKeyId)
           });
           if (existingConv) {
-            console.log("[Evolution Webhook] \u26A0\uFE0F Outbound message already in conversation_messages, skipping ingest:", updateKeyId);
+            console.log("[Evolution Webhook] Message already in conversation_messages, skipping:", updateKeyId);
+            return;
+          }
+          const existingUpdate = await getReceivedMessageByExternalId(updateKeyId, "whatsapp");
+          if (existingUpdate) {
+            console.log("[Evolution Webhook] Message already exists in DB:", updateKeyId);
             return;
           }
           let fullMsg = null;

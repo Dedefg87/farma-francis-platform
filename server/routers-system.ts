@@ -27,4 +27,17 @@ export const systemRouter = router({
       
       return { closed: result.affectedRows || 0 };
     }),
+  
+  // ✅ Endpoint temporário para aplicar migration
+  migrate: publicProcedure
+    .mutation(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // ✅ Aplicar: adicionar reply_to_external_id + reaction
+      await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_external_id VARCHAR(255) NULL`);
+      await db.execute(sql`ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reaction VARCHAR(10) NULL`);
+      
+      return { success: true, message: "Migration applied: reply + reaction columns added" };
+    }),
 });

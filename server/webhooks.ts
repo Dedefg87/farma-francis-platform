@@ -2011,22 +2011,30 @@ async function processEvolutionWebhook(body: unknown) {
           }
           // 🎯 Salvar mensagem outbound na conversa (mensagens enviadas do celular)
           try {
-            await ingestOutboundConversationMessage({
-              provider: "whatsapp",
-              toNumber: fromNumber,
-              fromUserId: 1,
-              messageType: messageType as any,
-              messageText: messageText || null,
-              caption: caption || null,
-              mediaUrl: fromMeMediaUrl || mediaUrl || null,
-              mediaId: parsed.mediaId || null,
-              mimeType: mimeType || null,
-              fileName: parsed.fileName || null,
-              fileSize: parsed.fileSize || null,
-              externalId: messageId,
-              createdAt: new Date(messageTimestamp * 1000),
+            // ✅ Proteção idempotente: skip se já existe
+            const existingOutbound = await db.query.conversationMessages.findFirst({
+              where: (cm, { eq }) => eq(cm.externalId, messageId),
             });
-            console.log("[Evolution Webhook] ✅ Outbound message ingested:", messageId);
+            if (existingOutbound) {
+              console.log("[Evolution Webhook] ✅ Outbound already exists in conversation_messages, skipping:", messageId);
+            } else {
+              await ingestOutboundConversationMessage({
+                provider: "whatsapp",
+                toNumber: fromNumber,
+                fromUserId: 1,
+                messageType: messageType as any,
+                messageText: messageText || null,
+                caption: caption || null,
+                mediaUrl: fromMeMediaUrl || mediaUrl || null,
+                mediaId: parsed.mediaId || null,
+                mimeType: mimeType || null,
+                fileName: parsed.fileName || null,
+                fileSize: parsed.fileSize || null,
+                externalId: messageId,
+                createdAt: new Date(messageTimestamp * 1000),
+              });
+              console.log("[Evolution Webhook] ✅ Outbound message ingested:", messageId);
+            }
           } catch (outboundErr) {
             console.error("[Evolution Webhook] ❌ Failed to ingest outbound:", outboundErr);
           }
@@ -2214,9 +2222,7 @@ async function processEvolutionWebhook(body: unknown) {
             console.log("[Evolution Webhook] Message already exists in DB:", updateKeyId);
             return;
           }
-            return;
-          }
-        
+       
           // Buscar mensagem completa na Evolution API
                     let fullMsg: any = null;
                     await new Promise(r => setTimeout(r, 500));
