@@ -290,6 +290,7 @@ export async function sendWhatsAppMessage(params: {
   to: string;
   message: string;
   replyToMessageId?: string;
+  replyToRemoteJid?: string; // ✅ JID da mensagem respondida (necessário para quoted)
   mediaUrl?: string;
   caption?: string;
   senderId?: string | number;
@@ -326,6 +327,8 @@ export async function sendWhatsAppMessage(params: {
     const result = await sendEvolutionText({
       to: params.to,
       message: finalMessage,
+      replyToMessageId: params.replyToMessageId,
+      remoteJid: params.replyToRemoteJid, // ✅ Passar remoteJid para quoted
     });
     await db.insert(messages).values({
       channel: "whatsapp",
@@ -345,6 +348,7 @@ export async function sendWhatsAppMessage(params: {
         messageType: "text",
         messageText: params.message,
         externalId: result?.key?.id || null,
+        replyToExternalId: params.replyToMessageId || null, // ✅ Salvar referência do reply
       });
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }

@@ -1105,6 +1105,11 @@ var init_schema = __esm({
       // MIME type
       fileSize: (0, import_mysql_core2.int)("file_size"),
       // Tamanho em bytes
+      // ✅ NOVOS CAMPOS: Reply + Reaction
+      replyToExternalId: (0, import_mysql_core2.varchar)("reply_to_external_id", { length: 255 }),
+      // Evolution ID da mensagem respondida
+      reaction: (0, import_mysql_core2.varchar)("reaction", { length: 10 }),
+      // Emoji (❤️, 👍)
       readAt: (0, import_mysql_core2.timestamp)("read_at"),
       createdAt: (0, import_mysql_core2.timestamp)("created_at").defaultNow().notNull()
     });
@@ -7023,6 +7028,8 @@ async function ingestOutboundConversationMessage(message2) {
   const insertResult = await db.insert(conversationMessages).values({
     conversationId: conversationId2,
     externalId: message2.externalId || null,
+    replyToExternalId: message2.replyToExternalId || null,
+    // ✅ Salvar referência do reply
     senderId: message2.fromUserId,
     senderName: message2.fromUserName || null,
     senderPosition: message2.fromUserPosition || null,
@@ -7424,7 +7431,10 @@ ${finalMessage2}`;
   if (evolutionConfig) {
     const result2 = await sendEvolutionText({
       to: params.to,
-      message: finalMessage2
+      message: finalMessage2,
+      replyToMessageId: params.replyToMessageId,
+      remoteJid: params.replyToRemoteJid
+      // ✅ Passar remoteJid para quoted
     });
     await db.insert(messages).values({
       channel: "whatsapp",
@@ -7441,7 +7451,9 @@ ${finalMessage2}`;
       fromUserPosition: params.senderPosition || null,
       messageType: "text",
       messageText: params.message,
-      externalId: result2?.key?.id || null
+      externalId: result2?.key?.id || null,
+      replyToExternalId: params.replyToMessageId || null
+      // ✅ Salvar referência do reply
     });
     return { success: true, messageId: result2?.key?.id || null, to: params.to };
   }
@@ -16450,6 +16462,7 @@ var inboxRouter = router({
       senderName: msg.senderName || null,
       senderPosition: msg.senderPosition || null,
       reaction: msg.reaction || null,
+      replyToExternalId: msg.replyToExternalId || null,
       externalId: msg.externalId,
       processed: true
     }));
@@ -17261,7 +17274,8 @@ var messagesRouter = router({
           createdAt: msg.createdAt,
           senderName,
           senderPosition,
-          reaction: msg.reaction || null
+          reaction: msg.reaction || null,
+          replyToExternalId: msg.replyToExternalId || null
         };
       }));
       return result;
@@ -17357,6 +17371,59 @@ var messagesRouter = router({
       return { success: true, messageId: result?.messageId };
     }
     throw new Error("Provider n\xE3o suportado");
+  }),
+  /**
+   * Responder a uma mensagem específica (reply/context)
+   * - replyToId: externalId (Evolution message ID) da mensagem original
+   * - content: texto da resposta
+   */
+  reply: protectedProcedure.input(
+    import_zod21.z.object({
+      replyToId: import_zod21.z.string(),
+      // externalId da mensagem a responder
+      content: import_zod21.z.string().min(1),
+      conversation_id: import_zod21.z.coerce.number()
+    })
+  ).mutation(async ({ input, ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [conv] = await db.select().from(conversations).where((0, import_drizzle_orm35.eq)(conversations.id, input.conversation_id)).limit(1);
+    if (!conv) throw new Error("Conversa n\xE3o encontrada");
+    const [senderUser] = await db.select().from(users).where((0, import_drizzle_orm35.eq)(users.id, ctx.user?.id)).limit(1);
+    const [senderEmp] = await db.select().from(employees).where((0, import_drizzle_orm35.eq)(employees.userId, ctx.user?.id)).limit(1);
+    const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
+    const senderPosition = senderEmp?.position || null;
+    const { sendWhatsAppMessage: sendWhatsAppMessage2 } = await Promise.resolve().then(() => (init_messaging(), messaging_exports));
+    const [originalMsg] = await db.select().from(conversationMessages).where((0, import_drizzle_orm35.eq)(conversationMessages.externalId, input.replyToId)).limit(1);
+    const result = await sendWhatsAppMessage2({
+      to: conv.customerPhone,
+      message: input.content,
+      replyToMessageId: input.replyToId,
+      replyToRemoteJid: originalMsg?.remoteJid || void 0,
+      // ✅ Passar remoteJid para quoted
+      senderId: ctx.user?.id ? Number(ctx.user.id) : void 0,
+      senderName,
+      senderPosition
+    });
+    try {
+      const { ingestOutboundConversationMessage: ingestOutboundConversationMessage3 } = await Promise.resolve().then(() => (init_db_messages(), db_messages_exports));
+      await ingestOutboundConversationMessage3({
+        provider: "whatsapp",
+        toNumber: conv.customerPhone,
+        fromUserId: ctx.user?.id ? Number(ctx.user.id) : 1,
+        fromUserName: senderName || null,
+        fromUserPosition: senderPosition || null,
+        messageType: "text",
+        messageText: input.content,
+        externalId: result?.messageId || `outbound-${Date.now()}`,
+        replyToExternalId: input.replyToId,
+        // ✅ Referenciar mensagem respondida
+        createdAt: /* @__PURE__ */ new Date()
+      });
+    } catch (saveErr) {
+      console.error("[messages.reply] Failed to save outbound:", saveErr);
+    }
+    return { success: true, messageId: result?.messageId };
   })
 });
 

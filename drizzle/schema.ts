@@ -961,6 +961,9 @@ export const conversationMessages = mysqlTable("conversation_messages", {
   fileName: varchar("file_name", { length: 255 }),
   fileType: varchar("file_type", { length: 100 }), // MIME type
   fileSize: int("file_size"), // Tamanho em bytes
+  // ✅ NOVOS CAMPOS: Reply + Reaction
+  replyToExternalId: varchar("reply_to_external_id", { length: 255 }), // Evolution ID da mensagem respondida
+  reaction: varchar("reaction", { length: 10 }), // Emoji (❤️, 👍)
   readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

@@ -533,6 +533,7 @@ export const messagesRouter = router({
             senderName,
             senderPosition,
             reaction: (msg as any).reaction || null,
+            replyToExternalId: (msg as any).replyToExternalId || null,
           };
         }));
 
@@ -668,5 +669,88 @@ export const messagesRouter = router({
       }
 
       throw new Error("Provider não suportado");
+    }),
+
+  /**
+   * Responder a uma mensagem específica (reply/context)
+   * - replyToId: externalId (Evolution message ID) da mensagem original
+   * - content: texto da resposta
+   */
+  reply: protectedProcedure
+    .input(
+      z.object({
+        replyToId: z.string(), // externalId da mensagem a responder
+        content: z.string().min(1),
+        conversation_id: z.coerce.number(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Buscar conversa para obter número do cliente
+      const [conv] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, input.conversation_id))
+        .limit(1);
+
+      if (!conv) throw new Error("Conversa não encontrada");
+
+      // Buscar nome e cargo do agente
+      const [senderUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, ctx.user?.id))
+        .limit(1);
+      const [senderEmp] = await db
+        .select()
+        .from(employees)
+        .where(eq(employees.userId, ctx.user?.id))
+        .limit(1);
+
+      const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
+      const senderPosition = senderEmp?.position || null;
+
+      // Enviar reply via Evolution API
+      const { sendWhatsAppMessage } = await import("./messaging");
+      
+      // Buscar mensagem original para obter remoteJid (necessário para quoted)
+      const [originalMsg] = await db
+        .select()
+        .from(conversationMessages)
+        .where(eq(conversationMessages.externalId, input.replyToId))
+        .limit(1);
+
+      const result = await sendWhatsAppMessage({
+        to: conv.customerPhone,
+        message: input.content,
+        replyToMessageId: input.replyToId,
+        replyToRemoteJid: originalMsg?.remoteJid || undefined, // ✅ Passar remoteJid para quoted
+        senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
+        senderName,
+        senderPosition,
+      });
+
+      // Salvar no histórico
+      try {
+        const { ingestOutboundConversationMessage } = await import("./db-messages");
+        await ingestOutboundConversationMessage({
+          provider: "whatsapp",
+          toNumber: conv.customerPhone,
+          fromUserId: ctx.user?.id ? Number(ctx.user.id) : 1,
+          fromUserName: senderName || null,
+          fromUserPosition: senderPosition || null,
+          messageType: "text",
+          messageText: input.content,
+          externalId: result?.messageId || `outbound-${Date.now()}`,
+          replyToExternalId: input.replyToId, // ✅ Referenciar mensagem respondida
+          createdAt: new Date(),
+        });
+      } catch (saveErr) {
+        console.error("[messages.reply] Failed to save outbound:", saveErr);
+      }
+
+      return { success: true, messageId: result?.messageId };
     }),
 });

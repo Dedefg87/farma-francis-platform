@@ -44,6 +44,7 @@ export default function Inbox() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [enlargedPhoto, setEnlargedPhoto] = useState<{ url: string; name: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ externalId: string; content: string } | null>(null); // ✅ Estado: mensagem que está sendo respondida
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: conversations, refetch: refetchConversations } =
@@ -561,11 +562,12 @@ export default function Inbox() {
                               variant="ghost"
                               className="h-5 px-1 text-xs"
                               onClick={() => {
-                                const content = prompt("Resposta:");
-                                if (content) {
+                                const content = prompt("Resposta:", "");
+                                if (content && selectedConversation) {
                                   replyToMessage.mutate({
                                     replyToId: msg.externalId,
                                     content,
+                                    conversation_id: selectedConversation.id, // ✅ conversation_id obrigatório
                                   });
                                 }
                               }}

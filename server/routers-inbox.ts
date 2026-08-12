@@ -198,6 +198,7 @@ export const inboxRouter = router({
         senderName: msg.senderName || null,
         senderPosition: msg.senderPosition || null,
         reaction: msg.reaction || null,
+        replyToExternalId: (msg as any).replyToExternalId || null,
         externalId: msg.externalId,
         processed: true,
       }));

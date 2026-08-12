@@ -826,6 +826,7 @@ export async function ingestOutboundConversationMessage(message: {
   fileName?: string | null;
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
+  replyToExternalId?: string | null; // ✅ ID da mensagem respondida (reply)
   createdAt?: Date;
 }) {
   console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
@@ -936,6 +937,7 @@ export async function ingestOutboundConversationMessage(message: {
     const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId || null,
+    replyToExternalId: message.replyToExternalId || null, // ✅ Salvar referência do reply
     senderId: message.fromUserId,
     senderName: message.fromUserName || null,
     senderPosition: message.fromUserPosition || null,
