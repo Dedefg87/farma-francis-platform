@@ -18396,9 +18396,25 @@ var systemRouter = router({
   migrate: publicProcedure.mutation(async () => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
-    await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_external_id VARCHAR(255) NULL`);
-    await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reaction VARCHAR(10) NULL`);
-    return { success: true, message: "Migration applied: reply + reaction columns added" };
+    try {
+      await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN reply_to_external_id VARCHAR(255) NULL`);
+      console.log("\u2705 reply_to_external_id added");
+    } catch (e) {
+      if (!e.message?.includes("Duplicate column") && !e.message?.includes("exists")) {
+        throw e;
+      }
+      console.log("\u2139\uFE0F reply_to_external_id j\xE1 existe");
+    }
+    try {
+      await db.execute(import_drizzle_orm42.sql`ALTER TABLE conversation_messages ADD COLUMN reaction VARCHAR(10) NULL`);
+      console.log("\u2705 reaction added");
+    } catch (e) {
+      if (!e.message?.includes("Duplicate column") && !e.message?.includes("exists")) {
+        throw e;
+      }
+      console.log("\u2139\uFE0F reaction j\xE1 existe");
+    }
+    return { success: true, message: "Migration applied: reply + reaction columns" };
   })
 });
 
