@@ -1303,7 +1303,7 @@ export default function AgentMessages() {
                               deleteMessageMutation.mutate({ messageId: msg.id });
                             }
                           }}
-                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-red-600 z-10"
                           title="Excluir mensagem"
                           disabled={deleteMessageMutation.isPending}
                         >
@@ -1314,7 +1314,7 @@ export default function AgentMessages() {
                           onClick={() => {
                             setReplyToMsg({ id: msg.id, content: msg.content || "" });
                           }}
-                          className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-green-600 z-10"
+                          className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-green-600 z-10"
                           title="Responder mensagem"
                         >
                           <CornerUpLeft className="w-3 h-3" />
@@ -1325,7 +1325,7 @@ export default function AgentMessages() {
                             setForwardMessageId(msg.id);
                             setShowForwardDialog(true);
                           }}
-                          className="absolute -top-2 -right-10 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-600 z-10"
+                          className="absolute -top-2 -right-10 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-blue-600 z-10"
                           title="Encaminhar mensagem"
                           disabled={forwardMessageMutation.isPending}
                         >
