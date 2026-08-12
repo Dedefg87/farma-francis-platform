@@ -561,14 +561,34 @@ export default function Inbox() {
                               size="sm"
                               variant="ghost"
                               className="h-5 px-1 text-xs"
-                              onClick={() => {
-                                const content = prompt("Resposta:", "");
-                                if (content && selectedConversation) {
-                                  replyToMessage.mutate({
+                              onClick={async () => {
+                                // ✅ Validações robustas antes de chamar a API
+                                if (!selectedConversation) {
+                                  toast.error("Nenhuma conversa selecionada");
+                                  return;
+                                }
+                                if (!msg.externalId) {
+                                  toast.error("ID da mensagem indisponível");
+                                  return;
+                                }
+
+                                const content = await new Promise<string | null>((resolve) => {
+                                  const result = window.prompt("💬 Responder mensagem:");
+                                  resolve(result ? result.trim() : null);
+                                });
+
+                                if (!content) return;
+
+                                try {
+                                  await replyToMessage.mutateAsync({
                                     replyToId: msg.externalId,
-                                    content,
-                                    conversation_id: selectedConversation.id, // ✅ conversation_id obrigatório
+                                    content: content,
+                                    conversation_id: Number(selectedConversation.id), // ✅ Garantir number
                                   });
+                                  // onSuccess do hook já refaz o fetch
+                                } catch (err: any) {
+                                  console.error("[Reply] Erro detalhado:", err);
+                                  toast.error(`Erro ao responder: ${err?.data?.message || err.message}`);
                                 }
                               }}
                             >
