@@ -871,10 +871,10 @@ async function processWhatsAppWebhook(body: unknown) {
               fileSize = message.sticker?.file_size ? parseInt(message.sticker.file_size) : null;
               break;
             case "reaction":
-              messageText = message.reaction?.emoji || null;
+              messageText = (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null;
               // Capturar ID da mensagem original + emoji para atualizar a coluna reaction
-              reactionTargetId = message.reaction?.key?.id || null;
-              reactionEmoji = message.reaction?.emoji || null;
+              reactionTargetId = (message as any)?.reactionMessage?.key?.id || (message as any)?.reaction?.key?.id || null;
+              reactionEmoji = (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null;
               break;
             case "contact":
               messageText = JSON.stringify(message.contacts || []);
@@ -900,7 +900,7 @@ async function processWhatsAppWebhook(body: unknown) {
               console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
             }
             // UPDATE_REACTION
-            return;
+            continue;
           }
 
           const existing = await getReceivedMessageByExternalId(
@@ -1633,9 +1633,7 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     fileSize,
     isStoryReply: !!quotedMessage,
     // Extract reaction data if present (Evolution API sends reactionMessage with key.id + emoji)
-    reactionTargetId: message && typeof message === 'object' && 'reaction' in message
-      ? (message as any).reaction?.key?.id || null
-      : null,
+    reactionTargetId: (message as any)?.reactionMessage?.key?.id || (message as any)?.reaction?.key?.id || null, reactionEmoji: (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null,
     reactionEmoji: message && typeof message === 'object' && 'reaction' in message
       ? (message as any).reaction?.emoji || null
       : null,
