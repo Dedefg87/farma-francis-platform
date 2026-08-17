@@ -900,7 +900,7 @@ async function processWhatsAppWebhook(body: unknown) {
               console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
             }
             // UPDATE_REACTION
-            continue;
+            return;
           }
 
           const existing = await getReceivedMessageByExternalId(
@@ -1190,7 +1190,7 @@ async function processInstagramWebhook(body: unknown) {
               console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
             }
             // UPDATE_REACTION
-            continue;
+            return;
           }
 
           const existing = await getReceivedMessageByExternalId(
