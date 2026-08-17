@@ -18440,7 +18440,21 @@ var systemRouter = router({
         console.log(`\u2139\uFE0F ${name} j\xE1 existe`);
       }
     }
-    return { success: true, message: "Migration applied: reply + reaction + sender columns" };
+    return {
+      success: true,
+      message: "Migration applied: reply + reaction + sender columns",
+      cols: existingCols
+    };
+  }),
+  // ✅ Endpoint: verificar schema real do MySQL
+  dbSchema: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    const [cols] = await db.execute(import_drizzle_orm42.sql`SHOW COLUMNS FROM conversation_messages`);
+    return cols.map((c) => ({
+      Field: c.Field || c.field,
+      Type: c.Type || c.type
+    }));
   })
 });
 
