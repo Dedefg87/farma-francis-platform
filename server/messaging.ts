@@ -191,7 +191,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
       body: JSON.stringify({
         number: normalizeWhatsAppNumber(params.to),
         text: params.message,
-        ...(params.replyToMessageId && params.remoteJid ? {
+        ...(params.replyToMessageId ? {
           quoted: {
             key: {
               id: params.replyToMessageId,
