@@ -189,7 +189,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
   // Se temos replyToMessageId, adicionar quoted completo
   // Evolution API v2 exige: key.id + message.conversation (ambos obrigatorios)
   if (params.replyToMessageId) {
-    const remoteJid = params.remoteJid || (params.to ? params.to.replace(/D/g, "") + "@s.whatsapp.net" : undefined);
+    const remoteJid = params.remoteJid || (params.to ? params.to.replace(/\D/g, "") + "@s.whatsapp.net" : undefined);
     payload.quoted = {
       key: {
         id: params.replyToMessageId,
