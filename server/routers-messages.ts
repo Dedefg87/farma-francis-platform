@@ -1,3 +1,4 @@
+// [BUILD VERSION] routers-messages v2.0 - regex fix + send debug
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { conversationMessages, conversations, users, employees, internalMessages } from "../drizzle/schema";
@@ -659,7 +660,7 @@ export const messagesRouter = router({
         if (replyToMessageId) {
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           replyToExternalId = origMsg?.externalId || undefined;
-          replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/D/g, "") + "@s.whatsapp.net" : undefined);
+          replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/\D/g, "") + "@s.whatsapp.net" : undefined);
           replyToContent = origMsg?.content || undefined;
           replyToFromMe = origMsg?.direction === "outbound";
           console.log("[reply] externalId:", replyToExternalId, "remoteJid:", replyToRemoteJid, "content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
