@@ -576,6 +576,7 @@ export const messagesRouter = router({
       )
     )
     .mutation(async ({ input, ctx }) => {
+        console.log("[SEND DEBUG] input completo:", JSON.stringify({ conversation_id: input.conversation_id, content: (input.content||input.message||"").substring(0,80), replyToMessageId: input.replyToMessageId, hasReplyTo: !!input.replyToMessageId }));
       // Admin NÃO pode enviar mensagens ao cliente — usar sussurros (internalMessages)
       if (ctx.user?.role === "admin") {
         throw new Error(
