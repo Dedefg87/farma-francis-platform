@@ -652,6 +652,7 @@ export const messagesRouter = router({
 
         // Buscar externalId da mensagem original para citar (reply)
         let replyToExternalId: string | undefined = undefined;
+        let replyToRemoteJid: string | undefined = undefined;
         if (replyToMessageId) {
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           replyToExternalId = origMsg?.externalId || undefined;
