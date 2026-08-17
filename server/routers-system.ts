@@ -1,3 +1,7 @@
+import { router, publicProcedure } from "./trpc";
+import { getDb } from "./db";
+
+export const systemRouter = router({
 // ✅ Endpoint: forçar teste de conexão DB
 debugDb: publicProcedure
   .query(async () => {
@@ -49,3 +53,4 @@ debugDb: publicProcedure
       
       return { success: true, message: "Migration completed" };
     }),
+});
