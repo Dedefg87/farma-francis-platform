@@ -121,7 +121,7 @@ export default function Messages() {
   });
 
   // ✅ Estado para mensagem que está sendo respondida
-  const [replyingTo, setReplyingTo] = useState<{ externalId: string; content: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: number; externalId: string; content: string } | null>(null);
 
   // Buscar mensagens internas da conversa selecionada
   const { data: internalMessages, isLoading: loadingInternalMessages } =
@@ -310,7 +310,9 @@ export default function Messages() {
       content: messageInput,
       ...fileData,
       viewOnce: isViewOnce && selectedFile ? true : false,
+      ...(replyingTo ? { replyToMessageId: replyingTo.id } : {}),
     });
+    setReplyingTo(null);
 
     setIsUploading(false);
   };
@@ -1021,16 +1023,10 @@ export default function Messages() {
                                     size="sm"
                                     variant="ghost"
                                     className="h-5 px-1 text-xs text-gray-600 hover:text-indigo-600"
-                                    onClick={async () => {
+                                    onClick={() => {
                                       if (!selectedConversation) return;
-                                      const content = window.prompt("💬 Responder mensagem:");
-                                      if (content?.trim()) {
-                                        await replyToMessage.mutateAsync({
-                                          replyToMessageId: msg.externalId || "",
-                                          content: content.trim(),
-                                          conversation_id: Number(selectedConversation),
-                                        });
-                                      }
+                                      setReplyingTo({ id: msg.id, externalId: msg.externalId || "", content: msg.content || "" });
+                                      document.getElementById("message-input")?.focus();
                                     }}
                                   >
                                     <Reply className="w-3 h-3 mr-1" />
