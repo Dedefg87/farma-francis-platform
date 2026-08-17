@@ -174,7 +174,7 @@ async function getEvolutionConfig() {
   }
 }
 
-async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string; remoteJid?: string }) {
+async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string; remoteJid?: string; replyToContent?: string; replyToFromMe?: boolean }) {
   const config = await getEvolutionConfig();
   if (!config) {
     throw new Error("Evolution API configuration not found or incomplete");
@@ -195,7 +195,11 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
           quoted: {
             key: {
               id: params.replyToMessageId,
-              remoteJid: params.remoteJid,
+              ...(params.remoteJid ? { remoteJid: params.remoteJid } : {}),
+              fromMe: params.replyToFromMe ?? false,
+            },
+            message: {
+              conversation: params.replyToContent || "",
             },
           },
         } : {}),
@@ -290,7 +294,9 @@ export async function sendWhatsAppMessage(params: {
   to: string;
   message: string;
   replyToMessageId?: string;
-  replyToRemoteJid?: string; // ✅ JID da mensagem respondida (necessário para quoted)
+  replyToRemoteJid?: string;
+  replyToContent?: string; // texto da mensagem original (para quoted.conversation)
+  replyToFromMe?: boolean; // se a mensagem original foi enviada por nos
   mediaUrl?: string;
   caption?: string;
   senderId?: string | number;
@@ -328,7 +334,9 @@ export async function sendWhatsAppMessage(params: {
       to: params.to,
       message: finalMessage,
       replyToMessageId: params.replyToMessageId,
-      remoteJid: params.replyToRemoteJid, // ✅ Passar remoteJid para quoted
+      remoteJid: params.replyToRemoteJid,
+      replyToContent: params.replyToContent,
+      replyToFromMe: params.replyToFromMe,
     });
     await db.insert(messages).values({
       channel: "whatsapp",
