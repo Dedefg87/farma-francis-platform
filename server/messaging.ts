@@ -180,6 +180,29 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
     throw new Error("Evolution API configuration not found or incomplete");
   }
 
+  // Construir o payload base
+  const payload: any = {
+    number: normalizeWhatsAppNumber(params.to),
+    text: params.message,
+  };
+
+  // Se temos replyToMessageId, adicionar quoted completo
+  // Evolution API v2 exige: key.id + message.conversation (ambos obrigatorios)
+  if (params.replyToMessageId) {
+    const remoteJid = params.remoteJid || (params.to ? params.to.replace(/D/g, "") + "@s.whatsapp.net" : undefined);
+    payload.quoted = {
+      key: {
+        id: params.replyToMessageId,
+        remoteJid: remoteJid,
+        fromMe: params.replyToFromMe ?? false,
+      },
+      message: {
+        conversation: params.replyToContent || "",
+      },
+    };
+    console.log("[sendEvolutionText] quoted payload:", JSON.stringify(payload.quoted));
+  }
+
   const response = await fetch(
     `${config.apiUrl}/message/sendText/${config.instanceName}`,
     {
@@ -188,22 +211,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
         apikey: config.apiKey,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        number: normalizeWhatsAppNumber(params.to),
-        text: params.message,
-        ...(params.replyToMessageId ? {
-          quoted: {
-            key: {
-              id: params.replyToMessageId,
-              ...(params.remoteJid ? { remoteJid: params.remoteJid } : {}),
-              fromMe: params.replyToFromMe ?? false,
-            },
-            message: {
-              conversation: params.replyToContent || "",
-            },
-          },
-        } : {}),
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
@@ -331,13 +339,13 @@ export async function sendWhatsAppMessage(params: {
   const evolutionConfig = await getEvolutionConfig();
   if (evolutionConfig) {
     const result = await sendEvolutionText({
-      to: params.to,
-      message: finalMessage,
-      replyToMessageId: params.replyToMessageId,
-      remoteJid: params.replyToRemoteJid,
-      replyToContent: params.replyToContent,
-      replyToFromMe: params.replyToFromMe,
-    });
+          to: params.to,
+          message: finalMessage,
+          replyToMessageId: params.replyToMessageId,
+          remoteJid: params.replyToRemoteJid,
+          replyToContent: params.replyToContent,
+          replyToFromMe: params.replyToFromMe,
+        });
     await db.insert(messages).values({
       channel: "whatsapp",
       direction: "outbound",
