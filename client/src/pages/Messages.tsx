@@ -100,7 +100,7 @@ export default function Messages() {
     );
 
   // ✅ Hooks: Reply + Reaction
-  const replyToMessage = trpc.messages.reply.useMutation({
+  const replyToMessage = trpc.messages.send.useMutation({
     onSuccess: () => {
       toast.success("Resposta enviada!");
       utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
@@ -111,7 +111,7 @@ export default function Messages() {
     },
   });
 
-  const reactToMessage = trpc.messages.react.useMutation({
+  const reactToMessage = trpc.messages.send.useMutation({
     onSuccess: () => {
       utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
     },
@@ -1026,7 +1026,7 @@ export default function Messages() {
                                       const content = window.prompt("💬 Responder mensagem:");
                                       if (content?.trim()) {
                                         await replyToMessage.mutateAsync({
-                                          replyToId: msg.externalId || "",
+                                          replyToMessageId: msg.externalId || "",
                                           content: content.trim(),
                                           conversation_id: Number(selectedConversation),
                                         });
