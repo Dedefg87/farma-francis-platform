@@ -655,6 +655,7 @@ export const messagesRouter = router({
         if (replyToMessageId) {
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           replyToExternalId = origMsg?.externalId || undefined;
+  replyToRemoteJid = origMsg?.remoteJid || undefined;
         }
         const result = await sendWhatsAppMessage({
           to: customerPhone,
@@ -663,6 +664,7 @@ export const messagesRouter = router({
           senderName,
           senderPosition,
           replyToMessageId: replyToExternalId,
+          replyToRemoteJid: replyToRemoteJid,
         });
         return { success: true, messageId: result?.messageId };
       } else if (provider === "instagram") {
