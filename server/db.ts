@@ -63,16 +63,14 @@ export async function getDb() {
 
       // ✅ Importar todos os schemas necessários para db.query funcionar
       const { conversationMessages, conversations, customers, employees, users, internalMessages } = await import("../drizzle/schema");
-      _db = drizzle(_pool, { 
-        schema: { 
-          conversationMessages, 
-          conversations, 
-          customers, 
-          employees, 
-          users, 
-          internalMessages 
-        } 
-      });
+      _db = drizzle(_pool, { mode: "default", schema: { 
+        conversationMessages, 
+        conversations, 
+        customers, 
+        employees, 
+        users, 
+        internalMessages 
+      } });
       _dbHealthCheck = Date.now();
       console.log("[Database] New connection pool created (50 connections)");
     } catch (error) {

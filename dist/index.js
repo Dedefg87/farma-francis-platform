@@ -1548,16 +1548,14 @@ async function getDb() {
         timezone: "Z"
       });
       const { conversationMessages: conversationMessages5, conversations: conversations5, customers: customers5, employees: employees4, users: users7, internalMessages: internalMessages2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      _db = (0, import_mysql2.drizzle)(_pool, {
-        schema: {
-          conversationMessages: conversationMessages5,
-          conversations: conversations5,
-          customers: customers5,
-          employees: employees4,
-          users: users7,
-          internalMessages: internalMessages2
-        }
-      });
+      _db = (0, import_mysql2.drizzle)(_pool, { mode: "default", schema: {
+        conversationMessages: conversationMessages5,
+        conversations: conversations5,
+        customers: customers5,
+        employees: employees4,
+        users: users7,
+        internalMessages: internalMessages2
+      } });
       _dbHealthCheck = Date.now();
       console.log("[Database] New connection pool created (50 connections)");
     } catch (error) {
@@ -7338,6 +7336,24 @@ async function sendEvolutionText(params) {
   if (!config) {
     throw new Error("Evolution API configuration not found or incomplete");
   }
+  const payload = {
+    number: normalizeWhatsAppNumber2(params.to),
+    text: params.message
+  };
+  if (params.replyToMessageId) {
+    const remoteJid = params.remoteJid || (params.to ? params.to.replace(/D/g, "") + "@s.whatsapp.net" : void 0);
+    payload.quoted = {
+      key: {
+        id: params.replyToMessageId,
+        remoteJid,
+        fromMe: params.replyToFromMe ?? false
+      },
+      message: {
+        conversation: params.replyToContent || ""
+      }
+    };
+    console.log("[sendEvolutionText] quoted payload:", JSON.stringify(payload.quoted));
+  }
   const response = await fetch(
     `${config.apiUrl}/message/sendText/${config.instanceName}`,
     {
@@ -7346,18 +7362,7 @@ async function sendEvolutionText(params) {
         apikey: config.apiKey,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({
-        number: normalizeWhatsAppNumber2(params.to),
-        text: params.message,
-        ...params.replyToMessageId && params.remoteJid ? {
-          quoted: {
-            key: {
-              id: params.replyToMessageId,
-              remoteJid: params.remoteJid
-            }
-          }
-        } : {}
-      })
+      body: JSON.stringify(payload)
     }
   );
   if (!response.ok) {
@@ -7447,8 +7452,9 @@ ${finalMessage2}`;
       to: params.to,
       message: finalMessage2,
       replyToMessageId: params.replyToMessageId,
-      remoteJid: params.replyToRemoteJid
-      // ✅ Passar remoteJid para quoted
+      remoteJid: params.replyToRemoteJid,
+      replyToContent: params.replyToContent,
+      replyToFromMe: params.replyToFromMe
     });
     await db.insert(messages).values({
       channel: "whatsapp",
@@ -17367,12 +17373,28 @@ var messagesRouter = router({
       const [senderEmp] = await db.select().from(employees).where((0, import_drizzle_orm35.eq)(employees.userId, ctx.user?.id)).limit(1);
       const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
       const senderPosition = senderEmp?.position || null;
+      let replyToExternalId = void 0;
+      let replyToRemoteJid = void 0;
+      let replyToContent = void 0;
+      let replyToFromMe = void 0;
+      if (replyToMessageId) {
+        const [origMsg] = await db.select().from(conversationMessages).where((0, import_drizzle_orm35.eq)(conversationMessages.id, replyToMessageId)).limit(1);
+        replyToExternalId = origMsg?.externalId || void 0;
+        replyToRemoteJid = origMsg?.remoteJid || (customerPhone2 ? customerPhone2.replace(/D/g, "") + "@s.whatsapp.net" : void 0);
+        replyToContent = origMsg?.content || void 0;
+        replyToFromMe = origMsg?.direction === "outbound";
+        console.log("[reply] externalId:", replyToExternalId, "remoteJid:", replyToRemoteJid, "content:", replyToContent?.substring(0, 50), "fromMe:", replyToFromMe);
+      }
       const result = await sendWhatsAppMessage2({
         to: customerPhone2,
         message: content2,
         senderId: ctx.user?.id ? Number(ctx.user.id) : void 0,
         senderName,
-        senderPosition
+        senderPosition,
+        replyToMessageId: replyToExternalId,
+        replyToRemoteJid,
+        replyToContent,
+        replyToFromMe
       });
       return { success: true, messageId: result?.messageId };
     } else if (provider === "instagram") {
