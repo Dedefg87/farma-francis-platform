@@ -656,7 +656,7 @@ export const messagesRouter = router({
         if (replyToMessageId) {
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           replyToExternalId = origMsg?.externalId || undefined;
-  replyToRemoteJid = origMsg?.remoteJid || undefined;
+  replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/D/g, '') + '@s.whatsapp.net' : undefined);
         }
         const result = await sendWhatsAppMessage({
           to: customerPhone,
