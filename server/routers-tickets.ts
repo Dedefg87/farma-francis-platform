@@ -172,81 +172,86 @@ export const ticketsRouter = router({
     }),
 
   // Buscar ticket por ID (conversa real)
-  getById: protectedProcedure
-    .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) throw new Error('Database not available');
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new Error('Database not available');
 
-      const result = await db
-        .select({
-          id: conversations.id,
-          customerId: conversations.customerId,
-          customerName: conversations.customerName,
-          customerPhone: conversations.customerPhone,
-          channel: conversations.channel,
-          status: conversations.status,
-          assignedTo: conversations.assignedTo,
-          openedAt: conversations.openedAt,
-          lastMessageAt: conversations.lastMessageAt,
-          closedAt: conversations.closedAt,
-          unreadCount: conversations.unreadCount,
-          customer: {
-            id: customers.id,
-            name: customers.name,
-            phone: customers.phone,
-            email: customers.email,
-          },
-          assignedAgent: {
-            id: users.id,
-            name: users.name,
-            email: users.email,
-          },
-        })
-        .from(conversations)
-        .leftJoin(customers, eq(conversations.customerId, customers.id))
-        .leftJoin(users, eq(conversations.assignedTo, users.id))
-        .where(eq(conversations.id, input.id))
-        .limit(1);
+        const result = await db
+          .select({
+            id: conversations.id,
+            customerId: conversations.customerId,
+            customerName: conversations.customerName,
+            customerPhone: conversations.customerPhone,
+            channel: conversations.channel,
+            status: conversations.status,
+            assignedTo: conversations.assignedTo,
+            openedAt: conversations.openedAt,
+            lastMessageAt: conversations.lastMessageAt,
+            closedAt: conversations.closedAt,
+            unreadCount: conversations.unreadCount,
+            customer: {
+              id: customers.id,
+              name: customers.name,
+              phone: customers.phone,
+              email: customers.email,
+            },
+            assignedAgent: {
+              id: users.id,
+              name: users.name,
+              email: users.email,
+            },
+          })
+          .from(conversations)
+          .leftJoin(customers, eq(conversations.customerId, customers.id))
+          .leftJoin(users, eq(conversations.assignedTo, users.id))
+          .where(
+            and(
+              eq(conversations.id, input.id),
+              eq(conversations.assignedTo, ctx.user.id) // Ensure the ticket belongs to the current user
+            )
+          )
+          .limit(1);
 
-      if (!result || result.length === 0) {
-        throw new Error('Ticket not found');
-      }
+        if (!result || result.length === 0) {
+          throw new Error('Ticket not found or access denied');
+        }
 
-      const row = result[0];
+        const row = result[0];
 
-      // Buscar última mensagem
-      const lastMessage = await db
-        .select({ content: conversationMessages.content })
-        .from(conversationMessages)
-        .where(eq(conversationMessages.conversationId, input.id))
-        .orderBy(desc(conversationMessages.createdAt))
-        .limit(1);
+        // Buscar última mensagem
+        const lastMessage = await db
+          .select({ content: conversationMessages.content })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.conversationId, input.id))
+          .orderBy(desc(conversationMessages.createdAt))
+          .limit(1);
 
-      return {
-        id: row.id,
-        ticketNumber: generateTicketNumber(row.id),
-        customerId: row.customerId,
-        customerName: row.customerName,
-        customerPhone: row.customerPhone,
-        subject: lastMessage[0]?.content || 'Sem mensagem',
-        description: lastMessage[0]?.content || '',
-        status: mapStatusToTicket(row.status),
-        priority: 'medium',
-        category: null,
-        channel: row.channel,
-        assignedTo: row.assignedTo,
-        slaDeadline: null,
-        resolvedAt: row.status === 'closed' ? row.closedAt : null,
-        closedAt: row.closedAt,
-        timeSpentMinutes: null,
-        createdBy: null,
-        createdAt: row.openedAt,
-        updatedAt: row.lastMessageAt,
-        customer: row.customer,
-        assignedAgent: row.assignedAgent,
-      };
-    }),
+        return {
+          id: row.id,
+          ticketNumber: generateTicketNumber(row.id),
+          customerId: row.customerId,
+          customerName: row.customerName,
+          customerPhone: row.customerPhone,
+          subject: lastMessage[0]?.content || 'Sem mensagem',
+          description: lastMessage[0]?.content || '',
+          status: mapStatusToTicket(row.status),
+          priority: 'medium',
+          category: null,
+          channel: row.channel,
+          assignedTo: row.assignedTo,
+          slaDeadline: null,
+          resolvedAt: row.status === 'closed' ? row.closedAt : null,
+          closedAt: row.closedAt,
+          timeSpentMinutes: null,
+          createdBy: null,
+          createdAt: row.openedAt,
+          updatedAt: row.lastMessageAt,
+          customer: row.customer,
+          assignedAgent: row.assignedAgent,
+        };
+      }),
 
   // Estatísticas baseadas em conversas reais
   stats: protectedProcedure

@@ -3,7 +3,7 @@ import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap,
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
 import { useState, useRef, useLayoutEffect } from "react";
 
@@ -110,9 +110,13 @@ export function TopBar() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-10 w-10 rounded-full p-0 hover:bg-gray-100">
                 <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-[#3FA9D4] text-white">
-                    {user ? getInitials(user.name || "User") : "U"}
-                  </AvatarFallback>
+                  {user?.photo ? (
+                    <AvatarImage src={user.photo} />
+                  ) : (
+                    <AvatarFallback className="bg-[#3FA9D4] text-white">
+                      {user?.name?.charAt(0).toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,8 +13,35 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [siteKey, setSiteKey] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const loginMutation = trpc.auth.login.useMutation();
+
+  // Load Turnstile script and site key from environment
+  useEffect(() => {
+    // Fetch the site key from an endpoint or meta tag
+    // For simplicity, we'll assume it's set in a global variable or meta tag
+    // In a real app, you might fetch from /api/env or use a build-time env variable
+    // Since we don't have that, we'll try to get it from a meta tag or window variable
+    const meta = document.querySelector('meta[name="cloudflare-site-key"]');
+    if (meta) {
+      const key = meta.getAttribute('content');
+      if (key) {
+        setSiteKey(key);
+        // Load the Turnstile script
+        const script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+    }
+  }, []);
+
+  const handleTurnstileCallback = (token: string) => {
+    setToken(token);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,13 +53,23 @@ export default function Login() {
         throw new Error('Por favor, preencha todos os campos');
       }
 
-      // Removida validação de tamanho mínimo da senha
-      // if (password.length < 5) { ... }
+      // Turnstile é OPCIONAL: só exige o desafio se a chave estiver configurada.
+      // Sem siteKey (meta tag ausente), o login prossegue apenas com usuário/senha,
+      // que o backend valida de qualquer forma. Evita travar o acesso em produção.
+      const isProduction = import.meta.env.MODE === 'production';
+      if (isProduction && !siteKey) {
+        console.warn('[Login] Turnstile não configurado (sem site key) — prosseguindo sem desafio de segurança');
+      }
+      if (isProduction && siteKey && !token) {
+        throw new Error('Por favor, complete o desafio de segurança');
+      }
 
-      // Chamar mutation de login com username (pode ser email ou nome)
-      const result = await loginMutation.mutateAsync({ username, password });
-      
-      console.log('[LOGIN RESPONSE FULL]', JSON.stringify(result, null, 2));
+      // Chamar mutation de login com o token do Turnstile (só quando há siteKey+token)
+      const result = await loginMutation.mutateAsync({ 
+        username, 
+        password,
+        ...(isProduction && siteKey && token ? { cfTurnstileToken: token } : {})
+      });
       
       // Salvar token no localStorage com chave exata "jti"
       localStorage.setItem('jti', result.token);
@@ -40,29 +77,16 @@ export default function Login() {
       // Invalidar cache do auth.me para forçar recarregamento
       await utils.auth.me.invalidate();
       
-      // Aguardar um momento para garantir que o cache foi invalidado
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      // Buscar dados do usuário para verificar role
-      const userData = await utils.auth.me.fetch();
-      
-      console.log('[LOGIN.TSX] Dados do usuário após login:', {
-        name: userData?.name,
-        email: userData?.email,
-        role: userData?.role,
-        isAdmin: userData?.role === 'admin'
-      });
-      
-      // Redirecionar baseado no role
-      if (userData?.role === 'admin') {
-        console.log('[LOGIN.TSX] Redirecionando ADMIN para /dashboard');
-        setLocation('/dashboard');
-      } else {
-        console.log('[LOGIN.TSX] Redirecionando USER para /agent/queues');
-        setLocation('/agent/queues');
-      }
+      // Redirecionar para a página inicial ou painel após login bem-sucedido
+      setLocation('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Usuário ou senha incorretos');
+      // Resetar o token para forçar novo desafio
+      setToken(null);
+      // Resetar o widget do Turnstile se estiver carregado
+      if (window.turnstile) {
+        window.turnstile.reset();
+      }
     } finally {
       setIsLoading(false);
     }
@@ -130,10 +154,21 @@ export default function Login() {
               </div>
             </div>
 
+            {/* Turnstile Widget (se a chave do site estiver disponível) */}
+            {siteKey && (
+              <div id="turnstile-container" className="mb-4">
+                {/* O widget será renderizado aqui pelo script do Turnstile */}
+              </div>
+            )}
+
             {/* Botão Entrar */}
             <Button
               type="submit"
-              className="w-full h-12 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-lg transition-colors"
+              className={`w-full h-12 ${
+                isLoading 
+                  ? 'bg-gray-200 hover:bg-gray-300 text-gray-700' 
+                  : 'bg-[#D32F2F] hover:#B71C1C text-white'
+              } font-medium rounded-lg transition-colors`}
               disabled={isLoading}
             >
               {isLoading ? (

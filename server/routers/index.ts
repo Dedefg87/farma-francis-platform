@@ -23,6 +23,7 @@ import { migrationRouter } from "../routers-migration";
 import { pausesRouter } from "../routers-pauses";
 import { queuesRouter } from "../routers-queues";
 import { quickRepliesRouter } from "../routers-quick-replies";
+import { remindersRouter } from "../routers-reminders";
 import { surveyRouter } from "../routers-survey";
 import { systemRouter } from "../routers-system";
 import { tagsRouter } from "../routers-tags";
@@ -36,7 +37,7 @@ import { businessHoursRouter } from "../routers-business-hours";
 export const appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
-  customers: customersRouter,
+  crm: customersRouter,
   employees: employeesRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
@@ -58,12 +59,13 @@ export const appRouter = router({
   pauses: pausesRouter,
   queues: queuesRouter,
   quickReplies: quickRepliesRouter,
+  reminders: remindersRouter,
   survey: surveyRouter,
   system: systemRouter,
   tags: tagsRouter,
   telemetry: telemetryRouter,
   test: testRouter,
-    approvals: approvalsRouter,
+  approvals: approvalsRouter,
   internalMessages: internalMessagesRouter,
   tickets: ticketsRouter,
   businessHours: businessHoursRouter,

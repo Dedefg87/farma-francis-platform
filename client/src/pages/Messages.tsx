@@ -44,6 +44,8 @@ import {
   ChevronRight,
   Building,
   Smile,
+  Reply,
+  Heart,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -51,9 +53,11 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { renderContentWithLinks } from "@/utils/text-format";
 import { SoundSelector } from "@/components/SoundSelector";
+import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
+  const utils = trpc.useContext();
   const [, setLocation] = useLocation();
   const [selectedConversation, setSelectedConversation] = useState<
     number | null
@@ -94,6 +98,30 @@ export default function Messages() {
       { conversation_id: selectedConversation || 0 },
       { enabled: selectedConversation !== null }
     );
+
+  // ✅ Hooks: Reply + Reaction
+  const replyToMessage = trpc.messages.send.useMutation({
+    onSuccess: () => {
+      toast.success("Resposta enviada!");
+      utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
+      utils.conversations.list.invalidate();
+    },
+    onError: error => {
+      toast.error(`Erro ao responder: ${error.message}`);
+    },
+  });
+
+  const reactToMessage = trpc.messages.send.useMutation({
+    onSuccess: () => {
+      utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
+    },
+    onError: error => {
+      toast.error(`Erro ao reagir: ${error.message}`);
+    },
+  });
+
+  // ✅ Estado para mensagem que está sendo respondida
+  const [replyingTo, setReplyingTo] = useState<{ externalId: string; content: string } | null>(null);
 
   // Buscar mensagens internas da conversa selecionada
   const { data: internalMessages, isLoading: loadingInternalMessages } =
@@ -868,18 +896,27 @@ export default function Messages() {
                               className={`flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[70%] rounded-lg p-3 ${
+                                className={`max-w-[70%] rounded-lg p-3 group ${
                                   msg.senderType === "agent"
                                     ? "bg-indigo-600 text-white"
                                     : "bg-gray-100 text-gray-900"
                                 }`}
                               >
-                                {/* DEBUG: Agent name display */}
+                                {/* Nome do remetente */}
                                 <p className="text-xs font-medium mb-1 opacity-75" data-testid="sender-name">
-                                  {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
+                                  {msg.senderType === "agent" 
+                                    ? msg.senderPosition 
+                                      ? `${msg.senderName || "Atendente"}`
+                                      : msg.senderName || "Atendente"
+                                    : msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")
+                                  }
                                 </p>
                                 {msg.content && msg.content !== "null" && (
                                   <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
+                                )}
+                                {/* ✅ Exibir reação (emoji) se existir */}
+                                {msg.reaction && (
+                                  <span className="text-base ml-1">{msg.reaction}</span>
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
@@ -932,8 +969,13 @@ export default function Messages() {
                                           className="max-w-full rounded-lg max-h-64"
                                         />
                                       </div>
-                                    ) : (
-                                      <a
+                                                                        ) : (msg.fileType === "application/pdf" || msg.fileType?.includes("officedocument") || msg.fileType === "application/msword" || msg.fileType === "application/vnd.ms-excel" || msg.fileType === "application/vnd.ms-powerpoint") ? (
+                                      <PDFPreview
+                                      fileUrl={getImageSrc(msg.fileUrl, msg.id)}
+                                      fileName={msg.fileName}
+                                      fileType={msg.fileType}
+                                    />
+                                    ) : (                                      <a
                                         href={getImageSrc(msg.fileUrl, msg.id)}
                                         target="_blank"
                                         rel="noopener noreferrer"
@@ -972,6 +1014,40 @@ export default function Messages() {
                                     }
                                   )}
                                 </span>
+                                
+                                {/* ✅ Botões de Resposta + Reação (estilo WhatsApp) */}
+                                <div className="flex gap-1 mt-2 opacity-100 transition-opacity">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 px-1 text-xs text-gray-600 hover:text-indigo-600"
+                                    onClick={async () => {
+                                      if (!selectedConversation) return;
+                                      const content = window.prompt("💬 Responder mensagem:");
+                                      if (content?.trim()) {
+                                        await replyToMessage.mutateAsync({
+                                          replyToMessageId: msg.externalId || "",
+                                          content: content.trim(),
+                                          conversation_id: Number(selectedConversation),
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <Reply className="w-3 h-3 mr-1" />
+                                    Responder
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 px-1 text-xs text-red-500 hover:text-red-700"
+                                    onClick={() => reactToMessage.mutate({
+                                      messageId: msg.externalId || "",
+                                      emoji: "❤️",
+                                    })}
+                                  >
+                                    <Heart className="w-3 h-3" />
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           ))

@@ -51,6 +51,7 @@ export interface ConversationMessage {
   senderType: 'customer' | 'agent' | 'system';
   senderId: string | null;
   senderName: string | null;
+  senderPosition: string | null; // Cargo/posição do agente (ex: "Gerente")
   attachments: Attachment[];
   metadata: Record<string, unknown>;
   isRead: boolean;

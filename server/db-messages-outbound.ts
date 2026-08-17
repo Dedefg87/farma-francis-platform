@@ -57,6 +57,8 @@ export async function ingestOutboundConversationMessage(message: {
   fileName?: string | null;
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
+  reaction?: string | null; // Emoji de reação
+  replyToMessageId?: string | null; // Mensagem respondida
   createdAt?: Date;
 }) {
   console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
@@ -111,7 +113,7 @@ export async function ingestOutboundConversationMessage(message: {
   // 4. Insert message into conversation_messages
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
-    externalId: message.externalId || null,
+    externalId: (message.externalId || message.key?.id) ?? null,
     senderId: message.fromUserId,
     senderType: "agent",
     content,
@@ -119,8 +121,13 @@ export async function ingestOutboundConversationMessage(message: {
     fileName: message.fileName || null,
     fileType: message.mimeType || null,
     fileSize: message.fileSize || null,
+    reaction: message.reaction || null,
+    replyToMessageId: message.replyToMessageId || null,
     createdAt: message.createdAt || new Date(),
   });
+  
+  // LOG para depurar problemas com externalId (obrigatório para investigação)
+  console.log("[DB-INSERT] externalId gravado (insertion):", message.externalId ? "PRESENTE - " + message.externalId : "NULL (erro)");
 
   const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
   const messageDbId = Number(rawMessageId) || undefined;

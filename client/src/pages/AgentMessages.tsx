@@ -14,6 +14,7 @@ import { BroadcastListManager } from "@/components/BroadcastListManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +47,6 @@ function getMimeType(
   // Fallback para o fileType do banco
   return fileType || "";
 }
-
 import {
   MessageSquare,
   Clock,
@@ -71,6 +71,8 @@ import {
   Megaphone,
   Keyboard,
   Trash2,
+  Send,
+  CornerUpLeft,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -85,7 +87,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -161,6 +166,14 @@ export default function AgentMessages() {
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
+  const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
+  const [replyToMsg, setReplyToMsg] = useState<{ id: number; externalId?: string; content: string } | null>(null);
+  const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
+  const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
+  const [forwardTargetCustomerPhone, setForwardTargetCustomerPhone] = useState<string>("");
+  const [forwardTargetProvider, setForwardTargetProvider] = useState<"whatsapp" | "instagram">("whatsapp");
+  const [manualPhoneInput, setManualPhoneInput] = useState<string>("");
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
   const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
@@ -180,6 +193,12 @@ export default function AgentMessages() {
   const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
   const queryClient = useQueryClient();
+
+  // Buscar contatos recentes para o dropdown de encaminhar para cliente
+  const { data: recentContacts = [], isLoading: loadingRecentContacts } = trpc.conversations.recentContacts.useQuery(
+    { limit: 30 },
+    { enabled: true }
+  );
 
   // DEBUG: Log component mount
   useEffect(() => {
@@ -574,6 +593,20 @@ export default function AgentMessages() {
     },
   });
 
+  // Forward message mutation
+  const forwardMessageMutation = trpc.messages.forward.useMutation({
+    onSuccess: () => {
+      toast.success("Mensagem encaminhada com sucesso!");
+      setShowForwardDialog(false);
+      setForwardMessageId(null);
+      setForwardTargetAgentId("");
+      setForwardTargetCustomerPhone("");
+    },
+    onError: error => {
+      toast.error(`Erro ao encaminhar: ${error.message}`);
+    },
+  });
+
   // Função para selecionar conversa e marcar como lida
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
@@ -824,7 +857,9 @@ export default function AgentMessages() {
       sendMessageMutation.mutate({
         conversation_id: selectedConversationId,
         content: message,
+        replyToMessageId: replyToMsg?.id ?? undefined,
       });
+      setReplyToMsg(null);
     }
   };
 
@@ -1268,18 +1303,47 @@ export default function AgentMessages() {
                               deleteMessageMutation.mutate({ messageId: msg.id });
                             }
                           }}
-                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-red-600 z-10"
                           title="Excluir mensagem"
                           disabled={deleteMessageMutation.isPending}
                         >
                           <Trash2 className="w-3 h-3" />
+                        </button>
+                        {/* Reply button - appears on hover */}
+                        <button
+                          onClick={() => {
+                              setReplyToMsg({ id: msg.id, content: msg.content || "" });
+                          }}
+                          className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-green-600 z-10"
+                          title="Responder mensagem"
+                        >
+                          <CornerUpLeft className="w-3 h-3" />
+                        </button>
+                        {/* Forward button - appears on hover */}
+                        <button
+                          onClick={() => {
+                            setForwardMessageId(msg.id);
+                            setShowForwardDialog(true);
+                          }}
+                          className="absolute -top-2 -right-10 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-blue-600 z-10"
+                          title="Encaminhar mensagem"
+                          disabled={forwardMessageMutation.isPending}
+                        >
+                          <Send className="w-3 h-3" />
                         </button>
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
                         {msg.content && msg.content !== "null" && (
-                          <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
+                          <p className="text-sm">{renderContentWithLinks((msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
+                        )}
+                        {msg.reaction && (
+                          <div className="mt-1 text-lg leading-none">
+                            <span className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm">
+                              {msg.reaction}
+                            </span>
+                          </div>
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
@@ -1331,6 +1395,20 @@ export default function AgentMessages() {
               </div>
 
               {/* Input de Mensagem */}
+              {replyToMsg && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border-l-4 border-green-500 rounded text-sm">
+                  <CornerUpLeft className="w-4 h-4 text-green-600 shrink-0" />
+                  <span className="text-green-800 truncate flex-1">Respondendo: {replyToMsg.content}</span>
+                  <button
+                    onClick={() => setReplyToMsg(null)}
+                    className="text-green-600 hover:text-green-800 shrink-0"
+                    title="Cancelar resposta"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="bg-white border-t border-gray-200 p-4">
                 {/* File Preview */}
                 {selectedFile && (
@@ -1424,12 +1502,19 @@ export default function AgentMessages() {
                     )}
                   </div>
 
-                  <Input
+                  <Textarea
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    onKeyPress={e => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1"
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                      // Shift+Enter permite nova linha (comportamento padrão do textarea)
+                    }}
+                    placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                    className="flex-1 min-h-[44px] max-h-48 resize-none"
+                    rows={1}
                   />
 
                   <Button
@@ -1705,10 +1790,182 @@ export default function AgentMessages() {
                 Encerrar Todas
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                      </DialogContent>
+                    </Dialog>
 
-{showQuickReplies && (
+                    <Dialog open={showForwardDialog} onOpenChange={setShowForwardDialog}>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Encaminhar mensagem</DialogTitle>
+                          <DialogDescription>Escolha o destino para encaminhar a mensagem</DialogDescription>
+                        </DialogHeader>
+                        
+                        {/* Tipo de destino */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Encaminhar para</label>
+                            <Select value={forwardTargetType} onValueChange={setForwardTargetType}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo de destino" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="agent">👤 Outro atendente (sussurro interno)</SelectItem>
+                                <SelectItem value="customer">📱 Cliente (WhatsApp/Instagram)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Destino: Atendente */}
+                          {forwardTargetType === "agent" && (
+                            <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <label className="block text-sm font-medium text-gray-700">Atendente destino</label>
+                              <Select value={forwardTargetAgentId} onValueChange={setForwardTargetAgentId}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione um atendente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {loggedAgents && loggedAgents.length > 0 ? (
+                                    loggedAgents.map(agent => (
+                                      <SelectItem key={agent.id} value={String(agent.id)}>
+                                        {agent.name || `Agente ${agent.id}`}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>
+                                      Nenhum atendente logado
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
+                          {/* Destino: Cliente */}
+                          {forwardTargetType === "customer" && (
+                            <div className="space-y-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                              <label className="block text-sm font-medium text-gray-700">Selecionar cliente</label>
+                              <div className="relative">
+                                <Select
+                                  value={forwardTargetCustomerPhone}
+                                  onValueChange={setForwardTargetCustomerPhone}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Digite para buscar ou selecione um cliente recente..." />
+                                  </SelectTrigger>
+                                  <SelectContent position="popper">
+                                    <SelectGroup>
+                                      <label className="px-2 py-1.5 text-xs text-gray-500 font-medium">Clientes recentes (últimas interações)</label>
+                                      {loadingRecentContacts ? (
+                                        <div className="px-2 py-1.5 text-xs text-gray-500">
+                                          Carregando...
+                                        </div>
+                                      ) : recentContacts.length > 0 ? (
+                                        recentContacts.map(contact => (
+                                          <SelectItem 
+                                            key={contact.customerPhone} 
+                                            value={contact.customerPhone}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                                                {contact.customerName?.charAt(0)?.toUpperCase() || 'C'}
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">{contact.customerName}</div>
+                                                <div className="text-xs text-gray-500 truncate">{contact.customerPhone}</div>
+                                              </div>
+                                              <span className="text-xs text-gray-400">
+                                                {contact.channel === 'whatsapp' ? '📱' : '📷'} {contact.lastMessageAt ? new Date(contact.lastMessageAt).toLocaleDateString('pt-BR') : 'Sem data'}
+                                              </span>
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <div className="px-2 py-1.5 text-xs text-gray-500">
+                                          Nenhum cliente recente encontrado
+                                        </div>
+                                      )}
+                                    </SelectGroup>
+                                    <SelectSeparator />
+                                    <SelectItem value="__manual__">
+                                      <div className="flex items-center gap-2 text-blue-600">
+                                        <Plus className="w-4 h-4" />
+                                        <span>Inserir número manualmente</span>
+                                      </div>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              {/* Input manual quando selecionado "Inserir número manualmente" */}
+                              {forwardTargetCustomerPhone === "__manual__" && (
+                                <div className="space-y-2 mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <label className="block text-sm font-medium text-gray-700">Telefone do cliente (com DDD)</label>
+                                  <Input
+                                    type="tel"
+                                    placeholder="Ex: 5511999999999"
+                                    value={manualPhoneInput}
+                                    onChange={e => setManualPhoneInput(e.target.value)}
+                                    className="w-full"
+                                  />
+                                  <label className="block text-sm font-medium text-gray-700 mt-2">Canal</label>
+                                  <Select value={forwardTargetProvider} onValueChange={setForwardTargetProvider}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione o canal" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="whatsapp">📱 WhatsApp</SelectItem>
+                                      <SelectItem value="instagram">📷 Instagram</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <DialogFooter>
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              if (!forwardMessageId) return;
+                              
+                              if (forwardTargetType === "agent") {
+                                if (
+                                  !forwardTargetAgentId ||
+                                  forwardTargetAgentId === "none"
+                                ) {
+                                  toast.error("Selecione um atendente");
+                                  return;
+                                }
+                                forwardMessageMutation.mutate({
+                                  messageId: forwardMessageId,
+                                  targetAgentId: Number(forwardTargetAgentId),
+                                });
+                              } else if (forwardTargetType === "customer") {
+                                if (!forwardTargetCustomerPhone.trim()) {
+                                  toast.error("Informe o telefone do cliente");
+                                  return;
+                                }
+                                if (!forwardTargetProvider) {
+                                  toast.error("Selecione o canal (WhatsApp/Instagram)");
+                                  return;
+                                }
+                                forwardMessageMutation.mutate({
+                                  messageId: forwardMessageId,
+                                  targetCustomerPhone: forwardTargetCustomerPhone.replace(/\D/g, ""),
+                                  targetProvider: forwardTargetProvider,
+                                });
+                              }
+                            }}
+                            disabled={forwardMessageMutation.isPending}
+                          >
+                            Encaminhar
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                  {showQuickReplies && (
         <QuickRepliesModal
           open={showQuickReplies}
           onClose={() => setShowQuickReplies(false)}

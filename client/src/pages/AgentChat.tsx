@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
 import { getImageSrc } from "@/utils/image-url";
@@ -459,12 +459,34 @@ export default function AgentChat() {
                 <div className="space-y-4">
                   {messages.map(message => {
                     const isAgent = message.senderType === "agent";
-                    const senderName = message.senderName || "Agente";
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
+                        className="flex items-start mb-2"
                       >
+                        {/* Avatar do remetente */}
+                        <div className="flex-shrink-0 h-10 w-10 mr-3">
+                          {!isAgent && selectedConv?.customerAvatar ? (
+                            <AvatarImage
+                              src={getImageSrc(selectedConv.customerAvatar)}
+                              alt={selectedConv.customerName ?? "Cliente"}
+                            />
+                          ) : !isAgent ? (
+                            <AvatarFallback className="bg-blue-500 text-white">
+                              {selectedConv?.customerName?.charAt(0).toUpperCase() || "C"}
+                            </AvatarFallback>
+                          ) : user?.image ? (
+                            <AvatarImage
+                              src={getImageSrc(user.image)}
+                              alt={user.name ?? "Agente"}
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-blue-500 text-white">
+                              {user?.name?.charAt(0).toUpperCase() || "A"}
+                            </AvatarFallback>
+                          )}
+                        </div>
+                        {/* Mensagem */}
                         <div
                           className={`max-w-[70%] rounded-lg p-3 ${
                             isAgent
@@ -475,31 +497,29 @@ export default function AgentChat() {
                           {/* Nome do agente acima da mensagem */}
                           {isAgent && (
                             <p className="text-xs font-semibold text-blue-100 mb-1">
-                              {senderName}
+                              {message.senderPosition 
+                                ? `${message.senderName || "Atendente"}`
+                                : message.senderName || "Atendente"
+                              }
+                            </p>
+                          )}
+                          {/* Texto da mensagem */}
+                          {message.content && (
+                            <p className="text-sm whitespace-pre-wrap">
+                              {message.content}
                             </p>
                           )}
                           {/* Arquivo anexado */}
                           {message.fileUrl && (
                             <div className="mb-2">
                               {getMimeType(message.fileUrl, message.fileType)?.startsWith?.("image/") ? (
-                                <>
-                                  {/* DEBUG: Quadro vermelho para ver se a imagem está sendo renderizada */}
-                                  <div style={{ padding: '10px', background: '#ffebee', color: '#cc0000', borderRadius: '8px', marginBottom: '8px' }}>
-                                    <p><b>DEBUG IMAGEM:</b></p>
-                                    <p>fileUrl bruto: {String(message.fileUrl)}</p>
-                                    <p>URL calculada: {getImageSrc(message.fileUrl)}</p>
-                                    <p>Se isso apareceu, o Frontend sabe que é uma imagem!</p>
-                                  </div>
                                 <a
-                                  href={getImageSrc(message.fileUrl)}
+                                  href={getImageSrc(message.fileUrl, message.id)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
                                   <img
-                                    src={getImageSrc(
-                                      message.fileUrl,
-                                      message.id
-                                    )}
+                                    src={getImageSrc(message.fileUrl, message.id)}
                                     alt={message.fileName || "Imagem"}
                                     className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
                                     style={{ maxHeight: "300px" }}
@@ -512,7 +532,6 @@ export default function AgentChat() {
                                     }}
                                   />
                                 </a>
-                                </>
                               ) : getMimeType(message.fileUrl, message.fileType)?.startsWith?.("video/") ? (
                                 <video
                                   src={getImageSrc(message.fileUrl)}

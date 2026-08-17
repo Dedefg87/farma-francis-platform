@@ -352,6 +352,10 @@ function buildInboundContent(message: {
   if (message.caption?.trim()) return message.caption;
 
   switch (message.messageType) {
+    case "reaction":
+      // Reações são salvas apenas como campo `reaction` na mensagem original,
+      // mas se chegar aqui como mensagem isolada, mostra o emoji
+      return message.messageText || "";
     case "image":
       return "[Imagem]";
     case "audio":
@@ -367,8 +371,6 @@ function buildInboundContent(message: {
       return ""; // Sticker é renderizado como imagem no frontend
     case "extendedTextMessage":
       return "[Resposta a Status]";
-    case "reaction":
-      return "[Reacao]";
     case "contact":
       return "[Contato]";
     default:
@@ -402,21 +404,32 @@ export async function ingestInboundConversationMessage(message: {
     return null;
   }
 
-  // 0. Deduplicação: verificar se mensagem já foi processada
+  // 0. Deduplicação: verificar se mensagem já foi processada (com TTL de 24h)
   if (message.externalId) {
+    const TTL_HOURS = 24;
+    const cutoffTime = new Date(Date.now() - TTL_HOURS * 60 * 60 * 1000);
+    
     const existing = await db
       .select()
       .from(processedWebhookMessages)
-      .where(eq(processedWebhookMessages.id, message.externalId))
+      .where(
+        and(
+          eq(processedWebhookMessages.id, message.externalId),
+          sql`${processedWebhookMessages.processedAt} > ${cutoffTime.toISOString().slice(0, 19).replace('T', ' ')}`
+        )
+      )
       .limit(1);
 
     if (existing.length > 0) {
-      console.log(`[Webhook] Duplicate message ignored: ${message.externalId}`);
+      console.log(`[Webhook] Duplicate message ignored (within TTL): ${message.externalId}`);
       return null;
     }
 
     // Marcar como processada
-    await db.insert(processedWebhookMessages).values({ id: message.externalId });
+    await db.insert(processedWebhookMessages).values({ 
+      id: message.externalId,
+      provider: message.provider 
+    });
     console.log(`[Webhook] New message registered: ${message.externalId}`);
   }
 
@@ -427,8 +440,13 @@ export async function ingestInboundConversationMessage(message: {
   );
 
   // 2. Fetch profile picture in background (non-blocking)
-  // Download from WhatsApp CDN and upload to R2 (avoids 403 in browser)
-  if (message.provider === "whatsapp" && !customer?.photoUrl && customer?.id) {
+  // Download from WhatsApp CDN (proxied via Evolution API) and upload to R2.
+  // Re-download if missing OR if the stored URL is a (now-expired) WhatsApp CDN link.
+  const isExpiredCdn =
+    !!customer?.photoUrl &&
+    (customer.photoUrl.includes('whatsapp.net') ||
+      customer.photoUrl.includes('whatsapp.com'));
+  if (message.provider === "whatsapp" && customer?.id && (!customer?.photoUrl || isExpiredCdn)) {
     setImmediate(async () => {
       try {
         const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
@@ -437,6 +455,21 @@ export async function ingestInboundConversationMessage(message: {
         // Silently fail - photo is not critical
       }
     });
+  }
+
+  // 2b. CRITICAL: link received_messages to the customer so getConversations
+  // LEFT JOIN (customers.id = receivedMessages.customerId) and the profile-pic
+  // update resolve correctly. Without this, photos never show in the inbox.
+  if (customer?.id) {
+    await db
+      .update(receivedMessages)
+      .set({ customerId: customer.id })
+      .where(
+        and(
+          eq(receivedMessages.fromNumber, message.fromNumber),
+          eq(receivedMessages.provider, message.provider)
+        )
+      );
   }
 
   const now = message.createdAt ?? new Date();
@@ -536,7 +569,7 @@ export async function ingestInboundConversationMessage(message: {
 
   // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  const fileUrlToSave = message.mediaUrl || null;
+  let fileUrlToSave = message.mediaUrl || null;
 
   // 8. Insert conversation message — guard contra duplicata por externalId
   let duplicateCheck;
@@ -570,9 +603,22 @@ export async function ingestInboundConversationMessage(message: {
 
   console.log(`[EvolutionDeduplication] Nova mensagem, processando: ${message.externalId || 'sem externalId'}`);
 
+  // IDEMPOTENCY: skip if message with same externalId + provider already exists
+  const externalIdToCheck = (message.key?.id as string) ?? null;
+  if (externalIdToCheck) {
+    const existing = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, externalIdToCheck), eq(conversationMessages.provider, message.provider || "whatsapp")))
+      .limit(1);
+    if (existing.length > 0) {
+      console.log(`[EvolutionDeduplication] ⏭️ Skipping duplicate message: ${externalIdToCheck}`);
+      return null;
+    }
+  }
+  
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
-    externalId: message.externalId || null,
+    externalId: (message.key?.id as string) ?? null,
     senderId: null,
     senderType: "customer",
     content: buildInboundContent(message),
@@ -761,4 +807,161 @@ export async function listReceivedMessages(filters?: {
   });
 
   return { conversationId, customerId: customer.id };
+}
+// ==============================================
+// Ingest outbound conversation message (WhatsApp/Instagram)
+// ==============================================
+export async function ingestOutboundConversationMessage(message: {
+  provider: "whatsapp" | "instagram";
+  toNumber: string;
+  fromUserId: number; // ID do agente que enviou
+  fromUserName?: string | null; // Nome do agente
+  fromUserPosition?: string | null; // Cargo do agente
+  messageType: string;
+  messageText?: string | null;
+  caption?: string | null;
+  mediaUrl?: string | null;
+  mediaId?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  externalId?: string | null; // Evolution API message ID
+  replyToExternalId?: string | null; // ✅ ID da mensagem respondida (reply)
+  createdAt?: Date;
+}) {
+  console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
+  
+  const db = await getDb();
+  if (!db) {
+    console.error("[ingestOutbound] Database not available!");
+    return null;
+  }
+
+  // 1. Find customer by phone number
+  const customer = await findOrCreateCustomerByPhone(
+    message.toNumber,
+    undefined,
+    null
+  );
+
+  if (!customer) {
+    console.error("[ingestOutbound] Customer not found for:", message.toNumber);
+    return null;
+  }
+
+  // 2. Find existing conversation or create new one
+  let found = await findConversationByPhone(db, customer.phone, conversations, customers);
+  
+  // Try phone variants if not found (Brazilian number normalization)
+  if (!found) {
+    const variants = generatePhoneVariants(customer.phone);
+    for (const variant of variants) {
+
+      found = await findConversationByPhone(db, variant, conversations, customers);
+      if (found) {
+        console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
+        break;
+      }
+    }
+  }
+  
+  let conversationId: number;
+  // Create conversation if not found
+  if (!found) {
+    console.log("[ingestOutbound] ⚠️ No conversation found for", customer.phone, "→ creating new one");
+    const [newConv] = await db.insert(conversations).values({
+      customerId: customer.id,
+      customerName: customer.name || null,
+      customerPhone: customer.phone,
+      channel: message.provider || "whatsapp",
+      status: "open",
+      assignedTo: message.fromUserId || null,
+    }).returning();
+    // Create conversation if still not found
+    if (!found) {
+      console.log("[ingestOutbound] ⚠️ No conversation found for", customer.phone, "→ creating new one");
+      const [newConv] = await db.insert(conversations).values({
+        customerId: customer.id,
+        customerName: customer.name || null,
+        customerPhone: customer.phone,
+        channel: message.provider || "whatsapp",
+        status: "open",
+        assignedTo: message.fromUserId || null,
+      }).returning();
+      found = { conversationId: newConv.id };
+    }
+    
+    found = { conversationId: newConv.id };
+  }
+  
+  if (found?.conversationId) {
+    conversationId = found.conversationId;
+  } else {
+    // Create new conversation
+    const [newConv] = await db.insert(conversations).values({
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      channel: message.provider,
+      status: "open",
+      assignedTo: message.fromUserId,
+      openedAt: message.createdAt || new Date(),
+      lastMessageAt: message.createdAt || new Date(),
+      unreadCount: 0,
+    });
+    conversationId = newConv.id;
+  }
+
+  // 3. Insert message into conversation_messages
+  // IDEMPOTENCY: skip if outbound message with same externalId already exists
+  const outboundExtId = message.key?.id || message.messageId || null;
+  if (outboundExtId) {
+    const existingOut = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, outboundExtId), eq(conversationMessages.provider, "whatsapp")))
+      .limit(1);
+    if (existingOut.length > 0) {
+      console.log("[ingestOutbound] ⏭️ Skipping duplicate outbound message:", outboundExtId);
+      return null;
+    }
+  }
+    // FIX: Reconstruir URL completa do R2 se o webhook limpou para caminho relativo
+    let fileUrlToSave = message.mediaUrl || null;
+    if (fileUrlToSave && !fileUrlToSave.startsWith("http") && !fileUrlToSave.startsWith("evolution-api")) {
+      const r2Base = process.env.R2_PUBLIC_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+      const key = fileUrlToSave.startsWith("media/") ? fileUrlToSave : "media/" + fileUrlToSave;
+      fileUrlToSave = r2Base + "/" + key;
+      console.log("[ingestOutbound] Reconstructed full R2 URL:", fileUrlToSave);
+    }
+    
+    const insertResult = await db.insert(conversationMessages).values({
+    conversationId,
+    externalId: message.externalId || null,
+    replyToExternalId: message.replyToExternalId || null, // ✅ Salvar referência do reply
+    senderId: message.fromUserId,
+    senderName: message.fromUserName || null,
+    senderPosition: message.fromUserPosition || null,
+    senderType: "agent",
+    content: message.messageText || message.caption || buildInboundContent({
+      messageType: message.messageType,
+      messageText: message.messageText,
+      caption: message.caption,
+    } as any),
+    fileUrl: fileUrlToSave || null,
+    fileName: message.fileName || null,
+    fileType: message.mimeType || null,
+    fileSize: message.fileSize || null,
+    createdAt: message.createdAt || new Date(),
+  });
+
+  const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
+  const messageDbId = Number(rawMessageId) || undefined;
+
+  console.log("[ingestOutbound] ✅ Message ingested successfully:", {
+    conversationId,
+    messageDbId,
+    content: (message.messageText || message.caption || "[Mídia]").substring(0, 50),
+  });
+
+  return { conversationId, customerId: customer.id, messageDbId };
 }

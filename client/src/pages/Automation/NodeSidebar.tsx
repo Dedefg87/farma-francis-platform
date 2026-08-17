@@ -71,9 +71,7 @@ export default function NodeSidebar({ onDragStart, isOpen, onToggle }: NodeSideb
     CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat.id]: true }), {})
   );
 
-  const toggleCategory = (catId: string) => {
-    setExpandedCategories(prev => ({ ...prev, [catId]: !prev[catId] }));
-  });
+  const toggleCategory = (catId: string) => setExpandedCategories(prev => ({ ...prev, [catId]: !prev[catId] }));
 
   const filteredNodes = useMemo(() => {
     if (!searchTerm) return NODE_TYPES;

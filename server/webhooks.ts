@@ -23,6 +23,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import {
   getReceivedMessageByExternalId,
   ingestInboundConversationMessage,
+  ingestOutboundConversationMessage,
   findOrCreateCustomerByPhone,
 } from "./db-messages";
 
@@ -41,8 +42,32 @@ try {
 
 // In-memory cache of customer profile pictures to avoid hitting provider APIs on every message.
 // key: `${provider}:${fromNumber}` -> { url, fetchedAt }
+// CRITICAL: We ONLY cache URLs that are actually reachable (R2 or data URLs).
+// Raw WhatsApp CDN URLs (pps.whatsapp.net, mmg.whatsapp.net) are expired the moment
+// they leave the WhatsApp session, so we NEVER cache them — otherwise the UI loads
+// a broken <img> and the avatar appears empty.
 const profilePicCache = new Map<string, { url: string | null; fetchedAt: number }>();
 const PROFILE_PIC_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
+/**
+ * Returns true only if the URL is a permanently reachable media URL
+ * (R2 public bucket, our own proxy, or data: inline). WhatsApp CDN URLs
+ * are rejected here because they are session-bound and expire immediately
+ * for any non-WhatsApp client.
+ */
+function isReachableMediaUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  if (url.startsWith('data:')) return true;
+  // Our R2 public bucket
+  if (url.includes('.r2.dev') || url.includes('r2.cloudflarestorage.com')) return true;
+  // Our own origin
+  if (url.startsWith('/') || url.includes('farmafrancis')) return true;
+  // WhatsApp CDN URLs are EXPIRED — they only work from within WhatsApp
+  if (url.includes('whatsapp.net') || url.includes('whatsapp.com')) return false;
+  // Anything else http — assume reachable (external CDN/CDN with public access)
+  if (url.startsWith('http')) return true;
+  return false;
+}
 
 async function resolveProfilePic(
   provider: "whatsapp" | "instagram",
@@ -58,11 +83,16 @@ async function resolveProfilePic(
     if (provider === "whatsapp") {
       const { fetchEvolutionProfile } = await import("./messaging");
       const prof = await fetchEvolutionProfile(fromNumber);
-      url = prof?.profilePicture || null;
+      const raw = prof?.profilePicture || null;
+      // Only accept if it's a permanently reachable URL (R2/data:).
+      // WhatsApp CDN profile pics expire the moment they leave the WhatsApp
+      // session, so we reject them here to avoid storing broken URLs.
+      url = isReachableMediaUrl(raw) ? raw : null;
     } else {
       const { fetchInstagramProfile } = await import("./messaging");
       const prof = await fetchInstagramProfile(fromNumber);
-      url = prof?.profilePicture || null;
+      const raw = prof?.profilePicture || null;
+      url = isReachableMediaUrl(raw) ? raw : null;
     }
   } catch (e) {
     console.warn(`[ProfilePic] Failed to fetch for ${key}:`, (e as Error).message);
@@ -123,6 +153,35 @@ function normalizeBrazilianNumber(value: string): string {
  * Limpa URL do R2 para obter apenas o caminho relativo dentro do bucket.
  * Remove query string, nome do bucket e deixa o path (ex: evolution-api/.../file.jpg)
  */
+// Fetch full message from Evolution API by message ID
+async function fetchMessageFromEvolution(messageId: string): Promise<any> {
+  try {
+    const EVO_URL = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
+    const EVO_KEY = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
+    const EVO_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
+    const response = await fetch(`${EVO_URL}/chat/findMessages/${EVO_INSTANCE}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": EVO_KEY },
+      body: JSON.stringify({ where: { key: { id: messageId } }, limit: 1 }),
+    });
+    if (!response.ok) {
+      console.log("[Evolution Webhook] fetchMessageFromEvolution failed:", response.status);
+      return null;
+    }
+    const data = await response.json();
+    const records = data?.messages?.records || data?.records || [];
+    if (records.length === 0) {
+      console.log("[Evolution Webhook] fetchMessageFromEvolution: no records found for", messageId);
+      return null;
+    }
+    console.log("[Evolution Webhook] fetchMessageFromEvolution: found message, type:", records[0].messageType);
+    return records[0];
+  } catch (err) {
+    console.error("[Evolution Webhook] fetchMessageFromEvolution error:", err);
+    return null;
+  }
+}
+
 function cleanR2Url(url: string | null | undefined): string | null {
   console.log("[cleanR2Url] Input URL:", url?.substring(0, 120));
   if (!url) return null;
@@ -468,7 +527,6 @@ router.get("/instagram", async (req: Request, res: Response) => {
  */
 router.get("/instagram", async (req: Request, res: Response) => {
   try {
-    const body = req.body;
 
     logWebhookSummary("Instagram", body);
 
@@ -507,12 +565,62 @@ router.get("/instagram", async (req: Request, res: Response) => {
  * Evolution API Webhook (POST)
  * Supports both /evolution and /evolution/:event (when webhook_by_events is true)
  */
-router.get("/whatsapp", async (req: Request, res: Response) => {
+router.post("/evolution", async (req: Request, res: Response) => {
   return handleEvolutionWebhook(req, res);
 });
 
-router.post("/evolution", async (req: Request, res: Response) => {
-  return handleEvolutionWebhook(req, res);
+// Keep the original WhatsApp verification route (was incorrectly overridden above)
+router.get("/whatsapp", async (req: Request, res: Response) => {
+  try {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+
+    console.log("[WhatsApp Webhook] Verification request:", {
+      mode,
+      token: token ? "***" : undefined,
+    });
+
+    if (mode === "subscribe") {
+      // Get stored verify token from database
+      const db = await getDb();
+      if (!db) {
+        return res.status(500).send("Database not available");
+      }
+
+      // Buscar configuração da tabela integration_settings
+      const config = await db
+        .select()
+        .from(integrationSettings)
+        .where(eq(integrationSettings.integrationType, "whatsapp_business"))
+        .limit(1);
+
+      if (config.length === 0) {
+        console.log("[WhatsApp Webhook] No configuration found");
+        return res.status(403).send("No configuration found");
+      }
+
+      // Parse config JSON
+      const configData =
+        typeof config[0].config === "string"
+          ? JSON.parse(config[0].config)
+          : config[0].config;
+      const storedToken = configData.webhookVerifyToken;
+
+      if (token === storedToken) {
+        console.log("[WhatsApp Webhook] Verification successful");
+        return res.status(200).send(challenge);
+      } else {
+        console.log("[WhatsApp Webhook] Token mismatch");
+        return res.status(403).send("Verification token mismatch");
+      }
+    }
+
+    res.status(400).send("Invalid verification request");
+  } catch (error) {
+    console.error("[WhatsApp Webhook] Verification error:", error);
+    res.status(500).send("Internal server error");
+  }
 });
 
 async function handleEvolutionWebhook(req: Request, res: Response) {
@@ -527,6 +635,7 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
     // Usar Promise.resolve para garantir que erros sejam capturados
     setImmediate(() => {
       processEvolutionWebhookAsync(req).catch((err) => {
+        const body = req.body;
         console.error("🔴 [Evolution Webhook] Background CRASH:", err?.message || String(err));
         if (err?.stack) console.error("🔴 [Evolution Webhook] STACK:", err.stack);
       });
@@ -538,8 +647,8 @@ async function handleEvolutionWebhook(req: Request, res: Response) {
 }
 
 async function processEvolutionWebhookAsync(req: Request) {
+  const body = req.body;
   try {
-    const body = req.body;
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
     // LOG SIMPLES - sem objetos complexos para evitar crash
@@ -612,7 +721,7 @@ async function processEvolutionWebhookAsync(req: Request) {
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
     // Aceitar variações de eventos de mensagem
-    const allowedEvents = ["messages_upsert", "messages_update"];
+    const allowedEvents = ["messages_upsert", "messages_update", "send_message"];
     
     // Ignorar TUDO que não for mensagem nova
     if (!allowedEvents.includes(normalizedEvent)) {
@@ -762,7 +871,10 @@ async function processWhatsAppWebhook(body: unknown) {
               fileSize = message.sticker?.file_size ? parseInt(message.sticker.file_size) : null;
               break;
             case "reaction":
-              messageText = message.reaction?.emoji || null;
+              messageText = (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null;
+              // Capturar ID da mensagem original + emoji para atualizar a coluna reaction
+              reactionTargetId = (message as any)?.reactionMessage?.key?.id || (message as any)?.reaction?.key?.id || null;
+              reactionEmoji = (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null;
               break;
             case "contact":
               messageText = JSON.stringify(message.contacts || []);
@@ -771,13 +883,33 @@ async function processWhatsAppWebhook(body: unknown) {
               console.log(`[WhatsApp] Unknown message type: ${type}`);
           }
 
+          
+          // 🎯 REAÇÃO: atualizar a mensagem original em vez de criar mensagem "[Reacao]"
+          if (messageType === "reaction" && reactionTargetId && reactionEmoji) {
+            try {
+              const target = await db.query.conversationMessages.findFirst({
+                where: (cm, { eq }) => eq(cm.externalId, reactionTargetId),
+              });
+              if (target) {
+                await db.update(conversationMessages).set({ reaction: reactionEmoji }).where(eq(conversationMessages.id, target.id));
+                console.log("[Webhook] ✅ Reação " + reactionEmoji + " aplicada à mensagem " + reactionTargetId);
+              } else {
+                console.log("[Webhook] ⚠️ Mensagem original " + reactionTargetId + " não encontrada para reação");
+              }
+            } catch (reactionErr) {
+              console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
+            }
+            // UPDATE_REACTION
+            return;
+          }
+
           const existing = await getReceivedMessageByExternalId(
             messageId,
             "whatsapp"
           );
           if (existing) {
             console.log(`[WhatsApp] Duplicate message ${messageId} ignored`);
-            continue;
+            return;
           }
 
           // Save to database (idempotent - ignore duplicates)
@@ -810,9 +942,7 @@ async function processWhatsAppWebhook(body: unknown) {
               timestamp,
               rawPayload: JSON.stringify(message),
               processed: 0,
-            }).onConflict({
-              target: [receivedMessages.provider, receivedMessages.externalId],
-            }).doNothing();
+              });
           } catch (e: unknown) {
             if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
               throw e;
@@ -1043,7 +1173,27 @@ async function processInstagramWebhook(body: unknown) {
           console.warn("[Instagram] Could not resolve profile pic:", (picErr as Error).message);
         }
 
-        const existing = await getReceivedMessageByExternalId(
+        
+          // 🎯 REAÇÃO: atualizar a mensagem original em vez de criar mensagem "[Reacao]"
+          if (messageType === "reaction" && reactionTargetId && reactionEmoji) {
+            try {
+              const target = await db.query.conversationMessages.findFirst({
+                where: (cm, { eq }) => eq(cm.externalId, reactionTargetId),
+              });
+              if (target) {
+                await db.update(conversationMessages).set({ reaction: reactionEmoji }).where(eq(conversationMessages.id, target.id));
+                console.log("[Webhook] ✅ Reação " + reactionEmoji + " aplicada à mensagem " + reactionTargetId);
+              } else {
+                console.log("[Webhook] ⚠️ Mensagem original " + reactionTargetId + " não encontrada para reação");
+              }
+            } catch (reactionErr) {
+              console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
+            }
+            // UPDATE_REACTION
+            return;
+          }
+
+          const existing = await getReceivedMessageByExternalId(
           messageId,
           "instagram"
         );
@@ -1071,9 +1221,7 @@ async function processInstagramWebhook(body: unknown) {
             timestamp,
             rawPayload: JSON.stringify(event),
             processed: 0,
-          }).onConflict({
-            target: [receivedMessages.provider, receivedMessages.externalId],
-          }).doNothing();
+            });
         } catch (e: unknown) {
           // Se erro de duplicidade e onConflict não suportado ou falhou, ignorar silenciosamente
           if (!e.message.includes('Duplicate entry') && !e.message.includes('already exists')) {
@@ -1200,6 +1348,7 @@ if (message.conversation) {
     else if (rawMessageType === 'videoMessage') typeToSave = 'video';
     else if (rawMessageType === 'documentMessage') typeToSave = 'document';
     else if (rawMessageType === 'conversation') typeToSave = 'text';
+    else if (rawMessageType === 'extendedTextMessage') typeToSave = 'text';
     else if (rawMessageType === 'stickerMessage') typeToSave = 'sticker';
     else if (rawMessageType === 'locationMessage') typeToSave = 'location';
     else if (rawMessageType === 'contactMessage') typeToSave = 'contact';
@@ -1483,6 +1632,11 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     fileName,
     fileSize,
     isStoryReply: !!quotedMessage,
+    // Extract reaction data if present (Evolution API sends reactionMessage with key.id + emoji)
+    reactionTargetId: (message as any)?.reactionMessage?.key?.id || (message as any)?.reaction?.key?.id || null, reactionEmoji: (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null,
+    reactionEmoji: message && typeof message === 'object' && 'reaction' in message
+      ? (message as any).reaction?.emoji || null
+      : null,
     // Campos extras que podem ser úteis
     ...(base64 && { base64 }),
     ...(mediaKey && { mediaKey }),
@@ -1521,7 +1675,7 @@ async function processEvolutionWebhook(body: unknown) {
     }
 
     // Evento de mensagens
-    if (normalizedEvent === "messages_upsert" || normalizedEvent === "messages.upsert") {
+    if (normalizedEvent === "messages_upsert" || normalizedEvent === "messages.upsert" || normalizedEvent === "send_message" || normalizedEvent === "send.message") {
       try {
         const data = body?.data || body;
         const messageData = data?.message || data?.messages?.[0] || body || {};
@@ -1536,7 +1690,7 @@ async function processEvolutionWebhook(body: unknown) {
         }
         const remoteJid = key?.remoteJid || data?.remoteJid || messageData?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
         const pushName = data?.pushName || data?.senderName || messageData?.pushName || body?.pushName || body?.sender?.name || body?.sender?.pushName || body?.data?.sender?.name;
-        const fromMe = key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe;
+        const fromMe = (normalizedEvent === "send_message" || normalizedEvent === "send.message") ? true : (key?.fromMe ?? data?.fromMe ?? messageData?.fromMe ?? body?.fromMe);
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
         const rawMessageType = data?.messageType || null; // PRIORITY: Evolution API message type
 
@@ -1554,10 +1708,15 @@ async function processEvolutionWebhook(body: unknown) {
                 const contextInfoForParse = data?.message?.contextInfo || data?.contextInfo || null;
 
                 const parsed = parseEvolutionMessageContent(messageContent, rawMessageType, contextInfoForParse);
-                let messageType = parsed.type; // DECLARAR ANTES DO STORY REPLY
+                let messageType = parsed.type as any;
+                let reactionTargetId = parsed.reactionTargetId || null;
+                let reactionEmoji = parsed.reactionEmoji || null;
                 let messageText = parsed.text;
                 const caption = parsed.caption;
                 let mediaUrl = parsed.mediaUrl; // DECLARAR ANTES DO STORY REPLY
+                let storyOverrideType: string | null = null;
+                let storyOverrideMime: string | null = null;
+                let storyOverrideUrl: string | null = null;
 
                 // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
                 const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
@@ -1574,198 +1733,112 @@ async function processEvolutionWebhook(body: unknown) {
                                                         const isStoryReply = contextInfo.remoteJid === 'status@broadcast' && 
                                                           (contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage);
       
+                                                        // 🔬 INSTRUMENTAÇÃO STORY_RAW - capturar payload real (caminho upsert)
+                                                        console.log("[STORY_RAW][UPSERT] event:", eventName,
+                                                          "| messageType:", messageType,
+                                                          "| ctxRemoteJid:", contextInfo?.remoteJid,
+                                                          "| hasQuoted:", !!contextInfo?.quotedMessage,
+                                                          "| hasQuotedImg:", !!contextInfo?.quotedMessage?.imageMessage,
+                                                          "| hasQuotedVid:", !!contextInfo?.quotedMessage?.videoMessage,
+                                                          "| stanzaId:", contextInfo?.stanzaId,
+                                                          "| isStoryReply:", isStoryReply);
+                                                        console.log("[STORY_RAW][UPSERT] bodyPreview:", JSON.stringify(body).slice(0, 800));
+
                                                         if (isStoryReply) {
-                                                                                                          console.log("🚨🚨🚨 [Evolution Webhook] STORY REPLY DETECTADO - INICIANDO PROCESSAMENTO 🚨🚨🚨");
-                                                                                                          console.log("[Evolution Webhook] 🎯 STORY REPLY DETECTADO via status@broadcast + quotedMessage");
-                                                  
-                                                                                                          // Log seguro - usar try/catch para evitar crash no Object.keys
-                                                                                                          const safeKeys = (obj: unknown) => { try { return Object.keys(obj || {}); } catch { return '(erro)'; } };
-                                                                                                          console.log("[Evolution Webhook] 📋 quotedMessage keys:", safeKeys(contextInfo.quotedMessage));
-                                                                                                          if (contextInfo.quotedMessage?.imageMessage) {
-                                                                                                            console.log("[Evolution Webhook] 📋 imageMessage keys:", safeKeys(contextInfo.quotedMessage.imageMessage));
-                                                                                                          }
-                                                                                                          console.log("[Evolution Webhook] 📋 stanzaId:", contextInfo.stanzaId);
-                                                  
-                                                                                                          // NÃO sobrescrever messageType com base no quotedMessage!
-                                                                                                          // messageType original já foi detectado: 'conversation' para texto
-                                                  
-                                                                                                          // PRESERVAR participant original
-                                                                                                          const rawContextInfo = data?.contextInfo || {};
-                                                                                                          const storyParticipant = rawContextInfo.participant || 
-                                                                                                                                  data?.key?.participant || 
-                                                                                                                                  data?.participant || 
-                                                                                                                                  '';
-                                                                                                          console.log("[Evolution Webhook] 📋 storyParticipant:", storyParticipant || '(vazio)');
-                                                  
-                                                                                                          const originalStoryId = contextInfo.stanzaId || messageId;
-                                                                                                          const quotedMsg = contextInfo.quotedMessage;
-                                                                                                          const quotedImage = quotedMsg?.imageMessage;
-                                                                                                          const isImage = !!quotedImage;
-                                                                                                          const mimeType = isImage ? 'image/jpeg' : 'video/mp4';
-                                                                                                          const ext = isImage ? 'jpg' : 'mp4';
-                                                  
-                                                                                                          let mediaBuffer: Buffer | null = null;
-                                                                                                          let source = '';
-                                                  
-                                                                                                          // TENTATIVA 1: getBase64FromMediaMessage (endpoint correto para stories)
-                                                                                                          // ⚠️ Para stories, SEMPRE usar getBase64FromMediaMessage, mesmo se URL existir
-                                                                                                          // A URL do WhatsApp (.enc) é criptografada e não pode ser baixada diretamente
-                                                                                                          if (originalStoryId && storyParticipant) {
-                                                                                                            try {
-                                                                                                              const { getStoryMediaViaBase64 } = await import("./services/evolution-download");
-                                                                                                              const { uploadToR2 } = await import("./r2-client");
-                                                                                                              console.log("[Evolution Webhook] 📤 Tentativa 1: getBase64FromMediaMessage stanzaId:", originalStoryId, "participant:", storyParticipant);
-                                                      
-                                                                                                              mediaBuffer = await getStoryMediaViaBase64(
-                                                                                                                originalStoryId,
-                                                                                                                storyParticipant,
-                                                                                                                quotedMsg,
-                                                                                                                data.instance || 'Meu'
-                                                                                                              );
-                                                      
-                                                                                                              if (mediaBuffer) {
-                                                                                                                source = 'getBase64FromMediaMessage';
-                                                                                                                console.log("[Evolution Webhook] ✅ Tentativa 1 OK:", mediaBuffer.length, "bytes");
-                                                                                                              } else {
-                                                                                                                console.log("[Evolution Webhook] ⚠️ Tentativa 1 falhou");
-                                                                                                              }
-                                                                                                            } catch (err1) {
-                                                                                                              console.error("[Evolution Webhook] ❌ Tentativa 1 erro:", err1?.message || String(err1));
-                                                                                                            }
-                                                                                                          } else {
-                                                                                                            console.log("[Evolution Webhook] ⚠️ Pulando Tentativa 1: falta stanzaId ou participant", { originalStoryId, hasParticipant: !!storyParticipant });
-                                                                                                          }
-                                                  
-                                                                                                          // TENTATIVA 2: jpegThumbnail fallback
-                                                                                                          if (!mediaBuffer && quotedImage?.jpegThumbnail) {
-                                                                                                            try {
-                                                                                                              console.log("[Evolution Webhook] 📤 Tentativa 2: jpegThumbnail fallback");
-                                                                                                              const thumbBase64 = quotedImage.jpegThumbnail;
-                                                                                                              mediaBuffer = Buffer.from(thumbBase64, 'base64');
-                                                                                                              source = 'thumbnail_fallback';
-                                                                                                              console.log("[Evolution Webhook] ✅ Tentativa 2 OK:", mediaBuffer.length, "bytes");
-                                                                                                            } catch (err2) {
-                                                                                                              console.error("[Evolution Webhook] ❌ Tentativa 2 erro:", err2?.message || String(err2));
-                                                                                                            }
-                                                                                                          }
-                                                  
-                                                                                                          // TENTATIVA 3: message/download (ultimo recurso)
-                                                                                                          if (!mediaBuffer) {
-                                                                                                            try {
-                                                                                                              const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-                                                                                                              console.log("[Evolution Webhook] 📤 Tentativa 3: message/download");
-                                                                                                              mediaBuffer = await downloadWhatsAppMediaFromEvolution({
-                                                                                                                url: "",
-                                                                                                                messageKey: { id: originalStoryId, remoteJid: 'status@broadcast', fromMe: true }
-                                                                                                              });
-                                                                                                              if (mediaBuffer) {
-                                                                                                                source = 'message_download';
-                                                                                                                console.log("[Evolution Webhook] ✅ Tentativa 3 OK:", mediaBuffer.length, "bytes");
-                                                                                                              }
-                                                                                                            } catch (err3) {
-                                                                                                              console.error("[Evolution Webhook] ❌ Tentativa 3 erro:", err3?.message || String(err3));
-                                                                                                            }
-                                                                                                          }
-                                                  
-                                                                                                          // Se alguma tentativa funcionou, upload para R2
-                                                                                                          if (mediaBuffer) {
-                                                                                                            try {
-                                                                                                              const { uploadToR2 } = await import("./r2-client");
-                                                                                                              const fileName = `story-${messageId}.${ext}`;
-                                                                                                              const uploadResult = await uploadToR2(mediaBuffer, fileName, mimeType);
-                                                      
-                                                                                                              // NÃO passar por cleanR2Url - a URL já é do R2!
-                                                                                                              mediaUrl = uploadResult.url;
-                                                      
-                                                                                                              console.log("[Evolution Webhook] ✅ Story reply upado pro R2 (fonte:", source, "):", { 
-                                                                                                                url: mediaUrl?.substring(0, 80), 
-                                                                                                                etag: uploadResult.etag, 
-                                                                                                                size: uploadResult.size
-                                                                                                              });
-                                                                                                            } catch (uploadErr) {
-                                                                                                              console.error("[Evolution Webhook] ❌ Upload R2 erro:", uploadErr?.message || String(uploadErr));
-                                                                                                            }
-                                                                                                          } else {
-                                                                                                            console.log("[Evolution Webhook] ⚠️ Todas tentativas falharam - salvando apenas texto");
-                                                                                                          }
-                                            // Se ainda não tem mediaUrl, tentar cache
-                                            if (!mediaUrl) {
-                                              // 🚨 CACHE WORKAROUND - Pesquisar story cacheado recentemente
-                                              const timeWindow = 120; // 2 minutos
-                                              const storyCacheWindowStart = Math.floor(messageTimestamp) - timeWindow;
-            
-                                              const cachedStory = await db
-                                                .select()
-                                                .from(storyCache)
-                                                .where(
-                                                  and(
-                                                    eq(storyCache.remoteJid, remoteJid || ""),
-                                                    sql`${storyCache.messageTimestamp} >= ${storyCacheWindowStart}`
-                                                  )
-                                                )
-                                                .orderBy(desc(storyCache.messageTimestamp))
-                                                .limit(1);
-            
-                                              if (cachedStory?.[0]) {
-                                                console.log("[Evolution Webhook] ✅ Story correlacionado via cache:", cachedStory[0].storyId);
-                                                if (messageType === 'text' || messageType === 'unknown') {
-                                                  messageType = cachedStory[0].mediaType;
-                                                }
-                                                if (!mediaUrl) {
-                                                  mediaUrl = cachedStory[0].mediaUrl;
-                                                }
-                                                if (messageText) {
-                                                  messageText = `Responderam ao seu story: ${messageText}`;
-                                                }
-                                              } else {
-                                                console.log("[Evolution Webhook] ⚠️ Nenhum story cacheado encontrado para correlacionar");
-                                                // 🔥 FALLBACK FINAL: Tentar baixar via Evolution API usando messageKey (com validação)
-                                                try {
-                                                  console.log("[Evolution Webhook] 🔄 Tentando fallback final download via Evolution API (com validação)...");
-                                                  const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-                                                  const { uploadToR2 } = await import("./r2-client");
-                                                  const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
-                                                    url: "",
-                                                    messageKey: { id: messageId, remoteJid, fromMe: false }
-                                                  });
-                                                  if (mediaBuffer) {
-                                                    const fileName = `story-${messageId}.jpg`;
-                                                    const uploadResult = await uploadToR2(mediaBuffer, fileName, "image/jpeg");
-                                                    mediaUrl = cleanR2Url(uploadResult.url);
-                                                    messageType = 'image';
-                                                    console.log("[Evolution Webhook] ✅ Story reply fallback: mídia validada e upada pro R2:", { 
-                                                      url: mediaUrl, 
-                                                      etag: uploadResult.etag, 
-                                                      size: uploadResult.size 
-                                                    });
-            
-                                                    // Salvar no cache para futuras replies
-                                                    try {
-                                                      await db.insert(storyCache).values({
-                                                        storyId: messageId,
-                                                        remoteJid: remoteJid || '',
-                                                        fromNumber,
-                                                        mediaUrl: mediaUrl,
-                                                        rawUrl: mediaUrl,
-                                                        mediaType: 'image',
-                                                        caption: messageText || null,
-                                                        messageTimestamp: Math.floor(messageTimestamp),
-                                                      });
-                                                      console.log("[Evolution Webhook] ✅ Story cached for future replies");
-                                                    } catch (cacheErr) {
-                                                      console.error("[Evolution Webhook] ❌ Failed to store story in cache:", cacheErr);
-                                                    }
-                                                  }
-                                                } catch (fallbackErr) {
-                                                  console.error("[Evolution Webhook] ❌ Fallback download failed:", fallbackErr);
-                                                }
-                                              }
-                                            }
-                                          }
+                                                          console.log("[Evolution Webhook] 📖 Story reply detected:", { messageId, stanzaId: contextInfo.stanzaId });
+                                                          
+                                                          try {
+                                                            const { downloadStoryMedia } = await import("./services/evolution-download");
+                                                            const { uploadToR2 } = await import("./r2-client");
+                                                            
+                                                            // Consolidar mediaKey, directPath e participant para a função
+                                                            const quotedImage = contextInfo.quotedMessage?.imageMessage;
+                                                            const storyContext = {
+                                                              stanzaId: contextInfo.stanzaId || messageId,
+                                                              participant: contextInfo.participant || data?.key?.participant || data?.participant || '',
+                                                              mediaKey: quotedImage?.mediaKey || contextInfo.quotedMessage?.videoMessage?.mediaKey || null,
+                                                              directPath: quotedImage?.directPath || contextInfo.quotedMessage?.videoMessage?.directPath || null,
+                                                              quotedMessage: contextInfo.quotedMessage || null,
+                                                            };
+                                                            
+                                                            const originalStoryId = storyContext.stanzaId;
+                                                            const isImage = !!quotedImage;
+                                                            storyOverrideMime = isImage ? 'image/jpeg' : 'video/mp4';
+                                                            const ext = isImage ? 'jpg' : 'mp4';
+                                                            
+                                                            const mediaBuffer = await downloadStoryMedia(storyContext, messageId, data.instance || 'Meu');
+
+                                                                                                                        if (mediaBuffer) {
+                                                                                                                          const fileName = `story-${originalStoryId}-${Date.now()}.${ext}`;
+                                                                                                                          const uploadResult = await uploadToR2(mediaBuffer.buffer, fileName, mediaBuffer.mimetype);
+                                                                                                                          storyOverrideUrl = uploadResult.url;
+                                                                                                                          storyOverrideType = isImage ? 'image' : 'video';
+                                                                                                                          console.log("[Evolution Webhook] ✅ Story media uploaded:", { 
+                                                                                                                            url: mediaUrl?.substring(0, 80), 
+                                                                                                                            size: mediaBuffer.buffer.length,
+                                                                                                                            mime: mediaBuffer.mimetype,
+                                                                                                                            isThumbnail: mediaBuffer.isThumbnail
+                                                                                                                          });
+                                                              
+                                                              // Salvar no cache para futuras replies
+                                                              try {
+                                                                await db.insert(storyCache).values({
+                                                                  storyId: originalStoryId,
+                                                                  remoteJid: remoteJid || '',
+                                                                  fromNumber,
+                                                                  mediaUrl: storyOverrideUrl,
+                                                                  rawUrl: storyOverrideUrl,
+                                                                  mediaType: messageType,
+                                                                  caption: messageText || null,
+                                                                  messageTimestamp: Math.floor(messageTimestamp),
+                                                                });
+                                                                console.log("[Evolution Webhook] ✅ Story cached for future replies:", originalStoryId);
+                                                              } catch (cacheErr) {
+                                                                console.error("[Evolution Webhook] ❌ Failed to cache story:", cacheErr);
+                                                              }
+                                                            } else {
+                                                              console.log("[Evolution Webhook] ⚠️ Story download failed, checking cache...");
+                                                              
+                                                              // Último recurso: buscar no cache (janela de 5 minutos)
+                                                              const storyCacheWindowStart = Math.floor(messageTimestamp) - 300;
+                                                              const cachedStory = await db
+                                                                .select()
+                                                                .from(storyCache)
+                                                                .where(
+                                                                  and(
+                                                                    eq(storyCache.remoteJid, remoteJid || ""),
+                                                                    sql`${storyCache.messageTimestamp} >= ${storyCacheWindowStart}`
+                                                                  )
+                                                                )
+                                                                .orderBy(desc(storyCache.messageTimestamp))
+                                                                .limit(1);
+                                                              
+                                                              if (cachedStory?.[0]) {
+                                                                console.log("[Evolution Webhook] ✅ Story resolved from cache:", cachedStory[0].storyId);
+                                                                storyOverrideUrl = cachedStory[0].mediaUrl;
+                                                                storyOverrideType = cachedStory[0].mediaType as any;
+                                                                if (messageType === 'text' || messageType === 'unknown') {
+                                                                  messageType = 'image';
+                                                                }
+                                                                if (messageText) {
+                                                                  messageText = `📸 Respondeu ao seu story:\n${messageText}`;
+                                                                }
+                                                              } else {
+                                                                console.log("[Evolution Webhook] ⚠️ No cached story found, saving text only");
+                                                                messageType = 'text';
+                                                                if (messageText) {
+                                                                  messageText = `📸 Respondeu ao seu story:\n${messageText}`;
+                                                                }
+                                                              }
+                                                            }
+                                                          } catch (storyErr) {
+                                                            console.error("[Evolution Webhook] ❌ Story processing error:", storyErr);
+                                                          }
+                                                        }
         const mimeType = parsed.mimeType;
        
                 // 🎯 DOWNLOAD DE MÍDIA DO WHATSAPP CDN (COM VALIDAÇÃO ROBUSTA)
-                if (parsed.needsDownload && parsed.rawUrl) {
+                if (parsed.needsDownload && parsed.rawUrl && !mediaUrl) {
                   try {
                     const { downloadWhatsAppMediaFromEvolution, downloadGenericMedia, isWhatsAppCdnUrl } = await import("./services/evolution-download");
                     const { uploadToR2 } = await import("./r2-client");
@@ -1802,52 +1875,114 @@ async function processEvolutionWebhook(body: unknown) {
                   }
                 }
 
-                // Story reply fallback: quando a Evolution não expõe rawUrl, usar quotedRawUrl/mediaKey/directPath
-                if (!mediaUrl && parsed.isStoryReply) {
-                  try {
-                    const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
-                    const { uploadToR2 } = await import("./r2-client");
-            
-                    const fallbackUrl = parsed.quotedRawUrl || parsed.rawUrl || null;
-                    const mediaBuffer = await downloadWhatsAppMediaFromEvolution({
-                      url: fallbackUrl || "",
-                      messageKey: { id: messageId, remoteJid, fromMe: false }
-                    });
-            
-                    if (mediaBuffer) {
-                      const uploadResult = await uploadToR2(mediaBuffer, parsed.fileName || `story-${messageId}.jpg`, parsed.mimeType || "image/jpeg");
-                      mediaUrl = cleanR2Url(uploadResult.url);
-                      messageType = parsed.type === "video" ? "video" : "image";
-                      console.log("[Evolution] ✅ Story reply fallback validado e upado para R2:", { 
-                        url: mediaUrl, 
-                        etag: uploadResult.etag, 
-                        size: uploadResult.size 
-                      });
-                    }
-                  } catch (storyDownloadErr) {
-                    console.error("[Evolution] ❌ Story reply fallback failed:", storyDownloadErr);
-                  }
-                }
+                // (Bloco "Story reply fallback" removido — agora consolidado no bloco
+                // principal isStoryReply acima que usa downloadStoryMedia)
         const mediaKey = parsed.mediaKey;
         const directPath = parsed.directPath;
         const imageBase64 = parsed.base64;
-        
+
         if (isSentByMe) {
           console.log("[Evolution Webhook] Detected fromMe message, enqueuing:", messageId, "to:", fromNumber);
+
+          // ============================================================
+          // 🎯 PROBLEMA 2 FIX: Para mensagens fromMe, baixar a mídia ANTES
+          // de enfileirar. Sem URL (comum para fromMe), a Evolution expõe
+          // mediaKey + directPath que permitem download autenticado.
+          // ============================================================
+          let fromMeMediaUrl = mediaUrl || null;
+          let isThumbnail = false;
+          
+          // Tentar baixar mídia para mensagens fromMe (outbound)
+          if (
+            !fromMeMediaUrl &&
+            (messageType === 'image' || messageType === 'video' || messageType === 'audio' || messageType === 'document') &&
+            (mediaKey || directPath || rawUrl || quotedMessage)
+          ) {
+            try {
+              console.log("[Evolution Webhook] fromMe media missing URL, attempting download via multiple strategies");
+              
+              // ESTRATÉGIA 1: downloadWhatsAppMediaFromEvolution com mediaKey/directPath
+              const { downloadWhatsAppMediaFromEvolution } = await import("./services/evolution-download");
+              const { uploadToR2 } = await import("./r2-client");
+              
+              let mediaBuffer: Buffer | null = null;
+              let detectedMime = parsed.mimeType || 'application/octet-stream';
+              
+              mediaBuffer = await downloadWhatsAppMediaFromEvolution({
+                url: rawUrl || "",
+                messageKey: { id: messageId, remoteJid, fromMe: true },
+                ...(mediaKey && { mediaKey: String(mediaKey) }),
+                ...(directPath && { directPath: String(directPath) }),
+              });
+              
+              // ESTRATÉGIA 2: Se não funcionou, tentar downloadStoryMedia (para stories enviados por nós)
+              if (!mediaBuffer && quotedMessage) {
+                console.log("[Evolution Webhook] 🔄 Tentando downloadStoryMedia para fromMe");
+                const { downloadStoryMedia } = await import("./services/evolution-download");
+                
+                const contextInfo = data?.contextInfo || data?.message?.contextInfo || {};
+                const result = await downloadStoryMedia({
+                  stanzaId: contextInfo.stanzaId || messageId,
+                  participant: contextInfo.participant || data?.key?.participant || '',
+                  quotedMessage: quotedMessage,
+                }, messageId, data.instance || 'Meu');
+                
+                if (result) {
+                  mediaBuffer = result.buffer;
+                  detectedMime = result.mimetype;
+                  isThumbnail = result.isThumbnail || false;
+                }
+              }
+              
+              // ESTRATÉGIA 3: thumbnail fallback
+              if (!mediaBuffer && quotedMessage) {
+                const quotedAny = quotedMessage as any;
+                const thumbnail = quotedAny?.imageMessage?.jpegThumbnail || quotedAny?.videoMessage?.jpegThumbnail;
+                if (thumbnail) {
+                  mediaBuffer = Buffer.from(thumbnail, 'base64');
+                  detectedMime = 'image/jpeg';
+                  isThumbnail = true;
+                  console.log("[Evolution Webhook] 📎 Usando thumbnail fallback para fromMe");
+                }
+              }
+
+              if (mediaBuffer && mediaBuffer.length > 0) {
+                const extMap: Record<string, string> = {
+                  image: 'jpg', video: 'mp4', audio: 'ogg', document: 'pdf'
+                };
+                const ext = parsed.fileName?.split('.').pop() || extMap[messageType] || 'bin';
+                const fromMeFileName = parsed.fileName || `sent-${messageId}.${ext}`;
+                const fromMeMime = detectedMime;
+
+                const uploadResult = await uploadToR2(mediaBuffer, fromMeFileName, fromMeMime);
+                fromMeMediaUrl = cleanR2Url(uploadResult.url);
+                console.log("[Evolution Webhook] ✅ fromMe media uploaded to R2:", {
+                  url: fromMeMediaUrl,
+                  etag: uploadResult.etag,
+                  size: uploadResult.size,
+                  isThumbnail
+                });
+              } else {
+                console.log("[Evolution Webhook] ⚠️ fromMe download returned empty buffer");
+              }
+            } catch (err) {
+              console.error("[Evolution Webhook] ❌ fromMe media download failed:", (err as Error).message);
+            }
+          }
 
           // 🎯 Cachear stories enviadas para que respostas futuras (story replies) possam
           // recuperar a mídia original. A Evolution NÃO envia o contextInfo/quotedMessage
           // nas replies de story, então precisamos do cache.
           const isMediaType = messageType === "image" || messageType === "video";
-          const isStoryCandidate = isMediaType && mediaUrl && mediaUrl.length > 0;
+          const isStoryCandidate = isMediaType && fromMeMediaUrl && fromMeMediaUrl.length > 0;
           if (isStoryCandidate) {
             try {
               await db.insert(storyCache).values({
                 storyId: messageId,
                 remoteJid: remoteJid || "",
                 fromNumber,
-                mediaUrl: mediaUrl,
-                rawUrl: mediaUrl,
+                mediaUrl: fromMeMediaUrl,
+                rawUrl: fromMeMediaUrl,
                 mediaType: messageType === "video" ? "video" : "image",
                 caption: caption || messageText || null,
                 messageTimestamp: Math.floor(messageTimestamp),
@@ -1866,12 +2001,42 @@ async function processEvolutionWebhook(body: unknown) {
               messageText: messageText,
               caption: caption,
               messageType: messageType,
-              mediaUrl: mediaUrl,
+              mediaUrl: fromMeMediaUrl,
               mimeType: mimeType,
               messageTimestamp: messageTimestamp,
+              fileName: parsed.fileName || null,
             });
           } catch (e) {
             // Erro ao enfileirar (raro), ignora silenciosamente
+          }
+          // 🎯 Salvar mensagem outbound na conversa (mensagens enviadas do celular)
+          try {
+            // ✅ Proteção idempotente: skip se já existe
+            const existingOutbound = await db.query.conversationMessages.findFirst({
+              where: (cm, { eq }) => eq(cm.externalId, messageId),
+            });
+            if (existingOutbound) {
+              console.log("[Evolution Webhook] ✅ Outbound already exists in conversation_messages, skipping:", messageId);
+            } else {
+              await ingestOutboundConversationMessage({
+                provider: "whatsapp",
+                toNumber: fromNumber,
+                fromUserId: 1,
+                messageType: messageType as any,
+                messageText: messageText || null,
+                caption: caption || null,
+                mediaUrl: fromMeMediaUrl || mediaUrl || null,
+                mediaId: parsed.mediaId || null,
+                mimeType: mimeType || null,
+                fileName: parsed.fileName || null,
+                fileSize: parsed.fileSize || null,
+                externalId: messageId,
+                createdAt: new Date(messageTimestamp * 1000),
+              });
+              console.log("[Evolution Webhook] ✅ Outbound message ingested:", messageId);
+            }
+          } catch (outboundErr) {
+            console.error("[Evolution Webhook] ❌ Failed to ingest outbound:", outboundErr);
           }
           return;
         }
@@ -1901,7 +2066,27 @@ async function processEvolutionWebhook(body: unknown) {
         // 🎯 IDEMPOTÊNCIA - UPSERT com ID único
         // ==============================================
         // Verificar se já existe (mais seguro que simples insert)
-        const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
+        
+          // 🎯 REAÇÃO: atualizar a mensagem original em vez de criar mensagem "[Reacao]"
+          if (messageType === "reaction" && reactionTargetId && reactionEmoji) {
+            try {
+              const target = await db.query.conversationMessages.findFirst({
+                where: (cm, { eq }) => eq(cm.externalId, reactionTargetId),
+              });
+              if (target) {
+                await db.update(conversationMessages).set({ reaction: reactionEmoji }).where(eq(conversationMessages.id, target.id));
+                console.log("[Webhook] ✅ Reação " + reactionEmoji + " aplicada à mensagem " + reactionTargetId);
+              } else {
+                console.log("[Webhook] ⚠️ Mensagem original " + reactionTargetId + " não encontrada para reação");
+              }
+            } catch (reactionErr) {
+              console.error("[Webhook] Erro ao aplicar reação:", reactionErr);
+            }
+            // UPDATE_REACTION
+            return;
+          }
+
+          const existing = await getReceivedMessageByExternalId(messageId, "whatsapp");
 
         // Buscar foto de perfil do cliente (Evolution API, com cache)
         let profilePic: string | null = null;
@@ -1940,7 +2125,7 @@ async function processEvolutionWebhook(body: unknown) {
               fromProfilePic: profilePic || existing.fromProfilePic,
               messageText: messageText || existing.messageText,
               mediaUrl: mediaUrl || existing.mediaUrl,
-              mimeType: mimeType || existing.mimeType,
+              mimeType: storyOverrideMime || mimeType || existing.mimeType,
               caption: caption || existing.caption,
             })
             .where(eq(receivedMessages.id, existing.id));
@@ -1960,12 +2145,12 @@ async function processEvolutionWebhook(body: unknown) {
             provider: "whatsapp",
             fromNumber,
             fromName: pushName || null,
-            messageType,
+            messageType: storyOverrideType || messageType,
             messageText,
             caption,
-            mediaUrl: mediaUrl || null,
+            mediaUrl: storyOverrideUrl || mediaUrl || null,
             mediaId: parsed.mediaId || null,
-            mimeType,
+            mimeType: storyOverrideMime || mimeType,
             fileName: parsed.fileName,
             fileSize: parsed.fileSize,
             externalId: messageId,
@@ -1998,9 +2183,169 @@ async function processEvolutionWebhook(body: unknown) {
       normalizedEvent === "messages_update" ||
       normalizedEvent === "messages.update"
     ) {
-      const status = body?.data?.status || body?.status;
-      console.log("[Evolution Webhook] Message status update ignored:", status);
-      return;
+      // Story reply detection for messages.update events
+      const msgUpdateCtx = body?.data?.contextInfo || body?.contextInfo || {};
+      const isStoryReplyUpdate = msgUpdateCtx.remoteJid === "status@broadcast" &&
+        (msgUpdateCtx.quotedMessage?.imageMessage || msgUpdateCtx.quotedMessage?.videoMessage);
+      // 🔬 INSTRUMENTAÇÃO STORY_RAW - capturar payload real para diagnostico definitivo
+      console.log("[STORY_RAW][UPDATE] event:", eventName,
+        "| dataKeys:", body?.data ? Object.keys(body.data).join(",") : "none",
+        "| ctxKeys:", msgUpdateCtx ? Object.keys(msgUpdateCtx).join(",") : "none",
+        "| ctxRemoteJid:", msgUpdateCtx?.remoteJid,
+        "| hasQuoted:", !!msgUpdateCtx?.quotedMessage,
+        "| isStoryReplyUpdate:", isStoryReplyUpdate);
+      console.log("[STORY_RAW][UPDATE] bodyPreview:", JSON.stringify(body).slice(0, 800));
+      if (isStoryReplyUpdate) {
+        console.log("[Evolution Webhook] 📖 Story reply detected in messages.update");
+        // Continuar processamento normal (não ignorar)
+      } else {
+        // 🎯 Detectar mensagens fromMe (enviadas do celular) e buscar conteúdo completo
+        const updateFromMe = body?.data?.fromMe === true || body?.data?.fromMe === "true" || body?.data?.fromMe === 1;
+        const updateStatus = body?.data?.status || body?.status;
+        const updateKeyId = body?.data?.keyId || body?.data?.key?.id;
+        
+        if (updateFromMe && updateKeyId && (updateStatus === "DELIVERY_ACK" || updateStatus === 3 || updateStatus === "READ" || updateStatus === 4)) {
+          console.log("[Evolution Webhook] 📤 fromMe message detected in messages.update, key:", updateKeyId, "status:", updateStatus);
+        
+          // ✅ Proteção idempotente: verificar conversation_messages PRIMEIRO (antes de qualquer ingestOutbound)
+          const existingConv = await db.query.conversationMessages.findFirst({
+            where: (cm, { eq }) => eq(cm.externalId, updateKeyId),
+          });
+          if (existingConv) {
+            console.log("[Evolution Webhook] Message already in conversation_messages, skipping:", updateKeyId);
+            return;
+          }
+        
+          // Verificar se já existe no banco (tanto em receivedMessages quanto conversationMessages)
+          const existingUpdate = await getReceivedMessageByExternalId(updateKeyId, "whatsapp");
+          if (existingUpdate) {
+            console.log("[Evolution Webhook] Message already exists in DB:", updateKeyId);
+            return;
+          }
+       
+          // Buscar mensagem completa na Evolution API
+                    let fullMsg: any = null;
+                    await new Promise(r => setTimeout(r, 500));
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                      fullMsg = await fetchMessageFromEvolution(updateKeyId);
+                      if (fullMsg) {
+                        if (attempt > 0) console.log("[Evolution Webhook] ✅ Message fetched on retry:", attempt + 1);
+                        break;
+                      }
+                      console.log("[Evolution Webhook] ⏳ Media not ready, retry in 500ms (attempt " + (attempt + 1) + "/3)");
+                      await new Promise(r => setTimeout(r, 500));
+                    }
+          if (!fullMsg) {
+            console.log("[Evolution Webhook] Could not fetch full message from API, skipping");
+            return;
+          }
+        
+          // Extrair dados da mensagem
+          const msgKey = fullMsg.key || {};
+          const jidToUse = fullMsg.key?.remoteJidAlt || msgKey.remoteJidAlt || msgKey.remoteJid || body?.data?.remoteJid || "";
+          const toNumber = normalizeInboundNumber(jidToUse);
+          if (!toNumber) {
+            console.log("[Evolution Webhook] Could not normalize number:", jidToUse);
+            return;
+          }
+        
+          const msgType = fullMsg.messageType || "conversation";
+          const msgContent = fullMsg.message || {};
+        
+          // Extrair texto/caption/mídia baseado no tipo
+          let msgText: string | null = null;
+          let caption: string | null = null;
+          let mediaUrl: string | null = null;
+          let mimeType: string | null = null;
+          let fileName: string | null = null;
+        
+          if (msgContent.conversation) {
+            msgText = msgContent.conversation;
+          } else if (msgContent.extendedTextMessage?.text) {
+            msgText = msgContent.extendedTextMessage.text;
+          } else if (msgContent.imageMessage) {
+            caption = msgContent.imageMessage.caption || null;
+            mimeType = msgContent.imageMessage.mimetype || "image/jpeg";
+          } else if (msgContent.videoMessage) {
+            caption = msgContent.videoMessage.caption || null;
+            mimeType = msgContent.videoMessage.mimetype || "video/mp4";
+          } else if (msgContent.audioMessage) {
+            mimeType = msgContent.audioMessage.mimetype || "audio/ogg";
+          } else if (msgContent.documentMessage) {
+            caption = msgContent.documentMessage.caption || null;
+            mimeType = msgContent.documentMessage.mimetype || "application/octet-stream";
+            fileName = msgContent.documentMessage.fileName || null;
+          }
+        
+          // Salvar como outbound
+          try {
+            // 🎯 Baixar mídia via getBase64FromMediaMessage (formato correto)
+            const isMediaMsg = msgType === "imageMessage" || msgType === "videoMessage" || msgType === "audioMessage" || msgType === "documentMessage";
+            if (isMediaMsg) {
+              try {
+                const { uploadToR2 } = await import("./r2-client");
+                const EVO_URL2 = process.env.EVOLUTION_API_URL || "https://evolution-api-production-ffea.up.railway.app";
+                const EVO_KEY2 = process.env.EVOLUTION_API_KEY || "7296ECE8D5DB-401B-8C39-2147777EA59B";
+                const EVO_INSTANCE2 = process.env.EVOLUTION_INSTANCE_NAME || "Meu";
+            
+                console.log("[Evolution Webhook] Downloading outbound media via getBase64:", msgType, "key:", updateKeyId);
+            
+                const mediaResponse = await fetch(`${EVO_URL2}/chat/getBase64FromMediaMessage/${EVO_INSTANCE2}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", "apikey": EVO_KEY2 },
+                  body: JSON.stringify({
+                    message: { key: fullMsg.key, message: fullMsg.message, messageTimestamp: fullMsg.messageTimestamp },
+                    key: fullMsg.key,
+                  }),
+                });
+            
+                if (mediaResponse.ok) {
+                  const mediaData = await mediaResponse.json();
+                  if (mediaData.base64) {
+                    const mediaBuffer = Buffer.from(mediaData.base64, "base64");
+                    console.log("[Evolution Webhook] Media downloaded:", mediaBuffer.length, "bytes");
+                    const extMap: Record<string, string> = { imageMessage: "jpg", videoMessage: "mp4", audioMessage: "ogg", documentMessage: "pdf" };
+                    const ext = fileName ? (fileName.split(".").pop() || extMap[msgType]) : extMap[msgType] || "bin";
+                    const mediaFileName = fileName || `sent-${updateKeyId}.${ext}`;
+                    const uploadResult = await uploadToR2(mediaBuffer, mediaFileName, mediaData.mimetype || mimeType || "application/octet-stream");
+                    mediaUrl = cleanR2Url(uploadResult.url);
+                    console.log("[Evolution Webhook] ✅ Outbound media uploaded to R2:", mediaUrl);
+                  } else {
+                    console.log("[Evolution Webhook] ⚠️ No base64 in response");
+                  }
+                } else {
+                  console.log("[Evolution Webhook] ⚠️ getBase64 failed:", mediaResponse.status);
+                }
+              } catch (mediaErr) {
+                console.error("[Evolution Webhook] ❌ Outbound media download failed:", mediaErr);
+              }
+            }
+
+            await ingestOutboundConversationMessage({
+              provider: "whatsapp",
+              toNumber: toNumber,
+              fromUserId: 1,
+              messageType: msgType as any,
+              messageText: msgText,
+              caption: caption,
+              mediaUrl: mediaUrl,
+              mediaId: fullMsg.id || null,
+              mimeType: mimeType,
+              fileName: fileName,
+              fileSize: null,
+              externalId: updateKeyId,
+              createdAt: fullMsg.messageTimestamp ? new Date(fullMsg.messageTimestamp * 1000) : new Date(),
+            });
+            console.log("[Evolution Webhook] ✅ Outbound message ingested from messages.update:", updateKeyId, "to:", toNumber);
+          } catch (outboundErr) {
+            console.error("[Evolution Webhook] ❌ Failed to ingest outbound from update:", outboundErr);
+          }
+          return;
+        } else {
+          console.log("[Evolution Webhook] Message status update ignored:", updateStatus, "fromMe:", updateFromMe);
+          return;
+        }
+      }
     }
 
     // Chats update - pode ser útil para atualizar status

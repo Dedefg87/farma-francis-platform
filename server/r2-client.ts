@@ -8,6 +8,8 @@ const s3Client = new S3Client({
     accessKeyId: 'debc3a713faeb6d442dab499221ba42f',
     secretAccessKey: 'c82abdafb97bf0d1a39e66644c86cacbe373cb6aa2b852ea5786726070a0513c',
   },
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 export interface UploadResult {
@@ -87,18 +89,21 @@ export async function uploadToR2(
  * Extrai a key do objeto R2 de uma URL pública
  */
 export function extractR2Key(url: string | null | undefined): string | null {
-  if (!url) return null;
-  if (!url.includes('.r2.') && !url.includes('r2.cloudflarestorage.com') && !url.includes('.r2.dev') && !url.includes('pub-33c481f0a9e94adb8870472308f49471.r2.dev')) {
-    return null;
+  if (!url || typeof url !== "string") return null;
+  if (url.includes(".r2.") || url.includes("r2.cloudflarestorage.com") || url.includes(".r2.dev") || url.includes("pub-33c481f0a9e94adb8870472308f49471.r2.dev")) {
+    try {
+      const parsed = new URL(url);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts.length < 2) return null;
+      return parts.slice(1).join("/");
+    } catch {
+      return null;
+    }
   }
-  try {
-    const parsed = new URL(url);
-    const parts = parsed.pathname.split('/').filter(Boolean);
-    if (parts.length < 2) return null;
-    return parts.slice(1).join('/');
-  } catch {
-    return null;
-  }
+  // Non-R2 paths (e.g. evolution-api/...): return as-is so getMediaAsBase64 can handle them
+  if (!url.startsWith("http") && !url.startsWith("data:")) return url;
+  // HTTP URLs: return as-is, getMediaAsBase64 will fetch via HTTP
+  return url;
 }
 
 /**

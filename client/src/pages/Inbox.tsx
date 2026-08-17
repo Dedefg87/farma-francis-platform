@@ -14,6 +14,8 @@ import {
   Sparkles,
   Paperclip,
   X,
+  Reply,
+  Heart,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AudioTranscription } from "@/components/AudioTranscription";
@@ -22,6 +24,7 @@ import { SentimentBadge } from "@/components/SentimentBadge";
 import { TagManager } from "@/components/TagManager";
 import { TagFilter } from "@/components/TagFilter";
 import { useConversationTags } from "@/hooks/useConversationTags";
+import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Inbox() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
@@ -40,6 +43,8 @@ export default function Inbox() {
   const [selectedTagFilter, setSelectedTagFilter] = useState<number[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [enlargedPhoto, setEnlargedPhoto] = useState<{ url: string; name: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ externalId: string; content: string } | null>(null); // ✅ Estado: mensagem que está sendo respondida
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: conversations, refetch: refetchConversations } =
@@ -79,6 +84,26 @@ export default function Inbox() {
   const markAsRead = trpc.inbox.markAsRead.useMutation({
     onSuccess: () => {
       refetchConversations();
+    },
+  });
+
+  const replyToMessage = trpc.messages.send.useMutation({
+    onSuccess: () => {
+      toast.success("Resposta enviada!");
+      refetchHistory();
+      refetchConversations();
+    },
+    onError: error => {
+      toast.error(`Erro ao responder: ${error.message}`);
+    },
+  });
+
+  const reactToMessage = trpc.messages.send.useMutation({
+    onSuccess: () => {
+      refetchHistory();
+    },
+    onError: error => {
+      toast.error(`Erro ao reagir: ${error.message}`);
     },
   });
 
@@ -227,7 +252,19 @@ export default function Inbox() {
                 <div className="flex items-center gap-2">
                   {/* Foto do cliente (estilo WhatsApp) com badge do canal */}
                   <div className="relative flex-shrink-0">
-                    <Avatar className="w-9 h-9">
+                    <Avatar 
+                      className={`w-9 h-9 ${conv.fromProfilePic ? "cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-200" : ""}`}
+                      onClick={(e) => {
+                        if (conv.fromProfilePic) {
+                          e.stopPropagation();
+                          setEnlargedPhoto({
+                            url: conv.fromProfilePic,
+                            name: conv.fromName || conv.fromNumber,
+                          });
+                        }
+                      }}
+                      title={conv.fromProfilePic ? "Clique para ampliar a foto" : undefined}
+                    >
                       {conv.fromProfilePic && (
                         <AvatarImage
                           src={conv.fromProfilePic}
@@ -339,38 +376,101 @@ export default function Inbox() {
       <div className="flex-1 flex flex-col">
         {selectedConversation ? (
           <>
-            {/* Chat Header */}
-            <div className="p-4 border-b bg-background">
-              <div className="flex items-center gap-3">
-                <div className="relative flex-shrink-0">
-                  <Avatar className="w-10 h-10">
+            {/* Chat Header - Grande estilo WhatsApp Web */}
+            <div className="border-b bg-gradient-to-b from-background to-background/95 shadow-sm">
+              <div className="p-6 flex flex-col items-center gap-4">
+                {/* Foto grande de perfil */}
+                <div className="relative group">
+                  <Avatar 
+                    className={`w-32 h-32 ring-4 ring-background shadow-xl ${selectedConversation.fromProfilePic ? "cursor-pointer hover:ring-[#3FA9D4] hover:scale-105 active:scale-95 transition-all duration-300" : ""}`}
+                    onClick={() => {
+                      if (selectedConversation.fromProfilePic) {
+                        setEnlargedPhoto({
+                          url: selectedConversation.fromProfilePic,
+                          name: selectedConversation.fromName || selectedConversation.fromNumber,
+                        });
+                      }
+                    }}
+                    title={selectedConversation.fromProfilePic ? "Clique para ampliar a foto" : undefined}
+                  >
                     {selectedConversation.fromProfilePic && (
                       <AvatarImage
                         src={selectedConversation.fromProfilePic}
                         alt={selectedConversation.fromName || selectedConversation.fromNumber}
+                        className="object-cover"
                       />
                     )}
-                    <AvatarFallback className="bg-[#3FA9D4] text-white">
+                    <AvatarFallback className="bg-gradient-to-br from-[#3FA9D4] to-[#2B5876] text-white text-4xl font-semibold">
                       {getInitials(selectedConversation.fromName || selectedConversation.fromNumber)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="absolute -bottom-1 -right-1 bg-white rounded-full p-[1px]">
+                  {/* Badge do canal */}
+                  <div className="absolute bottom-1 right-1 bg-white rounded-full p-2 shadow-lg ring-2 ring-background">
                     {selectedConversation.provider === "whatsapp" ? (
-                      <MessageSquare className="w-3.5 h-3.5 text-green-600" />
+                      <MessageSquare className="w-5 h-5 text-green-600" />
                     ) : (
-                      <Instagram className="w-3.5 h-3.5 text-pink-600" />
+                      <Instagram className="w-5 h-5 text-pink-600" />
                     )}
-                  </span>
+                  </div>
+                  {/* Overlay de hover */}
+                  {selectedConversation.fromProfilePic && (
+                    <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center opacity-100">
+                      <div className="bg-white/90 rounded-full p-3 shadow-xl">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <h3 className="font-semibold">
-                    {selectedConversation.fromName ||
-                      selectedConversation.fromNumber}
+
+                {/* Nome e informações */}
+                <div className="text-center space-y-1">
+                  <h3 className="text-2xl font-bold text-foreground">
+                    {selectedConversation.fromName || selectedConversation.fromNumber}
                   </h3>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground font-mono">
                     {selectedConversation.fromNumber}
                   </p>
+                  {/* Status da conversa */}
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    {selectedConversation.unreadCount > 0 && (
+                      <Badge variant="default" className="text-xs px-2 py-1">
+                        {selectedConversation.unreadCount} não lida{selectedConversation.unreadCount > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    {sentiments[`${selectedConversation.provider}-${selectedConversation.fromNumber}`] && (
+                      <SentimentBadge
+                        sentiment={sentiments[`${selectedConversation.provider}-${selectedConversation.fromNumber}`].sentiment}
+                        confidence={sentiments[`${selectedConversation.provider}-${selectedConversation.fromNumber}`].confidence}
+                        size="sm"
+                      />
+                    )}
+                  </div>
                 </div>
+
+                {/* Tags */}
+                {conversationTags[`${selectedConversation.provider}-${selectedConversation.fromNumber}`] &&
+                  conversationTags[`${selectedConversation.provider}-${selectedConversation.fromNumber}`].length > 0 && (
+                    <div className="flex items-center justify-center gap-2 flex-wrap max-w-md">
+                      {conversationTags[`${selectedConversation.provider}-${selectedConversation.fromNumber}`]
+                        .slice(0, 5)
+                        .map(tag => (
+                          <Badge
+                            key={tag.id}
+                            style={{ backgroundColor: tag.color }}
+                            className="text-xs px-2 py-1 text-white shadow-sm"
+                          >
+                            {tag.name}
+                          </Badge>
+                        ))}
+                      {conversationTags[`${selectedConversation.provider}-${selectedConversation.fromNumber}`].length > 5 && (
+                        <Badge variant="secondary" className="text-xs px-2 py-1">
+                          +{conversationTags[`${selectedConversation.provider}-${selectedConversation.fromNumber}`].length - 5}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
               </div>
             </div>
 
@@ -443,19 +543,70 @@ export default function Inbox() {
                           {msg.mediaUrl && msg.messageType === "document" && (
                             <div className="mb-2 p-2 bg-blue-50 rounded flex items-center gap-2">
                               <Paperclip className="w-4 h-4 text-blue-600" />
-                              <a
-                                href={msg.mediaUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm text-blue-600 underline"
-                              >
-                                📊 Documento anexo
-                              </a>
+                              <iframe
+                                src={msg.mediaUrl}
+                                className="w-full h-64 rounded border border-blue-200"
+                                title="Visualizar documento"
+                              />
                             </div>
                           )}
                           <p className="text-sm whitespace-pre-wrap">
                             {msg.content}
                           </p>
+                          {msg.reaction && (
+                            <span className="text-base ml-1">{msg.reaction}</span>
+                          )}
+                          <div className="flex gap-1 mt-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1 text-xs"
+                              onClick={async () => {
+                                // ✅ Validações robustas antes de chamar a API
+                                if (!selectedConversation) {
+                                  toast.error("Nenhuma conversa selecionada");
+                                  return;
+                                }
+                                if (!msg.externalId) {
+                                  toast.error("ID da mensagem indisponível");
+                                  return;
+                                }
+
+                                const content = await new Promise<string | null>((resolve) => {
+                                  const result = window.prompt("💬 Responder mensagem:");
+                                  resolve(result ? result.trim() : null);
+                                });
+
+                                if (!content) return;
+
+                                try {
+                                  await replyToMessage.mutateAsync({
+                                    replyToId: msg.externalId,
+                                    content: content,
+                                    conversation_id: Number(selectedConversation.id), // ✅ Garantir number
+                                  });
+                                  // onSuccess do hook já refaz o fetch
+                                } catch (err: any) {
+                                  console.error("[Reply] Erro detalhado:", err);
+                                  toast.error(`Erro ao responder: ${err?.data?.message || err.message}`);
+                                }
+                              }}
+                            >
+                              <Reply className="w-3 h-3 mr-1" />
+                              Responder
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-5 px-1 text-xs"
+                              onClick={() => reactToMessage.mutate({
+                                messageId: msg.externalId,
+                                emoji: "❤️",
+                              })}
+                            >
+                              <Heart className="w-3 h-3 text-red-500" />
+                            </Button>
+                          </div>
                           <span className="text-xs opacity-70 mt-1 block">
                             {formatTimestamp(msg.timestamp)}
                           </span>
@@ -581,6 +732,54 @@ export default function Inbox() {
           </div>
         )}
       </div>
+
+      {/* Modal Lightbox para Ampliar Foto do Cliente (Estilo WhatsApp Web) */}
+      {enlargedPhoto && (
+        <div 
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+          onClick={() => setEnlargedPhoto(null)}
+        >
+          <div 
+            className="relative bg-background rounded-lg border border-border shadow-2xl max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden cursor-default animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-semibold text-lg truncate">
+                {enlargedPhoto.name}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full h-8 w-8 hover:bg-muted"
+                onClick={() => setEnlargedPhoto(null)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            {/* Modal Body */}
+            <div className="flex-1 p-6 flex items-center justify-center bg-zinc-950 min-h-[300px]">
+              <img
+                src={enlargedPhoto.url}
+                alt={enlargedPhoto.name}
+                className="max-w-full max-h-[50vh] object-contain rounded-md shadow-lg"
+              />
+            </div>
+            {/* Modal Footer */}
+            <div className="p-4 border-t flex justify-end gap-2 bg-muted/20">
+              <Button
+                variant="outline"
+                onClick={() => window.open(enlargedPhoto.url, '_blank')}
+              >
+                Abrir em nova aba
+              </Button>
+              <Button onClick={() => setEnlargedPhoto(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
