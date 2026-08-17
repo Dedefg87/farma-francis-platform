@@ -657,8 +657,11 @@ export const messagesRouter = router({
         let replyToRemoteJid: string | undefined = undefined;
         let replyToContent: string | undefined = undefined;
         let replyToFromMe: boolean | undefined = undefined;
+        console.log("[REPLY FLOW] replyToMessageId:", replyToMessageId, "type:", typeof replyToMessageId);
         if (replyToMessageId) {
+          console.log("[REPLY FLOW] querying conversationMessages for id:", replyToMessageId);
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
+          console.log("[REPLY FLOW] origMsg found:", JSON.stringify({ id: origMsg?.id, externalId: origMsg?.externalId, direction: origMsg?.direction, content: origMsg?.content?.substring(0,50) }));
           replyToExternalId = origMsg?.externalId || undefined;
           replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/\D/g, "") + "@s.whatsapp.net" : undefined);
           replyToContent = origMsg?.content || undefined;
