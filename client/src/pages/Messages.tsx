@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-const utils = trpc.useContext();
 import { hasSession } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -58,6 +57,7 @@ import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
+  const utils = trpc.useContext();
   const [, setLocation] = useLocation();
   const [selectedConversation, setSelectedConversation] = useState<
     number | null
