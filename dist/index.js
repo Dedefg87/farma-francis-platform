@@ -20215,7 +20215,7 @@ async function processInstagramWebhook(body2) {
           } catch (reactionErr) {
             console.error("[Webhook] Erro ao aplicar rea\xE7\xE3o:", reactionErr);
           }
-          continue;
+          return;
         }
         const existing = await getReceivedMessageByExternalId(
           messageId,
