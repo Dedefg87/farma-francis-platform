@@ -653,10 +653,14 @@ export const messagesRouter = router({
         // Buscar externalId da mensagem original para citar (reply)
         let replyToExternalId: string | undefined = undefined;
         let replyToRemoteJid: string | undefined = undefined;
+        let replyToContent: string | undefined = undefined;
+        let replyToFromMe: boolean | undefined = undefined;
         if (replyToMessageId) {
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           replyToExternalId = origMsg?.externalId || undefined;
   replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/D/g, '') + '@s.whatsapp.net' : undefined);
+  replyToContent = origMsg?.content || undefined;
+  replyToFromMe = origMsg?.direction === 'outbound';
         }
         const result = await sendWhatsAppMessage({
           to: customerPhone,
@@ -666,6 +670,8 @@ export const messagesRouter = router({
           senderPosition,
           replyToMessageId: replyToExternalId,
           replyToRemoteJid: replyToRemoteJid,
+          replyToContent: replyToContent,
+          replyToFromMe: replyToFromMe,
         });
         return { success: true, messageId: result?.messageId };
       } else if (provider === "instagram") {
