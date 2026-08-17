@@ -662,6 +662,8 @@ export const messagesRouter = router({
           replyToContent = origMsg?.content || undefined;
           replyToFromMe = origMsg?.direction === "outbound";
           console.log("[reply] externalId:", replyToExternalId, "remoteJid:", replyToRemoteJid, "content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
+          if (!replyToExternalId) console.log("[reply] WARNING: externalId missing - quoted nao vai funcionar!");
+          if (!replyToContent) console.log("[reply] WARNING: content missing - conversation sera vazia");
         }
 
         const result = await sendWhatsAppMessage({

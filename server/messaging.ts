@@ -201,6 +201,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
       },
     };
     console.log("[sendEvolutionText] quoted payload:", JSON.stringify(payload.quoted));
+    console.log("[sendEvolutionText] FULL payload:", JSON.stringify(payload));
   }
 
   const response = await fetch(
@@ -221,6 +222,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
   }
 
   const result = await response.json();
+  console.log("[sendEvolutionText] response:", JSON.stringify(result).substring(0, 500));
   return result;
 }
 
