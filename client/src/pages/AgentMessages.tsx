@@ -168,7 +168,7 @@ export default function AgentMessages() {
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
-  const [replyToMsg, setReplyToMsg] = useState<{ id: number; content: string } | null>(null);
+  const [replyToMsg, setReplyToMsg] = useState<{ id: number; externalId?: string; content: string } | null>(null);
   const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
   const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
   const [forwardTargetCustomerPhone, setForwardTargetCustomerPhone] = useState<string>("");
@@ -857,7 +857,7 @@ export default function AgentMessages() {
       sendMessageMutation.mutate({
         conversation_id: selectedConversationId,
         content: message,
-        replyToMessageId: replyToMsg?.id ?? undefined,
+        replyToMessageId: replyToMsg?.externalId || replyToMsg?.id?.toString() || undefined,
       });
       setReplyToMsg(null);
     }
@@ -1312,7 +1312,7 @@ export default function AgentMessages() {
                         {/* Reply button - appears on hover */}
                         <button
                           onClick={() => {
-                            setReplyToMsg({ id: msg.id, content: msg.content || "" });
+                              setReplyToMsg({ id: msg.id, externalId: msg.externalId, content: msg.content || "" });
                           }}
                           className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-green-600 z-10"
                           title="Responder mensagem"
@@ -1395,6 +1395,20 @@ export default function AgentMessages() {
               </div>
 
               {/* Input de Mensagem */}
+              {replyToMsg && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border-l-4 border-green-500 rounded text-sm">
+                  <CornerUpLeft className="w-4 h-4 text-green-600 shrink-0" />
+                  <span className="text-green-800 truncate flex-1">Respondendo: {replyToMsg.content}</span>
+                  <button
+                    onClick={() => setReplyToMsg(null)}
+                    className="text-green-600 hover:text-green-800 shrink-0"
+                    title="Cancelar resposta"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="bg-white border-t border-gray-200 p-4">
                 {/* File Preview */}
                 {selectedFile && (
