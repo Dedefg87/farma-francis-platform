@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-const utils = trpc.useContext();
 import { hasSession } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -58,6 +57,7 @@ import { PDFPreview } from "@/components/PDFPreview";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
+  const utils = trpc.useContext();
   const [, setLocation] = useLocation();
   const [selectedConversation, setSelectedConversation] = useState<
     number | null
@@ -100,7 +100,7 @@ export default function Messages() {
     );
 
   // ✅ Hooks: Reply + Reaction
-  const replyToMessage = trpc.messages.reply.useMutation({
+  const replyToMessage = trpc.messages.send.useMutation({
     onSuccess: () => {
       toast.success("Resposta enviada!");
       utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
@@ -111,7 +111,7 @@ export default function Messages() {
     },
   });
 
-  const reactToMessage = trpc.messages.react.useMutation({
+  const reactToMessage = trpc.messages.send.useMutation({
     onSuccess: () => {
       utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
     },
@@ -1016,7 +1016,7 @@ export default function Messages() {
                                 </span>
                                 
                                 {/* ✅ Botões de Resposta + Reação (estilo WhatsApp) */}
-                                <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex gap-1 mt-2 opacity-100 transition-opacity">
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -1026,7 +1026,7 @@ export default function Messages() {
                                       const content = window.prompt("💬 Responder mensagem:");
                                       if (content?.trim()) {
                                         await replyToMessage.mutateAsync({
-                                          replyToId: msg.externalId || "",
+                                          replyToMessageId: msg.externalId || "",
                                           content: content.trim(),
                                           conversation_id: Number(selectedConversation),
                                         });
