@@ -650,12 +650,19 @@ export const messagesRouter = router({
         const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
         const senderPosition = senderEmp?.position || null;
 
+        // Buscar externalId da mensagem original para citar (reply)
+        let replyToExternalId: string | undefined = undefined;
+        if (replyToMessageId) {
+          const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
+          replyToExternalId = origMsg?.externalId || undefined;
+        }
         const result = await sendWhatsAppMessage({
           to: customerPhone,
           message: content,
           senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
           senderName,
           senderPosition,
+          replyToMessageId: replyToExternalId,
         });
         return { success: true, messageId: result?.messageId };
       } else if (provider === "instagram") {
