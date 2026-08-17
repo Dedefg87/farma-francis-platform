@@ -650,7 +650,7 @@ export const messagesRouter = router({
         const senderName = senderUser?.displayName || senderUser?.name || ctx.user?.name || null;
         const senderPosition = senderEmp?.position || null;
 
-        // Buscar externalId da mensagem original para citar (reply)
+        // Buscar dados da mensagem original para citar (reply)
         let replyToExternalId: string | undefined = undefined;
         let replyToRemoteJid: string | undefined = undefined;
         let replyToContent: string | undefined = undefined;
@@ -658,21 +658,23 @@ export const messagesRouter = router({
         if (replyToMessageId) {
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           replyToExternalId = origMsg?.externalId || undefined;
-  replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/D/g, '') + '@s.whatsapp.net' : undefined);
-  replyToContent = origMsg?.content || undefined;
-  replyToFromMe = origMsg?.direction === 'outbound';
+          replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/D/g, "") + "@s.whatsapp.net" : undefined);
+          replyToContent = origMsg?.content || undefined;
+          replyToFromMe = origMsg?.direction === "outbound";
+          console.log("[reply] externalId:", replyToExternalId, "remoteJid:", replyToRemoteJid, "content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
         }
+
         const result = await sendWhatsAppMessage({
-          to: customerPhone,
-          message: content,
-          senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
-          senderName,
-          senderPosition,
-          replyToMessageId: replyToExternalId,
-          replyToRemoteJid: replyToRemoteJid,
-          replyToContent: replyToContent,
-          replyToFromMe: replyToFromMe,
-        });
+                  to: customerPhone,
+                  message: content,
+                  senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
+                  senderName,
+                  senderPosition,
+                  replyToMessageId: replyToExternalId,
+                  replyToRemoteJid: replyToRemoteJid,
+                  replyToContent: replyToContent,
+                  replyToFromMe: replyToFromMe,
+                });
         return { success: true, messageId: result?.messageId };
       } else if (provider === "instagram") {
         const { sendInstagramMessage } = await import("./messaging");
