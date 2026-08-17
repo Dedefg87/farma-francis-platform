@@ -1547,7 +1547,17 @@ async function getDb() {
         charset: "utf8mb4",
         timezone: "Z"
       });
-      _db = (0, import_mysql2.drizzle)(_pool, { mode: "raw" });
+      const { conversationMessages: conversationMessages5, conversations: conversations5, customers: customers5, employees: employees4, users: users7, internalMessages: internalMessages2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+      _db = (0, import_mysql2.drizzle)(_pool, {
+        schema: {
+          conversationMessages: conversationMessages5,
+          conversations: conversations5,
+          customers: customers5,
+          employees: employees4,
+          users: users7,
+          internalMessages: internalMessages2
+        }
+      });
       _dbHealthCheck = Date.now();
       console.log("[Database] New connection pool created (50 connections)");
     } catch (error) {
