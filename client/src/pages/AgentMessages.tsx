@@ -857,7 +857,8 @@ export default function AgentMessages() {
       sendMessageMutation.mutate({
         conversation_id: selectedConversationId,
         content: message,
-        replyToMessageId: replyToMsg?.id ?? undefined,
+        replyToMessageId: replyToMsg?.id,
+        replyToExternalId: replyToMsg?.externalId,
       });
       setReplyToMsg(null);
     }
@@ -1312,7 +1313,7 @@ export default function AgentMessages() {
                         {/* Reply button - appears on hover */}
                         <button
                           onClick={() => {
-                              setReplyToMsg({ id: msg.id, content: msg.content || "" });
+                              setReplyToMsg({ id: msg.id, externalId: msg.externalId, content: msg.content || "" });
                           }}
                           className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-green-600 z-10"
                           title="Responder mensagem"
