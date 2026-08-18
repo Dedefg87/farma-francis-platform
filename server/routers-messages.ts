@@ -827,6 +827,7 @@ export const messagesRouter = router({
           messageText: input.content,
           externalId: result?.messageId || `outbound-${Date.now()}`,
           replyToExternalId: input.replyToId, // ✅ Referenciar mensagem respondida
+          replyToContent: originalMsg?.content || null, // ✅ Salvar conteúdo da mensagem original
           createdAt: new Date(),
         });
       } catch (saveErr) {

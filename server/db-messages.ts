@@ -941,6 +941,7 @@ export async function ingestOutboundConversationMessage(message: {
     conversationId,
     externalId: message.externalId || null,
     replyToExternalId: message.replyToExternalId || null, // ✅ Salvar referência do reply
+    replyToContent: message.replyToContent || null, // ✅ Salvar conteúdo da mensagem respondida
     senderId: message.fromUserId,
     senderName: message.fromUserName || null,
     senderPosition: message.fromUserPosition || null,
