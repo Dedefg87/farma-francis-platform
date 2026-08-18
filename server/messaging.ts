@@ -191,13 +191,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
   console.log("[sendEvolutionText] replyToMessageId received:", params.replyToMessageId, "type:", typeof params.replyToMessageId, "truthy:", !!params.replyToMessageId);
   console.log("[sendEvolutionText] replyToContent:", params.replyToContent?.substring(0,50), "remoteJid:", params.remoteJid, "fromMe:", params.replyToFromMe);
   if (params.replyToMessageId) {
-    const remoteJid = params.remoteJid || (params.to ? params.to.replace(/\D/g, "") + "@s.whatsapp.net" : undefined);
-    
-    // Validação: Evolution API requer remoteJid no quoted.key
-    if (!remoteJid) {
-      console.warn("[sendEvolutionText] AVISO: remoteJid ausente para reply - quoted pode falhar na Evolution API");
-    }
-    
+    const remoteJid = params.remoteJid || (params.to ? params.to.replace(/D/g, "") + "@s.whatsapp.net" : undefined);
     payload.quoted = {
       key: {
         id: params.replyToMessageId,
@@ -208,11 +202,9 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
         conversation: params.replyToContent || "",
       },
     };
-    console.log("[sendEvolutionText] quoted payload:", JSON.stringify(payload.quoted));
-    console.log("[sendEvolutionText] FULL payload:", JSON.stringify(payload));
-    
-    // Log adicional para debug
-    console.log("[sendEvolutionText] Reply params - to:", params.to, "replyToMessageId:", params.replyToMessageId, "replyToContent length:", params.replyToContent?.length);
+    console.log("[EVO-REPLY] id:"+params.replyToMessageId+" jid:"+remoteJid+" fromMe:"+(params.replyToFromMe??false));
+  } else {
+    console.log("[EVO-REPLY] sem replyToMessageId - quoted nao adicionado");
   }
 
   const response = await fetch(
