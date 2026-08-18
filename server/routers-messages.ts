@@ -663,7 +663,7 @@ export const messagesRouter = router({
         console.log("[REPLY FLOW] replyToMessageId:", replyToMessageId, "replyToExternalIdDirect:", replyToExternalIdDirect, "type:", typeof replyToMessageId);
         if (replyToExternalIdDirect) {
           replyToExternalId = replyToExternalIdDirect;
-          replyToRemoteJid = customerPhone ? customerPhone.replace(/D/g, "") + "@s.whatsapp.net" : undefined;
+          replyToRemoteJid = customerPhone ? customerPhone.replace(/\D/g, "") + "@s.whatsapp.net" : undefined;
           replyToContent = "";
           // Buscar content da mensagem original no DB
           if (replyToMessageId) {
