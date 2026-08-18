@@ -2141,7 +2141,23 @@ async function processEvolutionWebhook(body: unknown) {
 
         if (!isPossibleSurveyResponse) {
           // Extrair dados da mensagem citada (reply)
-          const _replyCtx = data?.contextInfo || data?.message?.contextInfo || data?.message?.extendedTextMessage?.contextInfo || data?.message?.imageMessage?.contextInfo || data?.message?.videoMessage?.contextInfo || null;
+          // 🔍 DEBUG: dump da estrutura do payload para encontrar contextInfo
+          const _msgContent = messageContent || data?.message || {};
+          console.log("[DEBUG-REPLY] data keys:", Object.keys(data || {}));
+          console.log("[DEBUG-REPLY] data.message keys:", data?.message ? Object.keys(data.message) : 'no data.message');
+          console.log("[DEBUG-REPLY] messageContent keys:", Object.keys(_msgContent));
+          if (_msgContent?.extendedTextMessage) console.log("[DEBUG-REPLY] extendedTextMessage keys:", Object.keys(_msgContent.extendedTextMessage));
+          if (_msgContent?.extendedTextMessage?.contextInfo) console.log("[DEBUG-REPLY] contextInfo found in extendedTextMessage:", JSON.stringify(_msgContent.extendedTextMessage.contextInfo));
+          if (_msgContent?.imageMessage?.contextInfo) console.log("[DEBUG-REPLY] contextInfo found in imageMessage");
+          if (_msgContent?.videoMessage?.contextInfo) console.log("[DEBUG-REPLY] contextInfo found in videoMessage");
+          if (_msgContent?.contextInfo) console.log("[DEBUG-REPLY] contextInfo found directly:", JSON.stringify(_msgContent.contextInfo));
+          const _replyCtx = _msgContent?.contextInfo || _msgContent?.extendedTextMessage?.contextInfo || _msgContent?.imageMessage?.contextInfo || _msgContent?.videoMessage?.contextInfo || data?.contextInfo || data?.message?.contextInfo || data?.message?.extendedTextMessage?.contextInfo || data?.message?.imageMessage?.contextInfo || data?.message?.videoMessage?.contextInfo || null;
+          console.log("[DEBUG-REPLY] _replyCtx found:", !!_replyCtx);
+          if (_replyCtx) console.log("[DEBUG-REPLY] _replyCtx keys:", Object.keys(_replyCtx));
+          console.log("[DEBUG-REPLY] _replyCtx.stanzaId:", _replyCtx?.stanzaId || 'null');
+          console.log("[DEBUG-REPLY] _replyCtx.quotedMessage:", _replyCtx?.quotedMessage ? Object.keys(_replyCtx.quotedMessage) : 'null');
+          // Also check messageContent directly
+          console.log("[DEBUG-REPLY] messageContent JSON (first 500):", JSON.stringify(messageContent).substring(0, 500));
           const _replyToExternalId = _replyCtx?.stanzaId || null;
           let _replyToContent: string | null = null;
           if (_replyCtx?.quotedMessage) {
