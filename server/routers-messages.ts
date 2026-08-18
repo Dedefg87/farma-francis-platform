@@ -578,7 +578,7 @@ export const messagesRouter = router({
       )
     )
     .mutation(async ({ input, ctx }) => {
-        console.log("[SEND DEBUG] input completo:", JSON.stringify({ conversation_id: input.conversation_id, content: (input.content||input.message||"").substring(0,80), replyToMessageId: input.replyToMessageId, hasReplyTo: !!input.replyToMessageId }));
+        console.log("[SEND DEBUG] input completo:", JSON.stringify({ conversation_id: input.conversation_id, content: (input.content||input.message||"").substring(0,80), replyToMessageId: input.replyToMessageId, replyToExternalId: input.replyToExternalId, hasReplyTo: !!input.replyToMessageId, hasExternalId: !!input.replyToExternalId }));
       // Admin NÃO pode enviar mensagens ao cliente — usar sussurros (internalMessages)
       if (ctx.user?.role === "admin") {
         throw new Error(
@@ -659,11 +659,22 @@ export const messagesRouter = router({
         let replyToRemoteJid: string | undefined = undefined;
         let replyToContent: string | undefined = undefined;
         let replyToFromMe: boolean | undefined = undefined;
-        console.log("[REPLY FLOW] replyToMessageId:", replyToMessageId, "type:", typeof replyToMessageId);
+        console.log("[REPLY FLOW] replyToMessageId:", replyToMessageId, "replyToExternalIdDirect:", replyToExternalIdDirect, "type:", typeof replyToMessageId);
         if (replyToExternalIdDirect) {
           replyToExternalId = replyToExternalIdDirect;
           replyToRemoteJid = customerPhone ? customerPhone.replace(/D/g, "") + "@s.whatsapp.net" : undefined;
           replyToContent = "";
+          // Buscar content da mensagem original no DB
+          if (replyToMessageId) {
+            try {
+              const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
+              if (origMsg) {
+                replyToContent = origMsg.content || "";
+                replyToFromMe = origMsg.senderType === "agent";
+                console.log("[reply] fetched from DB - content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
+              }
+            } catch(e) { console.log("[reply] DB lookup error:", e.message); }
+          }
           replyToFromMe = false;
           console.log("[reply] Using direct externalId from frontend:", replyToExternalId);
         } else if (replyToMessageId) {
@@ -679,6 +690,13 @@ export const messagesRouter = router({
           if (!replyToContent) console.log("[reply] WARNING: content missing - conversation sera vazia");
         }
 
+        console.log("[REPLY FLOW] Final params para sendWhatsAppMessage:", JSON.stringify({
+          replyToExternalId: replyToExternalId,
+          replyToRemoteJid: replyToRemoteJid,
+          replyToContent: replyToContent?.substring(0,50),
+          replyToFromMe: replyToFromMe,
+          hasReply: !!replyToExternalId
+        }));
         const result = await sendWhatsAppMessage({
                   to: customerPhone,
                   message: content,
