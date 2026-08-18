@@ -370,6 +370,7 @@ export async function sendWhatsAppMessage(params: {
         messageText: params.message,
         externalId: result?.key?.id || null,
         replyToExternalId: params.replyToMessageId || null, // ✅ Salvar referência do reply
+      replyToContent: params.replyToContent || null, // ✅ Salvar conteúdo da mensagem citada
       });
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }
