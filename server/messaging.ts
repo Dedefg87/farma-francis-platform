@@ -199,7 +199,7 @@ async function sendEvolutionText(params: { to: string; message: string; replyToM
         fromMe: params.replyToFromMe ?? false,
       },
       message: {
-        conversation: params.replyToContent || "",
+        conversation: params.replyToContent || "[Mensagem citada]",
       },
     };
     console.log("[EVO-REPLY] id:"+params.replyToMessageId+" jid:"+remoteJid+" fromMe:"+(params.replyToFromMe??false));
