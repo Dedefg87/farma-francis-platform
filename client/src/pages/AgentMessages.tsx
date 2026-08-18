@@ -848,6 +848,7 @@ export default function AgentMessages() {
           fileType: selectedFile.type,
           fileSize: selectedFile.size,
           replyToMessageId: replyToMsg?.id ?? undefined,
+          replyToExternalId: replyToMsg?.externalId,
         });
         setSelectedFile(null);
         setFilePreview(null);

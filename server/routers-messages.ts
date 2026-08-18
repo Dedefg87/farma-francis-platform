@@ -665,16 +665,26 @@ export const messagesRouter = router({
           replyToExternalId = replyToExternalIdDirect;
           replyToRemoteJid = customerPhone ? customerPhone.replace(/\D/g, "") + "@s.whatsapp.net" : undefined;
           replyToContent = "";
-          // Buscar content da mensagem original no DB
+          // Buscar content da mensagem original no DB usando externalId se replyToMessageId não foi fornecido
           if (replyToMessageId) {
             try {
               const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
               if (origMsg) {
                 replyToContent = origMsg.content || "";
                 replyToFromMe = origMsg.senderType === "agent";
-                console.log("[reply] fetched from DB - content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
+                console.log("[reply] fetched from DB by id - content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
               }
             } catch(e) { console.log("[reply] DB lookup error:", e.message); }
+          } else {
+            // Tentar buscar pelo externalId direto
+            try {
+              const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.externalId, replyToExternalIdDirect)).limit(1);
+              if (origMsg) {
+                replyToContent = origMsg.content || "";
+                replyToFromMe = origMsg.senderType === "agent";
+                console.log("[reply] fetched from DB by externalId - content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
+              }
+            } catch(e) { console.log("[reply] DB lookup by externalId error:", e.message); }
           }
           // replyToFromMe ja definido pelo DB lookup acima
           console.log("[reply] Using direct externalId from frontend:", replyToExternalId);
