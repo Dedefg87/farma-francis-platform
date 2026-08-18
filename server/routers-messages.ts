@@ -566,7 +566,7 @@ export const messagesRouter = router({
         file_type: z.string().optional(),
         file_size: z.number().optional(),
         replyToMessageId: z.number().optional(), // ID da mensagem original para citar (responder)
-        replyToExternalId: z.string().optional(), // externalId direto do frontend (bypass DB lookup)
+        replyToExternalId: z.string().nullable().optional(), // externalId direto do frontend (bypass DB lookup)
       }).refine(
         data => {
           // Must have either conversation_id or (to + provider)
