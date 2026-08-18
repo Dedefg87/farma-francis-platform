@@ -675,7 +675,7 @@ export const messagesRouter = router({
               }
             } catch(e) { console.log("[reply] DB lookup error:", e.message); }
           }
-          replyToFromMe = false;
+          // replyToFromMe ja definido pelo DB lookup acima
           console.log("[reply] Using direct externalId from frontend:", replyToExternalId);
         } else if (replyToMessageId) {
           console.log("[REPLY FLOW] querying conversationMessages for id:", replyToMessageId);
