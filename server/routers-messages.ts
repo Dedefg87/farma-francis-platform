@@ -535,6 +535,7 @@ export const messagesRouter = router({
             senderPosition,
             reaction: (msg as any).reaction || null,
             replyToExternalId: (msg as any).replyToExternalId || null,
+            replyToContent: (msg as any).replyToContent || null,
           };
         }));
 
@@ -678,17 +679,37 @@ export const messagesRouter = router({
           // replyToFromMe ja definido pelo DB lookup acima
           console.log("[reply] Using direct externalId from frontend:", replyToExternalId);
         } else if (replyToMessageId) {
-          console.log("[REPLY FLOW] querying conversationMessages for id:", replyToMessageId);
-          const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
-          console.log("[REPLY FLOW] origMsg found:", JSON.stringify({ id: origMsg?.id, externalId: origMsg?.externalId, direction: origMsg?.direction, content: origMsg?.content?.substring(0,50) }));
-          replyToExternalId = origMsg?.externalId || undefined;
-          replyToRemoteJid = origMsg?.remoteJid || (customerPhone ? customerPhone.replace(/\D/g, "") + "@s.whatsapp.net" : undefined);
-          replyToContent = origMsg?.content || undefined;
-          replyToFromMe = origMsg?.direction === "outbound";
-          console.log("[reply] externalId:", replyToExternalId, "remoteJid:", replyToRemoteJid, "content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
-          if (!replyToExternalId) console.log("[reply] WARNING: externalId missing - quoted nao vai funcionar!");
-          if (!replyToContent) console.log("[reply] WARNING: content missing - conversation sera vazia");
-        }
+                  console.log("[REPLY FLOW] querying conversationMessages for id:", replyToMessageId);
+                  const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
+                  console.log("[REPLY FLOW] origMsg found:", JSON.stringify({ id: origMsg?.id, externalId: origMsg?.externalId, direction: origMsg?.direction, content: origMsg?.content?.substring(0,50) }));
+                  replyToExternalId = origMsg?.externalId || undefined;
+          
+                  // Melhor fallback para remoteJid - usar o remoteJid da mensagem original se disponível
+                  // Se não, tentar construir a partir do telefone do cliente da conversa
+                  if (origMsg?.remoteJid) {
+                    replyToRemoteJid = origMsg.remoteJid;
+                  } else if (conv?.customerPhone) {
+                    // Normalizar telefone: remover não-dígitos e adicionar sufixo WhatsApp
+                    const normalizedPhone = conv.customerPhone.replace(/\D/g, "");
+                    replyToRemoteJid = `${normalizedPhone}@s.whatsapp.net`;
+                  }
+          
+                  replyToContent = origMsg?.content || undefined;
+                  replyToFromMe = origMsg?.senderType === "agent" || origMsg?.direction === "outbound";
+          
+                  console.log("[reply] externalId:", replyToExternalId, "remoteJid:", replyToRemoteJid, "content:", replyToContent?.substring(0,50), "fromMe:", replyToFromMe);
+          
+                  // Validar se temos o mínimo necessário para quoted funcionar
+                  if (!replyToExternalId) {
+                    console.warn("[reply] AVISO: externalId ausente na mensagem original - quoted pode falhar");
+                  }
+                  if (!replyToRemoteJid) {
+                    console.warn("[reply] AVISO: remoteJid não pôde ser determinado - quoted pode falhar");
+                  }
+                  if (!replyToContent) {
+                    console.warn("[reply] AVISO: conteúdo da mensagem original ausente - quoted.conversation será vazio");
+                  }
+                }
 
         console.log("[REPLY FLOW] Final params para sendWhatsAppMessage:", JSON.stringify({
           replyToExternalId: replyToExternalId,

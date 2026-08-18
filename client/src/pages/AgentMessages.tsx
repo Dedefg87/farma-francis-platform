@@ -847,10 +847,12 @@ export default function AgentMessages() {
           fileName: selectedFile.name,
           fileType: selectedFile.type,
           fileSize: selectedFile.size,
+          replyToMessageId: replyToMsg?.id ?? undefined,
         });
         setSelectedFile(null);
         setFilePreview(null);
         setMessage("");
+        setReplyToMsg(null);
       };
       reader.readAsDataURL(selectedFile);
     } else {
@@ -1313,7 +1315,11 @@ export default function AgentMessages() {
                         {/* Reply button - appears on hover */}
                         <button
                           onClick={() => {
-                              setReplyToMsg({ id: msg.id, externalId: msg.externalId || undefined, content: msg.content || "" });
+                              setReplyToMsg({ 
+                                id: msg.id, 
+                                externalId: msg.externalId || undefined,
+                                content: msg.content || "" 
+                              });
                           }}
                           className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-green-600 z-10"
                           title="Responder mensagem"
@@ -1336,6 +1342,17 @@ export default function AgentMessages() {
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
+                        {/* Quoted/Reply message indicator */}
+                        {(msg as any).replyToExternalId && (msg as any).replyToContent && (
+                          <div className="mb-2 p-2 bg-green-50 border-l-3 border-green-500 rounded-r text-sm">
+                            <p className="text-xs text-green-700 font-medium mb-0.5">Respondendo a:</p>
+                            <p className="text-sm text-gray-700 line-clamp-1">
+                              {(msg as any).replyToContent.length > 100 
+                                ? (msg as any).replyToContent.substring(0, 100) + "..."
+                                : (msg as any).replyToContent}
+                            </p>
+                          </div>
+                        )}
                         {msg.content && msg.content !== "null" && (
                           <p className="text-sm">{renderContentWithLinks((msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
                         )}

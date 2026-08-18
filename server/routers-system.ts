@@ -2,21 +2,21 @@ import { router, publicProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 
 export const systemRouter = router({
-// ✅ Endpoint: forçar teste de conexão DB
-debugDb: publicProcedure
-  .query(async () => {
-    const dbUrl = process.env.DATABASE_URL || "";
-    console.log("[debugDb] DATABASE_URL:", dbUrl.substring(0, 50) + "...");
-    console.log("[debugDb] DATABASE_URL length:", dbUrl.length);
-    
-    const db = await getDb();
-    return {
-      hasDb: !!db,
-      hasDatabaseUrl: !!dbUrl,
-      urlLength: dbUrl.length,
-      urlPreview: dbUrl.substring(0, 60) + "..."
-    };
-  }),
+  // ✅ Endpoint: forçar teste de conexão DB
+  debugDb: publicProcedure
+    .query(async () => {
+      const dbUrl = process.env.DATABASE_URL || "";
+      console.log("[debugDb] DATABASE_URL:", dbUrl.substring(0, 50) + "...");
+      console.log("[debugDb] DATABASE_URL length:", dbUrl.length);
+      
+      const db = await getDb();
+      return {
+        hasDb: !!db,
+        hasDatabaseUrl: !!dbUrl,
+        urlLength: dbUrl.length,
+        urlPreview: dbUrl.substring(0, 60) + "..."
+      };
+    }),
 
   // ✅ Endpoint: aplicar migration via raw SQL (não depende de schema)
   migrate: publicProcedure

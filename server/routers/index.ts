@@ -1,6 +1,7 @@
 import { router } from "../_core/trpc";
 import { authRouter } from "../routers-auth";
 import { agentsRouter } from "../routers-agents";
+import { adminRouter } from "../routers-admin"; // ✅ LGPD - Direitos do Titular
 import { customersRouter } from "../routers-crm";
 import { aiRouter } from "../routers-ai";
 import { apiConfigRouter } from "../routers-api-config";
@@ -52,6 +53,8 @@ export const appRouter = router({
   dashboardStats: dashboardStatsRouter,
   dashboard: dashboardRouter,
   executions: executionsRouter,
+  agents: agentsRouter,
+  admin: adminRouter, // ✅ LGPD endpoints
   inbox: inboxRouter,
   logs: logsRouter,
   messages: messagesRouter,

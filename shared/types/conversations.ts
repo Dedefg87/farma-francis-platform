@@ -56,6 +56,9 @@ export interface ConversationMessage {
   metadata: Record<string, unknown>;
   isRead: boolean;
   createdAt: string;
+  // Reply/Quoted message fields
+  replyToExternalId?: string; // Evolution ID da mensagem respondida
+  replyToContent?: string;    // Conteúdo da mensagem respondida (para exibição)
 }
 
 export interface Attachment {
