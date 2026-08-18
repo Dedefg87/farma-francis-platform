@@ -394,6 +394,9 @@ export async function ingestInboundConversationMessage(message: {
   fileName?: string | null;
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
+  // Reply/Quoted fields
+  replyToExternalId?: string | null;
+  replyToContent?: string | null;
   createdAt?: Date;
 }) {
   console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
@@ -616,7 +619,7 @@ export async function ingestInboundConversationMessage(message: {
     }
   }
   
-  console.log("[DB-INSERT] Inbound message - externalId:", message.externalId, "remoteJid:", (message as any).remoteJid, "provider:", message.provider);
+  console.log("[DB-INSERT] Inbound message - externalId:", message.externalId, "remoteJid:", (message as any).remoteJid, "provider:", message.provider, "replyToExternalId:", message.replyToExternalId);
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId ?? null,
@@ -629,6 +632,8 @@ export async function ingestInboundConversationMessage(message: {
     fileName: message.fileName || null,
     fileType: message.mimeType || null,
     fileSize: message.fileSize || null,
+    replyToExternalId: message.replyToExternalId ?? null,
+    replyToContent: message.replyToContent ?? null,
     createdAt: now,
   });
 

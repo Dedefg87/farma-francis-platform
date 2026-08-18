@@ -1314,6 +1314,9 @@ function parseEvolutionMessageContent(message: unknown, rawMessageType?: string,
       mimeType: null,
       fileName: null,
       fileSize: null,
+      // Reply/Quoted fields
+      replyToExternalId: null,
+      replyToContent: null,
     };
 
   // ===========================================
@@ -1504,6 +1507,47 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
   // 🎯 Store quotedMessage for later access (needed for mediaKey/directPath)
   const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || (contextInfoFromData as any)?.quotedMessage;
 
+  // 🎯 EXTRAIR REPLY/QUOTED para mensagens normais (não story)
+  // Evolution API envia contextInfo.stanzaId + quotedMessage para replies normais
+  let replyToExternalId: string | null = null;
+  let replyToContent: string | null = null;
+  
+  const contextInfoForReply = message.extendedTextMessage?.contextInfo || (contextInfoFromData as any)?.contextInfo || (contextInfoFromData as any);
+  if (contextInfoForReply?.stanzaId) {
+    replyToExternalId = contextInfoForReply.stanzaId;
+    console.log("[Parse] Reply detected - stanzaId:", replyToExternalId);
+  }
+  
+  // Extrair conteúdo da mensagem citada se disponível
+  if (quotedMessage) {
+    // Para story replies, já temos lógica abaixo
+    // Para replies normais, extrair texto se for extendedTextMessage
+    if (quotedMessage.extendedTextMessage?.text) {
+      replyToContent = quotedMessage.extendedTextMessage.text;
+    } else if (quotedMessage.conversation) {
+      replyToContent = quotedMessage.conversation;
+    } else if (quotedMessage.imageMessage?.caption) {
+      replyToContent = quotedMessage.imageMessage.caption;
+    } else if (quotedMessage.videoMessage?.caption) {
+      replyToContent = quotedMessage.videoMessage.caption;
+    } else if (quotedMessage.documentMessage?.caption) {
+      replyToContent = quotedMessage.documentMessage.caption;
+    } else if (quotedMessage.imageMessage) {
+      replyToContent = "[Imagem]";
+    } else if (quotedMessage.videoMessage) {
+      replyToContent = "[Vídeo]";
+    } else if (quotedMessage.audioMessage) {
+      replyToContent = "[Áudio]";
+    } else if (quotedMessage.documentMessage) {
+      replyToContent = "[Documento]";
+    } else if (quotedMessage.stickerMessage) {
+      replyToContent = "[Sticker]";
+    }
+    if (replyToContent) {
+      console.log("[Parse] Reply content extracted:", replyToContent.substring(0, 50));
+    }
+  }
+
   if (typeToSave === 'text' || typeToSave === 'unknown') {
     // Text already set at the start of the function
     if (quotedMessage) {
@@ -1632,6 +1676,9 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     fileName,
     fileSize,
     isStoryReply: !!quotedMessage,
+    // Reply/Quoted fields
+    replyToExternalId,
+    replyToContent,
     // Extract reaction data if present (Evolution API sends reactionMessage with key.id + emoji)
     reactionTargetId: (message as any)?.reactionMessage?.key?.id || (message as any)?.reaction?.key?.id || null, reactionEmoji: (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null,
     reactionEmoji: message && typeof message === 'object' && 'reaction' in message
@@ -2178,8 +2225,9 @@ async function processEvolutionWebhook(body: unknown) {
             fileName: parsed.fileName,
             fileSize: parsed.fileSize,
             externalId: messageId,
-            replyToExternalId: _replyToExternalId,
-            replyToContent: _replyToContent,
+            // Reply/Quoted fields
+            replyToExternalId: parsed.replyToExternalId,
+            replyToContent: parsed.replyToContent,
           });
           console.log("9. [Evolution] ✅ ingestInboundConversationMessage concluído");
         } else {
