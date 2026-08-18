@@ -33,6 +33,7 @@ export const systemRouter = router({
       const queries = [
         "ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_external_id VARCHAR(255) NULL",
         "ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_message_id VARCHAR(255) NULL",
+        "ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reply_to_content TEXT NULL",
         "ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS reaction VARCHAR(10) NULL",
         "ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS sender_name VARCHAR(255) NULL",
         "ALTER TABLE conversation_messages ADD COLUMN IF NOT EXISTS sender_position VARCHAR(255) NULL",
