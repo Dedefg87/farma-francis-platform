@@ -566,6 +566,7 @@ export const messagesRouter = router({
         file_type: z.string().optional(),
         file_size: z.number().optional(),
         replyToMessageId: z.number().optional(), // ID da mensagem original para citar (responder)
+        replyToExternalId: z.string().optional(), // externalId direto do frontend (bypass DB lookup)
       }).refine(
         data => {
           // Must have either conversation_id or (to + provider)
@@ -591,6 +592,7 @@ export const messagesRouter = router({
       // Normalize camelCase/snake_case from frontend
       let fileUrl = input.fileUrl ?? input.file_url ?? null;
       const replyToMessageId = input.replyToMessageId ?? null;
+      const replyToExternalIdDirect = input.replyToExternalId ?? null;
       const fileName = input.fileName ?? input.file_name ?? null;
       let fileType = input.fileType ?? input.file_type ?? null;
       const fileSize = input.fileSize ?? input.file_size ?? null;
@@ -658,7 +660,13 @@ export const messagesRouter = router({
         let replyToContent: string | undefined = undefined;
         let replyToFromMe: boolean | undefined = undefined;
         console.log("[REPLY FLOW] replyToMessageId:", replyToMessageId, "type:", typeof replyToMessageId);
-        if (replyToMessageId) {
+        if (replyToExternalIdDirect) {
+          replyToExternalId = replyToExternalIdDirect;
+          replyToRemoteJid = customerPhone ? customerPhone.replace(/D/g, "") + "@s.whatsapp.net" : undefined;
+          replyToContent = "";
+          replyToFromMe = false;
+          console.log("[reply] Using direct externalId from frontend:", replyToExternalId);
+        } else if (replyToMessageId) {
           console.log("[REPLY FLOW] querying conversationMessages for id:", replyToMessageId);
           const [origMsg] = await db.select().from(conversationMessages).where(eq(conversationMessages.id, replyToMessageId)).limit(1);
           console.log("[REPLY FLOW] origMsg found:", JSON.stringify({ id: origMsg?.id, externalId: origMsg?.externalId, direction: origMsg?.direction, content: origMsg?.content?.substring(0,50) }));
