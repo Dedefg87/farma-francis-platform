@@ -535,7 +535,7 @@ export const messagesRouter = router({
             senderPosition,
             reaction: (msg as any).reaction || null,
             replyToExternalId: (msg as any).replyToExternalId || null,
-            replyToContent: (msg as any).replyToContent || null,
+            replyToContent: (msg as any).replyToContent || (msg as any).reply_to_content || null,
           };
         }));
 
