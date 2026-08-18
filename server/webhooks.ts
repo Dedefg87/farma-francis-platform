@@ -2140,7 +2140,15 @@ async function processEvolutionWebhook(body: unknown) {
         const isPossibleSurveyResponse = messageType === "text" && messageText && /^\s*[1-5]\s*$/.test(messageText.trim());
 
         if (!isPossibleSurveyResponse) {
-          console.log("8. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType });
+          // Extrair dados da mensagem citada (reply)
+          const _replyCtx = data?.contextInfo || data?.message?.contextInfo || null;
+          const _replyToExternalId = _replyCtx?.stanzaId || null;
+          let _replyToContent: string | null = null;
+          if (_replyCtx?.quotedMessage) {
+            const qm = _replyCtx.quotedMessage;
+            _replyToContent = qm.conversation || qm.extendedTextMessage?.text || qm.imageMessage?.caption || qm.videoMessage?.caption || "";
+          }
+          console.log("8. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType, hasReply: !!_replyToExternalId });
           await ingestInboundConversationMessage({
             provider: "whatsapp",
             fromNumber,
@@ -2154,6 +2162,8 @@ async function processEvolutionWebhook(body: unknown) {
             fileName: parsed.fileName,
             fileSize: parsed.fileSize,
             externalId: messageId,
+            replyToExternalId: _replyToExternalId,
+            replyToContent: _replyToContent,
           });
           console.log("9. [Evolution] ✅ ingestInboundConversationMessage concluído");
         } else {
