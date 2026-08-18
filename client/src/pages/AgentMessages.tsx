@@ -1348,9 +1348,9 @@ export default function AgentMessages() {
                           <div className="mb-2 p-2 bg-green-50 border-l-3 border-green-500 rounded-r text-sm">
                             <p className="text-xs text-green-700 font-medium mb-0.5">Respondendo a:</p>
                             <p className="text-sm text-gray-700 line-clamp-1">
-                              {(msg as any).replyToContent.length > 100 
+                              {((msg as any).replyToContent || "").length > 100 
                                 ? ((msg as any).replyToContent || "Mensagem citada").substring(0, 100) + "..."
-                                : (msg as any).replyToContent}
+                                : ((msg as any).replyToContent || "Mensagem citada")}
                             </p>
                           </div>
                         )}
