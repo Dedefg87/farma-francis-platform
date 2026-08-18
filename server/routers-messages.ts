@@ -516,6 +516,13 @@ export const messagesRouter = router({
             senderPosition = employee?.position || null;
           }
 
+          let _replyContent = (msg as any).replyToContent || null;
+          if (!_replyContent && (msg as any).replyToExternalId) {
+            try {
+              const [replyOrig] = await db.select({ content: conversationMessages.content }).from(conversationMessages).where(eq(conversationMessages.externalId, (msg as any).replyToExternalId)).limit(1);
+              _replyContent = replyOrig?.content || null;
+            } catch(e) {}
+          }
           return {
             id: msg.id,
             conversationId: msg.conversationId,
@@ -535,7 +542,7 @@ export const messagesRouter = router({
             senderPosition,
             reaction: (msg as any).reaction || null,
             replyToExternalId: (msg as any).replyToExternalId || null,
-            replyToContent: (msg as any).replyToContent || (msg as any).reply_to_content || null,
+            replyToContent: _replyContent,
           };
         }));
 

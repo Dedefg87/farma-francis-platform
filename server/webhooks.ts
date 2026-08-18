@@ -2141,7 +2141,7 @@ async function processEvolutionWebhook(body: unknown) {
 
         if (!isPossibleSurveyResponse) {
           // Extrair dados da mensagem citada (reply)
-          const _replyCtx = data?.contextInfo || data?.message?.contextInfo || null;
+          const _replyCtx = data?.contextInfo || data?.message?.contextInfo || data?.message?.extendedTextMessage?.contextInfo || data?.message?.imageMessage?.contextInfo || data?.message?.videoMessage?.contextInfo || null;
           const _replyToExternalId = _replyCtx?.stanzaId || null;
           let _replyToContent: string | null = null;
           if (_replyCtx?.quotedMessage) {
