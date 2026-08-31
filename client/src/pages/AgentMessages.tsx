@@ -264,6 +264,15 @@ export default function AgentMessages() {
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["messages"] });
 
+              // Auto-select conversation for new messages (so it appears in the screen)
+              if ((data.type === "message:new" || data.type === "MESSAGE_NEW" ||
+                   (data.type === "messages.update" && data.data?.fromMe === false)) &&
+                  data.data?.conversationId) {
+                const newConvId = Number(data.data.conversationId);
+                setSelectedConversationId(newConvId);
+                sessionStorage.setItem('selectedConversationId', String(newConvId));
+              }
+
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
                 queryClient.invalidateQueries({
