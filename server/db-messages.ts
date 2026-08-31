@@ -541,10 +541,13 @@ export async function ingestInboundConversationMessage(message: {
     conversationId = newConversation?.id;
   } else {
     // Update existing conversation (ou reabrir conversa fechada apenas se closeReason válido)
-    const closeReasonsThatReopen = ["venda", "orcamento", "conversa_anterior", "engano"];
+    const messageCloseReasons = ["venda", "orcamento", "conversa_anterior", "engano"];
+    // Só reabrir se a conversa foi fechada SEM mensagem de encerramento
+    // (closeReason vazio/nulo = encerramento simples, pode reabrir)
+    // Se closeReason é um dos 4 motivos de mensagem, NÃO reabrir.
     const isReopening = existingConversation?.status === "closed" &&
       (!existingConversation?.closeReason ||
-       !closeReasonsThatReopen.includes(existingConversation.closeReason));
+       !messageCloseReasons.includes(existingConversation.closeReason));
     const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
     await db
       .update(conversations)
