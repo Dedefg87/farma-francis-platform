@@ -516,6 +516,21 @@ export async function ingestInboundConversationMessage(message: {
     console.log(`[ingestInbound] 🔄 Customer ID ajustado: ${customer.id} → ${existingConversation.customerId} (mesmo telefone)`);
   }
 
+  // VERIFICAR DUPLICATA ANTES DE TUDO — se a mensagem já existe, não reabrir conversa
+  if (message.externalId) {
+    const duplicateMsgCheck = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(
+        eq(conversationMessages.externalId, message.externalId),
+        eq(conversationMessages.provider, message.provider || "whatsapp")
+      ))
+      .limit(1);
+    if (duplicateMsgCheck.length > 0) {
+      console.log(`[Ingest] Mensagem duplicata detectada antes do update: ${message.externalId}`);
+      return null;
+    }
+  }
+
   // 6. Create or update conversation
   if (!conversationId) {
     // Create new conversation
