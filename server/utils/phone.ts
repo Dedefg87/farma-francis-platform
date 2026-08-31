@@ -120,11 +120,12 @@ export async function findConversationByPhone(
       id: conversationsTable.id,
       customerId: conversationsTable.customerId,
       status: conversationsTable.status,
+      closeReason: conversationsTable.closeReason,
     })
     .from(conversationsTable)
     .where(inArray(conversationsTable.customerId, customerIds))
     .orderBy(desc(conversationsTable.lastMessageAt))
     .limit(1);
 
-  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status } : null;
+  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status, closeReason: conversation.closeReason || null } : null;
 }

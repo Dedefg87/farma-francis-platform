@@ -496,14 +496,20 @@ export async function ingestInboundConversationMessage(message: {
   // 5. Find existing conversation by PHONE (últimos 8 dígitos)
   // Resolve problema de clientes duplicados com formatos diferentes de telefone
   const found = await findConversationByPhone(db, customer.phone, conversations, customers);
-  console.log("[IngestDebug] findConversationByPhone result:", { found: found ? { conversationId: found.conversationId, customerId: found.customerId, status: found.status } : null, customerPhone: customer.phone, fromNumber: message.fromNumber, messageType: message.messageType });
 
   let conversationId = found?.conversationId;
   let existingConversation: unknown = null;
 
   if (conversationId) {
     [existingConversation] = await db
-      .select()
+      .select({
+        id: conversations.id,
+        customerId: conversations.customerId,
+        status: conversations.status,
+        closeReason: conversations.closeReason,
+        assignedTo: conversations.assignedTo,
+        unreadCount: conversations.unreadCount,
+      })
       .from(conversations)
       .where(eq(conversations.id, conversationId))
       .limit(1);
