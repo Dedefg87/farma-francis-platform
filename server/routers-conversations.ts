@@ -440,26 +440,37 @@ export const conversationsRouter = router({
             return mapConversation(existingConversation);
           }
 
-          // Conversa fechada — reabrir (preserva histórico!)
-          await db
-            .update(conversations)
-            .set({
-              status: "open",
-              assignedTo: ctx.user.id,
-              unreadCount: 0,
-              lastMessageAt: now,
-              ...(resolvedName ? { customerName: resolvedName } : {}),
-              ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
-            })
-            .where(eq(conversations.id, existingConversation.id));
+          // Conversa fechada — reabrir apenas se NÃO foi encerrada com motivo obrigatório
+          // 'venda' envia pesquisa obrigatória (1-5) e NÃO deve ser reaberta automaticamente
+          const mandatoryCloseReasons = ["venda"];
+          const canReopen = !existingConversation.closeReason ||
+            !mandatoryCloseReasons.includes(existingConversation.closeReason);
+          if (canReopen) {
+            await db
+              .update(conversations)
+              .set({
+                status: "open",
+                assignedTo: ctx.user.id,
+                unreadCount: 0,
+                lastMessageAt: now,
+                ...(resolvedName ? { customerName: resolvedName } : {}),
+                ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
+              })
+              .where(eq(conversations.id, existingConversation.id));
 
-          const [reopened] = await db
-            .select()
-            .from(conversations)
-            .where(eq(conversations.id, existingConversation.id));
+            const [reopened] = await db
+              .select()
+              .from(conversations)
+              .where(eq(conversations.id, existingConversation.id));
 
-          console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
-          return mapConversation(reopened);
+            console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
+            return mapConversation(reopened);
+          } else {
+            // Conversa fechada com motivo obrigatório (ex: venda → pesquisa) — NÃO reabrir automaticamente
+            // Retornar a conversa existente mas manter fechada (o cliente deve responder a pesquisa)
+            console.log('[conversations.create] Conversation closed with mandatory reason, not reopening:', existingConversation.closeReason);
+            return mapConversation(existingConversation);
+          }
         }
       }
 
