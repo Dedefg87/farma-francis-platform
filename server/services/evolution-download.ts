@@ -36,7 +36,7 @@ interface EvolutionDownloadResponse {
 /**
  * Get Evolution API config from database
  */
-async function getEvolutionConfig(): Promise<{ apiUrl: string; apiKey: string; instanceName: string } | null> {
+export async function getEvolutionConfig(): Promise<{ apiUrl: string; apiKey: string; instanceName: string } | null> {
   try {
     const db = await getDb();
     if (!db) return null;

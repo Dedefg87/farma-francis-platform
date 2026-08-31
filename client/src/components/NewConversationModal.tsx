@@ -23,14 +23,15 @@ export default function NewConversationModal({
   const [autoFetchedName, setAutoFetchedName] = useState<string | null>(null);
   const [channel, setChannel] = useState<"whatsapp" | "instagram">("whatsapp");
 
-  // Normalizar número brasileiro
+  // Normalizar número brasileiro — aceita com ou sem 9, mas mantém todos os dígitos
   const normalizePhoneNumber = (value: string): string => {
     let cleaned = value.replace(/\D/g, "");
     if (!cleaned?.startsWith?.("55")) {
       cleaned = "55" + cleaned;
     }
-    if (cleaned.length === 13 && cleaned?.startsWith?.("55")) {
-      cleaned = cleaned.substring(0, 4) + cleaned.substring(5);
+    // Se 12 dígitos (55 + DDD + 8 sem 9) → adiciona 9
+    if (cleaned.length === 12 && cleaned?.startsWith?.("55")) {
+      cleaned = cleaned.substring(0, 4) + "9" + cleaned.substring(4);
     }
     return "+" + cleaned;
   };

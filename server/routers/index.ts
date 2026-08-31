@@ -53,7 +53,6 @@ export const appRouter = router({
   dashboardStats: dashboardStatsRouter,
   dashboard: dashboardRouter,
   executions: executionsRouter,
-  agents: agentsRouter,
   admin: adminRouter, // ✅ LGPD endpoints
   inbox: inboxRouter,
   logs: logsRouter,

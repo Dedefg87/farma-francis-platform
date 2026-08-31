@@ -899,37 +899,30 @@ async function executeNodeWithEdges(
 
     // ===== NEW VISUAL EDITOR NODE HANDLERS =====
     case "if-node":
-    case "if-else":
       conditionResult = evaluateConditionNode(config, context);
       break;
 
     case "set-node":
-    case "setVariable":
       executeSetVariableNode(config, context);
       break;
 
     case "http-request-node":
-    case "httpRequest":
       await executeHttpRequestNode(config, context, message);
       break;
 
     case "switch-node":
-    case "switch":
       await executeSwitchNode(config, context, edges, node.id, nodes);
       break;
 
     case "filter-node":
-    case "filter":
       conditionResult = evaluateConditionNode(config, context);
       break;
 
     case "datetime-node":
-    case "setVariable":
       executeDatetimeNode(config, context);
       break;
 
     case "email-send-node":
-    case "email-send":
       console.log(`[Flow Engine] Email to: ${config.to}, subject: ${config.subject}`);
       break;
 

@@ -5,14 +5,14 @@
  * Strategy:
  *   1) Direct fetch from WhatsApp CDN with WhatsApp-compatible User-Agent —
  *      WhatsApp profile pics are public for any WhatsApp client UA.
- *   2) Fallback: if direct download fails (privacy-restricted profile or CDN
+ *      2) Fallback: if direct download fails (privacy-restricted profile or CDN
  *      block), use Evolution API authenticated proxy.
- *
  * The resulting bytes are uploaded to R2 and the permanent URL is persisted
  * in customers.photoUrl. We NEVER point the UI at a raw WhatsApp CDN URL
  * because those expire and are hotlink-protected for generic clients.
  */
 
+import { getEvolutionConfig } from './evolution-download';
 import { getDb } from '../db';
 import { customers, receivedMessages } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -25,38 +25,6 @@ export function getCustomerInitials(phone: string): string {
   const cleanPhone = phone.replace(/\D/g, '');
   if (cleanPhone.length >= 4) return cleanPhone.slice(-4);
   return 'USR';
-}
-
-/**
- * Get Evolution API config from DB
- */
-async function getEvolutionConfig(): Promise<{
-  apiUrl: string;
-  apiKey: string;
-  instanceName: string;
-} | null> {
-  try {
-    const { integrationSettings } = await import('../../drizzle/schema');
-    const db = await getDb();
-    if (!db) return null;
-
-    const [row] = await db
-      .select()
-      .from(integrationSettings)
-      .where(eq(integrationSettings.integrationType, 'evolution_api'))
-      .limit(1);
-
-    if (!row) return null;
-    const cfg =
-      typeof row.config === 'string' ? JSON.parse(row.config) : row.config;
-    const apiUrl = cfg.apiUrl?.replace(/\/$/, '');
-    const apiKey = cfg.apiKey || cfg.accessToken || cfg.token;
-    const instanceName = cfg.instanceName || cfg.instance || 'Meu';
-    if (!apiUrl || !apiKey || !instanceName) return null;
-    return { apiUrl, apiKey, instanceName };
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -164,7 +132,7 @@ async function downloadViaEvolutionProxy(url: string): Promise<Buffer | null> {
     const res = await fetch(proxyUrl, {
       method: 'POST',
       headers: {
-          apikey: config.apiKey,
+        apikey: config.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
