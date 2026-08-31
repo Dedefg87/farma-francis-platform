@@ -242,7 +242,8 @@ export default function AgentMessages() {
               data.type === "MESSAGE_NEW" ||
               data.type === "conversation:update" ||
               data.type === "conversation:new" ||
-              data.type === "conversation:read"
+              data.type === "conversation:read" ||
+              (data.type === "messages.update" && data.data?.fromMe === false)
             ) {
               // Play notification sound if not muted (only for new messages)
               if (!notificationsMuted && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
