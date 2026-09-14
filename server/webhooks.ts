@@ -2040,6 +2040,12 @@ async function processEvolutionWebhook(body: unknown) {
             }
           }
 
+          // Guarda: nao espelhar no chat a mensagem de encerramento / pesquisa de satisfacao
+          const _closeNorm = String(messageText || caption || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+          if (_closeNorm.indexOf("aperfeic") >= 0 && _closeNorm.indexOf("atendimento") >= 0) {
+            console.log("[Evolution Webhook] Ignorando mensagem de encerramento/pesquisa (nao exibir no chat)");
+            return;
+          }
           // Se for mensagem enviada pelo agente via celular, enfileirar para processamento assíncrono
           try {
             enqueueMobileSyncJob({
