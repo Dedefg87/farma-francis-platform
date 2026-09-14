@@ -441,8 +441,8 @@ export const conversationsRouter = router({
           }
 
           // Conversa fechada — reabrir apenas se NÃO foi encerrada com motivo obrigatório
-          // 'venda' envia pesquisa obrigatória (1-5) e NÃO deve ser reaberta automaticamente
-          const mandatoryCloseReasons = ["venda"];
+          // venda, orcamento e engano enviam mensagem de encerramento e NAO devem ser reabertas automaticamente
+          const mandatoryCloseReasons = ["venda", "orcamento", "engano"];
           const canReopen = !existingConversation.closeReason ||
             !mandatoryCloseReasons.includes(existingConversation.closeReason);
           if (canReopen) {
