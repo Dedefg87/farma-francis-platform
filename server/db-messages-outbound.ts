@@ -112,6 +112,26 @@ export async function ingestOutboundConversationMessage(message: {
     caption: message.caption,
   });
 
+  // 4a. Guarda de idempotencia: nao inserir a mesma mensagem duas vezes
+  const _outboundExtId = (message.externalId || (message as any).key?.id) ?? null;
+  if (_outboundExtId) {
+    const _existingOut = await db
+      .select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, _outboundExtId), eq(conversationMessages.provider, message.provider)))
+      .limit(1);
+    if (_existingOut.length > 0) {
+      console.log("[ingestOutbound] Skipping duplicate outbound message:", _outboundExtId);
+      return null;
+    }
+  }
+
+  // 4b. Guarda: nao exibir no chat a mensagem de encerramento / pesquisa de satisfacao
+  const _normOut = String(content || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (_normOut.indexOf("aperfeic") >= 0 && _normOut.indexOf("atendimento") >= 0) {
+    console.log("[ingestOutbound] Ignorando mensagem de encerramento/pesquisa:", content.substring(0, 40));
+    return null;
+  }
   // 4. Insert message into conversation_messages
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
