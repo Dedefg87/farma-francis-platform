@@ -345,12 +345,18 @@ async function saveBroadcastToConversation(
     conversationId = found.conversationId;
 
     // Se a conversa está fechada, reabrir
-    if (found.status === 'closed') {
+    if (found.status === 'closed' && (!found.closeReason || !["venda", "orcamento", "engano"].includes(found.closeReason))) {
       await db
         .update(conversations)
         .set({ status: 'open', lastMessageAt: now, unreadCount: 0 })
         .where(eq(conversations.id, conversationId));
       console.log(`[Broadcast] 🔄 Reabriu conversa ${conversationId}`);
+    } else if (found.status === 'closed') {
+      console.log('[Broadcast] Conversa ' + conversationId + ' fechada com motivo obrigatorio (' + found.closeReason + '), nao reabrindo');
+      await db
+        .update(conversations)
+        .set({ lastMessageAt: now })
+        .where(eq(conversations.id, conversationId));
     } else {
       // Atualizar lastMessageAt
       await db
