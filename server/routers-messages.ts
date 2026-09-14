@@ -161,12 +161,14 @@ export const messagesRouter = router({
             .from(conversations)
             .where(eqFn(conversations.customerPhone, input.targetCustomerPhone))
             .limit(1);
-          if (existingConv && existingConv.status === "closed") {
+          if (existingConv && existingConv.status === "closed" && (!existingConv.closeReason || !["venda", "orcamento", "engano"].includes(existingConv.closeReason || ""))) {
             await db
               .update(conversations)
               .set({ status: "open", updatedAt: new Date() })
               .where(eqFn(conversations.id, existingConv.id));
             console.log("[FORWARD] Conversa #" + existingConv.id + " reaberta");
+          } else if (existingConv && existingConv.status === "closed") {
+            console.log("[FORWARD] Conversa #" + existingConv.id + " fechada com motivo obrigatorio (" + existingConv.closeReason + "), mantendo fechada");
           }
           if (!existingConv) {
             let [customer] = await db.select().from(customers).where(eqFn(customers.phone, input.targetCustomerPhone)).limit(1);
