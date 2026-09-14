@@ -176,7 +176,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     console.log("[MobileSync] Created new conversation:", conversationId, "for phone:", customerPhone);
   } else {
     conversationId = conv.id;
-    const isReopening = conv.status === "closed";
+    const isReopening = conv.status === "closed" && conv.closeReason !== "venda";
     // Atualizar lastMessageAt, unreadCount e reabrir se fechada
     await db
       .update(conversations)
@@ -223,6 +223,12 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     content = typeLabels[job.messageType] || "";
   }
 
+  // Guarda: nao inserir mensagem de encerramento/pesquisa no chat
+  const _normSync = String(content || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (_normSync.indexOf("aperfeic") >= 0 && _normSync.indexOf("atendimento") >= 0) {
+    console.log("[MobileSync] Ignorando mensagem de encerramento/pesquisa:", content.substring(0, 40));
+    return;
+  }
   // Inserir mensagem na tabela conversation_messages
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
