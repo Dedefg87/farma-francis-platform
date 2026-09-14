@@ -565,8 +565,8 @@ export async function ingestInboundConversationMessage(message: {
   } else {
     // Update existing conversation (ou reabrir conversa fechada apenas se closeReason válido)
     // Não reabrir se encerramento foi com motivo que envia mensagem de fechamento obrigatória
-    // Apenas "venda" envia pesquisa obrigatória. Os outros (orcamento, conversa_anterior, engano) podem reabrir.
-    const closingReasonsWithMandatoryMessage = ["venda"];
+    // venda, orcamento e engano enviam mensagem de encerramento e NAO devem reabrir; apenas conversa_anterior (fechamento silencioso) pode reabrir.
+    const closingReasonsWithMandatoryMessage = ["venda", "orcamento", "engano"];
     // Se conversa está fechada com motivo obrigatório de mensagem (ex: venda → pesquisa 1-5), NÃO reabrir.
     // Se closeReason é outro motivo ou nulo/vazio, pode reabrir.
     const hasMandatoryCloseMessage = !!existingConversation?.closeReason &&
