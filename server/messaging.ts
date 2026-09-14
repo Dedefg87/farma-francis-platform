@@ -471,10 +471,7 @@ export async function sendWhatsAppImage(params: {
 
     try {
       const fileKey = extractR2Key(params.imageUrl);
-      if (!fileKey) {
-        throw new Error(`Não foi possível extrair key do R2 da URL: ${params.imageUrl}`);
-      }
-      const media = await getMediaAsBase64(fileKey);
+const media = await getMediaAsBase64(fileKey || params.imageUrl || params.mediaUrl || "");
       mediaBase64 = media.base64;
       mediaMimetype = media.mimetype;
     } catch (err) {
@@ -941,10 +938,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
 
     try {
       const fileKey = extractR2Key(params.mediaUrl);
-      if (!fileKey) {
-        throw new Error(`Não foi possível extrair key do R2 da URL: ${params.mediaUrl}`);
-      }
-      const media = await getMediaAsBase64(fileKey);
+const media = await getMediaAsBase64(fileKey || params.mediaUrl || params.imageUrl || "");
       mediaBase64 = media.base64;
       mediaMimetype = media.mimetype;
     } catch (err) {
