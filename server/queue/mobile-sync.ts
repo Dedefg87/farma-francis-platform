@@ -176,7 +176,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     console.log("[MobileSync] Created new conversation:", conversationId, "for phone:", customerPhone);
   } else {
     conversationId = conv.id;
-    const isReopening = conv.status === "closed" && conv.closeReason !== "venda";
+    const isReopening = conv.status === "closed" && !["venda", "orcamento", "engano"].includes(conv.closeReason || "");
     // Atualizar lastMessageAt, unreadCount e reabrir se fechada
     await db
       .update(conversations)
