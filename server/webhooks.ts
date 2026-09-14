@@ -1905,7 +1905,7 @@ async function processEvolutionWebhook(body: unknown) {
                       // Use Evolution API proxy for WhatsApp CDN URLs (story replies)
                       mediaBuffer = await downloadWhatsAppMediaFromEvolution({
                         url: parsed.rawUrl,
-                        messageKey: { id: messageId, remoteJid, fromMe: false }
+                        messageKey: { id: messageId, remoteJid, fromMe: false },
                         ...(parsed as any).mediaKey && { mediaKey: String((parsed as any).mediaKey) },
                         ...(parsed as any).directPath && { directPath: String((parsed as any).directPath) },
                       });
