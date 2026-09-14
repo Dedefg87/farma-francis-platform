@@ -1891,14 +1891,23 @@ async function processEvolutionWebhook(body: unknown) {
                     const { uploadToR2 } = await import("./r2-client");
             
                     const isWhatsAppCdn = isWhatsAppCdnUrl(parsed.rawUrl);
+                    // 🔧 FIX LID: caminhos internos da Evolution (evolution-api/... ou relativo) tambem
+                    // devem ser baixados via getBase64FromMediaMessage — a Evolution resolve o proprio
+                    // caminho local e usa mediaKey para descriptografar. Plain fetch so funciona p/ HTTP absoluto.
+                    const isInternalEvolutionPath = !isWhatsAppCdn && (
+                      parsed.rawUrl.startsWith("evolution-api/") ||
+                      !/^https?:///i.test(parsed.rawUrl)
+                    );
                     let mediaBuffer: Buffer | null = null;
                     let detectedMime = parsed.mimeType || "image/jpeg";
 
-                    if (isWhatsAppCdn) {
+                    if (isWhatsAppCdn || isInternalEvolutionPath) {
                       // Use Evolution API proxy for WhatsApp CDN URLs (story replies)
                       mediaBuffer = await downloadWhatsAppMediaFromEvolution({
                         url: parsed.rawUrl,
                         messageKey: { id: messageId, remoteJid, fromMe: false }
+                        ...(parsed as any).mediaKey && { mediaKey: String((parsed as any).mediaKey) },
+                        ...(parsed as any).directPath && { directPath: String((parsed as any).directPath) },
                       });
                     } else {
                       // Standard download for other URLs (Instagram, etc.) - com validação completa
