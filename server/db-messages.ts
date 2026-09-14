@@ -26,14 +26,6 @@ async function pickLeastLoadedOnlineAgent(params: {
   const db = await getDb();
   if (!db) return null;
 
-  // Guarda inbound: nao exibir no chat a mensagem de encerramento / pesquisa de satisfacao
-  const _inboundText = String((message as any).messageText ?? (message as any).text ?? (message as any).caption ?? "");
-  const _normIn = _inboundText.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  if (_normIn.indexOf("aperfeic") >= 0 && _normIn.indexOf("atendimento") >= 0) {
-    console.log("[ingestInbound] Ignorando mensagem de encerramento/pesquisa (nao exibir no chat)");
-    return null;
-  }
-
 
   const cacheKey = params.provider;
   const cached = agentAssignmentCache.get(cacheKey);
