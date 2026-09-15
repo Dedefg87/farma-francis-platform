@@ -1316,7 +1316,8 @@ export default function AgentMessages() {
                   filteredMessages.map(msg => (
                     <div
                       key={msg.id}
-                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"} onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}`}
+                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"} cursor-pointer`}
+                      onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}
                     >
                       <div
                         className={`relative max-w-[70%] rounded-lg p-3 ${
