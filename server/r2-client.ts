@@ -95,7 +95,7 @@ export function extractR2Key(url: string | null | undefined): string | null {
       const parsed = new URL(url);
       const parts = parsed.pathname.split("/").filter(Boolean);
       if (parts.length < 2) return null;
-      return parts.slice(1).join("/");
+      return parsed.hostname.endsWith(".r2.dev") ? parts.join("/") : parts.slice(1).join("/");
     } catch {
       return null;
     }
