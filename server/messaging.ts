@@ -267,23 +267,27 @@ async function getIntegrationConfig(
 
 async function getEvolutionConfig(overrideInstance?: string | null) {
   try {
-    const { configData } = await getIntegrationConfig("evolution_api");
-    const apiUrl = configData.apiUrl as string | undefined;
-    const apiKey =
-      (configData.apiKey as string | undefined) ||
-      (configData.accessToken as string | undefined);
-    const instanceName = configData.instanceName as string | undefined;
-    const resolvedInstance = (overrideInstance && overrideInstance.trim()) || instanceName;
-
-    if (!apiUrl || !apiKey || !resolvedInstance) {
-      return null;
-    }
-
-    return {
-      apiUrl: apiUrl.replace(/\/$/, ""),
-      apiKey,
-      instanceName: resolvedInstance,
-    };
+    const db = await getDb();
+    const rows = db
+      ? await db.select().from(integrationSettings).where(eq(integrationSettings.integrationType, "evolution_api"))
+      : [];
+    const parsed = rows.map((r: any) => {
+      let cfg = (r as any).config;
+      if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch { /* config invalido */ } }
+      if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch { /* config invalido */ } }
+      return cfg && typeof cfg === "object" ? (cfg as Record<string, any>) : {};
+    });
+    const target = overrideInstance ? String(overrideInstance).trim().toLowerCase() : "";
+    const chosen =
+      (target ? parsed.find((x) => x.instanceName && String(x.instanceName).trim().toLowerCase() === target) : undefined) ||
+      parsed.find((x) => x.instanceName && x.apiUrl && x.apiKey) ||
+      parsed[0] ||
+      {};
+    const apiUrl = chosen.apiUrl || process.env.EVOLUTION_API_URL || "";
+    const apiKey = chosen.apiKey || process.env.EVOLUTION_API_KEY || "";
+    const instanceName = chosen.instanceName || process.env.EVOLUTION_INSTANCE_NAME || "";
+    if (!apiUrl || !apiKey || !instanceName) return null;
+    return { apiUrl, apiKey, instanceName };
   } catch {
     return null;
   }
