@@ -1025,6 +1025,72 @@ export async function sendWhatsAppMedia(params: {
 /**
  * Send a view-once (disappearing) image or video via WhatsApp Business API
  */
+export async function sendWhatsAppAudio(params: {
+  to: string;
+  mediaUrl: string;
+  caption?: string;
+  senderId?: string | number;
+  senderName?: string;
+  senderPosition?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const evolutionConfig = await getEvolutionConfig();
+  if (evolutionConfig) {
+    let mediaBase64: string;
+    let mediaMimetype: string;
+    try {
+      const fileKey = extractR2Key(params.mediaUrl);
+      const media = await getMediaAsBase64(fileKey || params.mediaUrl || "");
+      mediaBase64 = media.base64;
+      mediaMimetype = media.mimetype || "audio/ogg; codecs=opus";
+    } catch (err) {
+      console.error("[sendWhatsAppAudio] Erro ao converter para base64:", err);
+      throw new Error("Falha ao preparar midia para Evolution API: " + (err as Error).message);
+    }
+
+    // WhatsApp voice notes: Opus em container Ogg. Usar endpoint dedicado com campo 'audio'.
+    const audioMimetype = mediaMimetype.includes("audio/") ? mediaMimetype : "audio/ogg; codecs=opus";
+    const response = await fetch(
+      `${evolutionConfig.apiUrl}/message/sendWhatsAppAudio/${evolutionConfig.instanceName}`,
+      {
+        method: "POST",
+        headers: { apikey: evolutionConfig.apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          number: normalizeWhatsAppNumber(params.to),
+          audio: mediaBase64,
+          encoding: "base64",
+          mimetype: audioMimetype,
+          fileName: "audio.ogg",
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error("Evolution API error: " + response.status + " - " + error);
+    }
+
+    const result = await response.json();
+    await db.insert(messages).values({
+      channel: "whatsapp",
+      direction: "outbound",
+      content: params.caption || "",
+      messageId: result?.key?.id || null,
+      status: "sent",
+      metadata: JSON.stringify({
+        mediaUrl: params.mediaUrl,
+        mediaType: "audio",
+        caption: params.caption || "",
+        viewOnce: false,
+      }),
+    });
+    return { success: true, messageId: result?.key?.id || null, to: params.to };
+  }
+  throw new Error("Evolution API not configured for audio send");
+}
+
 export async function sendWhatsAppViewOnceMedia(params: {
   to: string;
   mediaUrl: string;
