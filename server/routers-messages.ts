@@ -231,7 +231,7 @@ export const messagesRouter = router({
           // Helper para obter URL pública da mídia
           const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise<string> => {
             // Se já for URL do R2, usar como está
-            if (isR2Url(mediaUrl)) return null;
+            if (isR2Url(mediaUrl)) return mediaUrl;
             
             // Se for data URL (base64), fazer upload para R2
             if (mediaUrl.startsWith("data:")) {
@@ -378,8 +378,7 @@ export const messagesRouter = router({
                                         console.log("[FORWARD] Evolution API fallback error:", String(e.message || e).substring(0, 100));
                                       }
                                       console.log("[FORWARD] All media fetch attempts failed - returning mediaUrl");
-                                      return mediaUrl;
-                                    }
+                                      return null;
                                   } else {
                     // URL completa (HTTP), tentar download direto
                     try {
