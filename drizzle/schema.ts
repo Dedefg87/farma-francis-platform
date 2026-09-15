@@ -812,6 +812,7 @@ export const conversations = mysqlTable("conversations", {
   customerPhone: varchar("customer_phone", { length: 50 }),
   queueId: int("queue_id").references(() => queues.id), // Fila de atendimento
   channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
+  instanceName: varchar("instance_name", { length: 100 }), // [FIX] instancia que recebeu a mensagem (roteamento de resposta)
   status: mysqlEnum("status", ["open", "assigned", "closed"])
     .default("open")
     .notNull(),
