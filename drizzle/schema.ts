@@ -469,6 +469,7 @@ export const messages = mysqlTable("messages", {
   customerId: int("customer_id").references(() => customers.id),
   ticketId: int("ticket_id").references(() => tickets.id),
   channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
+  instanceName: varchar("instance_name", { length: 100 }), // [FIX] instancia que recebeu a mensagem
   direction: mysqlEnum("direction", ["inbound", "outbound"]).notNull(),
   content: text("content").notNull(),
   messageId: varchar("message_id", { length: 255 }), // external message ID
