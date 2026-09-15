@@ -1383,7 +1383,7 @@ export default function AgentMessages() {
           <div className="text-[11px] italic text-gray-400 select-none mb-1">→ Encaminhado</div>
         )}
         {msg.content && msg.content !== "null" && (
-                          <p className="text-sm">{renderContentWithLinks((msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
+                          <p className="text-sm">{renderContentWithLinks(msg.content?.includes("📤") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)).replace(/^💬 /, "").trim() : (msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
                         )}
                         {msg.reaction && (
                           <div className="mt-1 text-lg leading-none">
