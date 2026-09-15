@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Send,
   MessageSquare,
-  Forward,
   Instagram,
   Sparkles,
   Paperclip,
@@ -18,19 +17,6 @@ import {
   Reply,
   Heart,
 
-// === Rótulo 'Encaminhado' (estilo WhatsApp) — client-side, sem schema === //
-function isForwardedMessage(content: string | null | undefined): boolean {
-  return !!content && (content.includes("📤") || /mensagem encaminhada/i.test(content));
-}
-function cleanForwardedContent(content: string | null | undefined): string {
-  if (!content) return content as any;
-  return content
-    .replace(/^📤s***Mensagem encaminhada por[^*]***s*/i, "")
-    .replace(/^📤s*Mensagem encaminhada[:s]*/i, "")
-    .replace(/^s*Mensagem encaminhada[:s]*/i, "")
-    .trim();
-}
-// === Fim rótulo Encaminhado === //
 
 } from "lucide-react";
 import { toast } from "sonner";
@@ -566,16 +552,16 @@ export default function Inbox() {
                               />
                             </div>
                           )}
-                          {/* Rótulo Encaminhado (estilo WhatsApp) */}
-                          {isForwardedMessage(msg.content) && (
-                            <div className="flex items-center gap-1 text-[11px] italic text-gray-400 select-none">
-                              <Forward size={11} className="shrink-0" />
-                              <span>Encaminhado</span>
-                            </div>
-                          )}
+  {/* Rótulo Encaminhado (estilo WhatsApp) */}
+  {msg.content?.includes("📤") && (
+    <div className="flex items-center gap-1 text-[11px] italic text-gray-400 select-none">
+      <span>→</span>
+      <span>Encaminhado</span>
+    </div>
+  )}
 
                           <p className="text-sm whitespace-pre-wrap">
-                            {cleanForwardedContent(msg.content)}
+                            {msg.content?.replace(/^[sS]*?encaminhada[^\n]*\n\n/i, "").trim()}
                           </p>
                           {msg.reaction && (
                             <span className="text-base ml-1">{msg.reaction}</span>
