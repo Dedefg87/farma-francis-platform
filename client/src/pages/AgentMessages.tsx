@@ -620,18 +620,8 @@ export default function AgentMessages() {
 
   // Função para selecionar conversa e marcar como lida
 
-  // FIX: Auto-select conversation with unread messages (polling fallback quando SSE indisponivel)
-  useEffect(() => {
-    if (!conversations || !Array.isArray(conversations)) return;
-    const unread = conversations.find(c => Number(c.unreadCount) > 0);
-    if (unread) {
-      const id = Number(unread.id);
-      if (selectedConversationId !== id) {
-        setSelectedConversationId(id);
-        sessionStorage.setItem('selectedConversationId', String(id));
-      }
-    }
-  }, [conversations, selectedConversationId]);
+  // [FIX] Auto-select de conversa com nao-lida REMOVIDO: o sistema nao pula mais sozinho
+  // para a conversa mais recente. Notificacoes (badge) continuam normais; a troca e somente manual (clique).
 
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
