@@ -257,12 +257,12 @@ export default function AgentMessages() {
               const conversationId = data.data?.conversationId;
               if (conversationId) {
                 queryClient.invalidateQueries({
-                  queryKey: ["messages", "list", { conversation_id: conversationId }]
+                  queryKey: ["trpc", "messages", "list", { conversation_id: conversationId }]
                 });
               }
 
               // Fallback: invalidate all messages queries
-              queryClient.invalidateQueries({ queryKey: ["messages"] });
+              queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
 
               // Auto-select conversation for new messages (so it appears in the screen)
               if ((data.type === "message:new" || data.type === "MESSAGE_NEW" ||
@@ -276,7 +276,7 @@ export default function AgentMessages() {
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
                 queryClient.invalidateQueries({
-                  queryKey: ["messages", data.data.conversationId],
+                  queryKey: ["trpc", "messages", data.data.conversationId],
                 });
               }
             }
@@ -594,7 +594,7 @@ export default function AgentMessages() {
     onSuccess: () => {
       toast.success("Mensagem excluída");
       // Force immediate cache invalidation
-      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
       queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
       refetchMessages();
     },
@@ -618,6 +618,20 @@ export default function AgentMessages() {
   });
 
   // Função para selecionar conversa e marcar como lida
+
+  // FIX: Auto-select conversation with unread messages (polling fallback quando SSE indisponivel)
+  useEffect(() => {
+    if (!conversations || !Array.isArray(conversations)) return;
+    const unread = conversations.find(c => Number(c.unreadCount) > 0);
+    if (unread) {
+      const id = Number(unread.id);
+      if (selectedConversationId !== id) {
+        setSelectedConversationId(id);
+        sessionStorage.setItem('selectedConversationId', String(id));
+      }
+    }
+  }, [conversations, selectedConversationId]);
+
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
     setSelectedConversationId(conversationId);
