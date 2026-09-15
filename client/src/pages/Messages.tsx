@@ -28,6 +28,7 @@ import {
 import { Label } from "@/components/ui/label";
 import {
   MessageSquare,
+  Forward,
   Send,
   Search,
   Phone,
@@ -46,6 +47,21 @@ import {
   Smile,
   Reply,
   Heart,
+
+// === Rótulo 'Encaminhado' (estilo WhatsApp) — client-side, sem schema === //
+function isForwardedMessage(content: string | null | undefined): boolean {
+  return !!content && (content.includes("📤") || /mensagem encaminhada/i.test(content));
+}
+function cleanForwardedContent(content: string | null | undefined): string {
+  if (!content) return content as any;
+  return content
+    .replace(/^📤s***Mensagem encaminhada por[^*]***s*/i, "")
+    .replace(/^📤s*Mensagem encaminhada[:s]*/i, "")
+    .replace(/^s*Mensagem encaminhada[:s]*/i, "")
+    .trim();
+}
+// === Fim rótulo Encaminhado === //
+
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
@@ -913,8 +929,16 @@ export default function Messages() {
                                     : msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")
                                   }
                                 </p>
+                                {/* Rótulo Encaminhado (estilo WhatsApp) */}
+                                {isForwardedMessage(msg.content) && (
+                                  <div className="flex items-center gap-1 text-[11px] italic text-gray-400 select-none">
+                                    <Forward size={11} className="shrink-0" />
+                                    <span>Encaminhado</span>
+                                  </div>
+                                )}
+
                                 {msg.content && msg.content !== "null" && (
-                                  <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
+                                  <p className="text-sm">{renderContentWithLinks(cleanForwardedContent(msg.content))}</p>
                                 )}
                                 {/* ✅ Exibir reação (emoji) se existir */}
                                 {msg.reaction && (
