@@ -924,7 +924,7 @@ export default function Messages() {
   )}
 
                                 {msg.content && msg.content !== "null" && (
-                                  <p className="text-sm">{renderContentWithLinks(msg.content.replace(/^[sS]*?encaminhada[^\n]*\n\n/i, "").trim())}</p>
+                                  <p className="text-sm">{renderContentWithLinks(msg.content.replace(/^📤[sS]*?encaminhada[^\n]*\n\n/i, "").trim())}</p>
                                 )}
                                 {/* ✅ Exibir reação (emoji) se existir */}
                                 {msg.reaction && (
