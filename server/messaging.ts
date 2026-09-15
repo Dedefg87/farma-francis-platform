@@ -62,6 +62,24 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
     if (!r2Key.startsWith("messages/")) keysToTry.push("messages/" + r2Key);
     if (!r2Key.startsWith("evolution-api/")) keysToTry.push("evolution-api/" + r2Key);
     try { const decoded = decodeURIComponent(r2Key); if (decoded !== r2Key) keysToTry.push(decoded); } catch {}
+    // FIX DEFINITIVO: Evolution grava chaves com @ literal (ex: @lid), DB guarda %40 (URL-encoded)
+    // -> tentar tantas variantes quantas forem necessarias ate achar o objeto
+    const decodedPrefixed = (function(){
+      const out = [];
+      try {
+        const dec = decodeURIComponent(r2Key);
+        if (dec !== r2Key) {
+          out.push(dec);
+          const pfs = ["media/", "messages/", "evolution-api/"];
+          for (const p of pfs) {
+            const c = p + dec;
+            if (keysToTry.indexOf(c) === -1) out.push(c);
+          }
+        }
+      } catch (e) {}
+      return out;
+    })();
+    for (const c of decodedPrefixed) keysToTry.push(c);
     for (const key of keysToTry) {
       try {
         const command = new GetObjectCommand({ Bucket: "farmafranciswhatsappmedia", Key: key });
