@@ -2229,7 +2229,7 @@ async function processEvolutionWebhook(body: unknown) {
           console.log("8. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType, hasReply: !!_replyToExternalId });
           await ingestInboundConversationMessage({
             provider: "whatsapp",
-            instanceName: ((((body as any)?.instance) || ((body as any)?.data?.instance) || null), // [FIX] instancia que recebeu
+            instanceName: ((body as any)?.instance) || ((body as any)?.data?.instance) || null,
             fromNumber,
             fromName: pushName || null,
             messageType: storyOverrideType || messageType,
