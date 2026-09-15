@@ -233,6 +233,26 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
   // Se ja for URL do R2, usar como esta
   if (isR2Url(mediaUrl)) return mediaUrl;
 
+  // FIX: chave legada/pura (sem http) - resolver via R2 publico (tenta com e sem prefixo media/)
+  if (mediaUrl && mediaUrl.indexOf("http") !== 0 && !mediaUrl.startsWith("data:")) {
+    const publicBase = process.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+    const base = publicBase.endsWith("/") ? publicBase.slice(0, -1) : publicBase;
+    const candidates = mediaUrl.startsWith("media/") ? [mediaUrl] : [mediaUrl, "media/" + mediaUrl];
+    for (const cand of candidates) {
+      try {
+        const candUrl = base + "/" + cand;
+        const headResp = await fetch(candUrl, { method: "HEAD", signal: AbortSignal.timeout(10000) });
+        if (headResp.ok) {
+          console.log("[FORWARD] Resolved legacy R2 key:", cand);
+          return candUrl;
+        }
+      } catch (e) {
+        console.log("[FORWARD] legacy R2 HEAD failed:", cand);
+      }
+    }
+  }
+
+
   // Se for data URL (base64), fazer upload para R2
   if (mediaUrl.startsWith("data:")) {
     try {
