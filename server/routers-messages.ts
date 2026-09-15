@@ -231,7 +231,7 @@ export const messagesRouter = router({
           // Helper para obter URL pública da mídia
           const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise<string> => {
             // Se já for URL do R2, usar como está
-            if (isR2Url(mediaUrl)) return mediaUrl;
+            if (isR2Url(mediaUrl)) return null;
             
             // Se for data URL (base64), fazer upload para R2
             if (mediaUrl.startsWith("data:")) {
@@ -345,7 +345,7 @@ export const messagesRouter = router({
                                       } catch (e) {
                                         console.error("[messages.forward] Download error:", e);
                                       }
-                                    } else {
+                                    }
                                       // externalId is null - try fetching media directly from Evolution API server
                                       try {
                                         const decodedUrl = mediaUrl.includes("%40") ? decodeURIComponent(mediaUrl) : mediaUrl;
@@ -364,7 +364,7 @@ export const messagesRouter = router({
                                                 const buf = Buffer.from(await mediaResp.arrayBuffer());
                                                 if (buf.length > 0) {
                                                   const ext = mimetype.includes("png") ? "png" : mimetype.includes("webp") ? "webp" : mimetype.includes("pdf") ? "pdf" : mimetype.includes("video") ? "mp4" : mimetype.includes("audio") ? "ogg" : "jpg";
-                                                  const r2Result = await uploadToR22(buf, "messages/forward_" + Date.now() + "." + ext, mimetype);
+                                                  const r2Result = await uploadToR2(buf, "messages/forward_" + Date.now() + "." + ext, mimetype);
                                                   console.log("[FORWARD] Uploaded to R2 from Evolution API:", r2Result.url);
                                                   return r2Result.url;
                                                 }
