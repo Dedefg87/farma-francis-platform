@@ -605,8 +605,8 @@ export async function sendWhatsAppImage(params: {
   senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
-}) {
   instanceName?: string;
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -1073,8 +1073,8 @@ export async function sendWhatsAppAudio(params: {
   senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
-}) {
   instanceName?: string;
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -1142,8 +1142,8 @@ export async function sendWhatsAppViewOnceMedia(params: {
   senderId?: string | number;
   senderName?: string;
   senderPosition?: string;
-}) {
   instanceName?: string;
+}) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
