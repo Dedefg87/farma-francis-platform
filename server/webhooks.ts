@@ -208,7 +208,7 @@ function cleanR2Url(url: string | null | undefined): string | null {
       console.log("[Webhooks] R2 URL has no bucket+path:", url);
       return null;
     }
-    const relativePath = parts.slice(1).join("/");
+    const relativePath = parsed.hostname.endsWith(".r2.dev") ? parts.join("/") : parts.slice(1).join("/");
     console.log("[Webhooks] Cleaned R2 path:", relativePath);
     return relativePath;
   } catch (e) {
