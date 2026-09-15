@@ -561,7 +561,7 @@ export default function Inbox() {
   )}
 
                           <p className="text-sm whitespace-pre-wrap">
-                            {msg.content?.replace(/^📤[sS]*?encaminhada[^\n]*\n\n/i, "").trim()}
+                            {msg.content?.includes("📤") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)).replace(/^💬 /, "").trim() : msg.content}
                           </p>
                           {msg.reaction && (
                             <span className="text-base ml-1">{msg.reaction}</span>
