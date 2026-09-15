@@ -120,33 +120,101 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
     return { base64, mimetype };
   }
   // Fallback: try fetching from Evolution API server (for files not in R2)
+  // The path format is usually: evolution-api/{instanceId}/{jid}/imageMessage/{timestamp}_ACEBFD6FB4C9860
+  // We use /message/download/{instanceName} endpoint with the full path to retrieve the media.
   if (urlOrKey.startsWith("evolution-api/") || urlOrKey.includes("evolution-api/")) {
     try {
       const config = await getEvolutionConfig();
       if (config) {
         const decodedPath = urlOrKey.includes("%40") ? decodeURIComponent(urlOrKey) : urlOrKey;
-        const fetchUrl = config.apiUrl + "/" + decodedPath;
-        console.log("[getMediaAsBase64] Trying Evolution API:", fetchUrl.substring(0, 100));
-        const evoResp = await fetch(fetchUrl, {
-          headers: { "apikey": config.apiKey, "User-Agent": "Mozilla/5.0" },
+        // Try /message/download/{instanceName} endpoint (v2)
+        const downloadUrl = `${config.apiUrl}/message/download/${config.instanceName}`;
+        console.log("[getMediaAsBase64] Trying Evolution API download:", downloadUrl);
+
+        const evoResp = await fetch(downloadUrl, {
+          method: "POST",
+          headers: {
+            "apikey": config.apiKey,
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0"
+          },
+          body: JSON.stringify({
+            messageId: decodedPath.split("/").pop() || decodedPath,
+            mediaPath: decodedPath,
+          }),
           signal: AbortSignal.timeout(15000)
         });
-        console.log("[getMediaAsBase64] Evolution API response:", evoResp.status);
-        if (evoResp.ok) {
-          const ctype = evoResp.headers.get("content-type") || "";
-          if (!ctype.includes("text/html") && !ctype.includes("text/plain") && !ctype.includes("application/json")) {
-            const buf = Buffer.from(await evoResp.arrayBuffer());
-            if (buf.length > 0 && buf.length < 10 * 1024 * 1024) {
-              const b64 = buf.toString("base64");
-              const mt = ctype || "application/octet-stream";
-              console.log("[getMediaAsBase64] Got media from Evolution API:", buf.length, "bytes");
+        console.log("[getMediaAsBase64] Evolution API download response:", evoResp.status);
+
+        if (!evoResp.ok) {
+          // If /message/download fails, try /chat/getBase64FromMediaMessage with URL proxy
+          const proxyUrl = `${config.apiUrl}/chat/getBase64FromMediaMessage/${config.instanceName}`;
+          console.log("[getMediaAsBase64] Trying Evolution API proxy:", proxyUrl.substring(0, 120));
+          const proxyResp = await fetch(proxyUrl, {
+            method: "POST",
+            headers: {
+              "apikey": config.apiKey,
+              "Content-Type": "application/json",
+              "User-Agent": "Mozilla/5.0"
+            },
+            body: JSON.stringify({ url: config.apiUrl + "/" + decodedPath }),
+            signal: AbortSignal.timeout(15000)
+          });
+          console.log("[getMediaAsBase64] Evolution API proxy response:", proxyResp.status);
+          if (proxyResp.ok) {
+            const result = await proxyResp.json();
+            if (result?.url || result?.mediaUrl) {
+              const mediaUrl = result.url || result.mediaUrl;
+              console.log("[getMediaAsBase64] Got media URL from proxy:", (mediaUrl as string)?.substring(0, 80));
+              const mediaFetch = await fetch(mediaUrl, {
+                headers: { "User-Agent": "Mozilla/5.0" },
+                signal: AbortSignal.timeout(15000)
+              });
+              if (mediaFetch.ok) {
+                const ctype = mediaFetch.headers.get("content-type") || "";
+                if (!ctype.includes("text/html") && !ctype.includes("text/plain") && !ctype.includes("application/json")) {
+                  const buf = Buffer.from(await mediaFetch.arrayBuffer());
+                  if (buf.length > 0 && buf.length < 10 * 1024 * 1024) {
+                    const b64 = buf.toString("base64");
+                    const mt = ctype || "application/octet-stream";
+                    console.log("[getMediaAsBase64] Got media from proxy URL:", buf.length, "bytes");
+                    return { base64: b64, mimetype: mt };
+                  }
+                }
+              }
+            } else if (result?.base64 && typeof result.base64 === "string") {
+              const b64 = result.base64;
+              const mt = (result.mimetype || result.mimeType || "application/octet-stream") as string;
+              console.log("[getMediaAsBase64] Got base64 from proxy:", b64.length, "chars");
               return { base64: b64, mimetype: mt };
+            }
+          }
+        } else {
+          const result = await evoResp.json();
+          if (result?.url || result?.mediaUrl) {
+            const mediaUrl = result.url || result.mediaUrl;
+            console.log("[getMediaAsBase64] Got media URL from download:", (mediaUrl as string)?.substring(0, 80));
+            const mediaFetch = await fetch(mediaUrl, {
+              headers: { "User-Agent": "Mozilla/5.0" },
+              signal: AbortSignal.timeout(20000)
+            });
+            if (mediaFetch.ok) {
+              const ctype = mediaFetch.headers.get("content-type") || "";
+              if (!ctype.includes("text/html") && !ctype.includes("text/plain") && !ctype.includes("application/json")) {
+                const buf = Buffer.from(await mediaFetch.arrayBuffer());
+                if (buf.length > 0 && buf.length < 10 * 1024 * 1024) {
+                  const b64 = buf.toString("base64");
+                  const mt = ctype || "application/octet-stream";
+                  console.log("[getMediaAsBase64] Got media from download URL:", buf.length, "bytes");
+                  return { base64: b64, mimetype: mt };
+                }
+              }
             }
           }
         }
       }
     } catch (e: any) {
-      console.log("[getMediaAsBase64] Evolution API fallback failed:", String(e.message || e).substring(0, 100));
+      console.log("[getMediaAsBase64] Evolution API fallback failed:", String(e.message || e).substring(0, 150));
     }
   }
   throw new Error("Could not fetch media: " + String(urlOrKey).substring(0, 100));
@@ -488,7 +556,7 @@ export async function sendWhatsAppImage(params: {
   let finalCaption = params.caption || "";
   if (params.senderName) {
     const senderLabel = String(params.senderName).trim().split("*").join("").split("_").join("").split("~").join("");
-    finalCaption = `*${senderLabel}:*\n${finalMessage}`;
+    finalCaption = `*${senderLabel}:*\n${params.caption || ""}`;
   }
 
   const evolutionConfig = await getEvolutionConfig();
@@ -955,7 +1023,7 @@ export async function sendWhatsAppViewOnceMedia(params: {
   let finalCaption = params.caption || `""`;
   if (params.senderName) {
     const senderLabel = String(params.senderName).trim().split("*").join("").split("_").join("").split("~").join("");
-    finalCaption = `*${senderLabel}:*\n${finalMessage}`;
+    finalCaption = `*${senderLabel}:*\n${params.caption || ""}`;
   }
 
   const evolutionConfig = await getEvolutionConfig();
