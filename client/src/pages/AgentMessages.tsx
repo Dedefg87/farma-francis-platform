@@ -165,6 +165,7 @@ export default function AgentMessages() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
@@ -1315,7 +1316,7 @@ export default function AgentMessages() {
                   filteredMessages.map(msg => (
                     <div
                       key={msg.id}
-                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
+                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"} onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}`}
                     >
                       <div
                         className={`relative max-w-[70%] rounded-lg p-3 ${
@@ -1331,7 +1332,7 @@ export default function AgentMessages() {
                               deleteMessageMutation.mutate({ messageId: msg.id });
                             }
                           }}
-                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-red-600 z-10"
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none"} transition-opacity hover:bg-red-600 z-10`}
                           title="Excluir mensagem"
                           disabled={deleteMessageMutation.isPending}
                         >
@@ -1346,7 +1347,7 @@ export default function AgentMessages() {
                                 content: msg.content || "" 
                               });
                           }}
-                          className="absolute -top-2 -right-18 w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-green-600 z-10"
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-18" : "-right-18"} w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none"} transition-opacity hover:bg-green-600 z-10`}
                           title="Responder mensagem"
                         >
                           <CornerUpLeft className="w-3 h-3" />
@@ -1357,7 +1358,7 @@ export default function AgentMessages() {
                             setForwardMessageId(msg.id);
                             setShowForwardDialog(true);
                           }}
-                          className="absolute -top-2 -right-10 w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center opacity-100 transition-opacity hover:bg-blue-600 z-10"
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-10" : "-right-10"} w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none"} transition-opacity hover:bg-blue-600 z-10`}
                           title="Encaminhar mensagem"
                           disabled={forwardMessageMutation.isPending}
                         >
@@ -1378,7 +1379,10 @@ export default function AgentMessages() {
                             </p>
                           </div>
                         )}
-                        {msg.content && msg.content !== "null" && (
+                        {msg.content?.includes("📤") && (
+          <div className="text-[11px] italic text-gray-400 select-none mb-1">→ Encaminhado</div>
+        )}
+        {msg.content && msg.content !== "null" && (
                           <p className="text-sm">{renderContentWithLinks((msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
                         )}
                         {msg.reaction && (
