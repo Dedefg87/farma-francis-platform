@@ -100,11 +100,7 @@ export const messagesRouter = router({
 
       if (originalMsg.fileUrl) {
         const fileType = originalMsg.fileType || "";
-        if (!publicMediaUrl) {
-          console.log("[FORWARD] Midia nao recuperavel — enviando aviso de texto");
-          const result = await sendWhatsAppMessage({ to: input.targetCustomerPhone, message: "[Midia nao disponivel para encaminhamento]" });
-          externalMessageId = result?.messageId || null;
-        } else if (fileType.startsWith("image/")) {
+                    if (fileType.startsWith("image/")) {
           forwardContent += `🖼️ [Imagem encaminhada](${originalMsg.fileUrl})\n`;
         } else if (fileType.startsWith("audio/")) {
           forwardContent += `🎵 [Áudio encaminhado](${originalMsg.fileUrl})\n`;
@@ -392,7 +388,11 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
             };
             console.log("[FORWARD] payload to sendWhatsAppImage:", JSON.stringify(payloadToSend, null, 2));
             
-            if (fileType.startsWith("image/")) {
+            if (!publicMediaUrl) {
+              console.log("[FORWARD] Midia nao recuperavel — enviando aviso de texto");
+              const result = await sendWhatsAppMessage({ to: input.targetCustomerPhone, message: "[Midia nao disponivel para encaminhamento]" });
+              externalMessageId = result?.messageId || null;
+            } else if (fileType.startsWith("image/")) {
               const result = await sendWhatsAppImage({
                 to: input.targetCustomerPhone,
                 imageUrl: publicMediaUrl,
