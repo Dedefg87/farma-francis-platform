@@ -78,6 +78,31 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
       }
     }
   }
+  // Fallback: chave R2 pura via URL publica (mesmo mecanismo que o frontend usa para exibir)
+  if (r2Key && !urlOrKey.startsWith("http") && !urlOrKey.startsWith("data:")) {
+    const publicBase = process.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+    try {
+      const publicUrl = publicBase.replace(//$/, "") + "/" + r2Key;
+      console.log("[getMediaAsBase64] Trying public R2 URL:", publicUrl.substring(0, 120));
+      const resp = await fetch(publicUrl, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) });
+      if (resp.ok) {
+        const ctype = resp.headers.get("content-type") || "";
+        if (!ctype.includes("text/html") && !ctype.includes("text/plain")) {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          if (buf.length > 0) {
+            const b64 = buf.toString("base64");
+            if (b64.length <= 5 * 1024 * 1024) {
+              console.log("[getMediaAsBase64] Got media from public R2 URL:", buf.length, "bytes");
+              return { base64: b64, mimetype: ctype || "application/octet-stream" };
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log("[getMediaAsBase64] Public R2 URL fallback failed:", String((e as any).message || e).substring(0, 100));
+    }
+  }
+
   // Fallback: fetch via HTTP
   if (urlOrKey.startsWith("http")) {
     const response = await fetch(urlOrKey, {
