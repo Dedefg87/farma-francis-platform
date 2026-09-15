@@ -82,7 +82,7 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
   if (r2Key && !urlOrKey.startsWith("http") && !urlOrKey.startsWith("data:")) {
     const publicBase = process.env.VITE_PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
     try {
-      const publicUrl = publicBase.replace(//$/, "") + "/" + r2Key;
+      const publicUrl = (publicBase.endsWith("/") ? publicBase.slice(0, -1) : publicBase) + "/" + r2Key;
       console.log("[getMediaAsBase64] Trying public R2 URL:", publicUrl.substring(0, 120));
       const resp = await fetch(publicUrl, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(20000) });
       if (resp.ok) {
