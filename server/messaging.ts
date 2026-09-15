@@ -1,6 +1,6 @@
 import { getDb } from "./db";
-import { integrationSettings, messages } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { integrationSettings, messages , conversations } from "../drizzle/schema";
+import { eq, and , desc, sql } from "drizzle-orm";
 import { ingestOutboundConversationMessage } from "./db-messages-outbound";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 
@@ -265,7 +265,7 @@ async function getIntegrationConfig(
   return { configData, configId: config.id };
 }
 
-async function getEvolutionConfig() {
+async function getEvolutionConfig(overrideInstance?: string | null) {
   try {
     const { configData } = await getIntegrationConfig("evolution_api");
     const apiUrl = configData.apiUrl as string | undefined;
@@ -273,23 +273,54 @@ async function getEvolutionConfig() {
       (configData.apiKey as string | undefined) ||
       (configData.accessToken as string | undefined);
     const instanceName = configData.instanceName as string | undefined;
+    const resolvedInstance = (overrideInstance && overrideInstance.trim()) || instanceName;
 
-    if (!apiUrl || !apiKey || !instanceName) {
+    if (!apiUrl || !apiKey || !resolvedInstance) {
       return null;
     }
 
     return {
       apiUrl: apiUrl.replace(/\/$/, ""),
       apiKey,
-      instanceName,
+      instanceName: resolvedInstance,
     };
   } catch {
     return null;
   }
 }
 
-async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string; remoteJid?: string; replyToContent?: string; replyToFromMe?: boolean }) {
-  const config = await getEvolutionConfig();
+async function resolveInstanceName(to?: string | null, explicit?: string | null): Promise<string | null> {
+  if (explicit && String(explicit).trim()) return String(explicit).trim();
+  try {
+    const digits = String(to || "").replace(/[^0-9]/g, "");
+    if (!digits) return null;
+    const db = await getDb();
+    if (!db) return null;
+    const [exact] = await db
+      .select({ instanceName: conversations.instanceName })
+      .from(conversations)
+      .where(eq(conversations.customerPhone, String(to)))
+      .orderBy(desc(conversations.lastMessageAt))
+      .limit(1);
+    if (exact?.instanceName) return exact.instanceName;
+    const last8 = digits.slice(-8);
+    if (last8.length === 8) {
+      const [bySuffix] = await db
+        .select({ instanceName: conversations.instanceName })
+        .from(conversations)
+        .where(sql`${conversations.customerPhone} LIKE ${"%" + last8}`)
+        .orderBy(desc(conversations.lastMessageAt))
+        .limit(1);
+      if (bySuffix?.instanceName) return bySuffix.instanceName;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendEvolutionText(params: { to: string; message: string; replyToMessageId?: string; remoteJid?: string; replyToContent?: string; replyToFromMe?: boolean; instanceName?: string }) {
+  const config = await getEvolutionConfig(params.instanceName);
   if (!config) {
     throw new Error("Evolution API configuration not found or incomplete");
   }
@@ -428,10 +459,12 @@ export async function sendWhatsAppMessage(params: {
   caption?: string;
   senderId?: string | number;
   senderName?: string;
-  senderPosition?: string;
+  senderPosition?: string; instanceName?: string;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  // [FIX] Roteamento: responder pela instancia do numero que o cliente chamou (fallback padrao)
+  const resolvedInstance = await resolveInstanceName(params.to, params.instanceName);
 
   // Build message with sender identification if provided
   let finalMessage = params.message;
@@ -444,6 +477,7 @@ export async function sendWhatsAppMessage(params: {
   if (params.mediaUrl) {
     const result = await sendWhatsAppViewOnceMedia({
       to: params.to,
+      instanceName: resolvedInstance,
       mediaUrl: params.mediaUrl,
       mediaType:
         params.mediaUrl.startsWith("data:") ||
@@ -455,10 +489,11 @@ export async function sendWhatsAppMessage(params: {
     return result;
   }
 
-  const evolutionConfig = await getEvolutionConfig();
+  const evolutionConfig = await getEvolutionConfig(resolvedInstance);
   if (evolutionConfig) {
     const result = await sendEvolutionText({
           to: params.to,
+      instanceName: resolvedInstance,
           message: finalMessage,
           replyToMessageId: params.replyToMessageId,
           remoteJid: params.replyToRemoteJid,
@@ -577,7 +612,8 @@ export async function sendWhatsAppImage(params: {
     finalCaption = `*${senderLabel}:*\n${params.caption || ""}`;
   }
 
-  const evolutionConfig = await getEvolutionConfig();
+  const _instName = (params as any).instanceName || await resolveInstanceName((params as any).to);
+  const evolutionConfig = await getEvolutionConfig(_instName);
   if (evolutionConfig) {
     // Converter mídia do R2 para base64 puro (Evolution não acessa URLs do R2)
     let mediaBase64: string;
@@ -1036,7 +1072,8 @@ export async function sendWhatsAppAudio(params: {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const evolutionConfig = await getEvolutionConfig();
+  const _instName = (params as any).instanceName || await resolveInstanceName((params as any).to);
+  const evolutionConfig = await getEvolutionConfig(_instName);
   if (evolutionConfig) {
     let mediaBase64: string;
     let mediaMimetype: string;
@@ -1110,7 +1147,8 @@ export async function sendWhatsAppViewOnceMedia(params: {
     finalCaption = `*${senderLabel}:*\n${params.caption || ""}`;
   }
 
-  const evolutionConfig = await getEvolutionConfig();
+  const _instName = (params as any).instanceName || await resolveInstanceName((params as any).to);
+  const evolutionConfig = await getEvolutionConfig(_instName);
   if (evolutionConfig) {
     // Converter mídia do R2 para base64 puro
     let mediaBase64: string;
@@ -1259,7 +1297,8 @@ export async function getSentMessages(params: {
  * Send a reaction to a WhatsApp message (Evolution API)
  */
 export async function sendReaction(params: { to: string; messageId: string; remoteJid: string; emoji: string }) {
-  const config = await getEvolutionConfig();
+  const _instName = (params as any).instanceName || await resolveInstanceName((params as any).to);
+  const config = await getEvolutionConfig(_instName);
   if (!config) {
     throw new Error("Evolution API configuration not found or incomplete");
   }
