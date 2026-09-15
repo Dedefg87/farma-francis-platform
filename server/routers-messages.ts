@@ -408,11 +408,12 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
             
             if (!publicMediaUrl) {
               console.log("[FORWARD] Midia nao recuperavel — enviando aviso de texto");
-              const result = await sendWhatsAppMessage({ to: input.targetCustomerPhone, message: "[Midia nao disponivel para encaminhamento]" });
+              const result = await sendWhatsAppMessage({ to: input.targetCustomerPhone, instanceName: (originalMsg as any)?.instanceName || undefined, message: "[Midia nao disponivel para encaminhamento]" });
               externalMessageId = result?.messageId || null;
             } else if (fileType.startsWith("image/")) {
               const result = await sendWhatsAppImage({
                 to: input.targetCustomerPhone,
+                instanceName: (originalMsg as any)?.instanceName || undefined,
                 imageUrl: publicMediaUrl,
                 caption: undefined, // Removido: enviar apenas midia sem texto
               });
@@ -420,6 +421,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
             } else if (fileType.startsWith("video/")) {
               const result = await sendWhatsAppViewOnceMedia({
                 to: input.targetCustomerPhone,
+                instanceName: (originalMsg as any)?.instanceName || undefined,
                 mediaUrl: publicMediaUrl,
                 mediaType: "video",
                 caption: undefined, // Removido: enviar apenas midia sem texto
@@ -428,6 +430,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
             } else if (fileType.startsWith("audio/")) {
               const result = await sendWhatsAppAudio({
                 to: input.targetCustomerPhone,
+                instanceName: (originalMsg as any)?.instanceName || undefined,
                 mediaUrl: publicMediaUrl,
                 caption: undefined, // Removido: enviar apenas midia sem texto
               });
@@ -440,6 +443,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
                 const senderPosition = senderEmp?.position || null;
         const result = await sendWhatsAppMessage({
           to: customerPhone,
+          instanceName: (originalMsg as any)?.instanceName || undefined,
           message: content,
           senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
           senderName: senderName,
@@ -449,6 +453,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
           } else {
             const result = await sendWhatsAppMessage({
               to: input.targetCustomerPhone,
+              instanceName: (originalMsg as any)?.instanceName || undefined,
               message: customerContent,
             });
             externalMessageId = result?.messageId || null;
@@ -463,6 +468,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
         } else {
           const result = await sendWhatsAppMessage({
             to: input.targetCustomerPhone,
+            instanceName: (originalMsg as any)?.instanceName || undefined,
             message: customerContent,
           });
           externalMessageId = result?.messageId || null;
@@ -724,6 +730,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
         }));
         const result = await sendWhatsAppMessage({
                   to: customerPhone,
+                  instanceName: (conv as any)?.instanceName || undefined,
                   message: content,
                   senderId: ctx.user?.id ? Number(ctx.user.id) : undefined,
                   senderName,
@@ -800,6 +807,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
 
       const result = await sendWhatsAppMessage({
         to: conv.customerPhone,
+        instanceName: (conv as any)?.instanceName || undefined,
         message: input.content,
         replyToMessageId: input.replyToId,
         replyToRemoteJid: originalMsg?.remoteJid || undefined, // ✅ Passar remoteJid para quoted
