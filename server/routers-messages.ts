@@ -420,7 +420,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
               });
               externalMessageId = result?.messageId || null;
             } else if (fileType.startsWith("video/")) {
-              const result = await sendWhatsAppViewOnceMedia({
+              const result = await sendWhatsAppAudio({
                 to: input.targetCustomerPhone,
                 mediaUrl: publicMediaUrl,
                 mediaType: "video",
@@ -431,7 +431,6 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
               const result = await sendWhatsAppViewOnceMedia({
                 to: input.targetCustomerPhone,
                 mediaUrl: publicMediaUrl,
-                mediaType: "audio",
                 caption: undefined, // Removido: enviar apenas midia sem texto
               });
               externalMessageId = result?.messageId || null;
