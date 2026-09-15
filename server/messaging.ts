@@ -58,6 +58,8 @@ async function getMediaAsBase64(urlOrKey: string): Promise<{ base64: string; mim
   // Try R2 first (with and without URL decoding)
   if (r2Key) {
     const keysToTry = [r2Key];
+    if (!r2Key.startsWith("media/")) keysToTry.push("media/" + r2Key);
+    if (!r2Key.startsWith("messages/")) keysToTry.push("messages/" + r2Key);
     try { const decoded = decodeURIComponent(r2Key); if (decoded !== r2Key) keysToTry.push(decoded); } catch {}
     for (const key of keysToTry) {
       try {
