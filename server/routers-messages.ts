@@ -5,7 +5,7 @@ import { conversationMessages, conversations, users, employees, internalMessages
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { sseManager, EVENTS } from "./_core/sse";
-import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
+import { sendWhatsAppAudio, sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
 
 export const messagesRouter = router({
   /**
