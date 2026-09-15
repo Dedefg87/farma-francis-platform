@@ -384,6 +384,7 @@ function buildInboundContent(message: {
 // ==============================================
 export async function ingestInboundConversationMessage(message: {
   provider: "whatsapp" | "instagram";
+  instanceName?: string | null; // [FIX] instancia Evolution que recebeu
   fromNumber: string;
   fromName?: string | null;
   messageType: string;
@@ -546,11 +547,13 @@ export async function ingestInboundConversationMessage(message: {
       customerName: customer.name,
       customerPhone: customer.phone,
       channel: message.provider || "whatsapp", // fallback para whatsapp se undefined
+      instanceName: message.instanceName || null, // [FIX] grava a instancia do numero chamado
       status: assignedUserId ? "assigned" : "open",
       assignedTo: assignedUserId,
       queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
       openedAt: now,
       lastMessageAt: now,
+      ...(message.instanceName ? { instanceName: message.instanceName } : {}), // [FIX] sem sobrescrever quando ausente
       unreadCount: 1,
     });
 
