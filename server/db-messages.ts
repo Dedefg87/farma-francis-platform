@@ -497,7 +497,7 @@ export async function ingestInboundConversationMessage(message: {
 
   // 5. Find existing conversation by PHONE (últimos 8 dígitos)
   // Resolve problema de clientes duplicados com formatos diferentes de telefone
-  const found = await findConversationByPhone(db, customer.phone, conversations, customers);
+  const found = await findConversationByPhone(db, customer.phone, conversations, customers, message.instanceName);
 
   let conversationId = found?.conversationId;
   let existingConversation: unknown = null;
@@ -581,6 +581,7 @@ export async function ingestInboundConversationMessage(message: {
       .set({
         lastMessageAt: now,
         unreadCount: isReopening ? 1 : sql<number>`unread_count + 1`,
+    ...(message.instanceName ? { instanceName: message.instanceName } : {}), // [FIX] atualiza instancia no reuso
         // Reabrir conversa fechada
         ...(isReopening
           ? {
@@ -918,20 +919,6 @@ export async function ingestOutboundConversationMessage(message: {
       status: "open",
       assignedTo: message.fromUserId || null,
     }).returning();
-    // Create conversation if still not found
-    if (!found) {
-      console.log("[ingestOutbound] ⚠️ No conversation found for", customer.phone, "→ creating new one");
-      const [newConv] = await db.insert(conversations).values({
-        customerId: customer.id,
-        customerName: customer.name || null,
-        customerPhone: customer.phone,
-        channel: message.provider || "whatsapp",
-        status: "open",
-        assignedTo: message.fromUserId || null,
-      }).returning();
-      found = { conversationId: newConv.id };
-    }
-    
     found = { conversationId: newConv.id };
   }
   
