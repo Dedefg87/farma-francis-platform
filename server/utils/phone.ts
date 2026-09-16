@@ -96,7 +96,7 @@ export async function findConversationByPhone(
   db: unknown,
   phone: string,
   conversationsTable: unknown,
-  customersTable: unknown
+  customersTable: unknown,
   instanceName?: string | null, // [FIX] instancia Evolution que recebeu
 ): Promise<{ conversationId: number; customerId: number; status: string } | null> {
   const { eq, desc, inArray, like, or, and } = await import('drizzle-orm');
