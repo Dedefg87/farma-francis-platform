@@ -103,7 +103,7 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
           {!compact && (
             <>
               <div className="flex items-center gap-3">
-                <img src="/logo-farma-francis.jpg" alt="Farma Francis" className="h-8 w-auto object-contain" />
+                <img src="/logo-farma-francis.jpg" alt="Farma Francis" className="h-16 w-auto object-contain" />
                 <div>
                   <h1 className="text-lg font-semibold text-gray-900">
                     Farma Francis
