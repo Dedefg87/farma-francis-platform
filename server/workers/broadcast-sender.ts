@@ -207,6 +207,7 @@ export async function processBroadcastMessage(messageId: number) {
         customerId: broadcastMembersSent.customerId,
         phone: broadcastMembersSent.phone,
         customerPhone: customers.phone, // telefone do cliente (original)
+      name: customers.name, // [FIX] nome do cliente (personalizacao)
       })
       .from(broadcastMembersSent)
       .leftJoin(customers, eq(broadcastMembersSent.customerId, customers.id))
@@ -233,6 +234,12 @@ export async function processBroadcastMessage(messageId: number) {
     for (const sent of pendingSents) {
       // Usar o telefone do customer se disponível, senão o phone do broadcastMembersSent
       const targetPhone = sent.customerPhone || sent.phone;
+      // [FIX] Regra 4: personalizar com o nome do contato antes da mensagem
+      const customerName = (sent as any).name || "";
+      const baseText = message.messageText || "";
+      const personalizedContent = customerName
+        ? (baseText ? `Olá ${customerName}!\n${baseText}` : `Olá ${customerName}!`)
+        : baseText;
 
       const fileAttachment = resolvedFileUrl
         ? {
@@ -245,7 +252,7 @@ export async function processBroadcastMessage(messageId: number) {
 
       const result = await sendWhatsAppMessageWithRetry(
         targetPhone,
-        message.messageText,
+        personalizedContent,
         fileAttachment
       );
 
@@ -280,7 +287,9 @@ export async function processBroadcastMessage(messageId: number) {
       }
 
       // Pequena pausa para evitar rate limit (0.5s entre envios)
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // [FIX] Regra 6: intervalo aleatorio 30-90s entre envios (comportamento humano)
+      const randomDelay = 30000 + Math.floor(Math.random() * 60000); // 30s a 90s
+      await new Promise(resolve => setTimeout(resolve, randomDelay));
     }
 
     // 4. Atualizar contadores da mensagem
