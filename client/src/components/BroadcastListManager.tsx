@@ -366,167 +366,151 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
 
   // View: Lista de todas as listas
   if (view === "list") {
-  if (activeTab === "contato") {
-    const selectedLists = data?.lists || [];
-    const contactResults = Array.isArray(contactSearchResults) ? contactSearchResults : ((contactSearchResults as any)?.customers || []);
-    const targetMember = lookupListId !== null && lookupMembers ? lookupMembers.find((m: any) => Number(m.customerId) === Number(contactTarget?.customerId)) : null;
-    return (
-      <div className="space-y-4">
-        {selectedListIds.length > 0 && (
-          <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Disparo em massa para {selectedListIds.length} lista(s)</p>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedListIds([])}><X className="w-4 h-4" /></Button>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {data?.lists?.filter((l) => selectedListIds.includes(Number(l.id))).map((l) => (
-                <Badge key={l.id} variant="secondary">{l.name}</Badge>
-              ))}
-            </div>
-            <div className="relative">
-              <Textarea value={messageContent} onChange={(e) => setMessageContent(e.target.value)} placeholder="Escreva a mensagem que sera enviada para todas as listas selecionadas..." rows={3} className="bg-background pr-10" />
-              <label className="absolute right-2 top-2 cursor-pointer text-muted-foreground hover:text-foreground">
-                <input type="file" className="hidden" onChange={handleFileUpload} disabled={sendProgress !== null} />
-                <Paperclip className="w-5 h-5" />
-              </label>
-            </div>
-            {fileAttachment && (
-              <div className="flex items-center gap-2 p-2 bg-background rounded border">
-                <FileText className="w-4 h-4 text-gray-500" />
-                <span className="text-sm truncate flex-1">{fileAttachment.name}</span>
-                <Button variant="ghost" size="sm" onClick={handleRemoveFile} disabled={sendProgress !== null}><X className="w-4 h-4" /></Button>
-              </div>
-            )}
-            {sendProgress && (
-              <p className="text-xs text-muted-foreground">Enviando {sendProgress.current}/{sendProgress.total}...</p>
-            )}
-            <Button onClick={handleSendToSelected} disabled={sendProgress !== null || (!messageContent.trim() && !fileAttachment)} className="w-full">
-              <Send className="w-4 h-4 mr-2" />
-              {sendProgress ? "Enviando..." : "Enviar para " + selectedListIds.length + " lista(s) em sequencia"}
-            </Button>
+    if (activeTab === "contato") {
+      const selectedLists = data?.lists || [];
+      const contactResults = Array.isArray(contactSearchResults) ? contactSearchResults : ((contactSearchResults as any)?.customers || []);
+      const targetMember = lookupListId !== null && lookupMembers ? lookupMembers.find((m: any) => Number(m.customerId) === Number(contactTarget?.customerId)) : null;
+      return (
+        <div className="space-y-4">
+          <div className="flex gap-2 border-b pb-3">
+            <Button variant="outline" size="sm" onClick={() => setActiveTab("disparo")}>Disparo</Button>
+            <Button variant="default" size="sm" onClick={() => setActiveTab("contato")}>Localizar contato</Button>
           </div>
-        )}
-        <div className="flex gap-2 border-b pb-3">
-          <Button variant="outline" size="sm" onClick={() => setActiveTab("disparo")}>Disparo</Button>
-          <Button variant="default" size="sm" onClick={() => setActiveTab("contato")}>Localizar contato</Button>
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold">Localizar contato</h3>
-          <p className="text-sm text-muted-foreground">Busque por nome ou telefone para ver em quais listas a pessoa esta e remove-la.</p>
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Buscar por nome ou telefone..." value={contactQuery} onChange={(e) => { setContactQuery(e.target.value); setContactTarget(null); setLookupListId(null); }} />
-        </div>
-        {contactQuery.trim().length > 0 && contactResults.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhum contato encontrado.</p>
-        )}
-        {contactResults.map((c: any) => (
-          <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
-            <div className="flex items-center gap-3 min-w-0">
-              <Avatar><AvatarFallback>{(c.name || "?").charAt(0).toUpperCase()}</AvatarFallback></Avatar>
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{c.name || "Sem nome"}</p>
-                <p className="text-xs text-muted-foreground truncate">{c.phone || c.phoneNumber || c.email || ""}</p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => { setContactTarget({ customerId: Number(c.id), name: c.name || "", phone: c.phone || c.phoneNumber || "" }); setLookupListId(null); }}>Selecionar</Button>
+          <div>
+            <h3 className="text-lg font-semibold">Localizar contato</h3>
+            <p className="text-sm text-muted-foreground">Busque por nome ou telefone para ver em quais listas a pessoa esta e remove-la.</p>
           </div>
-        ))}
-        {contactTarget && (
-          <div className="p-4 border rounded-lg space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold">{contactTarget.name || "Contato"}</p>
-                <p className="text-xs text-muted-foreground">{contactTarget.phone}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => { setContactTarget(null); setLookupListId(null); }}><X className="w-4 h-4" /></Button>
-            </div>
-            <p className="text-xs text-muted-foreground">Em qual lista deseja verificar?</p>
-            <div className="space-y-2">
-              {selectedLists.map((lst: any) => (
-                <div key={lst.id} className="flex items-center justify-between p-2 border rounded">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{lst.name}</p>
-                    <p className="text-xs text-muted-foreground">{lst.memberCount || 0} contatos</p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => setLookupListId(Number(lst.id))}>Verificar</Button>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Buscar por nome ou telefone..." value={contactQuery} onChange={(e) => { setContactQuery(e.target.value); setContactTarget(null); setLookupListId(null); }} />
+          </div>
+          {contactQuery.trim().length > 0 && contactResults.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum contato encontrado.</p>
+          )}
+          {contactResults.map((c: any) => (
+            <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar><AvatarFallback>{(c.name || "?").charAt(0).toUpperCase()}</AvatarFallback></Avatar>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{c.name || "Sem nome"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{c.phone || c.phoneNumber || c.email || ""}</p>
                 </div>
-              ))}
-            </div>
-            {lookupListId !== null && (
-              <div className="p-3 bg-background border rounded space-y-2">
-                <p className="text-sm font-medium">Lista: {selectedLists.find((l: any) => Number(l.id) === lookupListId)?.name || "..."}</p>
-                {targetMember ? (
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-green-600">Contato esta nesta lista</p>
-                    <Button variant="destructive" size="sm" onClick={() => removeMember.mutate({ memberId: targetMember.id })} disabled={removeMember.isPending}>
-                      <Trash2 className="w-4 h-4 mr-1" /> Remover
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Contato nao esta nesta lista.</p>
-                )}
               </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
+              <Button variant="outline" size="sm" onClick={() => { setContactTarget({ customerId: Number(c.id), name: c.name || "", phone: c.phone || c.phoneNumber || "" }); setLookupListId(null); }}>Selecionar</Button>
+            </div>
+          ))}
+          {contactTarget && (
+            <div className="p-4 border rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">{contactTarget.name || "Contato"}</p>
+                  <p className="text-xs text-muted-foreground">{contactTarget.phone}</p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => { setContactTarget(null); setLookupListId(null); }}><X className="w-4 h-4" /></Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Em qual lista deseja verificar?</p>
+              <div className="space-y-2">
+                {selectedLists.map((lst: any) => (
+                  <div key={lst.id} className="flex items-center justify-between p-2 border rounded">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{lst.name}</p>
+                      <p className="text-xs text-muted-foreground">{lst.memberCount || 0} contatos</p>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setLookupListId(Number(lst.id))}>Verificar</Button>
+                  </div>
+                ))}
+              </div>
+              {lookupListId !== null && (
+                <div className="p-3 bg-background border rounded space-y-2">
+                  <p className="text-sm font-medium">Lista: {selectedLists.find((l: any) => Number(l.id) === lookupListId)?.name || "..."}</p>
+                  {targetMember ? (
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-green-600">Contato esta nesta lista</p>
+                      <Button variant="destructive" size="sm" onClick={() => removeMember.mutate({ memberId: targetMember.id })} disabled={removeMember.isPending}>
+                        <Trash2 className="w-4 h-4 mr-1" /> Remover
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Contato nao esta nesta lista.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-4">
+        <div className="flex gap-2 border-b pb-3">
+          <Button variant="default" size="sm" onClick={() => setActiveTab("disparo")}>Disparo</Button>
+          <Button variant="outline" size="sm" onClick={() => setActiveTab("contato")}>Localizar contato</Button>
+        </div>
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold">Listas de Transmissão</h3>
-            <p className="text-sm text-muted-foreground">
-              Crie listas com até 50 contatos para enviar mensagens em massa
-            </p>
+            <p className="text-sm text-muted-foreground">Crie listas com até 50 contatos para enviar mensagens em massa</p>
           </div>
           <Button onClick={() => setView("create")}>
             <Plus className="w-4 h-4 mr-2" />
             Nova Lista
           </Button>
         </div>
-
-        {/* Bulk actions toolbar */}
         {data?.lists && data.lists.length > 0 && (
           <div className="flex items-center gap-2 p-2 border rounded-lg bg-muted/50">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleAllLists}
-              disabled={!data?.lists || data.lists.length === 0}
-            >
+            <Button variant="outline" size="sm" onClick={toggleAllLists} disabled={!data?.lists || data.lists.length === 0}>
               {selectedListIds.length === data.lists.length ? "Desmarcar todas" : "Selecionar todas"}
             </Button>
             {selectedListIds.length > 0 && (
               <>
-                <span className="text-sm text-muted-foreground">
-                  {selectedListIds.length} selecionada(s)
-                </span>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleDeleteSelected}
-                  disabled={deleteMany.isPending}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Excluir selecionadas
+                <span className="text-sm text-muted-foreground">{selectedListIds.length} selecionada(s)</span>
+                <Button variant="destructive" size="sm" onClick={handleDeleteSelected} disabled={deleteMany.isPending}>
+                  <Trash2 className="w-4 h-4 mr-2" /> Excluir selecionadas
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedListIds([])}
-                >
-                  Limpar
-                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedListIds([])}>Limpar</Button>
               </>
             )}
           </div>
         )}
-
+        <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">
+              {selectedListIds.length > 0 ? `Disparo em massa para ${selectedListIds.length} lista(s)` : "Disparo em massa"}
+            </p>
+            {selectedListIds.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setSelectedListIds([])}><X className="w-4 h-4" /></Button>
+            )}
+          </div>
+          {selectedListIds.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {data?.lists?.filter((l: any) => selectedListIds.includes(Number(l.id))).map((l: any) => (
+                <Badge key={l.id} variant="secondary">{l.name}</Badge>
+              ))}
+            </div>
+          )}
+          <div className="relative">
+            <Textarea value={messageContent} onChange={(e) => setMessageContent(e.target.value)} placeholder="Escreva a mensagem que sera enviada para as listas selecionadas..." rows={3} className="bg-background pr-10" />
+            <label className="absolute right-2 top-2 cursor-pointer text-muted-foreground hover:text-foreground">
+              <input type="file" className="hidden" onChange={handleFileUpload} disabled={sendProgress !== null} />
+              <Paperclip className="w-5 h-5" />
+            </label>
+          </div>
+          {fileAttachment && (
+            <div className="flex items-center gap-2 p-2 bg-background rounded border">
+              <FileText className="w-4 h-4 text-gray-500" />
+              <span className="text-sm truncate flex-1">{fileAttachment.name}</span>
+              <Button variant="ghost" size="sm" onClick={handleRemoveFile} disabled={sendProgress !== null}><X className="w-4 h-4" /></Button>
+            </div>
+          )}
+          {sendProgress && (
+            <p className="text-xs text-muted-foreground">Enviando {sendProgress.current}/{sendProgress.total}...</p>
+          )}
+          <Button onClick={handleSendToSelected} disabled={sendProgress !== null || selectedListIds.length === 0 || (!messageContent.trim() && !fileAttachment)} className="w-full">
+            <Send className="w-4 h-4 mr-2" />
+            {sendProgress ? "Enviando..." : selectedListIds.length > 0 ? `Enviar para ${selectedListIds.length} lista(s) em sequencia` : "Selecione uma lista para enviar"}
+          </Button>
+        </div>
         <div className="space-y-2">
           {data?.lists?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -536,35 +520,17 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
             </div>
           ) : (
             data?.lists?.map(list => (
-              <div
-                key={list.id}
-                className={`p-4 rounded-lg border transition-colors ${
-                  selectedListIds.includes(list.id) ? "bg-accent border-primary" : ""
-                }`}
-              >
+              <div key={list.id} className={`p-4 rounded-lg border transition-colors ${selectedListIds.includes(list.id) ? "bg-accent border-primary" : ""}`}>
                 <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={selectedListIds.includes(list.id)}
-                    onCheckedChange={() => toggleListSelection(list.id)}
-                    onClick={e => e.stopPropagation()}
-                  />
-                  <div
-                    className="flex-1 text-left cursor-pointer"
-                    onClick={() => {
-                      setSelectedListId(list.id);
-                      setView("detail");
-                    }}
-                  >
+                  <Checkbox checked={selectedListIds.includes(list.id)} onCheckedChange={() => toggleListSelection(list.id)} onClick={e => e.stopPropagation()} />
+                  <div className="flex-1 text-left cursor-pointer" onClick={() => { setSelectedListId(list.id); setView("detail"); }}>
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
                         <Megaphone className="w-5 h-5 text-indigo-600" />
                       </div>
                       <div>
                         <p className="font-medium">{list.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {list.memberCount} contato
-                          {list.memberCount !== 1 ? "s" : ""}
-                        </p>
+                        <p className="text-sm text-muted-foreground">{list.memberCount} contato{list.memberCount !== 1 ? "s" : ""}</p>
                       </div>
                     </div>
                   </div>
@@ -577,7 +543,6 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       </div>
     );
   }
-
   // View: Criar nova lista
   if (view === "create") {
     return (
