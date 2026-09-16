@@ -17,6 +17,8 @@ import {
   conversations,
   conversationMessages,
   customers,
+  broadcastListMembers,
+  broadcastLists,
   storyCache,
 } from "../drizzle/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -954,6 +956,38 @@ async function processWhatsAppWebhook(body: unknown) {
           // Survey responses should NOT be inserted into conversationMessages
           // They will be processed by the chatbot and saved to survey_responses table
           const isPossibleSurveyResponse =
+          // [FIX] Regra 2: Opt-out 'SAIR' - remove de todas as listas de transmissao e responde confirmando
+          const isOptOut = messageType === "text" && messageText && messageText.trim().toUpperCase() === "SAIR";
+          if (isOptOut && !isSentByMe) {
+            try {
+              const optCustomer = await db.select({ id: customers.id })
+                .from(customers)
+                .where(eq(customers.phone, fromNumber))
+                .limit(1);
+              if (optCustomer && optCustomer[0]) {
+                await db.delete(broadcastListMembers).where(eq(broadcastListMembers.customerId, optCustomer[0].id));
+                console.log('[OptOut] Cliente ' + fromNumber + ' removido de todas as listas de transmissao');
+              }
+              let evoUrl = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-ffea.up.railway.app';
+              let evoKey = process.env.EVOLUTION_API_KEY || '7296ECE8D5DB-401B-8C39-2147777EA59B';
+              let evoInstance = process.env.EVOLUTION_INSTANCE_NAME || 'Meu';
+              try {
+                const cfg = await getEvolutionConfig();
+                if (cfg && cfg.apiUrl && cfg.instanceName) {
+                  evoUrl = cfg.apiUrl;
+                  evoInstance = cfg.instanceName;
+                  if ((cfg as any).apiKey) evoKey = (cfg as any).apiKey;
+                }
+              } catch (cfgErr) {}
+              await fetch(evoUrl + '/message/sendText/' + evoInstance, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', apikey: evoKey },
+                body: JSON.stringify({ number: fromNumber, text: 'Você foi removido da lista de transmissão. Se quiser voltar a receber, é só nos chamar. 😊' }),
+              });
+            } catch (optErr) {
+              console.error('[OptOut] Erro ao processar SAIR:', optErr);
+            }
+          }
             type === "text" &&
             messageText &&
             /^\s*[1-5]\s*$/.test(messageText.trim());
