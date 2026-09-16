@@ -265,14 +265,8 @@ export default function AgentMessages() {
               // Fallback: invalidate all messages queries
               queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
 
-              // Auto-select conversation for new messages (so it appears in the screen)
-              if ((data.type === "message:new" || data.type === "MESSAGE_NEW" ||
-                   (data.type === "messages.update" && data.data?.fromMe === false)) &&
-                  data.data?.conversationId) {
-                const newConvId = Number(data.data.conversationId);
-                setSelectedConversationId(newConvId);
-                sessionStorage.setItem('selectedConversationId', String(newConvId));
-              }
+  // [FIX] Auto-select no SSE REMOVIDO: mensagem nova NAO troca a conversa aberta.
+  // A lista atualiza, o som toca e o badge de nao-lida sinaliza; a troca e somente por clique.
 
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
@@ -502,6 +496,13 @@ export default function AgentMessages() {
     return messages.filter(msg => msg.content?.toLowerCase().includes(query));
   }, [messages, messageSearchQuery]);
 
+  // [FIX] Primeira mensagem nao lida: ancora a rolagem ao abrir a conversa
+  const firstUnreadMessageId = useMemo(() => {
+    if (!filteredMessages || filteredMessages.length === 0) return null;
+    const m = filteredMessages.find((x: unknown) => (x as any).senderType === "customer" && !(x as any).readAt);
+    return m ? (m as any).id : null;
+  }, [filteredMessages]);
+
   const mediaItems = useMemo(() => {
     if (!messages) return [];
     return messages.filter(msg => msg.fileUrl);
@@ -689,13 +690,17 @@ export default function AgentMessages() {
     isAtBottomRef.current = true;
   }, [selectedConversationId]);
 
-  // Scroll inicial quando carrega conversa
+  // [FIX] Scroll inicial: posiciona na primeira mensagem nao lida; se nao houver, vai ao fim
   useEffect(() => {
-    if (!hasInitiallyScrolledRef.current && messages && messages.length > 0) {
+    if (hasInitiallyScrolledRef.current || !messages || messages.length === 0) return;
+    const anchor = document.getElementById("first-unread-anchor");
+    if (anchor) {
+      anchor.scrollIntoView({ block: "start" });
+    } else {
       scrollToBottom(true);
-      hasInitiallyScrolledRef.current = true;
     }
-  }, [messages, scrollToBottom]);
+    hasInitiallyScrolledRef.current = true;
+  }, [messages, scrollToBottom, firstUnreadMessageId]);
 
   // Scroll condicional para novas mensagens
   useEffect(() => {
@@ -1306,6 +1311,7 @@ export default function AgentMessages() {
                   filteredMessages.map(msg => (
                     <div
                       key={msg.id}
+                      id={firstUnreadMessageId === msg.id ? "first-unread-anchor" : undefined}
                       className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"} cursor-pointer`}
                       onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}
                     >
