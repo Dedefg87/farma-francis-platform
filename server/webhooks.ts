@@ -1766,6 +1766,20 @@ async function processEvolutionWebhook(body: unknown) {
         if (!remoteJid) continue;
         // Resolver LID (@lid) para o numero real do cliente via Evolution API (findContacts)
         const cfg = await getEvolutionConfig();
+      // [fix28] Auto-heal (1x por boot): limpa photoUrl quebrada para o avatar vir do fromProfilePic (data URL)
+      if (!(globalThis as any).__ffProfileHealed) {
+        (globalThis as any).__ffProfileHealed = true;
+        try {
+          const dh = await getDb();
+          if (dh) {
+            await dh.update(customers).set({ photoUrl: null }).where(
+              sql`${customers.photoUrl} IS NOT NULL AND ${customers.photoUrl} NOT LIKE 'data:%'
+            );
+            console.log('[ProfilePic] Auto-heal OK: photoUrls nao-data limpas (avatar passa a usar fromProfilePic)');
+          }
+        } catch (e) { console.log('[ProfilePic] Auto-heal falhou:', (e as Error).message); }
+      }
+      const cfg = await getEvolutionConfig();
         const realJid = await resolveLidToRealNumber(remoteJid, cfg);
         const fromNumber = normalizeInboundNumber(realJid);
         if (!fromNumber) continue;
@@ -1790,6 +1804,8 @@ async function processEvolutionWebhook(body: unknown) {
               if (!db) return;
               // Gravar em receivedMessages.fromProfilePic (longtext) — o COALESCE do Inbox ja usa
               await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, c.id));
+              // [fix28] photoUrl (varchar 500) nao comporta data URL — limpar p/ avatar vir do fromProfilePic
+              await db.update(customers).set({ photoUrl: null, updatedAt: new Date() }).where(eq(customers.id, c.id));
               // Tentar gravar em customers.photoUrl (varchar(500) — so cabe se a dataUrl for pequena)
               if (dataUrl.length <= 500) {
                 await db.update(customers).set({ photoUrl: dataUrl, updatedAt: new Date() }).where(eq(customers.id, c.id));
