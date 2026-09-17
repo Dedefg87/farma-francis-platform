@@ -1712,7 +1712,6 @@ async function processEvolutionWebhook(body: unknown) {
 
     // Evento de contatos
     if (normalizedEvent.includes("contact") || normalizedEvent === "contacts_update") {
-      // A Evolution envia data como ARRAY de contatos (contacts.update) ou objeto unico
       const contactsList = Array.isArray(body?.data) ? body.data : [body?.data || body];
       for (const contact of contactsList) {
         const remoteJid = contact?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
@@ -1721,16 +1720,32 @@ async function processEvolutionWebhook(body: unknown) {
         if (!fromNumber) continue;
         const pushName = contact?.profileName || contact?.name || contact?.pushName || body?.data?.profileName || body?.profileName || null;
         const c = await findOrCreateCustomerByPhone(fromNumber, pushName);
-        // Se a Evolution avisou que o contato tem foto (profilePicUrl do CDN, expira),
-        // baixar e persistir imediatamente (R2 ou data URL) — sem esperar o lazy load.
         const picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
+        // Fetch direto com UA do WhatsApp + fallback data URL (sem R2, sem proxy)
         if (picUrl && c?.id) {
           setImmediate(async () => {
             try {
-              const { persistProfilePicFromUrl } = await import('./services/profile-pic.js');
-              await persistProfilePicFromUrl(fromNumber, c.id, picUrl);
+              console.log('[Webhook] Baixando foto de perfil de', fromNumber);
+              const resp = await fetch(picUrl, {
+                headers: { 'User-Agent': 'WhatsApp/2.23.20.0', 'Accept': 'image/*' },
+                signal: AbortSignal.timeout(15000),
+              });
+              if (!resp.ok) { console.log('[Webhook] Fetch foto falhou status', resp.status, 'para', fromNumber); return; }
+              const ct = resp.headers.get('content-type') || 'image/jpeg';
+              const buf = Buffer.from(await resp.arrayBuffer());
+              if (buf.length < 100) { console.log('[Webhook] Foto muito pequena para', fromNumber); return; }
+              const dataUrl = 'data:' + ct + ';base64,' + buf.toString('base64');
+              const db = await getDb();
+              if (!db) return;
+              // Gravar em receivedMessages.fromProfilePic (longtext) — o COALESCE do Inbox ja usa
+              await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, c.id));
+              // Tentar gravar em customers.photoUrl (varchar(500) — so cabe se a dataUrl for pequena)
+              if (dataUrl.length <= 500) {
+                await db.update(customers).set({ photoUrl: dataUrl, updatedAt: new Date() }).where(eq(customers.id, c.id));
+              }
+              console.log('[Webhook] Foto salva como data URL para customer', c.id, '(' + buf.length + ' bytes)');
             } catch (err) {
-              console.error('[Contacts Update] Failed to persist profile pic for ' + fromNumber + ':', err);
+              console.error('[Webhook] Erro ao salvar foto de', fromNumber + ':', err.message);
             }
           });
         }
