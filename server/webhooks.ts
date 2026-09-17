@@ -1712,14 +1712,29 @@ async function processEvolutionWebhook(body: unknown) {
 
     // Evento de contatos
     if (normalizedEvent.includes("contact") || normalizedEvent === "contacts_update") {
-      let remoteJid = body?.data?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
-      if (!remoteJid && Array.isArray(body)) remoteJid = body[0]?.remoteJid;
-      
-      const fromNumber = normalizeInboundNumber(remoteJid);
-      if (!fromNumber) return;
-
-      const pushName = body?.data?.profileName || body?.profileName || body?.data?.name || body?.name || null;
-      await findOrCreateCustomerByPhone(fromNumber, pushName);
+      // A Evolution envia data como ARRAY de contatos (contacts.update) ou objeto unico
+      const contactsList = Array.isArray(body?.data) ? body.data : [body?.data || body];
+      for (const contact of contactsList) {
+        const remoteJid = contact?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
+        if (!remoteJid) continue;
+        const fromNumber = normalizeInboundNumber(remoteJid);
+        if (!fromNumber) continue;
+        const pushName = contact?.profileName || contact?.name || contact?.pushName || body?.data?.profileName || body?.profileName || null;
+        const c = await findOrCreateCustomerByPhone(fromNumber, pushName);
+        // Se a Evolution avisou que o contato tem foto (profilePicUrl do CDN, expira),
+        // baixar e persistir imediatamente (R2 ou data URL) — sem esperar o lazy load.
+        const picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
+        if (picUrl && c?.id) {
+          setImmediate(async () => {
+            try {
+              const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
+              await downloadAndUploadProfilePic(fromNumber, c.id);
+            } catch (err) {
+              console.error('[Contacts Update] Failed to persist profile pic for ' + fromNumber + ':', err);
+            }
+          });
+        }
+      }
       return;
     }
 
