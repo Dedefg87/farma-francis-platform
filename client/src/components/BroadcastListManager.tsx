@@ -512,7 +512,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
             </div>
           )}
           {sendProgress && (
-            {sendProgress.paused ? "Aguardando pausa de " + sendProgress.pauseMin + " min antes da proxima lista..." : "Enviando " + sendProgress.current + "/" + sendProgress.total + "..."}
+            <p className="text-xs text-muted-foreground">{sendProgress.paused ? "Aguardando pausa de " + sendProgress.pauseMin + " min antes da proxima lista..." : "Enviando " + sendProgress.current + "/" + sendProgress.total + "..."}</p>
           )}
           <Button onClick={handleSendToSelected} disabled={sendProgress !== null || selectedListIds.length === 0 || (!messageContent.trim() && !fileAttachment)} className="w-full">
             <Send className="w-4 h-4 mr-2" />
