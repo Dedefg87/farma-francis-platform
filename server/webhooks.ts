@@ -1703,7 +1703,8 @@ async function resolveLidToRealNumber(
   cfg: { apiUrl?: string; apiKey?: string; instanceName?: string } | null | undefined
 ): Promise<string> {
   if (!remoteJid.endsWith('@lid')) return remoteJid;
-  const base = (cfg?.apiUrl || '').replace(//$/, '');
+  let base = (cfg?.apiUrl || '');
+  if (base.endsWith('/')) base = base.slice(0, -1);
   const key = cfg?.apiKey || '';
   const inst = cfg?.instanceName || 'Meu';
   if (!base || !key) {
