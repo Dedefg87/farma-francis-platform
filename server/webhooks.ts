@@ -1693,6 +1693,53 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
   };
 }
 
+/**
+ * Resolve um remoteJid @lid (Linked Device ID) para o numero real do cliente.
+ * O WhatsApp moderno entrega @lid em varios webhooks; o numero real so e obtido
+ * consultando a Evolution API (findContacts). Se nao for @lid ou falhar, retorna o original.
+ */
+async function resolveLidToRealNumber(
+  remoteJid: string,
+  cfg: { apiUrl?: string; apiKey?: string; instanceName?: string } | null | undefined
+): Promise<string> {
+  if (!remoteJid.endsWith('@lid')) return remoteJid;
+  const base = (cfg?.apiUrl || '').replace(//$/, '');
+  const key = cfg?.apiKey || '';
+  const inst = cfg?.instanceName || 'Meu';
+  if (!base || !key) {
+    console.log('[LID] Sem config da Evolution para resolver', remoteJid);
+    return remoteJid;
+  }
+  try {
+    const res = await fetch(
+      base + '/chat/findContacts/' + inst,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: key },
+        body: JSON.stringify({ where: { id: remoteJid } }),
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    if (!res.ok) {
+      console.log('[LID] findContacts falhou status', res.status, 'para', remoteJid);
+      return remoteJid;
+    }
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data?.contacts || []);
+    for (const c of list) {
+      const jid = c?.jid || c?.id || '';
+      if (jid.indexOf('@s.whatsapp.net') >= 0 && jid.indexOf('@lid') < 0) {
+        console.log('[LID] Resolvido', remoteJid, '->', jid);
+        return jid;
+      }
+    }
+    return remoteJid;
+  } catch (e) {
+    console.log('[LID] Falha ao resolver', remoteJid, ':', (e as Error).message);
+    return remoteJid;
+  }
+}
+
 async function processEvolutionWebhook(body: unknown) {
   try {
     console.log("4. [Evolution] 🚀 Iniciando processEvolutionWebhook");
@@ -1716,7 +1763,10 @@ async function processEvolutionWebhook(body: unknown) {
       for (const contact of contactsList) {
         const remoteJid = contact?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
         if (!remoteJid) continue;
-        const fromNumber = normalizeInboundNumber(remoteJid);
+        // Resolver LID (@lid) para o numero real do cliente via Evolution API (findContacts)
+        const cfg = await getEvolutionConfig();
+        const realJid = await resolveLidToRealNumber(remoteJid, cfg);
+        const fromNumber = normalizeInboundNumber(realJid);
         if (!fromNumber) continue;
         const pushName = contact?.profileName || contact?.name || contact?.pushName || body?.data?.profileName || body?.profileName || null;
         const c = await findOrCreateCustomerByPhone(fromNumber, pushName);
