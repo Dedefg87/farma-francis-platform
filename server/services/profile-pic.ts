@@ -320,7 +320,26 @@ async function _downloadAndUploadProfilePic(
 
     // 3. Upload para R2
     const r2Url = await uploadProfilePicToR2(buffer, customerId, mimetype);
-    if (!r2Url) return null;
+    if (!r2Url) {
+  // R2 falhou: fallback para data URL inline (nao depende de credenciais R2).
+  // customers.photoUrl e varchar(500) — pequeno demais para base64, entao
+  // gravamos apenas em receivedMessages.fromProfilePic (longtext), que o
+  // COALESCE do Inbox ja usa para exibir o avatar.
+  const dataUrl = `data:${mimetype || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+  const dbF = await getDb();
+  if (dbF) {
+    await dbF
+      .update(receivedMessages)
+      .set({ fromProfilePic: dataUrl })
+      .where(eq(receivedMessages.customerId, customerId));
+  }
+  console.log(
+    '[ProfilePic] R2 falhou — fallback data URL inline para customer',
+    customerId,
+    '(' + buffer.length + ' bytes)'
+  );
+  return dataUrl;
+}
 
     // 4. Persistir no DB
     const db = await getDb();
