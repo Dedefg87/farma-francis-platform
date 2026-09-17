@@ -1727,8 +1727,8 @@ async function processEvolutionWebhook(body: unknown) {
         if (picUrl && c?.id) {
           setImmediate(async () => {
             try {
-              const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
-              await downloadAndUploadProfilePic(fromNumber, c.id);
+              const { persistProfilePicFromUrl } = await import('./services/profile-pic.js');
+              await persistProfilePicFromUrl(fromNumber, c.id, picUrl);
             } catch (err) {
               console.error('[Contacts Update] Failed to persist profile pic for ' + fromNumber + ':', err);
             }
