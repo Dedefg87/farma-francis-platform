@@ -104,7 +104,7 @@ async function fetchProfileFromEvolution(phone: string): Promise<{
  * Solution: Use Evolution's /chat/getBase64FromMediaMessage endpoint which
  * has access to the authenticated session and can fetch CDN resources.
  */
-async function downloadViaEvolutionProxy(url: string): Promise<Buffer | null> {
+export async function downloadViaEvolutionProxy(url: string): Promise<Buffer | null> {
   const config = await getEvolutionConfig();
   if (!config) {
     console.error('[ProfilePic] ❌ No Evolution config available');
@@ -366,6 +366,43 @@ async function _downloadAndUploadProfilePic(
     return r2Url;
   } catch (err) {
     console.error('[ProfilePic] Error for customer', customerId, ':', err);
+    return null;
+  }
+}
+
+/**
+ * Persiste a foto do perfil usando a profilePicUrl que o evento contacts.update
+ * ja entrega (URL fresca do CDN do WhatsApp). Baixa via proxy da Evolution e
+ * grava em R2 (primario) ou data URL inline (fallback, sem depender de credenciais).
+ */
+export async function persistProfilePicFromUrl(
+  phone: string,
+  customerId: number,
+  knownUrl: string
+): Promise<string | null> {
+  try {
+    const buffer = await downloadViaEvolutionProxy(knownUrl);
+    if (!buffer || buffer.length < 100) {
+      console.log('[ProfilePic] Could not download bytes from knownUrl for', phone);
+      return null;
+    }
+    const mimetype = 'image/jpeg';
+    const r2Url = await uploadProfilePicToR2(buffer, customerId, mimetype);
+    const db = await getDb();
+    if (db) {
+      if (r2Url) {
+        await db.update(customers).set({ photoUrl: r2Url, updatedAt: new Date() }).where(eq(customers.id, customerId));
+        await db.update(receivedMessages).set({ fromProfilePic: r2Url }).where(eq(receivedMessages.customerId, customerId));
+        return r2Url;
+      }
+      const dataUrl = `data:${mimetype};base64,${buffer.toString('base64')}`;
+      await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, customerId));
+      console.log('[ProfilePic] persistProfilePicFromUrl fallback data URL para customer', customerId, '(' + buffer.length + ' bytes)');
+      return dataUrl;
+    }
+    return r2Url;
+  } catch (err) {
+    console.error('[ProfilePic] persistProfilePicFromUrl error for', phone, ':', err);
     return null;
   }
 }
