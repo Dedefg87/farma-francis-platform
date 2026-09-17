@@ -67,7 +67,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   const [contactQuery, setContactQuery] = useState("");
   const [contactTarget, setContactTarget] = useState<{ customerId: number; name: string; phone: string } | null>(null);
   const [lookupListId, setLookupListId] = useState<number | null>(null);
-  const [sendProgress, setSendProgress] = useState<{ current: number; total: number } | null>(null);
+  const [sendProgress, setSendProgress] = useState<{ current: number; total: number; paused?: boolean; pauseMin?: number } | null>(null);
 
   // Queries
   const { data, refetch: refetchLists } = trpc.broadcast.list.useQuery({ page: 1, limit: 20 });
@@ -313,6 +313,14 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
         done += 1;
         setSendProgress({ current: done, total: targets.length });
         await sendMessage.mutateAsync(buildSendVars(listId));
+        // [FIX] Regra 6: pausa aleatoria de 1-2h entre listas (comportamento humano) - a aba precisa ficar aberta
+        if (done < targets.length) {
+          const pauseMs = 60 * 60 * 1000 + Math.floor(Math.random() * 60 * 60 * 1000); // 1h a 2h
+          const pauseMin = Math.round(pauseMs / 60000);
+          setSendProgress({ current: done, total: targets.length, paused: true, pauseMin });
+          await new Promise(resolve => setTimeout(resolve, pauseMs));
+          setSendProgress({ current: done, total: targets.length });
+        }
       }
       toast.success("Envio concluido para " + targets.length + " lista(s)!");
       setMessageContent("");
@@ -504,7 +512,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
             </div>
           )}
           {sendProgress && (
-            <p className="text-xs text-muted-foreground">Enviando {sendProgress.current}/{sendProgress.total}...</p>
+            {sendProgress.paused ? "Aguardando pausa de " + sendProgress.pauseMin + " min antes da proxima lista..." : "Enviando " + sendProgress.current + "/" + sendProgress.total + "..."}
           )}
           <Button onClick={handleSendToSelected} disabled={sendProgress !== null || selectedListIds.length === 0 || (!messageContent.trim() && !fileAttachment)} className="w-full">
             <Send className="w-4 h-4 mr-2" />
