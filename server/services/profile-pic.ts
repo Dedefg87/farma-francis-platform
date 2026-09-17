@@ -381,7 +381,7 @@ export async function persistProfilePicFromUrl(
   knownUrl: string
 ): Promise<string | null> {
   try {
-    const buffer = await downloadViaEvolutionProxy(knownUrl);
+    const buffer = await fetchProfilePicBytes(knownUrl);
     if (!buffer || buffer.length < 100) {
       console.log('[ProfilePic] Could not download bytes from knownUrl for', phone);
       return null;
@@ -405,4 +405,35 @@ export async function persistProfilePicFromUrl(
     console.error('[ProfilePic] persistProfilePicFromUrl error for', phone, ':', err);
     return null;
   }
+}
+
+/**
+ * Baixa os bytes de uma foto de perfil do WhatsApp.
+ * Foto de perfil (pps.whatsapp.net) e publica para qualquer cliente com UA do WhatsApp.
+ * 1) Tenta fetch direto com User-Agent do WhatsApp (mais confiavel).
+ * 2) Fallback: proxy autenticado da Evolution.
+ */
+async function fetchProfilePicBytes(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'WhatsApp/2.23.20.0',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 100) {
+        console.log('[ProfilePic] fetchProfilePicBytes direto OK:', buf.length, 'bytes');
+        return buf;
+      }
+    } else {
+      console.log('[ProfilePic] fetch direto falhou status', res.status, '— tentando proxy Evolution');
+    }
+  } catch (err) {
+    console.log('[ProfilePic] fetch direto erro — tentando proxy Evolution:', (err as Error).message);
+  }
+  // Fallback: proxy autenticado da Evolution
+  return downloadViaEvolutionProxy(url);
 }
