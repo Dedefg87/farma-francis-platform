@@ -1765,7 +1765,6 @@ async function processEvolutionWebhook(body: unknown) {
         const remoteJid = contact?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
         if (!remoteJid) continue;
         // Resolver LID (@lid) para o numero real do cliente via Evolution API (findContacts)
-        const cfg = await getEvolutionConfig();
       // [fix28] Auto-heal (1x por boot): limpa photoUrl quebrada para o avatar vir do fromProfilePic (data URL)
       if (!(globalThis as any).__ffProfileHealed) {
         (globalThis as any).__ffProfileHealed = true;
@@ -1773,7 +1772,7 @@ async function processEvolutionWebhook(body: unknown) {
           const dh = await getDb();
           if (dh) {
             await dh.update(customers).set({ photoUrl: null }).where(
-              sql`${customers.photoUrl} IS NOT NULL AND ${customers.photoUrl} NOT LIKE 'data:%'
+              sql`${customers.photoUrl} IS NOT NULL AND ${customers.photoUrl} NOT LIKE 'data:%'`
             );
             console.log('[ProfilePic] Auto-heal OK: photoUrls nao-data limpas (avatar passa a usar fromProfilePic)');
           }
