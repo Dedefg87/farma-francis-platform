@@ -1819,14 +1819,22 @@ async function processEvolutionWebhook(body: unknown) {
       const cfg = await getEvolutionConfig();
         const realJid = await resolveLidToRealNumber(remoteJid, cfg);
         const fromNumber = normalizeInboundNumber(realJid);
-        if (!fromNumber) continue;
+        console.log('[ProfilePic] contact handler: remoteJid=' + remoteJid + ' realJid=' + realJid + ' fromNumber=' + (fromNumber||'NULL'));
         const pushName = contact?.profileName || contact?.name || contact?.pushName || body?.data?.profileName || body?.profileName || null;
-        // [fix32] Se o LID nao resolveu (fromNumber ainda contem 'lid'), o cliente real
-        // esta na conversa pelo numero real. Busca o cliente existente antes de criar um novo.
-        let c = await findOrCreateCustomerByPhone(fromNumber, pushName);
-        if (String(realJid).indexOf('@lid') >= 0 || String(fromNumber).indexOf('lid') >= 0) {
-          console.log('[ProfilePic] LID nao resolveu para ' + remoteJid + ' — foto sera salva no cliente ' + (c ? c.id : '?'));
+        // [fix36] NUNCA pular silenciosamente: se o LID nao resolveu, ainda assim
+        // tenta achar/criar o cliente pelo numero disponivel e salvar a foto.
+        let c = null;
+        if (fromNumber) {
+          c = await findOrCreateCustomerByPhone(fromNumber, pushName);
+        } else {
+          // LID nao resolveu: tenta pelo numero bruto do LID (fallback) e loga
+          const lidDigits = String(remoteJid).replace(/\D/g, '');
+          console.log('[ProfilePic] LID nao resolveu para ' + remoteJid + ' — tentando fallback por ' + (lidDigits||'sem-numero'));
+          if (lidDigits) {
+            try { c = await findOrCreateCustomerByPhone(lidDigits, pushName); } catch(e) { console.log('[ProfilePic] fallback findOrCreate falhou: ' + (e as Error).message); }
+          }
         }
+        if (!c) { console.log('[ProfilePic] SEM cliente para ' + remoteJid + ' — foto nao salva'); }
         let picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
         // Padrao oficial Evolution: busca a URL da foto via fetchProfilePictureUrl
         if (!picUrl) {
