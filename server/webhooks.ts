@@ -1835,7 +1835,18 @@ async function processEvolutionWebhook(body: unknown) {
           }
         }
         if (!c) { console.log('[ProfilePic] SEM cliente para ' + remoteJid + ' — foto nao salva'); }
-        let picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
+                let picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
+        // [fix37] Foto de perfil do WhatsApp (pps.whatsapp.net) e acessivel direto pelo navegador.
+        // Nao precisa baixar: salvar a URL direto em fromProfilePic e o frontend renderiza como <img>.
+        // (O caminho de download/proxy via getBase64FromMediaMessage falha sempre com 400 para fotos de perfil.)
+        if (picUrl && c?.id) {
+          try {
+            await db.update(customers).set({ fromProfilePic: picUrl }).where(eq(customers.id, c.id));
+            console.log('[ProfilePic] fix37: URL da foto salva direto em fromProfilePic para customer', c.id);
+          } catch (e) {
+            console.log('[ProfilePic] fix37: falha ao salvar URL direto para', c.id + ':', (e as Error).message);
+          }
+        }
         // Padrao oficial Evolution: busca a URL da foto via fetchProfilePictureUrl
         if (!picUrl) {
           picUrl = await fetchProfilePictureUrlFromEvolution(remoteJid, cfg);
