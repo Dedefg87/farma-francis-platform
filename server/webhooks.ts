@@ -1821,7 +1821,12 @@ async function processEvolutionWebhook(body: unknown) {
         const fromNumber = normalizeInboundNumber(realJid);
         if (!fromNumber) continue;
         const pushName = contact?.profileName || contact?.name || contact?.pushName || body?.data?.profileName || body?.profileName || null;
-        const c = await findOrCreateCustomerByPhone(fromNumber, pushName);
+        // [fix32] Se o LID nao resolveu (fromNumber ainda contem 'lid'), o cliente real
+        // esta na conversa pelo numero real. Busca o cliente existente antes de criar um novo.
+        let c = await findOrCreateCustomerByPhone(fromNumber, pushName);
+        if (String(realJid).indexOf('@lid') >= 0 || String(fromNumber).indexOf('lid') >= 0) {
+          console.log('[ProfilePic] LID nao resolveu para ' + remoteJid + ' — foto sera salva no cliente ' + (c ? c.id : '?'));
+        }
         let picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
         // Padrao oficial Evolution: busca a URL da foto via fetchProfilePictureUrl
         if (!picUrl) {
