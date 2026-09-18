@@ -47,7 +47,7 @@ async function fetchProfileFromEvolution(phone: string): Promise<{
   try {
     // Endpoint principal: /chat/fetchProfile/{instance}
     const res = await fetch(
-      `${config.apiUrl}/chat/fetchProfile/${config.instanceName}`,
+      `${config.apiUrl}/chat/fetchProfilePictureUrl/${config.instanceName}`,
       {
         method: 'POST',
         headers: {
@@ -69,7 +69,7 @@ async function fetchProfileFromEvolution(phone: string): Promise<{
 
     // Evolution pode retornar em vários formatos
     const picture =
-      data.profilePicture || data.picture || data.profilePictureUrl || null;
+      data.profilePictureUrl || data.url || data.profilePicture || data.picture || null;
 
     if (!picture) return null;
 
