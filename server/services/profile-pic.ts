@@ -216,6 +216,39 @@ async function uploadProfilePicToR2(
  * Returns the permanent R2 URL, or null if no picture available.
  * Uses in-memory lock to prevent concurrent downloads for same phone.
  */
+/**
+ * [fix38] Baixa a foto de perfil via endpoint oficial de avatar da Evolution:
+ * POST /chat/fetchProfilePicFromServer/{instance} com { number: remoteJid }.
+ * Usa a sessao autenticada (Baileys getProfilePicFromServer) e retorna Buffer.
+ * Este e o caminho correto para FOTO DE PERFIL (getBase64FromMediaMessage e para midia de mensagem).
+ */
+export async function fetchProfilePicViaEvolution(remoteJid: string): Promise<Buffer | null> {
+  const config = await getEvolutionConfig();
+  if (!config) { console.error('[ProfilePic] fix38: sem config Evolution'); return null; }
+  let base = (config.apiUrl || ''); if (base.endsWith('/')) base = base.slice(0, -1);
+  const url = base + '/chat/fetchProfilePicFromServer/' + config.instanceName;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
+      body: JSON.stringify({ number: remoteJid }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) { console.log('[ProfilePic] fix38: fetchProfilePicFromServer status ' + res.status + ' para ' + remoteJid); return null; }
+    const data = await res.json();
+    const b64 = data?.base64 || data?.profilePictureUrl || null;
+    if (!b64) { console.log('[ProfilePic] fix38: resposta sem base64 para ' + remoteJid); return null; }
+    const clean = String(b64).replace(/^data:[^;]+;base64,/, '');
+    const buf = Buffer.from(clean, 'base64');
+    if (buf.length < 100) { console.log('[ProfilePic] fix38: base64 invalido para ' + remoteJid); return null; }
+    console.log('[ProfilePic] fix38: foto obtida via fetchProfilePicFromServer para ' + remoteJid + ' (' + buf.length + ' bytes)');
+    return buf;
+  } catch (e) {
+    console.log('[ProfilePic] fix38: erro fetchProfilePicFromServer ' + remoteJid + ': ' + (e as Error).message);
+    return null;
+  }
+}
+
 export async function downloadAndUploadProfilePic(
   phone: string,
   customerId: number
