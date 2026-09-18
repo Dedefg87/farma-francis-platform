@@ -1741,6 +1741,44 @@ async function resolveLidToRealNumber(
   }
 }
 
+/**
+ * Padrao oficial da Evolution para foto de perfil:
+ * POST /chat/fetchProfilePictureUrl/{instance} com { number: remoteJid }
+ * retorna { profilePictureUrl }. Aceita @lid direto (Evolution 2.4+ mapeia LID).
+ */
+async function fetchProfilePictureUrlFromEvolution(
+  remoteJid: string,
+  cfg: { apiUrl?: string; apiKey?: string; instanceName?: string } | null | undefined
+): Promise<string | null> {
+  let base = (cfg?.apiUrl || '');
+  if (base.endsWith('/')) base = base.slice(0, -1);
+  const key = cfg?.apiKey || '';
+  const inst = cfg?.instanceName || 'Meu';
+  if (!base || !key) return null;
+  try {
+    const res = await fetch(
+      base + '/chat/fetchProfilePictureUrl/' + inst,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: key },
+        body: JSON.stringify({ number: remoteJid }),
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    if (!res.ok) {
+      console.log('[ProfilePic] fetchProfilePictureUrl status ' + res.status + ' para ' + remoteJid);
+      return null;
+    }
+    const data = await res.json();
+    const url = (data && (data.profilePictureUrl || data.url)) || null;
+    if (url) console.log('[ProfilePic] URL obtida via fetchProfilePictureUrl para ' + remoteJid);
+    return url;
+  } catch (e) {
+    console.log('[ProfilePic] fetchProfilePictureUrl falhou ' + remoteJid + ': ' + ((e as Error).message || ''));
+    return null;
+  }
+}
+
 async function processEvolutionWebhook(body: unknown) {
   try {
     console.log("4. [Evolution] 🚀 Iniciando processEvolutionWebhook");
@@ -1784,7 +1822,11 @@ async function processEvolutionWebhook(body: unknown) {
         if (!fromNumber) continue;
         const pushName = contact?.profileName || contact?.name || contact?.pushName || body?.data?.profileName || body?.profileName || null;
         const c = await findOrCreateCustomerByPhone(fromNumber, pushName);
-        const picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
+        let picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
+        // Padrao oficial Evolution: busca a URL da foto via fetchProfilePictureUrl
+        if (!picUrl) {
+          picUrl = await fetchProfilePictureUrlFromEvolution(remoteJid, cfg);
+        }
         // Fetch direto com UA do WhatsApp + fallback data URL (sem R2, sem proxy)
         if (picUrl && c?.id) {
           setImmediate(async () => {
