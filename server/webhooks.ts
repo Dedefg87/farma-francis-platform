@@ -1836,16 +1836,28 @@ async function processEvolutionWebhook(body: unknown) {
         }
         if (!c) { console.log('[ProfilePic] SEM cliente para ' + remoteJid + ' — foto nao salva'); }
                 let picUrl = contact?.profilePicUrl || contact?.profilePicture || contact?.picture || null;
-        // [fix37] Foto de perfil do WhatsApp (pps.whatsapp.net) e acessivel direto pelo navegador.
-        // Nao precisa baixar: salvar a URL direto em fromProfilePic e o frontend renderiza como <img>.
-        // (O caminho de download/proxy via getBase64FromMediaMessage falha sempre com 400 para fotos de perfil.)
+        // [fix39] Pipeline R2 (como imagens/documentos): baixa via fetchProfilePicFromServer,
+        // sobe ao R2 e salva a URL publica em customers.photoUrl (coluna que o frontend usa).
         if (picUrl && c?.id) {
-          try {
-            await db.update(customers).set({ fromProfilePic: picUrl }).where(eq(customers.id, c.id));
-            console.log('[ProfilePic] fix37: URL da foto salva direto em fromProfilePic para customer', c.id);
-          } catch (e) {
-            console.log('[ProfilePic] fix37: falha ao salvar URL direto para', c.id + ':', (e as Error).message);
-          }
+          setImmediate(async () => {
+            try {
+              const { fetchProfilePicViaEvolution, uploadProfilePicToR2 } = await import('./services/profile-pic.js');
+              const buf = await fetchProfilePicViaEvolution(remoteJid);
+              if (buf) {
+                const r2Url = await uploadProfilePicToR2(buf, c.id, 'image/jpeg');
+                if (r2Url) {
+                  await db.update(customers).set({ photoUrl: r2Url }).where(eq(customers.id, c.id));
+                  console.log('[ProfilePic] fix39: URL R2 salva em customers.photoUrl para customer', c.id);
+                } else {
+                  console.log('[ProfilePic] fix39: upload R2 falhou para customer', c.id);
+                }
+              } else {
+                console.log('[ProfilePic] fix39: sem bytes para customer', c.id);
+              }
+            } catch (e) {
+              console.log('[ProfilePic] fix39: erro pipeline R2 para', c.id + ':', (e as Error).message);
+            }
+          });
         }
         // Padrao oficial Evolution: busca a URL da foto via fetchProfilePictureUrl
         if (!picUrl) {
