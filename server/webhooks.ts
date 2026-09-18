@@ -1836,15 +1836,38 @@ async function processEvolutionWebhook(body: unknown) {
         if (picUrl && c?.id) {
           setImmediate(async () => {
             try {
-              console.log('[Webhook] Baixando foto de perfil de', fromNumber);
-              const resp = await fetch(picUrl, {
-                headers: { 'User-Agent': 'WhatsApp/2.23.20.0', 'Accept': 'image/*' },
-                signal: AbortSignal.timeout(15000),
-              });
-              if (!resp.ok) { console.log('[Webhook] Fetch foto falhou status', resp.status, 'para', fromNumber); return; }
-              const ct = resp.headers.get('content-type') || 'image/jpeg';
-              const buf = Buffer.from(await resp.arrayBuffer());
-              if (buf.length < 100) { console.log('[Webhook] Foto muito pequena para', fromNumber); return; }
+              console.log('[Webhook] Baixando foto de perfil de', fromNumber, '| url:', String(picUrl).substring(0,60));
+              let buf: Buffer | null = null;
+              let ct = 'image/jpeg';
+              // 1) Tentativa direta (UA do WhatsApp)
+              try {
+                const resp = await fetch(picUrl, {
+                  headers: { 'User-Agent': 'WhatsApp/2.23.20.0', 'Accept': 'image/*' },
+                  signal: AbortSignal.timeout(15000),
+                });
+                if (resp.ok) {
+                  ct = resp.headers.get('content-type') || ct;
+                  const b = Buffer.from(await resp.arrayBuffer());
+                  if (b.length >= 100) buf = b;
+                  else console.log('[Webhook] Foto direta pequena ('+b.length+' bytes) para', fromNumber);
+                } else {
+                  console.log('[Webhook] Fetch direto falhou status', resp.status, 'para', fromNumber, '— tentando proxy Evolution');
+                }
+              } catch (e) {
+                console.log('[Webhook] Fetch direto erro para', fromNumber + ':', (e as Error).message, '— tentando proxy Evolution');
+              }
+              // 2) Fallback: proxy autenticado da Evolution
+              if (!buf) {
+                try {
+                  const { downloadViaEvolutionProxy } = await import('./services/profile-pic.js');
+                  const pb = await downloadViaEvolutionProxy(picUrl);
+                  if (pb && pb.length >= 100) { buf = pb; console.log('[Webhook] Foto obtida via proxy Evolution para', fromNumber, '('+pb.length+' bytes)'); }
+                  else console.log('[Webhook] Proxy Evolution sem bytes validos para', fromNumber);
+                } catch (e) {
+                  console.log('[Webhook] Proxy Evolution erro para', fromNumber + ':', (e as Error).message);
+                }
+              }
+              if (!buf) { console.log('[Webhook] Sem foto para', fromNumber); return; }
               const dataUrl = 'data:' + ct + ';base64,' + buf.toString('base64');
               const db = await getDb();
               if (!db) return;
