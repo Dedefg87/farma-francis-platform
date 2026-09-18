@@ -414,7 +414,12 @@ export async function persistProfilePicFromUrl(
   knownUrl: string
 ): Promise<string | null> {
   try {
-    const buffer = await fetchProfilePicBytes(knownUrl);
+          // [fix41] Usar o endpoint oficial de avatar (base64 direto) em vez do proxy quebrado
+      let buffer = await fetchProfilePicViaEvolution(phone);
+      if (!buffer && knownUrl) {
+        console.log('[ProfilePic] fix41: fetchProfilePicFromServer falhou, tentando URL direta para', phone);
+        buffer = await fetchProfilePicBytes(knownUrl);
+      }
     if (!buffer || buffer.length < 100) {
       console.log('[ProfilePic] Could not download bytes from knownUrl for', phone);
       return null;
