@@ -1852,7 +1852,11 @@ async function processEvolutionWebhook(body: unknown) {
                   console.log('[ProfilePic] fix39: upload R2 falhou para customer', c.id);
                 }
               } else {
-                console.log('[ProfilePic] fix39: sem bytes para customer', c.id);
+                                console.log('[ProfilePic] fix39: sem bytes para customer', c.id, '— salvando URL direta em photoUrl');
+                if (picUrl) {
+                  try { await db.update(customers).set({ photoUrl: picUrl }).where(eq(customers.id, c.id)); console.log('[ProfilePic] fix41: URL direta salva em customers.photoUrl para', c.id); }
+                  catch (e2) { console.log('[ProfilePic] fix41: falha ao salvar URL direta para', c.id + ':', (e2 as Error).message); }
+                }
               }
             } catch (e) {
               console.log('[ProfilePic] fix39: erro pipeline R2 para', c.id + ':', (e as Error).message);
