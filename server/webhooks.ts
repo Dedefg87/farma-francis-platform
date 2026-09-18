@@ -1912,18 +1912,9 @@ async function processEvolutionWebhook(body: unknown) {
                 console.log('[ProfilePic] fix38: URL R2 salva em fromProfilePic para customer', c.id);
               } else {
                 console.log('[ProfilePic] fix38: upload R2 falhou para ' + fromNumber + ' — salvando data URL');
-                              // [fix38] Pipeline R2 (como imagens/documentos): sobe ao R2 e salva a URL publica permanente
-              const { uploadToR2 } = await import('./services/r2.js');
-              const r2Url = await uploadToR2(buf, 'profile-pics/' + fromNumber + '-' + Date.now() + '.jpg', ct);
-              if (r2Url) {
-                console.log('[ProfilePic] fix38: foto enviada ao R2 para ' + fromNumber + ' -> ' + String(r2Url).substring(0,60));
-                await db.update(customers).set({ fromProfilePic: r2Url, photoUrl: null }).where(eq(customers.id, c.id));
-                console.log('[ProfilePic] fix38: URL R2 salva em fromProfilePic para customer', c.id);
-              } else {
-                console.log('[ProfilePic] fix38: upload R2 falhou para ' + fromNumber + ' — salvando data URL');
-                const dataUrl = 'data:' + ct + ';base64,' + buf.toString('base64');
-                await db.update(customers).set({ fromProfilePic: dataUrl }).where(eq(customers.id, c.id));
-              }
+                              // [fix42] Sem R2: salva a URL da foto direto em customers.photoUrl (coluna correta)
+              await db.update(customers).set({ photoUrl: picUrl }).where(eq(customers.id, c.id));
+              console.log('[ProfilePic] fix42: URL salva direto em customers.photoUrl para customer', c.id);
                 await db.update(customers).set({ fromProfilePic: dataUrl }).where(eq(customers.id, c.id));
               }
               const db = await getDb();
