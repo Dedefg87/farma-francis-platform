@@ -498,7 +498,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
           <div className="relative">
             <Textarea value={messageContent} onChange={(e) => setMessageContent(e.target.value)} placeholder="Escreva a mensagem que sera enviada para as listas selecionadas..." rows={3} className="bg-background pr-10" />
             <label className="absolute right-2 top-2 cursor-pointer text-muted-foreground hover:text-foreground">
-              <input type="file" className="hidden" onChange={handleFileUpload} disabled={sendProgress !== null} />
+              <input type="file" className="hidden" accept="image/*,.jpeg,.jpg,.png,.gif,.pdf,.mp4,.mp3,.doc,.docx,.xlsx" onChange={handleFileUpload} disabled={sendProgress !== null} />
               <Paperclip className="w-5 h-5" />
             </label>
           </div>
