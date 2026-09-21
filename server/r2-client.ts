@@ -3,14 +3,16 @@ import crypto from 'crypto';
 
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: 'https://816a5ff9c45a435c3a40b4fc262c914c.r2.cloudflarestorage.com',
+  endpoint: process.env.R2_ENDPOINT || 'https://816a5ff9c45a435c3a40b4fc262c914c.r2.cloudflarestorage.com',
   credentials: {
-    accessKeyId: 'debc3a713faeb6d442dab499221ba42f',
-    secretAccessKey: 'c82abdafb97bf0d1a39e66644c86cacbe373cb6aa2b852ea5786726070a0513c',
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || 'debc3a713faeb6d442dab499221ba42f',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || 'c82abdafb97bf0d1a39e66644c86cacbe373cb6aa2b852ea5786726070a0513c',
   },
   requestChecksumCalculation: "WHEN_REQUIRED",
   responseChecksumValidation: "WHEN_REQUIRED",
 });
+
+console.log("[R2] Cliente S3 " + (process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY ? "(via ENV)" : "(fallback hardcoded)"));
 
 export interface UploadResult {
   url: string;
