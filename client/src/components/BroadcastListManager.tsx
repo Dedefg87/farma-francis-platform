@@ -312,15 +312,13 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
       for (const listId of targets) {
         done += 1;
         setSendProgress({ current: done, total: targets.length });
-        await sendMessage.mutateAsync(buildSendVars(listId));
-        // [FIX] Regra 6: pausa aleatoria de 1-2h entre listas (comportamento humano) - a aba precisa ficar aberta
-        if (done < targets.length) {
-          const pauseMs = 60 * 60 * 1000 + Math.floor(Math.random() * 60 * 60 * 1000); // 1h a 2h
-          const pauseMin = Math.round(pauseMs / 60000);
-          setSendProgress({ current: done, total: targets.length, paused: true, pauseMin });
-          await new Promise(resolve => setTimeout(resolve, pauseMs));
-          setSendProgress({ current: done, total: targets.length });
+        try {
+          await sendMessage.mutateAsync(buildSendVars(listId));
+        } catch (listErr: any) {
+          console.warn('[Broadcast] Falha na lista', listId, listErr?.message || 'erro');
+          toast.error('Lista ' + listId + ' falhou: ' + (listErr?.message || 'erro desconhecido') + ' — seguindo para a proxima');
         }
+        // [fix50] Envio direto em sequencia: sem pausa entre listas (filtro 24h permanece no servidor)
       }
       toast.success("Envio concluido para " + targets.length + " lista(s)!");
       setMessageContent("");
