@@ -401,7 +401,7 @@ export const broadcastRouter = router({
           inArray(broadcastListMembers.customerId, recentIds)
         ));
 
-      if (members.length === 0) throw new Error("Lista não tem membros");
+      if (members.length === 0) throw new Error("Nenhum cliente ativo nas ultimas 24h nesta lista (ou lista vazia)");
 
       const values = {
         listId: input.listId,
