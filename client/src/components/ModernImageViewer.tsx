@@ -47,6 +47,12 @@ export function ModernImageViewer({
     return () => window.removeEventListener("keydown", handleKey);
   }, [handleKey]);
 
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY < 0) setZoom((z) => Math.min(z + 0.15, 4));
+    else setZoom((z) => Math.max(z - 0.15, 0.5));
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if (zoom > 1) {
       setDragging(true);
@@ -90,6 +96,7 @@ export function ModernImageViewer({
       {/* Main Image */}
       <div
         className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing"
+        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
