@@ -70,7 +70,7 @@ export function BroadcastListManager({ onClose }: BroadcastListManagerProps) {
   const [sendProgress, setSendProgress] = useState<{ current: number; total: number; paused?: boolean; pauseMin?: number } | null>(null);
 
   // Queries
-  const { data, refetch: refetchLists } = trpc.broadcast.list.useQuery({ page: 1, limit: 20 });
+  const { data, refetch: refetchLists } = trpc.broadcast.list.useQuery({ page: 1, limit: 1000 });
   const { data: listDetail, refetch: refetchDetail } =
     trpc.broadcast.getById.useQuery(
       { listId: selectedListId! },
