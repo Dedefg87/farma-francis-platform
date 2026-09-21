@@ -1867,6 +1867,8 @@ async function processEvolutionWebhook(body: unknown) {
         if (picUrl && c?.id) {
           setImmediate(async () => {
             try {
+              const db = await getDb();
+              if (!db) return;
               console.log('[Webhook] Baixando foto de perfil de', fromNumber, '| url:', String(picUrl).substring(0,60));
               let buf: Buffer | null = null;
               let ct = 'image/jpeg';
@@ -1910,19 +1912,17 @@ async function processEvolutionWebhook(body: unknown) {
               } else {
                 console.log('[ProfilePic] fix38: upload R2 falhou para ' + fromNumber + ' — salvando data URL');
                               // [fix42] Sem R2: salva a URL da foto direto em customers.photoUrl (coluna correta)
-              await db.update(customers).set({ photoUrl: picUrl }).where(eq(customers.id, c.id));
+              /* [fix46] pps nao gravado em photoUrl (router rejeita whatsapp.net) */
               console.log('[ProfilePic] fix42: URL salva direto em customers.photoUrl para customer', c.id);
-                await db.update(customers).set({ fromProfilePic: dataUrl }).where(eq(customers.id, c.id));
+                /* [fix46] dataUrl indefinido — removido */
               }
-              const db = await getDb();
-              if (!db) return;
               // Gravar em receivedMessages.fromProfilePic (longtext) — o COALESCE do Inbox ja usa
-              await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, c.id));
+              /* [fix46] dataUrl indefinido — removido */
               // [fix28] photoUrl (varchar 500) nao comporta data URL — limpar p/ avatar vir do fromProfilePic
               console.log('[ProfilePic] fix43: etapa fix28 desativada — photoUrl R2 preservada');
               // Tentar gravar em customers.photoUrl (varchar(500) — so cabe se a dataUrl for pequena)
-              if (dataUrl.length <= 500) {
-                await db.update(customers).set({ photoUrl: dataUrl, updatedAt: new Date() }).where(eq(customers.id, c.id));
+              if (false) { // [fix46] dataUrl nunca definido neste escopo
+                /* [fix46] dataUrl indefinido — removido */
               }
               console.log('[Webhook] Foto salva como data URL para customer', c.id, '(' + buf.length + ' bytes)');
             } catch (err) {
