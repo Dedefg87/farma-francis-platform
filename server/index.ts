@@ -426,7 +426,9 @@ async function startServer() {
       const chunks: Buffer[] = [];
       req.on('data', (chunk: Buffer) => chunks.push(chunk));
       req.on('end', async () => {
+        try {
         const rawBody = Buffer.concat(chunks);
+        console.log('[broadcast/upload] Recebido', rawBody.length, 'bytes | ct:', String(req.headers['content-type']||'').slice(0,50));
         const contentType = req.headers['content-type'] || '';
         
         // Parse multipart form data
@@ -487,9 +489,14 @@ async function startServer() {
           fileType: mimetype,
           fileSize: fileBuffer.length,
         });
+        console.log('[broadcast/upload] OK:', originalName, fileBuffer.length + ' bytes ->', String(result.url).substring(0,70));
+        } catch (endErr: unknown) {
+          console.error('[broadcast/upload] Error no processamento:', (endErr as Error)?.message || String(endErr));
+          try { res.status(500).json({ error: (endErr as Error)?.message || 'Erro interno no upload' }); } catch (_e) {}
+        }
       });
     } catch (err: unknown) {
-      console.error('[broadcast/upload] Error:', err.message);
+      console.error('[broadcast/upload] Error:', (err as Error)?.message || String(err));
       res.status(500).json({ error: err.message });
     }
   });
