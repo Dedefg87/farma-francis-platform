@@ -18,7 +18,7 @@ export const broadcastRouter = router({
   list: protectedProcedure
     .input(z.object({
       page: z.number().int().min(1).optional().default(1),
-      limit: z.number().int().min(1).max(100).optional().default(20),
+      limit: z.number().int().min(1).max(1000).optional().default(20),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
