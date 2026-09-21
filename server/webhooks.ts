@@ -1810,7 +1810,7 @@ async function processEvolutionWebhook(body: unknown) {
           const dh = await getDb();
           if (dh) {
             await dh.update(customers).set({ photoUrl: null }).where(
-              sql`${customers.photoUrl} IS NOT NULL AND ${customers.photoUrl} NOT LIKE 'data:%'`
+              sql`${customers.photoUrl} IS NOT NULL AND trim(${customers.photoUrl}) = ''`
             );
             console.log('[ProfilePic] Auto-heal OK: photoUrls nao-data limpas (avatar passa a usar fromProfilePic)');
           }
@@ -1852,11 +1852,7 @@ async function processEvolutionWebhook(body: unknown) {
                   console.log('[ProfilePic] fix39: upload R2 falhou para customer', c.id);
                 }
               } else {
-                                console.log('[ProfilePic] fix39: sem bytes para customer', c.id, '— salvando URL direta em photoUrl');
-                if (picUrl) {
-                  try { await db.update(customers).set({ photoUrl: picUrl }).where(eq(customers.id, c.id)); console.log('[ProfilePic] fix41: URL direta salva em customers.photoUrl para', c.id); }
-                  catch (e2) { console.log('[ProfilePic] fix41: falha ao salvar URL direta para', c.id + ':', (e2 as Error).message); }
-                }
+                                console.log('[ProfilePic] fix43: sem bytes via Evolution — mantem URL R2 salva pelo fluxo do webhook');
               }
             } catch (e) {
               console.log('[ProfilePic] fix39: erro pipeline R2 para', c.id + ':', (e as Error).message);
@@ -1904,7 +1900,7 @@ async function processEvolutionWebhook(body: unknown) {
               }
               if (!buf) { console.log('[Webhook] Sem foto para', fromNumber); return; }
                             // [fix38] Pipeline R2 (como imagens/documentos): sobe ao R2 e salva a URL publica permanente
-              const { uploadToR2 } = await import('./services/r2.js');
+              const { uploadToR2 } = await import('./r2-client');
               const r2Url = await uploadToR2(buf, 'profile-pics/' + fromNumber + '-' + Date.now() + '.jpg', ct);
               if (r2Url) {
                 console.log('[ProfilePic] fix38: foto enviada ao R2 para ' + fromNumber + ' -> ' + String(r2Url).substring(0,60));
@@ -1922,7 +1918,7 @@ async function processEvolutionWebhook(body: unknown) {
               // Gravar em receivedMessages.fromProfilePic (longtext) — o COALESCE do Inbox ja usa
               await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, c.id));
               // [fix28] photoUrl (varchar 500) nao comporta data URL — limpar p/ avatar vir do fromProfilePic
-              await db.update(customers).set({ photoUrl: null, updatedAt: new Date() }).where(eq(customers.id, c.id));
+              console.log('[ProfilePic] fix43: etapa fix28 desativada — photoUrl R2 preservada');
               // Tentar gravar em customers.photoUrl (varchar(500) — so cabe se a dataUrl for pequena)
               if (dataUrl.length <= 500) {
                 await db.update(customers).set({ photoUrl: dataUrl, updatedAt: new Date() }).where(eq(customers.id, c.id));
