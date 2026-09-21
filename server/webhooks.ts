@@ -223,7 +223,7 @@ function cleanR2Url(url: string | null | undefined): string | null {
  * Get Evolution API configuration
  */
 async function getEvolutionConfig() {
-  const db = await getDb();
+
   if (!db) return null;
 
   const [config] = await db
@@ -380,7 +380,7 @@ router.get("/whatsapp", async (req: Request, res: Response) => {
 
     if (mode === "subscribe") {
       // Get stored verify token from database
-      const db = await getDb();
+
       if (!db) {
         return res.status(500).send("Database not available");
       }
@@ -483,7 +483,7 @@ router.get("/instagram", async (req: Request, res: Response) => {
 
     if (mode === "subscribe") {
       // Get stored verify token from database
-      const db = await getDb();
+
       if (!db) {
         return res.status(500).send("Database not available");
       }
@@ -585,7 +585,7 @@ router.get("/whatsapp", async (req: Request, res: Response) => {
 
     if (mode === "subscribe") {
       // Get stored verify token from database
-      const db = await getDb();
+
       if (!db) {
         return res.status(500).send("Database not available");
       }
@@ -735,7 +735,7 @@ async function processEvolutionWebhookAsync(req: Request) {
     console.log("3. [Evolution Webhook] ✅ Passou no filtro de eventos permitidos");
 
     // A partir daqui, processamos APENAS mensagens.upsert
-    const db = await getDb();
+
     if (!db) {
       console.error("[Evolution Webhook] ❌ Database not available");
       return;
@@ -787,7 +787,7 @@ async function processEvolutionWebhookAsync(req: Request) {
  */
 async function processWhatsAppWebhook(body: unknown) {
   try {
-    const db = await getDb();
+
     if (!db) {
       throw new Error("Database not available");
     }
@@ -1033,7 +1033,7 @@ async function downloadMediaToBuffer(url: string): Promise<Buffer | null> {
 
 async function processInstagramWebhook(body: unknown) {
   try {
-    const db = await getDb();
+
     if (!db) {
       throw new Error("Database not available");
     }
@@ -1782,7 +1782,7 @@ async function fetchProfilePictureUrlFromEvolution(
 async function processEvolutionWebhook(body: unknown) {
   try {
     console.log("4. [Evolution] 🚀 Iniciando processEvolutionWebhook");
-    const db = await getDb();
+
     if (!db) {
       throw new Error("Database not available");
     }
@@ -1841,6 +1841,8 @@ async function processEvolutionWebhook(body: unknown) {
         if (picUrl && c?.id) {
           setImmediate(async () => {
             try {
+
+
               const { fetchProfilePicViaEvolution, uploadProfilePicToR2 } = await import('./services/profile-pic.js');
               const buf = await fetchProfilePicViaEvolution(remoteJid);
               if (buf) {
@@ -1867,6 +1869,8 @@ async function processEvolutionWebhook(body: unknown) {
         if (picUrl && c?.id) {
           setImmediate(async () => {
             try {
+
+
               console.log('[Webhook] Baixando foto de perfil de', fromNumber, '| url:', String(picUrl).substring(0,60));
               let buf: Buffer | null = null;
               let ct = 'image/jpeg';
@@ -1910,12 +1914,12 @@ async function processEvolutionWebhook(body: unknown) {
               } else {
                 console.log('[ProfilePic] fix38: upload R2 falhou para ' + fromNumber + ' — salvando data URL');
                               // [fix42] Sem R2: salva a URL da foto direto em customers.photoUrl (coluna correta)
-              await db.update(customers).set({ photoUrl: picUrl }).where(eq(customers.id, c.id));
+console.log('[ProfilePic] fix45: gravacao de URL pps expirada suprimida');
               console.log('[ProfilePic] fix42: URL salva direto em customers.photoUrl para customer', c.id);
-                await db.update(customers).set({ fromProfilePic: dataUrl }).where(eq(customers.id, c.id));
+
               }
-              const db = await getDb();
-              if (!db) return;
+
+
               // Gravar em receivedMessages.fromProfilePic (longtext) — o COALESCE do Inbox ja usa
               await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, c.id));
               // [fix28] photoUrl (varchar 500) nao comporta data URL — limpar p/ avatar vir do fromProfilePic
@@ -2723,7 +2727,7 @@ async function validateWhatsAppSignature(
   signature: string
 ): Promise<boolean> {
   try {
-    const db = await getDb();
+
     if (!db) return false;
 
     const config = await db
@@ -2795,7 +2799,7 @@ async function validateInstagramSignature(
   signature: string
 ): Promise<boolean> {
   try {
-    const db = await getDb();
+
     if (!db) return false;
 
     const config = await db
