@@ -879,6 +879,21 @@ export async function ingestOutboundConversationMessage(message: {
     return null;
   }
 
+  // [fix48] Idempotência: não duplicar outbound já persistido (MobileSync + webhook disputam o mesmo externalId)
+  if (message.externalId) {
+    try {
+      const existingOut = await db.query.conversationMessages.findFirst({
+        where: (cm, { eq }) => eq(cm.externalId, message.externalId as string),
+      });
+      if (existingOut) {
+        console.log("[ingestOutbound] ✅ Duplicado ignorado (externalId já existe):", message.externalId);
+        return existingOut;
+      }
+    } catch (dupErr) {
+      console.error("[ingestOutbound] check dup falhou (segue):", (dupErr as Error).message);
+    }
+  }
+
   // 1. Find customer by phone number
   const customer = await findOrCreateCustomerByPhone(
     message.toNumber,
