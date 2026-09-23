@@ -111,7 +111,7 @@ export const dashboardStatsRouter = router({
 
       let avgHandlingTime = "00:00:00";
       const avgTimeResult = await db
-        .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))` })
+        .select({ avgMs: sql<number>`COALESCE(AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt})), 0)` })
         .from(conversations)
         .where(
           and(
@@ -217,6 +217,7 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }): Promise<AgentStats[]> => {
+      try {
       const rawPeriod = input?.period || "mes";
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -247,7 +248,7 @@ export const dashboardStatsRouter = router({
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
           daysActive: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
           // TMA baseado apenas em conversas ENCERRADAS no período
-          avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
+          avgHandlingTime: sql<number>`COALESCE(AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt})), 0)`,
           // Mensagens no período VINCULADAS a conversas do período (senderType analisado via CASE)
           messagesSent: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'agent' THEN 1 ELSE 0 END)`,
           messagesReceived: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'customer' THEN 1 ELSE 0 END)`,
@@ -271,9 +272,10 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getAgentStats] Resultado:`, JSON.stringify(agentStats));
 
-      return agentStats.map((stat) => ({
+      const rows = Array.isArray(agentStats) ? agentStats : [];
+      return rows.map((stat) => ({
         agentId: stat.agentId,
-        agentName: stat.agentName,
+        agentName: String(stat.agentName || "").trim() || ("Agente " + String(stat.agentId || "")),
         photo: stat.photo ?? null,
         totalConversations: Number(stat.totalConversations) || 0,
         daysActive: Number(stat.daysActive) || 0,
@@ -282,6 +284,10 @@ export const dashboardStatsRouter = router({
         messagesReceived: Number(stat.messagesReceived) || 0,
         tma: stat.avgHandlingTime ? formatSecondsToHMS(Number(stat.avgHandlingTime) / 1000000) : "00:00:00",
       }));
+      } catch (err: any) {
+        console.error("[getAgentStats] erro:", err?.message || err);
+        return [];
+      }
     }),
 
   getContactsByHour: publicProcedure
