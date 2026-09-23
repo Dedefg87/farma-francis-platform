@@ -646,7 +646,7 @@ export const conversationsRouter = router({
    * Usado pela pagina /agent/messages (AgentMessages.tsx).
    */
   loggedAgents: protectedProcedure
-    .query(async (): Promise<{ id: number; name: string }[]> => {
+    .query(async ({ ctx }): Promise<{ id: number; name: string }[]> => {
       const loggedIn = await getLoggedInAgents();
       if (loggedIn.length === 0) return [];
       const db = await getDb();
@@ -654,7 +654,7 @@ export const conversationsRouter = router({
       const set = new Set<number>(loggedIn);
       const all = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.role, 'user'));
       return all
-        .filter(u => u && u.id != null && set.has(Number(u.id)))
+        .filter(u => u && u.id != null && set.has(Number(u.id)) && Number(u.id) !== ctx.user.id)
         .map(u => ({ id: Number(u.id), name: String(u?.name || '') || ('Agente ' + u.id) }));
     }),
 
@@ -663,11 +663,12 @@ export const conversationsRouter = router({
    */
   transfer: protectedProcedure
     .input(z.object({ conversationId: z.number(), agentId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
       const [exists] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
       if (!exists) throw new Error('Conversa nao encontrada');
+      if (input.agentId === ctx.user.id) throw new Error('Nao e possivel transferir para voce mesmo');
       await db.update(conversations).set({ assignedTo: input.agentId, status: 'assigned' }).where(eq(conversations.id, input.conversationId));
       return { success: true, conversationId: input.conversationId };
     }),
