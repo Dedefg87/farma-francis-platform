@@ -859,15 +859,50 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
         .set({ reaction: input.emoji })
         .where(eq(conversationMessages.externalId, input.messageId));
 
-      // Also send reaction via Evolution API
+      // Envia a reacao via Evolution API chamando sendReaction (a funcao real do modulo messaging)
       try {
-        const { sendWhatsAppReaction } = await import("./messaging");
-        await sendWhatsAppReaction({
-          to: input.messageId,
-          emoji: input.emoji,
-        });
+        // 1) Localiza a mensagem alvo pelo externalId (key.id do WhatsApp)
+        const [targetMsg] = await db
+          .select()
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, input.messageId))
+          .limit(1);
+
+        if (!targetMsg) {
+          console.error('[messages.react] Nenhuma mensagem encontrada para o externalId:', input.messageId);
+        } else {
+          // 2) Resolve o telefone do cliente -> remoteJid (o mesmo padrao do sendEvolutionText)
+          let to = String(targetMsg.remoteJid || '').includes('@') ? String(targetMsg.remoteJid) : '';
+          let remoteJid = targetMsg.remoteJid || '';
+          if (!remoteJid) {
+            const [conv] = await db
+              .select()
+              .from(conversations)
+              .where(eq(conversations.id, targetMsg.conversationId))
+              .limit(1);
+            const phone = String(conv?.customerPhone || '');
+            const digits = phone.replace(/\D/g, '');
+            if (digits) {
+              remoteJid = digits + '@s.whatsapp.net';
+              to = phone || remoteJid;
+            }
+          } else {
+            to = to || remoteJid;
+          }
+          if (remoteJid) {
+            const { sendReaction } = await import('./messaging');
+            await sendReaction({
+              to,
+              messageId: input.messageId,
+              remoteJid,
+              emoji: input.emoji,
+            });
+          } else {
+            console.error('[messages.react] Nao foi possivel resolver remoteJid para o externalId:', input.messageId);
+          }
+        }
       } catch (e) {
-        console.error("[messages.react] Failed to send Evolution reaction:", e);
+        console.error('[messages.react] Failed to send Evolution reaction:', e);
       }
 
       return { success: true };
