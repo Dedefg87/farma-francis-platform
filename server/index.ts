@@ -558,7 +558,12 @@ async function startServer() {
       startBroadcastRecoveryWorker();
     }).catch(err => {
       console.warn('[Server] ⚠️ Failed to start broadcast recovery worker:', err.message);
-    });
+    })
+    import('./workers/storage-cleanup.js').then(({ startStorageCleanupWorker }) => {
+      startStorageCleanupWorker();
+    }).catch(err => {
+      console.warn('[Server] Failed to start storage cleanup worker:', err?.message || err);
+    });;
   });
 
   server.on('error', (error) => {
