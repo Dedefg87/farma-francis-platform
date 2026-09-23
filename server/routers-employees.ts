@@ -258,8 +258,19 @@ export const employeesRouter = router({
 
       if (input.userId === 1) throw new Error('Não é possível excluir o administrador principal');
 
-      await db.delete(dbUsers).where(eq(dbUsers.id, input.userId));
+      // [fix56] Exclusao em transacao: preserva historico dos clientes e apaga registros do atendente
+      await db.transaction(async (tx) => {
+        // Historico preservado: desatribui as conversas do atendente (coluna nullable)
+        await tx.execute(sql`UPDATE conversations SET assigned_to = NULL WHERE assigned_to = ${input.userId}`);
+        // Historico preservado: desvincula as mensagens (nome permanece em sender_name)
+        await tx.execute(sql`UPDATE conversation_messages SET sender_id = NULL WHERE sender_id = ${input.userId}`);
+        // Registros operacionais do atendente sao removidos
+        await tx.execute(sql`DELETE FROM agent_pauses WHERE agent_id = ${input.userId}`);
+        await tx.execute(sql`DELETE FROM agent_status WHERE user_id = ${input.userId}`);
+        // FKs CASCADE (employees, notifications, internal_messages) e SET NULL (survey_responses, baby_shower_withdrawals) cuidam do restante
+        await tx.delete(dbUsers).where(eq(dbUsers.id, input.userId));
+      });
 
-      return { success: true, message: 'Funcionário excluído com sucesso' };
+      return { success: true, message: 'Funcionário e registros vinculados excluídos com sucesso' };
     }),
 });
