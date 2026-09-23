@@ -180,7 +180,7 @@ export const queuesRouter = router({
       if (loggedIn.length === 0) return [];
       const set = new Set<number>(loggedIn);
       const res = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
-      const rows = Array.isArray(res) ? res : ((res as any).rows ?? []);
+      const rows = (Array.isArray(res) && Array.isArray(res[0]) ? res[0] : (Array.isArray(res) ? res : ((res as any).rows ?? []))) as any[];
       return (rows as Array<any>)
         .filter(r => r && r.id != null && set.has(Number(r.id)))
         .map(r => ({ id: Number(r.id), name: String(r?.name || '') || ('Agente ' + r.id) }));
