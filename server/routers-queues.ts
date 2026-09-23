@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import { queues, queueAgents, conversations, users } from "../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql , inArray } from "drizzle-orm";
 import type { Queue, RoutingRule, RoutingCondition, RoutingAction } from "../../shared/types/queues";
 import { ConversationChannel } from "../../shared/types/conversations";
 
@@ -148,13 +148,17 @@ export const queuesRouter = router({
         .from(conversations)
         .where(
           and(
-            eq(conversations.status, 'open'),
-            sql`${conversations.assignedTo} IS NULL`
+            inArray(conversations.status, ['open', 'assigned']),
+            or(
+              sql`${conversations.assignedTo} IS NULL`,
+              sql`${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active')`,
+              sql`${conversations.assignedTo} NOT IN (SELECT id FROM users WHERE role = 'user' AND lastSignedIn >= NOW() - INTERVAL 24 HOUR)`
+            )
           )
         )
         .orderBy(conversations.openedAt)
         .limit(1);
-      if (!next) throw new Error('Nenhuma conversa aguardando na sala de espera');
+      if (!next) throw new Error('Nenhuma conversa disponivel para puxar');
       await db.update(conversations).set({ assignedTo: ctx.user.id, status: 'assigned' }).where(eq(conversations.id, next.id));
       return { success: true, conversationId: next.id };
     }),
@@ -173,7 +177,7 @@ export const queuesRouter = router({
 
   // Listar agentes LOGADOS (mesma fonte da distribuicao: lastSignedIn < 24h, exclui admin)
   listTransferAgents: protectedProcedure
-    .query(async () => {
+    .query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
       const loggedIn = await getLoggedInAgents();
@@ -182,7 +186,7 @@ export const queuesRouter = router({
       const res = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
       const rows = (Array.isArray(res) && Array.isArray(res[0]) ? res[0] : (Array.isArray(res) ? res : ((res as any).rows ?? []))) as any[];
       return (rows as Array<any>)
-        .filter(r => r && r.id != null && set.has(Number(r.id)))
+        .filter(r => r && r.id != null && set.has(Number(r.id)) && Number(r.id) !== ctx.user.id)
         .map(r => ({ id: Number(r.id), name: String(r?.name || '') || ('Agente ' + r.id) }));
     }),
 
