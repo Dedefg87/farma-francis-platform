@@ -1,6 +1,13 @@
 import { getDb } from '../db';
 import { agentPauses, queueAgents, conversations } from '../../drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
+function rowsOf(res: any): any[] {
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray((res as any).rows)) return (res as any).rows;
+  if (Array.isArray((res as any)[0])) return (res as any)[0];
+  return [];
+}
 
 /**
  * Verifica se um agente está disponível (não está em pausa ativa)
@@ -99,13 +106,13 @@ export async function pickLeastLoadedAgent(agentIds: number[]): Promise<number |
   if (!agentIds || agentIds.length === 0) return null;
   const db = await getDb();
   if (!db) return null;
-  const [rows] = await db.execute(sql`
+  const res = await db.execute(sql`
     SELECT c.assigned_to AS agent_id, COUNT(*) AS n
     FROM conversations c
     WHERE c.status IN ('open','assigned') AND c.assigned_to IS NOT NULL
     GROUP BY c.assigned_to
   `);
-  const counts = new Map<number, number>();
+  const rows = rowsOf(res);  const counts = new Map<number, number>();
   for (const row of (rows as Array<any>)) {
     if (row && row.agent_id != null) counts.set(Number(row.agent_id), Number(row.n || 0));
   }
@@ -126,35 +133,35 @@ export async function getLoggedInAgents(): Promise<number[]> {
   // lastSignedIn e atualizado no login (routers-auth) e reflete quem esta logado hoje.
   // Admin (role='admin') nunca entra na distribuicao.
   try {
-    const [rows] = await db.execute(sql`
+    const res = await db.execute(sql`
       SELECT id FROM users
       WHERE role = 'user'
         AND lastSignedIn IS NOT NULL
         AND lastSignedIn >= NOW() - INTERVAL 24 HOUR
       ORDER BY lastSignedIn DESC
     `);
-    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+    const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
     if (ids.length > 0) return ids;
   } catch { /* fallback abaixo */ }
 
   // Fallback 1: agent_status online com atividade recente (se houver registro fresco)
   try {
-    const [rows] = await db.execute(sql`
+    const res = await db.execute(sql`
       SELECT DISTINCT user_id AS id FROM agent_status
       WHERE status = 'online'
         AND last_activity >= NOW() - INTERVAL 15 MINUTE
         AND user_id IN (SELECT id FROM users WHERE role = 'user')
     `);
-    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+    const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
     if (ids.length > 0) return ids;
   } catch { /* fallback final */ }
 
   // Fallback final: qualquer atendente (role 'user'); admin nunca entra
   try {
-    const [rows] = await db.execute(sql`
+    const res = await db.execute(sql`
       SELECT id FROM users WHERE role = 'user' ORDER BY lastSignedIn DESC
     `);
-    return (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+    const rows = rowsOf(res);    return (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
   } catch { return []; }
 }
 
@@ -166,13 +173,13 @@ export async function autoAssignUnassigned(): Promise<number> {
   let available = online;
   try { available = await filterAvailableAgents(online); } catch { /* mantem online */ }
   if (available.length === 0) return 0;
-  const [rows] = await db.execute(sql`
+  const res = await db.execute(sql`
     SELECT id FROM conversations
     WHERE status = 'open' AND assigned_to IS NULL
     ORDER BY opened_at ASC
     LIMIT 50
   `);
-  const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+  const rows = rowsOf(res);  const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
   let assigned = 0;
   for (const id of ids) {
     const picked = await pickLeastLoadedAgent(available);
