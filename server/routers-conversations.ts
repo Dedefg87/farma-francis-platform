@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { and, eq, or, desc, inArray, like, isNull } from "drizzle-orm";
-import { conversations, customers, conversationMessages } from "../drizzle/schema";
+import { conversations, customers, conversationMessages, users } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
@@ -12,7 +12,7 @@ import {
   ConversationChannel,
 } from "@shared/types/conversations";
 import { closeConversation } from "./chatbot";
-import { autoAssignUnassigned } from "./helpers/agent-availability";
+import { autoAssignUnassigned, getLoggedInAgents } from "./helpers/agent-availability";
 
 /**
  * Helper: Converte uma row do Drizzle para o tipo Conversation compartilhado.
@@ -640,6 +640,40 @@ export const conversationsRouter = router({
 
   /**
    * Encerra todas as conversas abertas e atribuídas.
+   */
+  /**
+   * Lista agentes LOGADOS para o modal de transferencia (mesma fonte da distribuicao).
+   * Usado pela pagina /agent/messages (AgentMessages.tsx).
+   */
+  loggedAgents: protectedProcedure
+    .query(async (): Promise<{ id: number; name: string }[]> => {
+      const loggedIn = await getLoggedInAgents();
+      if (loggedIn.length === 0) return [];
+      const db = await getDb();
+      if (!db) return [];
+      const set = new Set<number>(loggedIn);
+      const all = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.role, 'user'));
+      return all
+        .filter(u => u && u.id != null && set.has(Number(u.id)))
+        .map(u => ({ id: Number(u.id), name: String(u?.name || '') || ('Agente ' + u.id) }));
+    }),
+
+  /**
+   * Transfere uma conversa para outro agente (usado pela pagina /agent/messages).
+   */
+  transfer: protectedProcedure
+    .input(z.object({ conversationId: z.number(), agentId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [exists] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+      if (!exists) throw new Error('Conversa nao encontrada');
+      await db.update(conversations).set({ assignedTo: input.agentId, status: 'assigned' }).where(eq(conversations.id, input.conversationId));
+      return { success: true, conversationId: input.conversationId };
+    }),
+
+  /**
+   * Encerra todas as conversas abertas e atribuidas.
    */
   closeAll: protectedProcedure
     .mutation(async (): Promise<{ count: number }> => {
