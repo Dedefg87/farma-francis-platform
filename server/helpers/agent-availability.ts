@@ -144,7 +144,8 @@ export async function getLoggedInAgents(): Promise<number[]> {
       ORDER BY lastSignedIn DESC
     `);
     const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
-    if (ids.length > 0) return ids;
+    const available = await filterAvailableAgents(ids);
+    if (available.length > 0) return available;
   } catch { /* fallback abaixo */ }
 
   // Fallback 1: agent_status online com atividade recente (se houver registro fresco)
@@ -156,7 +157,8 @@ export async function getLoggedInAgents(): Promise<number[]> {
         AND user_id IN (SELECT id FROM users WHERE role = 'user')
     `);
     const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
-    if (ids.length > 0) return ids;
+    const available = await filterAvailableAgents(ids);
+    if (available.length > 0) return available;
   } catch { /* fallback final */ }
 
   // Fallback final: qualquer atendente (role 'user'); admin nunca entra
@@ -164,7 +166,8 @@ export async function getLoggedInAgents(): Promise<number[]> {
     const res = await db.execute(sql`
       SELECT id FROM users WHERE role = 'user' ORDER BY lastSignedIn DESC
     `);
-    const rows = rowsOf(res);    return (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+    const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+    return filterAvailableAgents(ids);
   } catch { return []; }
 }
 
