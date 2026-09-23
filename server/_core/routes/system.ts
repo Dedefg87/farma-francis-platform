@@ -305,6 +305,7 @@ systemRouter.post("/clean-database", requireAdmin, async (req, res) => {
         if (exists) {
           const beforeCount = await countRows(db, tableName);
           try {
+      if (["received_messages","processed_webhook_messages","conversation_messages","messages","broadcast_members_sent","broadcast_messages"].includes(tableName)) continue; // [fix54] retencao: limpeza seletiva automatica
             await db.execute(sql.raw(`TRUNCATE TABLE ${tableName}`));
             results.push({
               table: tableName,
