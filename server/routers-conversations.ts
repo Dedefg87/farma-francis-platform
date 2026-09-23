@@ -12,6 +12,7 @@ import {
   ConversationChannel,
 } from "@shared/types/conversations";
 import { closeConversation } from "./chatbot";
+import { autoAssignUnassigned } from "../helpers/agent-availability";
 
 /**
  * Helper: Converte uma row do Drizzle para o tipo Conversation compartilhado.
@@ -186,7 +187,7 @@ export const conversationsRouter = router({
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
       // Antes: agents só viam suas próprias conversas — mudou porque conversas podem ser reatribuídas
-      const conditions = inArray(conversations.status, ["open", "assigned"]);
+      const conditions = sql`status IN ('open','assigned') AND (assigned_to = ${ctx.user.id} OR assigned_to IS NULL)`;
 
       const rows = await db
         .select({
@@ -226,12 +227,13 @@ export const conversationsRouter = router({
   listActive: protectedProcedure
     .query(async ({ ctx }): Promise<Conversation[]> => {
       console.log('[Conversations] listActive called | ctx.user:', ctx.user?.name, '| role:', ctx.user?.role);
+      await autoAssignUnassigned().catch(() => {});
       
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
-      const conditions = inArray(conversations.status, ["open", "assigned"]);
+      const conditions = sql`status IN ('open','assigned') AND (assigned_to = ${ctx.user.id} OR assigned_to IS NULL)`;
 
       const rows = await db
         .select({
