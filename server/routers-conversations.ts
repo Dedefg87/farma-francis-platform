@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, or, desc, inArray, like } from "drizzle-orm";
+import { and, eq, or, desc, inArray, like, isNull } from "drizzle-orm";
 import { conversations, customers, conversationMessages } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
@@ -187,7 +187,10 @@ export const conversationsRouter = router({
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
       // Antes: agents só viam suas próprias conversas — mudou porque conversas podem ser reatribuídas
-      const conditions = sql`status IN ('open','assigned') AND (assigned_to = ${ctx.user.id} OR assigned_to IS NULL)`;
+      const conditions = and(
+        inArray(conversations.status, ['open', 'assigned']),
+        or(eq(conversations.assignedTo, ctx.user.id), isNull(conversations.assignedTo))
+      );
 
       const rows = await db
         .select({
@@ -233,7 +236,10 @@ export const conversationsRouter = router({
       if (!db) throw new Error("Database not available");
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
-      const conditions = sql`status IN ('open','assigned') AND (assigned_to = ${ctx.user.id} OR assigned_to IS NULL)`;
+      const conditions = and(
+        inArray(conversations.status, ['open', 'assigned']),
+        or(eq(conversations.assignedTo, ctx.user.id), isNull(conversations.assignedTo))
+      );
 
       const rows = await db
         .select({
