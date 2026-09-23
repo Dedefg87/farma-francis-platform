@@ -121,13 +121,39 @@ export async function pickLeastLoadedAgent(agentIds: number[]): Promise<number |
 export async function getLoggedInAgents(): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
+
+  // [fix58] Fonte primaria: atendentes (role 'user') que fizeram login recentemente.
+  // lastSignedIn e atualizado no login (routers-auth) e reflete quem esta logado hoje.
+  // Admin (role='admin') nunca entra na distribuicao.
   try {
-    const [rows] = await db.execute(sql`SELECT DISTINCT user_id AS id FROM agent_status WHERE status = 'online'`);
+    const [rows] = await db.execute(sql`
+      SELECT id FROM users
+      WHERE role = 'user'
+        AND lastSignedIn IS NOT NULL
+        AND lastSignedIn >= NOW() - INTERVAL 24 HOUR
+      ORDER BY lastSignedIn DESC
+    `);
     const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
     if (ids.length > 0) return ids;
-  } catch (err: any) { /* coluna/flag varia entre ambientes: usa fallback abaixo */ }
+  } catch { /* fallback abaixo */ }
+
+  // Fallback 1: agent_status online com atividade recente (se houver registro fresco)
   try {
-    const [rows] = await db.execute(sql`SELECT DISTINCT user_id AS id FROM agent_status`);
+    const [rows] = await db.execute(sql`
+      SELECT DISTINCT user_id AS id FROM agent_status
+      WHERE status = 'online'
+        AND last_activity >= NOW() - INTERVAL 15 MINUTE
+        AND user_id IN (SELECT id FROM users WHERE role = 'user')
+    `);
+    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
+    if (ids.length > 0) return ids;
+  } catch { /* fallback final */ }
+
+  // Fallback final: qualquer atendente (role 'user'); admin nunca entra
+  try {
+    const [rows] = await db.execute(sql`
+      SELECT id FROM users WHERE role = 'user' ORDER BY lastSignedIn DESC
+    `);
     return (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
   } catch { return []; }
 }
