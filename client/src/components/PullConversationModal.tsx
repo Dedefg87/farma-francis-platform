@@ -43,8 +43,8 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
-        ) : queues && queues.length > 0 ? (
-          <div className="space-y-2">
+        ) : (
+          <div className="space-y-3">
             <Button
               variant="outline"
               className="w-full justify-start h-auto py-3"
@@ -54,13 +54,13 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-gray-400" />
                 <div className="text-left">
-                  <div className="font-medium">Incluir sala de espera</div>
-                  <div className="text-sm text-gray-500">Puxar mais antigo</div>
+                  <div className="font-medium">Puxar conversa disponível</div>
+                  <div className="text-sm text-gray-500">Sala de espera ou de atendente ausente</div>
                 </div>
               </div>
             </Button>
 
-            {queues.map((queue) => (
+            {(queues || []).map((queue) => (
               <Button
                 key={queue.id}
                 variant="outline"
@@ -79,10 +79,6 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
                 </span>
               </Button>
             ))}
-          </div>
-        ) : (
-          <div className="text-center text-gray-500 py-8">
-            Nenhuma fila disponível
           </div>
         )}
       </DialogContent>
