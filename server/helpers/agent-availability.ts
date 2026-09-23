@@ -3,9 +3,12 @@ import { agentPauses, queueAgents, conversations } from '../../drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 function rowsOf(res: any): any[] {
   if (!res) return [];
-  if (Array.isArray(res)) return res;
+  if (Array.isArray(res)) {
+    // db.execute do mysql2/drizzle devolve [rows, fields]; o primeiro elemento e o array de linhas.
+    if (Array.isArray(res[0])) return res[0];
+    return res;
+  }
   if (Array.isArray((res as any).rows)) return (res as any).rows;
-  if (Array.isArray((res as any)[0])) return (res as any)[0];
   return [];
 }
 
