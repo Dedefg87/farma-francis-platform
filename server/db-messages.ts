@@ -653,7 +653,31 @@ export async function ingestInboundConversationMessage(message: {
     }
   }
   
-  // [fix69] Reacao NUNCA vira balao: aplica na mensagem original e sai sem inserir,  const _msgType = String((message as any).messageType || (message as any).type || '').toLowerCase();,  const _hasReact = !!((message as any).reactionTargetId && (message as any).reactionEmoji);,  if (_msgType === 'reaction' || _hasReact) {,    const emoji = (message as any).messageText || (message as any).reactionEmoji || (message as any).reaction?.emoji || null;,    const targetId = (message as any).reactionTargetExternalId || (message as any).replyToExternalId || (message as any).reactionTargetId || null;,    try {,      if (targetId && emoji) {,        const [tgt] = await db,          .select({ id: conversationMessages.id }),          .from(conversationMessages),          .where(eq(conversationMessages.externalId, targetId)),          .limit(1);,        if (tgt) {,          await db.update(conversationMessages).set({ reaction: emoji }).where(eq(conversationMessages.id, tgt.id));,          console.log('[fix69] Reacao aplicada a mensagem', tgt.id, '=', emoji);,        } else {,          console.warn('[fix69] Alvo da reacao nao encontrado, ignorada (sem balao):', targetId);,        },      } else {,        console.warn('[fix69] Reacao sem alvo/emoji, ignorada (sem balao)');,      },    } catch (err) {,      console.error('[fix69] Erro ao processar reacao:', err);,    },    return null;,  },
+  // [fix69] Reacao NUNCA vira balao: aplica na mensagem original e sai sem inserir
+  if (String((message as any).messageType || (message as any).type || '').toLowerCase() === 'reaction') {
+    const emoji = (message as any).messageText || (message as any).reactionEmoji || null;
+    const targetId = (message as any).reactionTargetExternalId || (message as any).replyToExternalId || (message as any).reactionTargetId || null;
+    try {
+      if (targetId && emoji) {
+        const [tgt] = await db
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, targetId))
+          .limit(1);
+        if (tgt) {
+          await db.update(conversationMessages).set({ reaction: emoji }).where(eq(conversationMessages.id, tgt.id));
+          console.log('[fix69] Reacao aplicada a mensagem', tgt.id, '=', emoji);
+        } else {
+          console.warn('[fix69] Alvo da reacao nao encontrado, ignorada (sem balao):', targetId);
+        }
+      } else {
+        console.warn('[fix69] Reacao sem alvo/emoji, ignorada (sem balao)');
+      }
+    } catch (err) {
+      console.error('[fix69] Erro ao processar reacao:', err);
+    }
+    return null;
+  }
   console.log("[DB-INSERT] Inbound message - externalId:", message.externalId, "remoteJid:", (message as any).remoteJid, "provider:", message.provider, "replyToExternalId:", message.replyToExternalId);
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
