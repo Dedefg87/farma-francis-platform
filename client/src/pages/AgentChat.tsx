@@ -137,6 +137,32 @@ export default function AgentChat() {
     },
   });
 
+
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferAgentId, setTransferAgentId] = useState<number | null>(null);
+  const transferAgentsQuery = trpc.queues.listTransferAgents.useQuery(undefined, {
+    enabled: transferOpen,
+  });
+  const transferConversation = trpc.queues.transferConversation.useMutation({
+    onSuccess: async () => {
+      setTransferOpen(false);
+      setTransferAgentId(null);
+      await utils.conversations.listActive.invalidate();
+      toast({ title: "Sucesso", description: "Conversa transferida com sucesso!" });
+    },
+    onError: error => {
+      toast({ title: "Erro", description: `Erro ao transferir: ${error.message}`, variant: "destructive" });
+    },
+  });
+  const handleTransferClick = () => {
+    setTransferAgentId(null);
+    setTransferOpen(true);
+  };
+  const handleConfirmTransfer = () => {
+    if (!selectedConversation || !transferAgentId) return;
+    transferConversation.mutate({ conversationId: selectedConversation, targetAgentId: transferAgentId });
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -435,7 +461,7 @@ export default function AgentChat() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>Transferir conversa</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleTransferClick}>Transferir conversa</DropdownMenuItem>
                     <DropdownMenuItem>Encerrar atendimento</DropdownMenuItem>
                     <DropdownMenuItem className="text-red-600">
                       Bloquear usuário
@@ -783,7 +809,38 @@ export default function AgentChat() {
               </div>
             </div>
 
-            {/* Modal de Respostas Rápidas */}
+      
+      {/* Modal de Transferência de Conversa */}
+      {transferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setTransferOpen(false)}>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Transferir conversa</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {transferAgentsQuery.isLoading
+                ? "Carregando atendentes..."
+                : "Selecione o atendente que receberá esta conversa."}
+            </p>
+            <select
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              value={transferAgentId ?? ""}
+              onChange={e => setTransferAgentId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Selecione um atendente...</option>
+              {(transferAgentsQuery.data ?? []).map(agent => (
+                <option key={agent.id} value={agent.id}>{agent.name}</option>
+              ))}
+            </select>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setTransferOpen(false)}>Cancelar</Button>
+              <Button onClick={handleConfirmTransfer} disabled={!transferAgentId || transferConversation.isPending}>
+                {transferConversation.isPending ? "Transferindo..." : "Transferir"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Respostas Rápidas */}
             <QuickRepliesModal
               open={showQuickRepliesModal}
               onClose={() => setShowQuickRepliesModal(false)}
