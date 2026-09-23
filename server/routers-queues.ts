@@ -152,7 +152,8 @@ export const queuesRouter = router({
             or(
               sql`${conversations.assignedTo} IS NULL`,
               sql`${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active')`,
-              sql`${conversations.assignedTo} NOT IN (SELECT id FROM users WHERE role = 'user' AND lastSignedIn >= NOW() - INTERVAL 24 HOUR)`
+              sql`${conversations.assignedTo} IN (SELECT id FROM users WHERE role = 'user' AND (lastSignedIn IS NULL OR lastSignedIn < NOW() - INTERVAL 24 HOUR))`,
+              sql`NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.conversation_id = ${conversations.id} AND cm.sender_type = 'agent')`
             )
           )
         )
