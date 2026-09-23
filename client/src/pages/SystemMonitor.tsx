@@ -304,7 +304,7 @@ export default function SystemMonitor() {
                 <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-yellow-800">
                   <p className="font-semibold">Atenção</p>
-                  <p>A limpeza do banco de dados é irreversível. Apenas dados descartáveis (logs, sessões, mensagens antigas) são afetados.</p>
+                  <p>A limpeza agora é seletiva e automática: quando o armazenamento atinge 80%, são mantidos sempre os 20% mais recentes de conversas e mídias. Apenas dados descartáveis (logs, sessões, mensagens antigas) são afetados.</p>
                 </div>
               </div>
 
