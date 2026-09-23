@@ -853,23 +853,34 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // Update reaction on the target message
+      // Resolve a mensagem alvo por externalId (key.id do WhatsApp) OU pelo id interno
+      let [targetMsg] = await db
+        .select()
+        .from(conversationMessages)
+        .where(eq(conversationMessages.externalId, input.messageId))
+        .limit(1);
+      if (!targetMsg) {
+        const numericId = Number(input.messageId);
+        if (Number.isFinite(numericId)) {
+          [targetMsg] = await db
+            .select()
+            .from(conversationMessages)
+            .where(eq(conversationMessages.id, numericId))
+            .limit(1);
+        }
+      }
+      if (!targetMsg) {
+        throw new Error('Mensagem não encontrada para reação');
+      }
       await db
         .update(conversationMessages)
         .set({ reaction: input.emoji })
-        .where(eq(conversationMessages.externalId, input.messageId));
+        .where(eq(conversationMessages.id, targetMsg.id));
 
       // Envia a reacao via Evolution API chamando sendReaction (a funcao real do modulo messaging)
       try {
-        // 1) Localiza a mensagem alvo pelo externalId (key.id do WhatsApp)
-        const [targetMsg] = await db
-          .select()
-          .from(conversationMessages)
-          .where(eq(conversationMessages.externalId, input.messageId))
-          .limit(1);
-
         if (!targetMsg) {
-          console.error('[messages.react] Nenhuma mensagem encontrada para o externalId:', input.messageId);
+          console.error('[messages.react] Nenhuma mensagem encontrada para:', input.messageId);
         } else {
           // 2) Resolve o telefone do cliente -> remoteJid (o mesmo padrao do sendEvolutionText)
           let to = String(targetMsg.remoteJid || '').includes('@') ? String(targetMsg.remoteJid) : '';
@@ -893,7 +904,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
             const { sendReaction } = await import('./messaging');
             await sendReaction({
               to,
-              messageId: input.messageId,
+              messageId: targetMsg.externalId || input.messageId,
               remoteJid,
               emoji: input.emoji,
             });
