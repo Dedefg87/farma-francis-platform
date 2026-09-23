@@ -907,6 +907,7 @@ const ensurePublicMediaUrl = async (mediaUrl: string, mimetype: string): Promise
               messageId: targetMsg.externalId || input.messageId,
               remoteJid,
               emoji: input.emoji,
+              fromMe: targetMsg.senderType === 'agent',
             });
           } else {
             console.error('[messages.react] Nao foi possivel resolver remoteJid para o externalId:', input.messageId);
