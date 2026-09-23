@@ -1343,7 +1343,40 @@ export default function AgentMessages() {
                             : "bg-white text-gray-900 border border-gray-200"
                         }`}
                       >
-                        {/* Bug 1 fix: Delete button - appears on hover */}
+                                                {/* React button - appears on hover (WhatsApp-like) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReactForMsgId(reactForMsgId === msg.id ? null : msg.id);
+                          }}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-28" : "-right-28"} w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
+                          title="Reagir com emoji"
+                        >
+                          <Smile className="w-3 h-3" />
+                        </button>
+                        {reactForMsgId === msg.id && (
+                          <div
+                            className={`absolute top-0 ${msg.senderType === "agent" ? "-left-14" : "-right-14"} flex gap-1 bg-white border border-gray-200 rounded-full p-1 shadow-lg z-30`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {["❤️","👍","😂","😮","😢","🙏","👏"].map(emo => (
+                              <button
+                                key={emo}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const targetId = String((msg as any).externalId || (msg as any).id);
+                                  reactMessageMutation.mutate({ messageId: targetId, emoji: em });
+                                  setReactForMsgId(null);
+                                }}
+                                className="text-lg hover:scale-125 transition-transform"
+                                title={`Reagir com ${emo}`}
+                              >
+                                {emo}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+{/* Bug 1 fix: Delete button - appears on hover */}
                         <button
                           onClick={() => {
                             if (confirm("Excluir esta mensagem?")) {
@@ -1382,41 +1415,6 @@ export default function AgentMessages() {
                         >
                           <Send className="w-3 h-3" />
                         </button>
-                        {/* React button - appears on hover (WhatsApp-like) */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReactForMsgId(reactForMsgId === msg.id ? null : msg.id);
-                          }}
-                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-right-2" : "-left-2"} mt-6 w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
-                          title="Reagir com emoji"
-                        >
-                          <Smile className="w-3 h-3" />
-                        </button>
-                        {reactForMsgId === msg.id && (
-                          <div
-                            className={`absolute top-0 ${msg.senderType === "agent" ? "-right-14" : "-left-14"} flex gap-1 bg-white border border-gray-200 rounded-full p-1 shadow-lg z-30`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {["❤️","👍","😂","😮","😢","🙏","👏"].map(emo => (
-                              <button
-                                key={emo}
-                                onClick={() => {
-                                  if (msg.externalId) {
-                                    reactMessageMutation.mutate({ messageId: msg.externalId, emoji: em });
-                                  } else {
-                                    toast.error("Mensagem sem ID externo — não é possível reagir");
-                                  }
-                                  setReactForMsgId(null);
-                                }}
-                                className="text-lg hover:scale-125 transition-transform"
-                                title={`Reagir com ${emo}`}
-                              >
-                                {emo}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
