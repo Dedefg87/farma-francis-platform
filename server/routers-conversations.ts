@@ -12,7 +12,7 @@ import {
   ConversationChannel,
 } from "@shared/types/conversations";
 import { closeConversation } from "./chatbot";
-import { autoAssignUnassigned } from "../helpers/agent-availability";
+import { autoAssignUnassigned } from "./helpers/agent-availability";
 
 /**
  * Helper: Converte uma row do Drizzle para o tipo Conversation compartilhado.
