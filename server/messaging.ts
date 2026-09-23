@@ -1303,7 +1303,7 @@ export async function getSentMessages(params: {
 /**
  * Send a reaction to a WhatsApp message (Evolution API)
  */
-export async function sendReaction(params: { to: string; messageId: string; remoteJid: string; emoji: string }) {
+export async function sendReaction(params: { to: string; messageId: string; remoteJid: string; emoji: string; fromMe?: boolean }) {
   const _instName = (params as any).instanceName || await resolveInstanceName((params as any).to);
   const config = await getEvolutionConfig(_instName);
   if (!config) {
@@ -1315,11 +1315,12 @@ export async function sendReaction(params: { to: string; messageId: string; remo
       method: "POST",
       headers: { apikey: config.apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
-        number: normalizeWhatsAppNumber(params.to),
-        reactionMessage: {
-          key: { id: params.messageId, remoteJid: params.remoteJid },
-          reaction: params.emoji,
+        key: {
+          id: params.messageId,
+          remoteJid: params.remoteJid,
+          fromMe: !!(params as any).fromMe,
         },
+        reaction: params.emoji,
       }),
     }
   );
