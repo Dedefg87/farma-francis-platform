@@ -171,13 +171,19 @@ export const queuesRouter = router({
       return { success: true, conversationId: input.conversationId };
     }),
 
-  // Listar agentes (role user) para transferencia
+  // Listar agentes LOGADOS (mesma fonte da distribuicao: lastSignedIn < 24h, exclui admin)
   listTransferAgents: protectedProcedure
     .query(async () => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
-      const [rows] = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
-      return (rows as Array<any>).map(r => ({ id: Number(r?.id), name: String(r?.name || '') || ('Agente ' + r?.id) }));
+      const loggedIn = await getLoggedInAgents();
+      if (loggedIn.length === 0) return [];
+      const set = new Set<number>(loggedIn);
+      const res = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
+      const rows = Array.isArray(res) ? res : ((res as any).rows ?? []);
+      return (rows as Array<any>)
+        .filter(r => r && r.id != null && set.has(Number(r.id)))
+        .map(r => ({ id: Number(r.id), name: String(r?.name || '') || ('Agente ' + r.id) }));
     }),
 
   // Listar todas as filas (com estatísticas completas)
