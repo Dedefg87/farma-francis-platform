@@ -128,7 +128,7 @@ export default function Dashboard() {
   const channelData = (channelQuery.data ?? []) as ConversationsByChannelOutput[];
   const statusData = (statusQuery.data ?? []) as ConversationsByStatusOutput[];
   const hourData = hourQuery.data ?? [];
-  const agentData = (agentQuery.data ?? []) as AgentStatsOutput[];
+  const agentData = ((agentQuery.data ?? []) as AgentStatsOutput[]).filter(Boolean);
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
   const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
@@ -409,7 +409,7 @@ export default function Dashboard() {
               {agentQuery.isLoading ? (
                 <SkeletonLoader height="h-64" />
               ) : agentQuery.isError ? (
-                renderErrorState(`Falha ao carregar tabela de agentes: ${agentQuery.error?.message || 'Erro desconhecido'}`, agentQuery.refetch)
+                renderErrorState(`Nao foi possivel carregar a tabela de agentes neste periodo. Clique para tentar novamente.`, agentQuery.refetch)
               ) : agentData.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -432,7 +432,7 @@ export default function Dashboard() {
        <img src={agent.photo} alt={agent.agentName} className="h-8 w-8 rounded-full object-cover" />
      ) : (
        <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
-         {agent.agentName.charAt(0).toUpperCase()}
+         {(agent.agentName || "?").charAt(0).toUpperCase()}
        </div>
      )}
      <span className="font-medium text-gray-900">{agent.agentName}</span>
