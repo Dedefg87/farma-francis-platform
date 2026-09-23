@@ -1683,9 +1683,7 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     replyToContent,
     // Extract reaction data if present (Evolution API sends reactionMessage with key.id + emoji)
     reactionTargetId: (message as any)?.reactionMessage?.key?.id || (message as any)?.reaction?.key?.id || null,
-    reactionEmoji: message && typeof message === 'object' && 'reaction' in message
-      ? (message as any).reaction?.emoji || null
-      : null,
+    reactionEmoji: (message as any)?.reactionMessage?.text || (message as any)?.reaction?.emoji || null,
     // Campos extras que podem ser úteis
     ...(base64 && { base64 }),
     ...(mediaKey && { mediaKey }),
