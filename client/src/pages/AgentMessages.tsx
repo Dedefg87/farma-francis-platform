@@ -168,6 +168,7 @@ export default function AgentMessages() {
   const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [reactForMsgId, setReactForMsgId] = useState<number | null>(null);
   const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
   const [replyToMsg, setReplyToMsg] = useState<{ id: number; externalId?: string; content: string } | null>(null);
   const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
@@ -246,8 +247,17 @@ export default function AgentMessages() {
               data.type === "conversation:read" ||
               (data.type === "messages.update" && data.data?.fromMe === false)
             ) {
-              // Play notification sound if not muted (only for new messages)
-              if (!notificationsMuted && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
+              // Play notification sound ONLY for conversations owned by this agent
+              const isMine = (() => {
+                const evConv = data.data?.conversationId ?? data.data?.conversation_id;
+                if (!evConv) return true;
+                const conv = conversations?.find((c: any) => Number(c.id) === Number(evConv));
+                if (!conv) return true;
+                const owner = conv.assignedAgentId ?? conv.assignedTo;
+                if (owner == null) return true;
+                return String(owner) === String(user?.id);
+              })();
+              if (!notificationsMuted && isMine && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
                 playNotificationSound();
               }
 
@@ -616,6 +626,17 @@ export default function AgentMessages() {
     },
     onError: error => {
       toast.error(`Erro ao encaminhar: ${error.message}`);
+    },
+  });
+
+  // React to a message with an emoji (WhatsApp-like)
+  const reactMessageMutation = trpc.messages.react.useMutation({
+    onSuccess: () => {
+      toast.success("Reação enviada");
+      refetchMessages();
+    },
+    onError: error => {
+      toast.error(`Erro ao reagir: ${error.message}`);
     },
   });
 
@@ -1361,6 +1382,41 @@ export default function AgentMessages() {
                         >
                           <Send className="w-3 h-3" />
                         </button>
+                        {/* React button - appears on hover (WhatsApp-like) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReactForMsgId(reactForMsgId === msg.id ? null : msg.id);
+                          }}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-right-2" : "-left-2"} mt-6 w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
+                          title="Reagir com emoji"
+                        >
+                          <Smile className="w-3 h-3" />
+                        </button>
+                        {reactForMsgId === msg.id && (
+                          <div
+                            className={`absolute top-0 ${msg.senderType === "agent" ? "-right-14" : "-left-14"} flex gap-1 bg-white border border-gray-200 rounded-full p-1 shadow-lg z-30`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {["❤️","👍","😂","😮","😢","🙏","👏"].map(emo => (
+                              <button
+                                key={emo}
+                                onClick={() => {
+                                  if (msg.externalId) {
+                                    reactMessageMutation.mutate({ messageId: msg.externalId, emoji: em });
+                                  } else {
+                                    toast.error("Mensagem sem ID externo — não é possível reagir");
+                                  }
+                                  setReactForMsgId(null);
+                                }}
+                                className="text-lg hover:scale-125 transition-transform"
+                                title={`Reagir com ${emo}`}
+                              >
+                                {emo}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
