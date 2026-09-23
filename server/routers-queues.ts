@@ -138,6 +138,47 @@ export const queuesRouter = router({
 
       return { success: true, conversationId: nextConversation.id };
     }),
+  // Puxar da sala de espera: conversa aberta mais antiga sem dono (mesmo sem fila)
+  claimUnassignedConversation: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [next] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.status, 'open'),
+            sql`${conversations.assignedTo} IS NULL`
+          )
+        )
+        .orderBy(conversations.openedAt)
+        .limit(1);
+      if (!next) throw new Error('Nenhuma conversa aguardando na sala de espera');
+      await db.update(conversations).set({ assignedTo: ctx.user.id, status: 'assigned' }).where(eq(conversations.id, next.id));
+      return { success: true, conversationId: next.id };
+    }),
+
+  // Transferir conversa para outro agente
+  transferConversation: protectedProcedure
+    .input(z.object({ conversationId: z.number(), targetAgentId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [exists] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+      if (!exists) throw new Error('Conversa nao encontrada');
+      await db.update(conversations).set({ assignedTo: input.targetAgentId, status: 'assigned' }).where(eq(conversations.id, input.conversationId));
+      return { success: true, conversationId: input.conversationId };
+    }),
+
+  // Listar agentes (role user) para transferencia
+  listTransferAgents: protectedProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [rows] = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
+      return (rows as Array<any>).map(r => ({ id: Number(r?.id), name: String(r?.name || '') || ('Agente ' + r?.id) }));
+    }),
 
   // Listar todas as filas (com estatísticas completas)
   // Retorna array de Queue
