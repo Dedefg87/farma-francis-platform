@@ -18,6 +18,15 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
       onSuccess();
     },
   });
+  const claimUnassignedMutation = trpc.queues.claimUnassignedConversation.useMutation({
+    onSuccess: () => {
+      onOpenChange(false);
+      onSuccess();
+    },
+    onError: (error) => {
+      console.error('Erro ao puxar da sala de espera:', error.message);
+    },
+  });
 
   const handlePullFromQueue = (queueId: string) => {
     pullConversationMutation.mutate({ queueId: parseInt(queueId, 10) });
@@ -39,7 +48,8 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
             <Button
               variant="outline"
               className="w-full justify-start h-auto py-3"
-              onClick={() => onOpenChange(false)}
+              onClick={() => claimUnassignedMutation.mutate()}
+              disabled={claimUnassignedMutation.isPending}
             >
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-gray-400" />
