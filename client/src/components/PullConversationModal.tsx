@@ -55,7 +55,7 @@ export default function PullConversationModal({ open, onOpenChange, onSuccess }:
                 <div className="w-2 h-2 rounded-full bg-gray-400" />
                 <div className="text-left">
                   <div className="font-medium">Puxar conversa disponível</div>
-                  <div className="text-sm text-gray-500">Sala de espera ou de atendente ausente</div>
+                  <div className="text-sm text-gray-500">Sala de espera, ausente ou sem resposta</div>
                 </div>
               </div>
             </Button>
