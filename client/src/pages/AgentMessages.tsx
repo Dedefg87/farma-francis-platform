@@ -1385,7 +1385,24 @@ export default function AgentMessages() {
                             pickerEl.style.left = `${btnRect.left + btnRect.width/2 - 80}px`;
                             pickerEl.className = `z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
                             pickerEl.innerHTML = reactions.map(emo => `<button class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
-                            pickerEl.onclick = (e2) => e2.stopPropagation();
+                            pickerEl.onclick = (e2) => {
+                              e2.stopPropagation();
+                              const btn = e2.target.closest("button");
+                              if (btn && btn.innerText) {
+                                const emoji = btn.innerText.trim();
+                                const msgEl = document.querySelector(`[data-msg-id="${msg.id}"]`) || document.getElementById(`msg-${msg.id}`);
+                                if (msgEl) {
+                                  let reactionEl = msgEl.querySelector(".message-reaction");
+                                  if (!reactionEl) {
+                                    reactionEl = document.createElement("span");
+                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm mt-1";
+                                    msgEl.appendChild(reactionEl);
+                                  }
+                                  reactionEl.innerText = emoji;
+                                }
+                              }
+                              pickerEl.remove();
+                            };
                             document.body.appendChild(pickerEl);
                             setTimeout(() => pickerEl?.remove(), 8000);
                           }}
