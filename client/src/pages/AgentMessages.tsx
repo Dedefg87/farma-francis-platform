@@ -1379,11 +1379,14 @@ export default function AgentMessages() {
                             }
                             pickerEl = document.createElement("div");
                             pickerEl.id = pickerId;
-                            pickerEl.className = `absolute z-50 top-7 ${msg.senderType === "agent" ? "left-[-26px]" : "right-[-26px]"} flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
+                            const btnRect = e.currentTarget.getBoundingClientRect();
+                            pickerEl.style.position = "fixed";
+                            pickerEl.style.top = `${btnRect.bottom + 6}px`;
+                            pickerEl.style.left = `${btnRect.left}px`;
+                            pickerEl.className = `z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
                             pickerEl.innerHTML = reactions.map(emo => `<button class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
                             pickerEl.onclick = (e2) => e2.stopPropagation();
-                            const btnEl = e.currentTarget.closest(".group");
-                            btnEl?.appendChild(pickerEl);
+                            document.body.appendChild(pickerEl);
                             setTimeout(() => pickerEl?.remove(), 8000);
                           }}
                           className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-yellow-500 z-10`}
