@@ -1316,10 +1316,10 @@ export default function AgentMessages() {
                       onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}
                     >
                       <div
-                        className={`relative max-w-[70%] rounded-lg p-3 ${
+                        className={`relative max-w-[70%] rounded-2xl p-3.5 shadow-md ${
                           msg.senderType === "agent"
-                            ? "bg-blue-500 text-white"
-                            : "bg-white text-gray-900 border border-gray-200"
+                            ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-blue-200/40"
+                            : "bg-white text-gray-900 border border-gray-200/60 shadow-gray-200/50"
                         }`}
                       >
                         {/* Bug 1 fix: Delete button - appears on hover */}
