@@ -128,7 +128,8 @@ export async function ingestOutboundConversationMessage(message: {
     }
   }
 
-  // 4c. Guarda: se for reação, atualiza mensagem existente ao invés de criar nova
+  // 4c. Guarda: se for reação, NÃO insere nova mensagem (não é mensagem — é atualização de reação)
+  // A reação é processada pelo endpoint /api/messages/react, não pelo ingestOutbound
   if (message.messageType === "reaction") {
     const reactionEmoji = message.reaction || message.emoji || message.content || "";
     if (_outboundExtId) {
@@ -153,9 +154,9 @@ export async function ingestOutboundConversationMessage(message: {
       console.log("[ingestOutbound] ✅ Reação atualizada via replyToExternalId:", message.replyToExternalId, "emoji:", reactionEmoji);
       return { conversationId, customerId: customer.id, messageDbId: undefined, reactionUpdated: true };
     }
-    // Se não encontrou, não cria mensagem vazia — apenas retorna
-    console.log("[ingestOutbound] ⚠️ Reação recebida mas sem referência válida para atualizar (não cria mensagem vazia):", message);
-    return { conversationId, customerId: customer.id, messageDbId: undefined, reactionUpdated: false, skipped: "no_reference" };
+    // Se for reação sem referência válida, não faz nada (não cria mensagem vazia)
+    console.log("[ingestOutbound] Ignorando reação sem referência válida:", message);
+    return { conversationId, customerId: customer.id, messageDbId: undefined, skipped: "reaction_ignored" };
   }
   // 4d. Guarda: nao exibir no chat a mensagem de encerramento / pesquisa de satisfacao
   const _normOut = String(content || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();

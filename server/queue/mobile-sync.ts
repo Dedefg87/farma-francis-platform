@@ -213,6 +213,12 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   console.log("[MobileSync] Processing job:", job.id, "for conversation:", conversationId);
 
+  // Ignorar reações (não são mensagens — são processadas separadamente pelo endpoint /api/messages/react)
+  if (job.messageType === "reaction" || job.messageType === "reaction_message") {
+    console.log("[MobileSync] Ignorando job de reação (não é mensagem):", job.id, "emoji:", job.messageText || job.reaction);
+    return;
+  }
+
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";
   if (!content && job.messageType) {
