@@ -128,7 +128,36 @@ export async function ingestOutboundConversationMessage(message: {
     }
   }
 
-  // 4b. Guarda: nao exibir no chat a mensagem de encerramento / pesquisa de satisfacao
+  // 4c. Guarda: se for reação, atualiza mensagem existente ao invés de criar nova
+  if (message.messageType === "reaction") {
+    const reactionEmoji = message.reaction || message.emoji || message.content || "";
+    if (_outboundExtId) {
+      // Tenta encontrar mensagem pela externalId
+      await db.update(conversationMessages)
+        .set({ reaction: reactionEmoji })
+        .where(and(
+          eq(conversationMessages.externalId, _outboundExtId),
+          eq(conversationMessages.provider, message.provider)
+        ));
+      console.log("[ingestOutbound] ✅ Reação atualizada via externalId:", _outboundExtId, "emoji:", reactionEmoji);
+      return { conversationId, customerId: customer.id, messageDbId: undefined, reactionUpdated: true };
+    }
+    // Fallback: tenta encontrar pela externalId de reply (se reaction for resposta)
+    if (message.replyToExternalId) {
+      await db.update(conversationMessages)
+        .set({ reaction: reactionEmoji })
+        .where(and(
+          eq(conversationMessages.externalId, message.replyToExternalId),
+          eq(conversationMessages.provider, message.provider)
+        ));
+      console.log("[ingestOutbound] ✅ Reação atualizada via replyToExternalId:", message.replyToExternalId, "emoji:", reactionEmoji);
+      return { conversationId, customerId: customer.id, messageDbId: undefined, reactionUpdated: true };
+    }
+    // Se não encontrou, não cria mensagem vazia — apenas retorna
+    console.log("[ingestOutbound] ⚠️ Reação recebida mas sem referência válida para atualizar (não cria mensagem vazia):", message);
+    return { conversationId, customerId: customer.id, messageDbId: undefined, reactionUpdated: false, skipped: "no_reference" };
+  }
+  // 4d. Guarda: nao exibir no chat a mensagem de encerramento / pesquisa de satisfacao
   const _normOut = String(content || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   if (_normOut.indexOf("aperfeic") >= 0 && _normOut.indexOf("atendimento") >= 0) {
     console.log("[ingestOutbound] Ignorando mensagem de encerramento/pesquisa:", content.substring(0, 40));
