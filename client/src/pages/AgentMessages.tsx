@@ -1399,14 +1399,14 @@ export default function AgentMessages() {
                                 const msgElForVisual = document.querySelector(`[key="${msg.id}"]`) || document.querySelector(`.group[data-msg-id="${msg.id}"]`);
                                 if (msgElForVisual) {
                                   let reactionEl = msgElForVisual.querySelector(".message-reaction");
+                                  const bubble = msgElForVisual.querySelector(".relative.max-w-\[70\%\]");
                                   if (!reactionEl) {
                                     reactionEl = document.createElement("span");
-                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm mt-1 select-none";
+                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100/70 border border-gray-200/50 rounded-full px-2 py-0.5 text-sm mt-1.5 select-none backdrop-blur-sm";
                                   }
                                   reactionEl.innerText = emoji;
-                                  const contentContainer = msgElForVisual.querySelector(".relative");
-                                  if (contentContainer && !contentContainer.contains(reactionEl)) {
-                                    contentContainer.appendChild(reactionEl);
+                                  if (bubble && !bubble.contains(reactionEl)) {
+                                    bubble.appendChild(reactionEl);
                                   }
                                 }
                               }
