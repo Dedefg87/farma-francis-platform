@@ -893,6 +893,38 @@ export async function sendInstagramImage(params: {
 }
 
 /**
+ * Send a WhatsApp message reaction via Evolution API
+ */
+export async function sendWhatsAppReaction(params: {
+  to: string;
+  messageId: string;
+  emoji: string;
+  instanceName?: string;
+}) {
+  const config = await getEvolutionConfig(params.instanceName);
+  if (!config) throw new Error("Evolution API config not found for reaction");
+  const response = await fetch(
+    `${config.apiUrl}/message/sendReaction/${config.instanceName}`,
+    {
+      method: "POST",
+      headers: { apikey: config.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: { remoteJid: normalizeWhatsAppNumber(params.to) + "@s.whatsapp.net", fromMe: false, id: params.messageId },
+        reaction: params.emoji,
+      }),
+    }
+  );
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("[Reaction] Evolution API error:", response.status, error);
+    throw new Error(`Evolution API reaction error: ${response.status}`);
+  }
+  const result = await response.json();
+  console.log("[Reaction] Sent:", JSON.stringify(result).substring(0, 200));
+  return result;
+}
+
+/**
  * Send a document via WhatsApp Business API
  */
 export async function sendWhatsAppDocument(params: {

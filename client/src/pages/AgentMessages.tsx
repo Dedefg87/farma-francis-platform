@@ -1384,19 +1384,25 @@ export default function AgentMessages() {
                             pickerEl.style.top = `${btnRect.bottom + 6}px`;
                             pickerEl.style.left = `${btnRect.left + btnRect.width/2 - 80}px`;
                             pickerEl.className = `z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
-                            pickerEl.innerHTML = reactions.map(emo => `<button class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
+                            pickerEl.innerHTML = reactions.map(emo => `<button data-emoji="${emo}" class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
                             pickerEl.onclick = (e2) => {
                               e2.stopPropagation();
                               const btn = e2.target.closest("button");
-                              if (btn && btn.innerText) {
-                                const emoji = btn.innerText.trim();
-                                const msgEl = document.querySelector(`[data-msg-id="${msg.id}"]`) || document.getElementById(`msg-${msg.id}`);
-                                if (msgEl) {
-                                  let reactionEl = msgEl.querySelector(".message-reaction");
+                              if (btn && btn.getAttribute("data-emoji")) {
+                                const emoji = btn.getAttribute("data-emoji");
+                                // Envia reação via API para aparecer no celular
+                                fetch(`/api/messages/react`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ messageId: msg.id, emoji: emoji }),
+                                }).catch((e) => console.warn("[Reaction] Envio falhou:", e));
+                                const msgElForVisual = document.querySelector(`[data-msg-id="${msg.id}"]`) || document.getElementById(`msg-${msg.id}`);
+                                if (msgElForVisual) {
+                                  let reactionEl = msgElForVisual.querySelector(".message-reaction");
                                   if (!reactionEl) {
                                     reactionEl = document.createElement("span");
                                     reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm mt-1";
-                                    msgEl.appendChild(reactionEl);
+                                    msgElForVisual.appendChild(reactionEl);
                                   }
                                   reactionEl.innerText = emoji;
                                 }

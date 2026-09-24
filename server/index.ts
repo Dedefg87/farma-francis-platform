@@ -419,6 +419,38 @@ async function startServer() {
     }
   });
 
+  // Message reaction endpoint (Evolution API)
+  app.post("/api/messages/react", async (req, res) => {
+    try {
+      const { messageId, emoji } = req.body || {};
+      if (!messageId || !emoji) {
+        res.status(400).json({ error: "messageId e emoji são obrigatórios" });
+        return;
+      }
+      const db = await getDb();
+      if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
+      const [msg] = await db.select({ conversationId: conversationMessages.conversationId, customerPhone: conversations.customerPhone, externalId: conversationMessages.externalId })
+        .from(conversationMessages)
+        .leftJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
+        .where(eq(conversationMessages.id, parseInt(messageId, 10)))
+        .limit(1);
+      if (!msg || !msg.customerPhone) {
+        res.status(404).json({ error: "Mensagem ou conversa não encontrada" });
+        return;
+      }
+      const { sendWhatsAppReaction } = await import("./messaging");
+      await sendWhatsAppReaction({
+        to: msg.customerPhone,
+        messageId: msg.externalId || String(messageId),
+        emoji: String(emoji),
+      });
+      res.json({ success: true, messageId, emoji });
+    } catch (err: any) {
+      console.error("[react] Error:", err.message || err);
+      res.status(500).json({ error: err.message || "Erro interno" });
+    }
+  });
+
   // Broadcast file upload
   app.post("/api/broadcast/upload-temp-file", async (req, res) => {
     try {
