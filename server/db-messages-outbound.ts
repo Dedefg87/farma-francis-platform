@@ -36,6 +36,8 @@ function buildOutboundContent(message: {
       return "[Localização]";
     case "contact":
       return "[Contato]";
+    case "reaction":
+      return message.reaction ? `Reação: ${message.reaction}` : `[Reação]`;
     default:
       return `[${message.messageType}]`;
   }
