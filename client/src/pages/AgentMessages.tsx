@@ -1324,7 +1324,8 @@ export default function AgentMessages() {
                       >
                         {/* Bug 1 fix: Delete button - appears on hover */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (confirm("Excluir esta mensagem?")) {
                               deleteMessageMutation.mutate({ messageId: msg.id });
                             }
@@ -1337,7 +1338,8 @@ export default function AgentMessages() {
                         </button>
                         {/* Reply button - appears on hover */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                               setReplyToMsg({ 
                                 id: msg.id, 
                                 externalId: msg.externalId || undefined,
@@ -1351,7 +1353,8 @@ export default function AgentMessages() {
                         </button>
                         {/* Forward button - appears on hover */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setForwardMessageId(msg.id);
                             setShowForwardDialog(true);
                           }}
@@ -1363,7 +1366,8 @@ export default function AgentMessages() {
                         </button>
                         {/* Reaction button - appears on click */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             const reactions = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
                             const current = (msg as any).reaction;
                             const next = current ? reactions[(reactions.indexOf(current) + 1) % reactions.length] : reactions[0];
