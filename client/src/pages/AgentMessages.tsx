@@ -1382,7 +1382,7 @@ export default function AgentMessages() {
                             const btnRect = e.currentTarget.getBoundingClientRect();
                             pickerEl.style.position = "fixed";
                             pickerEl.style.top = `${btnRect.bottom + 6}px`;
-                            pickerEl.style.left = `${btnRect.left}px`;
+                            pickerEl.style.left = `${btnRect.left + btnRect.width/2 - 80}px`;
                             pickerEl.className = `z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
                             pickerEl.innerHTML = reactions.map(emo => `<button class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
                             pickerEl.onclick = (e2) => e2.stopPropagation();
