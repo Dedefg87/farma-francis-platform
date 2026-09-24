@@ -1396,15 +1396,18 @@ export default function AgentMessages() {
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ messageId: msg.id, emoji: emoji }),
                                 }).catch((e) => console.warn("[Reaction] Envio falhou:", e));
-                                const msgElForVisual = document.querySelector(`[data-msg-id="${msg.id}"]`) || document.getElementById(`msg-${msg.id}`);
+                                const msgElForVisual = document.querySelector(`[key="${msg.id}"]`) || document.querySelector(`.group[data-msg-id="${msg.id}"]`);
                                 if (msgElForVisual) {
                                   let reactionEl = msgElForVisual.querySelector(".message-reaction");
                                   if (!reactionEl) {
                                     reactionEl = document.createElement("span");
-                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm mt-1";
-                                    msgElForVisual.appendChild(reactionEl);
+                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm mt-1 select-none";
                                   }
                                   reactionEl.innerText = emoji;
+                                  const contentContainer = msgElForVisual.querySelector(".relative");
+                                  if (contentContainer && !contentContainer.contains(reactionEl)) {
+                                    contentContainer.appendChild(reactionEl);
+                                  }
                                 }
                               }
                               pickerEl.remove();
