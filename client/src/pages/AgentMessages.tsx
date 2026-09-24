@@ -1343,39 +1343,78 @@ export default function AgentMessages() {
                             : "bg-white text-gray-900 border border-gray-200"
                         }`}
                       >
+                                                                        {/* Delete button - appears on hover */}
+                                                                        <button
+                                                                          onClick={() => {
+                                                                            if (confirm("Excluir esta mensagem?")) {
+                                                                              deleteMessageMutation.mutate({ messageId: msg.id });
+                                                                            }
+                                                                          }}
+                                                                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
+                                                                          title="Excluir mensagem"
+                                                                          disabled={deleteMessageMutation.isPending}
+                                                                        >
+                                                                          <Trash2 className="w-3 h-3" />
+                                                                        </button>
+                                                                        {/* Reply button - appears on hover */}
+                                                                        <button
+                                                                          onClick={() => {
+                                                                            setReplyToMsg({
+                                                                              id: msg.id,
+                                                                              externalId: msg.externalId || undefined,
+                                                                              content: msg.content || "",
+                                                                            });
+                                                                          }}
+                                                                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-18" : "-right-18"} w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
+                                                                          title="Responder mensagem"
+                                                                        >
+                                                                          <CornerUpLeft className="w-3 h-3" />
+                                                                        </button>
+                                                                        {/* Forward button - appears on hover */}
+                                                                        <button
+                                                                          onClick={() => {
+                                                                            setForwardMessageId(msg.id);
+                                                                            setShowForwardDialog(true);
+                                                                          }}
+                                                                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-10" : "-right-10"} w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
+                                                                          title="Encaminhar mensagem"
+                                                                          disabled={forwardMessageMutation.isPending}
+                                                                        >
+                                                                          <Send className="w-3 h-3" />
+                                                                        </button>
                                                                         {/* React button - appears on hover (WhatsApp-like) */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setReactForMsgId(reactForMsgId === msg.id ? null : msg.id);
-                          }}
-                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-28" : "-right-28"} w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
-                          title="Reagir com emoji"
-                        >
-                          <Smile className="w-3 h-3" />
-                        </button>
-                        {reactForMsgId === msg.id && (
-                          <div
-                            className={`absolute top-7 ${msg.senderType === "agent" ? "-left-28" : "-right-28"} flex gap-1 bg-white border border-gray-200 rounded-full p-1 shadow-lg z-30`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {["❤️","👍","😂","😮","😢","🙏","👏"].map(emo => (
-                              <button
-                                key={emo}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const targetId = String((msg as any).externalId || (msg as any).id);
-                                  reactMessageMutation.mutate({ messageId: targetId, emoji: em });
-                                  setReactForMsgId(null);
-                                }}
-                                className="text-lg hover:scale-125 transition-transform"
-                                title={`Reagir com ${emo}`}
-                              >
-                                {emo}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                                                                        <button
+                                                                          onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setReactForMsgId(reactForMsgId === msg.id ? null : msg.id);
+                                                                          }}
+                                                                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-500 text-white rounded-full flex items-center justify-center hover:scale-110 transition-transform z-20`}
+                                                                          title="Reagir com emoji"
+                                                                        >
+                                                                          <Smile className="w-3 h-3" />
+                                                                        </button>
+                                                                        {reactForMsgId === msg.id && (
+                                                                          <div
+                                                                            className={`absolute top-7 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} flex gap-1 bg-white border border-gray-200 rounded-full p-1 shadow-lg z-30`}
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                          >
+                                                                            {["❤️","👍","😂","😮","😢","🙏","👏"].map(emo => (
+                                                                              <button
+                                                                                key={emo}
+                                                                                onClick={(e) => {
+                                                                                  e.stopPropagation();
+                                                                                  const targetId = String((msg as any).externalId || (msg as any).id);
+                                                                                  reactMessageMutation.mutate({ messageId: targetId, emoji: em });
+                                                                                  setReactForMsgId(null);
+                                                                                }}
+                                                                                className="text-lg hover:scale-125 transition-transform"
+                                                                                title={`Reagir com ${emo}`}
+                                                                              >
+                                                                                {emo}
+                                                                              </button>
+                                                                            ))}
+                                                                          </div>
+                                                                        )}
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
