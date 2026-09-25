@@ -1108,11 +1108,28 @@ export const pharmaProducts = mysqlTable("pharma_products", {
   name: varchar("name", { length: 255 }).notNull(),
   category: mysqlEnum("category", [
     "medicamento",
+    "generico",
     "perfumaria",
+    "hpc",
+    "correlato",
+    "servico",
     "outros",
-  ]).default("outros"),
+  ]).default("medicamento").notNull(),
   substance: varchar("substance", { length: 255 }),
   daysDuration: int("days_duration"),
+  salePrice: decimal("sale_price", { precision: 12, scale: 2 }).default("0").notNull(),
+  avgCost: decimal("avg_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  defaultMargin: decimal("default_margin", { precision: 6, scale: 2 }).default("0").notNull(),
+  unit: varchar("unit", { length: 10 }).default("UN").notNull(),
+  controlled: int("controlled").default(0).notNull(),
+  requiresPrescription: int("requires_prescription").default(0).notNull(),
+  ncm: varchar("ncm", { length: 8 }),
+  icms: decimal("icms", { precision: 6, scale: 2 }),
+  pis: decimal("pis", { precision: 6, scale: 2 }),
+  cofins: decimal("cofins", { precision: 6, scale: 2 }),
+  st: decimal("st", { precision: 6, scale: 2 }),
+  active: int("active").default(1).notNull(),
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -1159,6 +1176,67 @@ export const pharmaPurchaseItems = mysqlTable("pharma_purchase_items", {
 
 export type PharmaPurchaseItem = typeof pharmaPurchaseItems.$inferSelect;
 export type InsertPharmaPurchaseItem = typeof pharmaPurchaseItems.$inferInsert;
+
+/**
+ * PharmaCore - Suppliers (fornecedores)
+ */
+export const pharmaSuppliers = mysqlTable("pharma_suppliers", {
+  id: int("id").autoincrement().primaryKey(),
+  tradeName: varchar("trade_name", { length: 160 }).notNull(),
+  cnpj: varchar("cnpj", { length: 14 }).notNull(),
+  ie: varchar("ie", { length: 20 }),
+  contact: varchar("contact", { length: 120 }),
+  phone: varchar("phone", { length: 20 }),
+  email: varchar("email", { length: 120 }),
+  paymentTerms: varchar("payment_terms", { length: 40 }),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  uniqueIndex("uq_suppliers_cnpj").on(t.cnpj),
+]);
+
+export type PharmaSupplier = typeof pharmaSuppliers.$inferSelect;
+export type InsertPharmaSupplier = typeof pharmaSuppliers.$inferInsert;
+
+/**
+ * PharmaCore - Product batches (lote + validade + estoque)
+ */
+export const pharmaProductBatches = mysqlTable("pharma_product_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  productEan: varchar("product_ean", { length: 32 }).notNull(),
+  lot: varchar("lot", { length: 40 }).notNull(),
+  expiry: date("expiry").notNull(),
+  quantity: decimal("quantity", { precision: 14, scale: 3 }).default("0").notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  entryDate: date("entry_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_batches_product").on(t.productEan),
+  index("idx_batches_expiry").on(t.expiry),
+]);
+
+export type PharmaProductBatch = typeof pharmaProductBatches.$inferSelect;
+export type InsertPharmaProductBatch = typeof pharmaProductBatches.$inferInsert;
+
+/**
+ * PharmaCore - Supplier products (preço de compra por fornecedor)
+ */
+export const pharmaSupplierProducts = mysqlTable("pharma_supplier_products", {
+  id: int("id").autoincrement().primaryKey(),
+  supplierId: int("supplier_id").notNull(),
+  productEan: varchar("product_ean", { length: 32 }).notNull(),
+  supplierCode: varchar("supplier_code", { length: 40 }),
+  purchasePrice: decimal("purchase_price", { precision: 12, scale: 2 }).default("0").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("uq_supplier_product").on(t.supplierId, t.productEan),
+  index("idx_sp_product").on(t.productEan),
+]);
+
+export type PharmaSupplierProduct = typeof pharmaSupplierProducts.$inferSelect;
+export type InsertPharmaSupplierProduct = typeof pharmaSupplierProducts.$inferInsert;
 
 /**
  * CRM - Tags para Segmentação de Clientes
@@ -1595,100 +1673,3 @@ export type InsertReminder = typeof reminders.$inferInsert;
 // CREATE INDEX idx_reminders_event_date ON reminders(event_date);
 // CREATE INDEX idx_reminders_snoozed ON reminders(snoozed_until);
 
-// ============ MÓDULO VENDAS / PDV (base) ============
-export const organizations = mysqlTable('organizations', {
-  id: int('id').autoincrement().primaryKey(),
-  name: varchar('name', { length: 120 }).notNull(),
-  cnpj: varchar('cnpj', { length: 14 }),
-  ie: varchar('ie', { length: 20 }),
-  city: varchar('city', { length: 80 }),
-  uf: varchar('uf', { length: 2 }),
-  active: boolean('active').notNull().default(true),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow().onUpdateNow(),
-});
-
-export const categories = mysqlTable('categories', {
-  id: int('id').autoincrement().primaryKey(),
-  organizationId: int('organizationId').notNull().references(() => organizations.id),
-  name: varchar('name', { length: 80 }).notNull(),
-  type: mysqlEnum('type', ['MEDICAMENTO','GENERICO','HPC','PERFUMARIA','CORRELATO','SERVICO']).notNull().default('MEDICAMENTO'),
-  active: boolean('active').notNull().default(true),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow().onUpdateNow(),
-}, (t) => [index('idx_categories_org').on(t.organizationId)]);
-
-export const products = mysqlTable('products', {
-  id: int('id').autoincrement().primaryKey(),
-  organizationId: int('organizationId').notNull().references(() => organizations.id),
-  categoryId: int('categoryId').notNull().references(() => categories.id),
-  ean: varchar('ean', { length: 14 }),
-  name: varchar('name', { length: 160 }).notNull(),
-  activeIngredient: varchar('activeIngredient', { length: 120 }),
-  ncm: varchar('ncm', { length: 8 }),
-  unit: varchar('unit', { length: 10 }).notNull().default('UN'),
-  controlled: boolean('controlled').notNull().default(false),
-  requiresPrescription: boolean('requiresPrescription').notNull().default(false),
-  avgCost: decimal('avgCost', { precision: 12, scale: 2 }).notNull().default('0'),
-  salePrice: decimal('salePrice', { precision: 12, scale: 2 }).notNull().default('0'),
-  defaultMargin: decimal('defaultMargin', { precision: 6, scale: 2 }).notNull().default('0'),
-  icms: decimal('icms', { precision: 6, scale: 2 }),
-  pis: decimal('pis', { precision: 6, scale: 2 }),
-  cofins: decimal('cofins', { precision: 6, scale: 2 }),
-  st: decimal('st', { precision: 6, scale: 2 }),
-  active: boolean('active').notNull().default(true),
-  deletedAt: timestamp('deletedAt'),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow().onUpdateNow(),
-}, (t) => [
-  index('idx_products_org').on(t.organizationId),
-  index('idx_products_ean').on(t.ean),
-  index('idx_products_name').on(t.name),
-  index('idx_products_ingredient').on(t.activeIngredient),
-]);
-
-export const productBatches = mysqlTable('productBatches', {
-  id: int('id').autoincrement().primaryKey(),
-  organizationId: int('organizationId').notNull().references(() => organizations.id),
-  productId: int('productId').notNull().references(() => products.id),
-  lot: varchar('lot', { length: 40 }).notNull(),
-  expiry: date('expiry').notNull(),
-  quantity: decimal('quantity', { precision: 14, scale: 3 }).notNull().default('0'),
-  unitCost: decimal('unitCost', { precision: 12, scale: 2 }).notNull().default('0'),
-  entryDate: date('entryDate').notNull(),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow().onUpdateNow(),
-}, (t) => [
-  index('idx_batches_org_product').on(t.organizationId, t.productId),
-  index('idx_batches_expiry').on(t.expiry),
-]);
-
-export const suppliers = mysqlTable('suppliers', {
-  id: int('id').autoincrement().primaryKey(),
-  organizationId: int('organizationId').notNull().references(() => organizations.id),
-  tradeName: varchar('tradeName', { length: 160 }).notNull(),
-  cnpj: varchar('cnpj', { length: 14 }).notNull(),
-  ie: varchar('ie', { length: 20 }),
-  contact: varchar('contact', { length: 120 }),
-  phone: varchar('phone', { length: 20 }),
-  email: varchar('email', { length: 120 }),
-  paymentTerms: varchar('paymentTerms', { length: 40 }),
-  active: boolean('active').notNull().default(true),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow().onUpdateNow(),
-}, (t) => [
-  index('idx_suppliers_org').on(t.organizationId),
-  uniqueIndex('idx_suppliers_org_cnpj').on(t.organizationId, t.cnpj),
-]);
-
-export const supplierProducts = mysqlTable('supplierProducts', {
-  id: int('id').autoincrement().primaryKey(),
-  supplierId: int('supplierId').notNull().references(() => suppliers.id),
-  productId: int('productId').notNull().references(() => products.id),
-  supplierCode: varchar('supplierCode', { length: 40 }),
-  purchasePrice: decimal('purchasePrice', { precision: 12, scale: 2 }).notNull(),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-}, (t) => [
-  index('idx_supplier_products_product').on(t.productId),
-  uniqueIndex('idx_supplier_products_pair').on(t.supplierId, t.productId),
-]);
