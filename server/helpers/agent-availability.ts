@@ -132,43 +132,30 @@ export async function getLoggedInAgents(): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
 
-  // [fix58] Fonte primaria: atendentes (role 'user') que fizeram login recentemente.
-  // lastSignedIn e atualizado no login (routers-auth) e reflete quem esta logado hoje.
-  // Admin (role='admin') nunca entra na distribuicao.
+    // [fix-routing] Fonte unica: atendentes CONECTADOS AGORA via SSE (app aberto).
+  // Regra de negocio: mensagem so vai para atendente logado no momento.
+  // Removidos os fallbacks (lastSignedIn 24h, agent_status, "qualquer atendente")
+  // que entregavam conversas para quem nao estava com o app aberto.
   try {
+    const { sseManager } = await import("../_core/sse.js");
+    const connectedUsers = sseManager
+      .getConnectedUsers()
+      .map((id: any) => Number(id))
+      .filter((id: number) => Number.isFinite(id) && id > 0);
+    if (connectedUsers.length === 0) return [];
+    const uniq = [...new Set(connectedUsers)];
     const res = await db.execute(sql`
       SELECT id FROM users
       WHERE role = 'user'
-        AND lastSignedIn IS NOT NULL
-        AND lastSignedIn >= NOW() - INTERVAL 24 HOUR
-      ORDER BY lastSignedIn DESC
+        AND id IN (${sql.join(uniq.map((id: number) => sql`${id}`), sql`, `)})
     `);
-    const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
-    const available = await filterAvailableAgents(ids);
-    if (available.length > 0) return available;
-  } catch { /* fallback abaixo */ }
-
-  // Fallback 1: agent_status online com atividade recente (se houver registro fresco)
-  try {
-    const res = await db.execute(sql`
-      SELECT DISTINCT user_id AS id FROM agent_status
-      WHERE status = 'online'
-        AND last_activity >= NOW() - INTERVAL 15 MINUTE
-        AND user_id IN (SELECT id FROM users WHERE role = 'user')
-    `);
-    const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
-    const available = await filterAvailableAgents(ids);
-    if (available.length > 0) return available;
-  } catch { /* fallback final */ }
-
-  // Fallback final: qualquer atendente (role 'user'); admin nunca entra
-  try {
-    const res = await db.execute(sql`
-      SELECT id FROM users WHERE role = 'user' ORDER BY lastSignedIn DESC
-    `);
-    const rows = rowsOf(res);    const ids = (rows as Array<any>).map(r => Number(r?.id)).filter(Boolean);
-    return filterAvailableAgents(ids);
-  } catch { return []; }
+    const rows = rowsOf(res) as Array<any>;
+    const ids = (rows || []).map(r => Number(r?.id)).filter(Boolean);
+    if (ids.length === 0) return [];
+    return await filterAvailableAgents(ids);
+  } catch {
+    return [];
+  }
 }
 
 export async function autoAssignUnassigned(): Promise<number> {
