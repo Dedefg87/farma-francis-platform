@@ -1396,7 +1396,7 @@ export default function AgentMessages() {
                                   headers: { "Content-Type": "application/json" },
                                   body: JSON.stringify({ messageId: msg.id, emoji: emoji }),
                                 }).catch((e) => console.warn("[Reaction] Envio falhou:", e));
-                                const msgElForVisual = document.querySelector(`[key="${msg.id}"]`) || document.querySelector(.group[data-msg-id="${msg.id}"]`);
+                                const msgElForVisual = document.querySelector(`[key="${msg.id}"]`) || document.querySelector(`.group[data-msg-id="${msg.id}"]`);
 
                                 if (msgElForVisual) {
                                   const bubble = msgElForVisual.querySelector(".relative");
