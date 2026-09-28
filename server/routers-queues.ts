@@ -5,6 +5,7 @@ import { queues, queueAgents, conversations, users } from "../drizzle/schema";
 import { eq, and, sql , inArray } from "drizzle-orm";
 import type { Queue, RoutingRule, RoutingCondition, RoutingAction } from "../../shared/types/queues";
 import { ConversationChannel } from "../../shared/types/conversations";
+import { sseManager } from "./_core/sse";
 
 // Função auxiliar para transformar registro do Drizzle no tipo Queue compartilhado
 function toQueueType(
@@ -142,7 +143,10 @@ export const queuesRouter = router({
   claimUnassignedConversation: protectedProcedure
     .mutation(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available');
+      if (!db) throw new Error('Database not available'
+              _orphanCond,);
+      const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
+      const _orphanCond = _connIds.length > 0 ? sql`(${conversations.assignedTo} IS NOT NULL AND ${conversations.assignedTo} NOT IN (${_connIds.join(",")}))` : sql`1=0`;
       const [next] = await db
         .select()
         .from(conversations)
