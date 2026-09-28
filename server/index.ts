@@ -420,34 +420,68 @@ async function startServer() {
   });
 
   // Message reaction endpoint (Evolution API)
-  app.post("/api/messages/react", async (req, res) => {
+    app.post("/api/messages/react", async (req, res) => {
     try {
       const { messageId, emoji } = req.body || {};
       if (!messageId || !emoji) {
-        res.status(400).json({ error: "messageId e emoji são obrigatórios" });
+        res.status(400).json({ error: "messageId e emoji sao obrigatorios" });
         return;
       }
       const db = await getDb();
       if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
-      const [msg] = await db.select({ conversationId: conversationMessages.conversationId, customerPhone: conversations.customerPhone, externalId: conversationMessages.externalId })
-        .from(conversationMessages)
-        .leftJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
-        .where(eq(conversationMessages.id, parseInt(messageId, 10)))
-        .limit(1);
-      if (!msg || !msg.customerPhone) {
-        res.status(404).json({ error: "Mensagem ou conversa não encontrada" });
+      const { conversationMessages, conversations } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const raw = String(messageId || "");
+      const clean = raw.replace(/^cm-/, "");
+      const numeric = Number(clean);
+      let target = null;
+      if (Number.isFinite(numeric)) {
+        const rows = await db.select().from(conversationMessages).where(eq(conversationMessages.id, numeric)).limit(1);
+        target = rows[0] || null;
+      }
+      if (!target && clean && clean !== String(numeric)) {
+        const rows = await db.select().from(conversationMessages).where(eq(conversationMessages.externalId, clean)).limit(1);
+        target = rows[0] || null;
+      }
+      if (!target) {
+        const rows = await db.select().from(conversationMessages).where(eq(conversationMessages.externalId, raw)).limit(1);
+        target = rows[0] || null;
+      }
+      if (!target) {
+        res.status(404).json({ error: "Mensagem nao encontrada para reacao", messageId: raw });
         return;
       }
-      const { sendWhatsAppReaction } = await import("./messaging");
-      await sendWhatsAppReaction({
-        to: msg.customerPhone,
-        messageId: msg.externalId || String(messageId),
-        emoji: String(emoji),
-      });
-      res.json({ success: true, messageId, emoji });
-    } catch (err: any) {
-      console.error("[react] Error:", err.message || err);
-      res.status(500).json({ error: err.message || "Erro interno" });
+      await db.update(conversationMessages).set({ reaction: emoji }).where(eq(conversationMessages.id, target.id));
+      let remoteJid = String(target.remoteJid || "");
+      let to = remoteJid;
+      if (!remoteJid || !remoteJid.includes("@")) {
+        const convs = await db.select().from(conversations).where(eq(conversations.id, target.conversationId)).limit(1);
+        const phone = String(convs[0]?.customerPhone || "");
+        const digits = phone.replace(/\D/g, "");
+        if (digits) {
+          remoteJid = digits + "@s.whatsapp.net";
+          to = remoteJid;
+        }
+      }
+      if (remoteJid) {
+        try {
+          const { sendReaction } = await import("./messaging");
+          await sendReaction({ to, messageId: target.externalId || String(target.id), remoteJid, emoji, fromMe: target.senderType === "agent" });
+          console.log("[api/messages/react] Reacao enviada:", emoji, "para", remoteJid);
+        } catch (sendErr) {
+          console.error("[api/messages/react] Erro ao enviar reacao:", (sendErr as Error).message);
+        }
+      } else {
+        console.warn("[api/messages/react] Sem remoteJid — nao enviado:", target.id);
+      }
+      try {
+        const { sseManager } = await import("./_core/sse");
+        sseManager.emitToAll({ type: "message:reaction", data: { messageId: target.id, reaction: emoji }, timestamp: Date.now() });
+      } catch (e) { /* ignore */ }
+      res.json({ success: true, messageId: target.id });
+    } catch (err: unknown) {
+      console.error("[api/messages/react] Error:", (err as Error).message);
+      res.status(500).json({ error: (err as Error).message });
     }
   });
 
