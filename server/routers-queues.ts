@@ -144,8 +144,10 @@ export const queuesRouter = router({
     .mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
-            const _connIds = sseManager.getConnectedUsers();
-      const _orphanCond = _connIds.length > 0 ? sql`(${conversations.assignedTo} IS NOT NULL AND ${conversations.assignedTo} NOT IN (${sql.raw(_connIds.map((id: any) => `'${String(id).split("'").join("''")}'`).join(","))}))` : sql`1=0`;
+      const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
+      const _onlineCond = _connIds.length > 0
+        ? sql`(${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}) OR ${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE) OR ${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`
+        : sql`(${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE) OR ${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`;
       const [next] = await db
         .select()
         .from(conversations)
@@ -154,10 +156,9 @@ export const queuesRouter = router({
             inArray(conversations.status, ['open', 'assigned']),
             or(
               sql`${conversations.assignedTo} IS NULL`,
-              sql`${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active')`,
-              sql`${conversations.assignedTo} IN (SELECT id FROM users WHERE role = 'user' AND (lastSignedIn IS NULL OR lastSignedIn < NOW() - INTERVAL 24 HOUR))`,
-              sql`NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.conversation_id = ${conversations.id} AND cm.sender_type = 'agent')`,
-              _orphanCond
+              sql`NOT (${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE))`,
+              sql`NOT (${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`,
+              sql`NOT (${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}))`
             )
           )
         )
