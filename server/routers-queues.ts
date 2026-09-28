@@ -143,8 +143,7 @@ export const queuesRouter = router({
   claimUnassignedConversation: protectedProcedure
     .mutation(async ({ ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error('Database not available'
-              _orphanCond,);
+      if (!db) throw new Error('Database not available');
       const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
       const _orphanCond = _connIds.length > 0 ? sql`(${conversations.assignedTo} IS NOT NULL AND ${conversations.assignedTo} NOT IN (${_connIds.join(",")}))` : sql`1=0`;
       const [next] = await db
@@ -158,6 +157,7 @@ export const queuesRouter = router({
               sql`${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active')`,
               sql`${conversations.assignedTo} IN (SELECT id FROM users WHERE role = 'user' AND (lastSignedIn IS NULL OR lastSignedIn < NOW() - INTERVAL 24 HOUR))`,
               sql`NOT EXISTS (SELECT 1 FROM conversation_messages cm WHERE cm.conversation_id = ${conversations.id} AND cm.sender_type = 'agent')`
+              _orphanCond,
             )
           )
         )
