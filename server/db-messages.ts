@@ -377,7 +377,22 @@ export async function ingestInboundConversationMessage(message: {
     return null;
   }
 
-  // 0. Deduplicação: verificar se mensagem já foi processada (com TTL de 24h)
+
+  // [fix70] Reação NUNCA cria cliente/conversa: processa e retorna antes do findOrCreate
+  if (['reaction','reaction_message','reactionmessage'].includes(String((message as any).messageType || (message as any).type || '').toLowerCase())) {
+    const _reEmoji = String((message as any).messageText || (message as any).reaction || (message as any).emoji || (message as any).reactionEmoji || '');
+    const _reTarget = (message as any).reactionTargetExternalId || (message as any).replyToExternalId || (message as any).reactionTargetId || (message as any).reactionMessageId || null;
+    try {
+      if (_reTarget && _reEmoji) {
+        const [_tgt] = await db.select({ id: conversationMessages.id }).from(conversationMessages).where(eq(conversationMessages.externalId, _reTarget)).limit(1);
+        if (_tgt) { await db.update(conversationMessages).set({ reaction: _reEmoji }).where(eq(conversationMessages.id, _tgt.id)); console.log('[fix70] Reação aplicada na mensagem', _tgt.id, '=', _reEmoji); }
+        else console.warn('[fix70] Alvo da reação não encontrado, ignorada (sem criar conversa):', _reTarget);
+      } else {
+        if (!_reTarget && !_reEmoji) console.warn('[fix70] Reação sem alvo/emoji, ignorada (sem criar conversa)');
+      }
+    } catch (e) { console.error('[fix70] Erro ao processar reação:', e); }
+    return null;
+  }  // 0. Deduplicação: verificar se mensagem já foi processada (com TTL de 24h)
   if (message.externalId) {
     const TTL_HOURS = 24;
     const cutoffTime = new Date(Date.now() - TTL_HOURS * 60 * 60 * 1000);
