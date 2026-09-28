@@ -622,7 +622,7 @@ export async function ingestInboundConversationMessage(message: {
   }
   
   // [fix69] Reacao NUNCA vira balao: aplica na mensagem original e sai sem inserir
-  if (String((message as any).messageType || (message as any).type || '').toLowerCase() === 'reaction') {
+  if (['reaction','reaction_message','reactionmessage'].includes(String((message as any).messageType || (message as any).type || '').toLowerCase())) {
     const emoji = (message as any).messageText || (message as any).reactionEmoji || null;
     const targetId = (message as any).reactionTargetExternalId || (message as any).replyToExternalId || (message as any).reactionTargetId || null;
     try {
