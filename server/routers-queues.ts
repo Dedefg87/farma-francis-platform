@@ -2,7 +2,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import { queues, queueAgents, conversations, users } from "../drizzle/schema";
-import { eq, and, sql , inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, or } from "drizzle-orm";
 import type { Queue, RoutingRule, RoutingCondition, RoutingAction } from "../../shared/types/queues";
 import { ConversationChannel } from "../../shared/types/conversations";
 import { sseManager } from "./_core/sse";
