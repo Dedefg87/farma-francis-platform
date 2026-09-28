@@ -144,8 +144,8 @@ export const queuesRouter = router({
     .mutation(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
-      const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
-      const _orphanCond = _connIds.length > 0 ? sql`(${conversations.assignedTo} IS NOT NULL AND ${conversations.assignedTo} NOT IN (${_connIds.join(",")}))` : sql`1=0`;
+            const _connIds = sseManager.getConnectedUsers();
+      const _orphanCond = _connIds.length > 0 ? sql`(${conversations.assignedTo} IS NOT NULL AND ${conversations.assignedTo} NOT IN (${sql.raw(_connIds.map((id: any) => `'${String(id).split("'").join("''")}'`).join(","))}))` : sql`1=0`;
       const [next] = await db
         .select()
         .from(conversations)
