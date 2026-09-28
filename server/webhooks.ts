@@ -1975,6 +1975,28 @@ async function processEvolutionWebhook(body: unknown) {
                 let storyOverrideType: string | null = null;
                 let storyOverrideMime: string | null = null;
                 let storyOverrideUrl: string | null = null;
+                // [fix70] REAÇÃO: NUNCA cria conversa/cliente — aplica na mensagem original e retorna
+                let _react70 = false;
+                try {
+                  const _rt70 = String(typeof messageType !== 'undefined' && messageType ? messageType : '').toLowerCase();
+                  if (['reaction','reaction_message','reactionmessage'].includes(_rt70)) {
+                    _react70 = true;
+                    const _reEmoji = (typeof reactionEmoji !== 'undefined' && reactionEmoji) || (typeof messageText !== 'undefined' ? messageText : '') || '';
+                    const _reTarget = (typeof reactionTargetId !== 'undefined' && reactionTargetId) || (typeof reactionMessageId !== 'undefined' ? reactionMessageId : '') || null;
+                    const _db70 = (typeof db !== 'undefined' && db) || null;
+                    try {
+                      if (_db70 && _reTarget && _reEmoji) {
+                        const [_tgt70] = await _db70.select({ id: conversationMessages.id }).from(conversationMessages).where(eq(conversationMessages.externalId, _reTarget)).limit(1);
+                        if (_tgt70) {
+                          await _db70.update(conversationMessages).set({ reaction: _reEmoji }).where(eq(conversationMessages.id, _tgt70.id));
+                          console.log('[fix70] Reação aplicada à mensagem ' + _tgt70.id + ' = ' + _reEmoji);
+                          try { sseManager.emitToAll({ type: 'message:reaction', data: { messageId: _tgt70.id, reaction: _reEmoji }, timestamp: Date.now() }); } catch (e) { }
+                        } else console.warn('[fix70] Alvo da reação não encontrado, ignorada (sem criar conversa): ' + _reTarget);
+                      } else console.warn('[fix70] Reação sem alvo/emoji/db, ignorada (sem criar conversa)');
+                    } catch (e) { console.error('[fix70] Erro ao aplicar reação:', e); }
+                  }
+                } catch (_reErr70) { console.error('[fix70] Erro ao processar reação:', _reErr70); }
+                if (_react70) return;
 
                 // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
                 const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
