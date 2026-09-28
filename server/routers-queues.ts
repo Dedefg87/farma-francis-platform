@@ -145,7 +145,7 @@ export const queuesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
       const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
-      const [next] = await db
+      const rows = await db
         .select()
         .from(conversations)
         .where(
@@ -163,11 +163,13 @@ export const queuesRouter = router({
             )
           )
         )
-        .orderBy(conversations.openedAt)
-        .limit(1);
-      if (!next) throw new Error('Nenhuma conversa disponivel para puxar');
-      await db.update(conversations).set({ assignedTo: ctx.user.id, status: 'assigned' }).where(eq(conversations.id, next.id));
-      return { success: true, conversationId: next.id };
+        .orderBy(conversations.openedAt);
+      if (rows.length === 0) throw new Error('Nenhuma conversa disponivel para puxar');
+      const _ids = rows.map((r: any) => r.id);
+      for (let i = 0; i < _ids.length; i += 500) {
+        await db.update(conversations).set({ assignedTo: ctx.user.id, status: 'assigned' }).where(inArray(conversations.id, _ids.slice(i, i + 500)));
+      }
+      return { success: true, count: _ids.length, conversationIds: _ids, conversationId: _ids[0] };
     }),
 
   // Transferir conversa para outro agente
