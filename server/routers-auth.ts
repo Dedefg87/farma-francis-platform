@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 import { getDb } from "./db";
 import { users as usersTable } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export const authRouter = router({
   // Teste de autenticação (debug)
@@ -149,8 +150,14 @@ export const authRouter = router({
   }),
 
   // Logout (opcional, frontend limpa localStorage)
-  logout: protectedProcedure.mutation(({ ctx }) => {
-    console.log("[LOGOUT] User logging out:", ctx.user?.username);
-    return { success: true };
-  }),
+  logout: protectedProcedure.mutation(async ({ ctx }) => {
+      try {
+        const _db = await getDb();
+        if (_db) {
+          await _db.execute(sql`UPDATE conversations SET assigned_to = NULL, status = 'open' WHERE assigned_to = ${ctx.user.id} AND status IN ('open','assigned')`);
+          console.log("[LOGOUT] Conversas ativas liberadas para puxar:", ctx.user.id);
+        }
+      } catch (e) { console.error("[LOGOUT] Erro ao liberar conversas:", (e && e.message) || e); }
+      return { success: true };
+    }),
 });
