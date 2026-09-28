@@ -145,9 +145,6 @@ export const queuesRouter = router({
       const db = await getDb();
       if (!db) throw new Error('Database not available');
       const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
-      const _onlineCond = _connIds.length > 0
-        ? sql`(${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}) OR ${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE) OR ${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`
-        : sql`(${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE) OR ${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`;
       const [next] = await db
         .select()
         .from(conversations)
@@ -156,9 +153,13 @@ export const queuesRouter = router({
             inArray(conversations.status, ['open', 'assigned']),
             or(
               sql`${conversations.assignedTo} IS NULL`,
-              sql`NOT (${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE))`,
-              sql`NOT (${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`,
-              sql`NOT (${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}))`
+              and(
+                sql`NOT (${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE))`,
+                sql`NOT (${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`,
+                _connIds.length > 0
+                  ? sql`NOT (${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}))`
+                  : sql`1=1`
+              )
             )
           )
         )
