@@ -153,9 +153,9 @@ export const queuesRouter = router({
             inArray(conversations.status, ['open', 'assigned']),
             or(
               sql`${conversations.assignedTo} IS NULL`,
+              sql`${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active')`,
               and(
                 sql`NOT (${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE))`,
-                sql`NOT (${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active'))`,
                 _connIds.length > 0
                   ? sql`NOT (${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}))`
                   : sql`1=1`
