@@ -158,6 +158,28 @@ export async function getLoggedInAgents(): Promise<number[]> {
   }
 }
 
+export async function getAgentsForTransfer(): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  // [fix71] Fonte tolerante para o MODAL de transferencia (acao manual): conectados via SSE
+  // + agentes com login recente (30min). NAO afeta getLoggedInAgents/autoAssign (roteamento
+  // automatico continua estrito ao SSE vivo) — isolado de proposito.
+  const viaSse = await getLoggedInAgents();
+  const recent: number[] = [];
+  try {
+    const res = await db.execute(sql`
+      SELECT id FROM users
+      WHERE role = 'user'
+        AND lastSignedIn IS NOT NULL
+        AND lastSignedIn >= NOW() - INTERVAL 30 MINUTE
+    `);
+    const rows = rowsOf(res) as Array<any>;
+    for (const r of rows) { const n = Number(r && r.id); if (Number.isFinite(n) && n > 0) recent.push(n); }
+  } catch { /* mantem apenas SSE */ }
+  const merged = [...new Set([...viaSse, ...recent])];
+  if (merged.length === 0) return [];
+  try { return await filterAvailableAgents(merged); } catch { return merged; }
+}
 export async function autoAssignUnassigned(): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
