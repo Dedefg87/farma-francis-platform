@@ -183,14 +183,7 @@ export const conversationsRouter = router({
   list: protectedProcedure
     .query(async ({ ctx }): Promise<Conversation[]> => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available"
-      // [fix71] Divisao estrita: auto-assign roda no fluxo real do painel (guard 8s por processo)
-      const _now71 = Date.now();
-      const _last71 = (globalThis as any).__ffAutoAssignAt || 0;
-      if (_now71 - _last71 > 8000) {
-        (globalThis as any).__ffAutoAssignAt = _now71;
-        await autoAssignUnassigned().catch(() => {});
-      });
+      if (!db) throw new Error("Database not available");
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
       // Antes: agents só viam suas próprias conversas — mudou porque conversas podem ser reatribuídas
