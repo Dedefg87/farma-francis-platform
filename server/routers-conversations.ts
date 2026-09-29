@@ -12,7 +12,7 @@ import {
   ConversationChannel,
 } from "@shared/types/conversations";
 import { closeConversation } from "./chatbot";
-import { autoAssignUnassigned, getLoggedInAgents } from "./helpers/agent-availability";
+import { autoAssignUnassigned, getAgentsForTransfer } from "./helpers/agent-availability";
 
 /**
  * Helper: Converte uma row do Drizzle para o tipo Conversation compartilhado.
@@ -183,14 +183,21 @@ export const conversationsRouter = router({
   list: protectedProcedure
     .query(async ({ ctx }): Promise<Conversation[]> => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db) throw new Error("Database not available"
+      // [fix71] Divisao estrita: auto-assign roda no fluxo real do painel (guard 8s por processo)
+      const _now71 = Date.now();
+      const _last71 = (globalThis as any).__ffAutoAssignAt || 0;
+      if (_now71 - _last71 > 8000) {
+        (globalThis as any).__ffAutoAssignAt = _now71;
+        await autoAssignUnassigned().catch(() => {});
+      });
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
       // Antes: agents só viam suas próprias conversas — mudou porque conversas podem ser reatribuídas
-      const conditions = and(
-        inArray(conversations.status, ['open', 'assigned']),
-        or(eq(conversations.assignedTo, ctx.user.id), isNull(conversations.assignedTo))
-      );
+      const isUserRole = (ctx as any)?.user?.role === 'user';
+      const conditions = isUserRole
+        ? and(inArray(conversations.status, ['open', 'assigned']), eq(conversations.assignedTo, ctx.user.id))
+        : and(inArray(conversations.status, ['open', 'assigned']));
 
       const rows = await db
         .select({
@@ -236,10 +243,10 @@ export const conversationsRouter = router({
       if (!db) throw new Error("Database not available");
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
-      const conditions = and(
-        inArray(conversations.status, ['open', 'assigned']),
-        or(eq(conversations.assignedTo, ctx.user.id), isNull(conversations.assignedTo))
-      );
+      const isUserRole = (ctx as any)?.user?.role === 'user';
+      const conditions = isUserRole
+        ? and(inArray(conversations.status, ['open', 'assigned']), eq(conversations.assignedTo, ctx.user.id))
+        : and(inArray(conversations.status, ['open', 'assigned']));
 
       const rows = await db
         .select({
@@ -647,7 +654,7 @@ export const conversationsRouter = router({
    */
   loggedAgents: protectedProcedure
     .query(async ({ ctx }): Promise<{ id: number; name: string }[]> => {
-      const loggedIn = await getLoggedInAgents();
+      const loggedIn = await getAgentsForTransfer();
       if (loggedIn.length === 0) return [];
       const db = await getDb();
       if (!db) return [];
