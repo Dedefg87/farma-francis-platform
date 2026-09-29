@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { and, eq, or, desc, inArray, like, isNull } from "drizzle-orm";
-import { conversations, customers, conversationMessages, users } from "../drizzle/schema";
+import { conversations, customers, conversationMessages, users } from "../dri
+      // [fix71] Auto-assign roda no fluxo real do painel (guard global 8s por processo)
+      const _now71 = Date.now();
+      const _last71 = (globalThis as any).__ffAutoAssignAt || 0;
+      if (_now71 - _last71 > 8000) {
+        (globalThis as any).__ffAutoAssignAt = _now71;
+        await autoAssignUnassigned().catch(() => {});
+      }zzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
