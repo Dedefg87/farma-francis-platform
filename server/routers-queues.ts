@@ -189,7 +189,7 @@ export const queuesRouter = router({
     .query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) throw new Error('Database not available');
-      const loggedIn = await getLoggedInAgents();
+      const loggedIn = await getAgentsForTransfer();
       if (loggedIn.length === 0) return [];
       const set = new Set<number>(loggedIn);
       const res = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
