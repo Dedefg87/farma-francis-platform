@@ -110,6 +110,7 @@ import CRMPanel from "@/components/CRMPanel";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { shouldNotifyAgent, conversationOwner } from "@/lib/notificationGuard";
 import { useLocation } from "wouter";
 import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
 
@@ -247,7 +248,11 @@ export default function AgentMessages() {
               (data.type === "messages.update" && data.data?.fromMe === false)
             ) {
               // Play notification sound if not muted (only for new messages)
-              if (!notificationsMuted && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
+              if (
+                !notificationsMuted &&
+                (data.type === "message:new" || data.type === "MESSAGE_NEW") &&
+                shouldNotifyAgent(data.data?.assignedTo ?? data.data?.assigned_to, user?.id)
+              ) {
                 playNotificationSound();
               }
 
@@ -741,9 +746,12 @@ export default function AgentMessages() {
     }
 
     // Calcular total de mensagens não lidas
-    const currentTotalUnread = conversations.reduce(
-      (sum, c) => sum + (c.unreadCount || 0),
-      0
+    const myConversations = conversations.filter(
+    (c) => shouldNotifyAgent(conversationOwner(c), user?.id)
+    );
+    const currentTotalUnread = myConversations.reduce(
+    (sum, c) => sum + (c.unreadCount || 0),
+    0
     );
     const previousTotalUnread = previousTotalUnreadRef.current;
 

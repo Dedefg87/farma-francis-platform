@@ -759,10 +759,11 @@ export async function ingestInboundConversationMessage(message: {
   // 10. Notify connected agents via SSE (real-time update)
   const messageContent = message.messageText || message.caption || "[Mídia]";
   const sseMessage = {
-    type: EVENTS.MESSAGE_NEW,
-    data: {
-      conversationId,
-      message: {
+  type: EVENTS.MESSAGE_NEW,
+  data: {
+  conversationId,
+  assignedTo: assignedUserId,
+  message: {
         id: messageDbId,
         content: buildInboundContent(message),
         senderType: "customer",

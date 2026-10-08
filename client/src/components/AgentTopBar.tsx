@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
 import { hasSession } from "@/lib/auth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
+import { shouldNotifyAgent, conversationOwner } from "@/lib/notificationGuard";
 import { useEffect, useRef, useState } from "react";
 
 export default function AgentTopBar({ compact = false }: { compact?: boolean }) {
@@ -65,6 +66,8 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
     let hasNewMessage = false;
 
     conversations.forEach(conv => {
+    // Ignora conversas de outros atendentes: som so para as minhas ou sem dono
+    if (!shouldNotifyAgent(conversationOwner(conv), user?.id)) return;
 // @ts-ignore
       const previousCount = previousMessagesRef.current.get(conv.id) || 0;
       const currentCount = conv.unreadCount || 0;
