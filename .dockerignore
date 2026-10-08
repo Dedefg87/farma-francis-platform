@@ -1,0 +1,17 @@
+# Farma Francis - build context: so o que o app usa
+.git
+.github
+node_modules
+.agents
+.claude
+.claude-flow
+.manus
+goal_ui
+ruvocal
+chat-ui
+truncate*
+FORCE_REBUILD*
+DEPLOY_TRIGGER*
+REBUILD*
+/main
+/Dashboard_backup.tsx
