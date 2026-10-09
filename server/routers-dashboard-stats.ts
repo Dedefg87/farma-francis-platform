@@ -24,6 +24,7 @@ import type {
 
 // IMPORT DA FUNÇÃO getDateRangeFromPeriod
 import { getDateRangeFromPeriod } from "./utils/date-range";
+const SLA_TARGET_MINUTES = 120; // SLA de resolucao (min): venda fechada em ate 2h conta como dentro do SLA
 
 // Utilitário para formatar segundos em HH:MM:SS
 function formatSecondsToHMS(totalSeconds: number): string {
@@ -124,6 +125,27 @@ export const dashboardStatsRouter = router({
       const avgSeconds = avgMs / 1000000;
       avgHandlingTime = formatSecondsToHMS(avgSeconds);
 
+      const slaTotalResult = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(conversations)
+        .where(and(
+          eq(conversations.status, "closed"),
+          eq(conversations.closeReason, "venda"),
+          gte(conversations.closedAt, start),
+          lte(conversations.closedAt, end)
+        ));
+      const slaTargetResult = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(conversations)
+        .where(and(
+          eq(conversations.status, "closed"),
+          eq(conversations.closeReason, "venda"),
+          gte(conversations.closedAt, start),
+          lte(conversations.closedAt, end),
+          sql`TIMESTAMPDIFF(MINUTE, ${conversations.openedAt}, ${conversations.closedAt}) <= ${SLA_TARGET_MINUTES}`
+        ));
+      const slaTotal = Number(slaTotalResult[0]?.n) || 0;
+      const slaMet = Number(slaTargetResult[0]?.n) || 0;
       return {
         totalConversations,
         uniqueCustomers,
@@ -151,6 +173,7 @@ export const dashboardStatsRouter = router({
 
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
+        sla: slaTotal > 0 ? Math.round((slaMet / slaTotal) * 100) : null,
         input?.startDate,
         input?.endDate
       );
@@ -247,10 +270,12 @@ export const dashboardStatsRouter = router({
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
           daysActive: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
           // TMA baseado apenas em conversas ENCERRADAS no período
-          avgHandlingTime: sql<number>`COALESCE(AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt})), 0)`,
+          avgHandlingTime: sql<number>`COALESCE((SELECT AVG(TIMESTAMPDIFF(MICROSECOND, cc.opened_at, cc.closed_at)) FROM conversations cc WHERE cc.assigned_to = ${users.id} AND cc.closed_at IS NOT NULL AND cc.closed_at >= ${start} AND cc.closed_at <= ${end}), 0)`,
           // Mensagens no período VINCULADAS a conversas do período (senderType analisado via CASE)
           messagesSent: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'agent' THEN 1 ELSE 0 END)`,
           messagesReceived: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'customer' THEN 1 ELSE 0 END)`,
+          slaTotal: sql<number>`(SELECT COUNT(*) FROM conversations cc WHERE cc.assigned_to = ${users.id} AND cc.status = 'closed' AND cc.close_reason = 'venda' AND cc.closed_at >= ${start} AND cc.closed_at <= ${end})`,
+          slaMet: sql<number>`(SELECT COUNT(*) FROM conversations cc WHERE cc.assigned_to = ${users.id} AND cc.status = 'closed' AND cc.close_reason = 'venda' AND cc.closed_at >= ${start} AND cc.closed_at <= ${end} AND TIMESTAMPDIFF(MINUTE, cc.opened_at, cc.closed_at) <= ${SLA_TARGET_MINUTES})`,
         })
         .from(users)
         // LEFT JOIN conversations: apenas conversas do agente no período
@@ -281,6 +306,7 @@ export const dashboardStatsRouter = router({
         avgPerDay: Number(stat.daysActive) > 0 ? Number(((Number(stat.totalConversations) || 0) / Number(stat.daysActive)).toFixed(1)) : 0,
         messagesSent: Number(stat.messagesSent) || 0,
         messagesReceived: Number(stat.messagesReceived) || 0,
+        sla: Number(stat.slaTotal) > 0 ? Math.round((Number(stat.slaMet) / Number(stat.slaTotal)) * 100) : null,
         tma: stat.avgHandlingTime ? formatSecondsToHMS(Number(stat.avgHandlingTime) / 1000000) : "00:00:00",
       }));
       } catch (err: any) {

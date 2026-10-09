@@ -270,7 +270,7 @@ export default function Dashboard() {
                   stats.avgPerAgent?.toFixed(1) ?? "0.0"
                 )}
                 {renderMetricCard("TMA Médio", calculateAverageTMA)}
-                {renderMetricCard("% SLA", "—")}
+                {renderMetricCard("% SLA", stats.sla)}
               </>
             ) : (
               <div className="lg:col-span-7 p-4 text-center text-gray-500 bg-white rounded-lg shadow-sm border border-gray-100">
