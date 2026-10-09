@@ -57,7 +57,7 @@ export const dashboardStatsRouter = router({
         input?.endDate
       );
 
-      console.log(`[getStats] Período: ${period}, Filtrando entre ${start.toISOString()} e ${end.toISOString()}`);
+      console.log(`[getStats] Período: ${period}, Filtrando entre ${start.toISOString()} e ${end.toISOString()} (TMA/SLA por conversas encerradas)`);
 
       const dateFilter = and(
         gte(conversations.openedAt, start),
@@ -116,8 +116,9 @@ export const dashboardStatsRouter = router({
         .from(conversations)
         .where(
           and(
-            dateFilter,
-            isNotNull(conversations.closedAt)
+            isNotNull(conversations.closedAt),
+            gte(conversations.closedAt, start),
+            lte(conversations.closedAt, end)
           )
         );
 
@@ -153,6 +154,7 @@ export const dashboardStatsRouter = router({
         messagesReceived,
         avgPerAgent,
         avgHandlingTime,
+        sla: slaTotal > 0 ? Math.round((slaMet / slaTotal) * 100) : null,
       };
     }),
 
@@ -173,7 +175,6 @@ export const dashboardStatsRouter = router({
 
       const { startDate: start, endDate: end } = getDateRangeFromPeriod(
         period,
-        sla: slaTotal > 0 ? Math.round((slaMet / slaTotal) * 100) : null,
         input?.startDate,
         input?.endDate
       );

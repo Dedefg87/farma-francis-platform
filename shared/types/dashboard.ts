@@ -10,6 +10,7 @@ export interface AgentStats {
   messagesSent: number;
   messagesReceived: number;
   tma: string;
+  sla?: number | null;
 }
 
 export interface DashboardSummary {
@@ -19,6 +20,7 @@ export interface DashboardSummary {
   messagesReceived: number;
   avgPerAgent: number;
   avgHandlingTime: string;
+  sla?: number | null;
 }
 
 export interface ChannelStats {
