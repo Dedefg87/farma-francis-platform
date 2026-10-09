@@ -326,7 +326,8 @@ export default function Dashboard() {
             <Pie
             data={channelData.map(c => ({ name: c.channel, value: c.count }))}
             cx="50%" cy="50%" outerRadius={66} fill="#8884d8" dataKey="value" nameKey="name"
-            label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            labelLine={false}
             >
             {channelData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -351,7 +352,8 @@ export default function Dashboard() {
             <Pie
             data={statusData.map(s => ({ name: s.status, value: s.count }))}
             cx="50%" cy="50%" outerRadius={66} fill="#8884d8" dataKey="value" nameKey="name"
-            label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            labelLine={false}
             >
             {statusData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
