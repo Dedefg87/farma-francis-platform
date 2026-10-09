@@ -321,11 +321,11 @@ export default function Dashboard() {
             ) : channelQuery.isError ? (
             renderErrorState(`Falha ao carregar gráfico por canal: ${channelQuery.error?.message || 'Erro desconhecido'}`, channelQuery.refetch)
             ) : channelData && channelData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={340}>
             <PieChart>
             <Pie
             data={channelData.map(c => ({ name: c.channel, value: c.count }))}
-            cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" nameKey="name"
+            cx="50%" cy="50%" outerRadius={66} fill="#8884d8" dataKey="value" nameKey="name"
             label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
             >
             {channelData.map((_, index) => (
@@ -346,11 +346,11 @@ export default function Dashboard() {
             ) : statusQuery.isError ? (
             renderErrorState(`Falha ao carregar gráfico por status: ${statusQuery.error?.message || 'Erro desconhecido'}`, statusQuery.refetch)
             ) : statusData && statusData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
+            <ResponsiveContainer width="100%" height={340}>
             <PieChart>
             <Pie
             data={statusData.map(s => ({ name: s.status, value: s.count }))}
-            cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" nameKey="name"
+            cx="50%" cy="50%" outerRadius={66} fill="#8884d8" dataKey="value" nameKey="name"
             label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
             >
             {statusData.map((_, index) => (
