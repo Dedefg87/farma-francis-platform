@@ -331,8 +331,8 @@ export const dashboardStatsRouter = router({
       // Consulta: contar conversas únicas por data+hora
       const result = await db
         .select({
-          date: sql<Date>`DATE(${conversationMessages.createdAt})`,
-          hour: sql<number>`HOUR(${conversationMessages.createdAt})`,
+          date: sql<Date>`DATE(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`,
+          hour: sql<number>`HOUR(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`,
           chats: sql<number>`COUNT(DISTINCT ${conversationMessages.conversationId})`,
         })
         .from(conversationMessages)
@@ -343,8 +343,8 @@ export const dashboardStatsRouter = router({
             lte(conversationMessages.createdAt, endDate)
           )
         )
-        .groupBy(sql`DATE(${conversationMessages.createdAt})`, sql`HOUR(${conversationMessages.createdAt})`)
-        .orderBy(sql`DATE(${conversationMessages.createdAt})`, sql`HOUR(${conversationMessages.createdAt})`);
+        .groupBy(sql`DATE(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`, sql`HOUR(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`)
+        .orderBy(sql`DATE(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`, sql`HOUR(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`);
 
       console.log(`[getContactsByHour] Resultado bruto:`, JSON.stringify(result));
 
