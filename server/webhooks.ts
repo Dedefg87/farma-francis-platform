@@ -2141,6 +2141,7 @@ async function processEvolutionWebhook(body: unknown) {
                         messageKey: { id: messageId, remoteJid, fromMe: false },
                         ...(parsed as any).mediaKey && { mediaKey: String((parsed as any).mediaKey) },
                         ...(parsed as any).directPath && { directPath: String((parsed as any).directPath) },
+                        instanceName: ((body as any)?.instance) || ((body as any)?.data?.instance) || undefined,
                       });
                     } else {
                       // Standard download for other URLs (Instagram, etc.) - com validação completa
@@ -2202,6 +2203,7 @@ async function processEvolutionWebhook(body: unknown) {
                 messageKey: { id: messageId, remoteJid, fromMe: true },
                 ...(mediaKey && { mediaKey: String(mediaKey) }),
                 ...(directPath && { directPath: String(directPath) }),
+                instanceName: ((body as any)?.instance) || ((body as any)?.data?.instance) || undefined,
               });
               
               // ESTRATÉGIA 2: Se não funcionou, tentar downloadStoryMedia (para stories enviados por nós)

@@ -25,6 +25,7 @@ interface DownloadParams {
   }; // Optional for reference
   mediaKey?: string;     // Base64 media key for authenticated download
   directPath?: string;   // Direct path for authenticated download
+  instanceName?: string; // Instancia que RECEBEU a mensagem (multi-numero)
 }
 
 interface EvolutionDownloadResponse {
@@ -210,7 +211,7 @@ export async function downloadWhatsAppMediaFromEvolution(
 
     const apiUrl = config.apiUrl;
     const apiKey = config.apiKey;
-    const instanceName = config.instanceName;
+    const instanceName = params.instanceName || config.instanceName;
 
     console.log('🚨 [Evolution Download] Config OK, attempting download...');
 
