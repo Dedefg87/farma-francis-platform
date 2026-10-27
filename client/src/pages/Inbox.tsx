@@ -28,6 +28,16 @@ import { TagFilter } from "@/components/TagFilter";
 import { useConversationTags } from "@/hooks/useConversationTags";
 import { PDFPreview } from "@/components/PDFPreview";
 
+// Resolve URLs de midia: relativas ("evolution-api/...") vao pelo proxy /api/media/:id,
+// absolutas (http...) passam intactas. NAO altera comportamento de instancias que ja funcionam.
+function resolveMediaUrl(url: string | null | undefined, messageId?: number | string): string {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  if (messageId) return `/api/media/${messageId}`;
+  return url;
+}
+
 export default function Inbox() {
   const [selectedConversation, setSelectedConversation] = useState<any>(null);
   const [messageText, setMessageText] = useState("");
@@ -526,17 +536,17 @@ export default function Inbox() {
                           {msg.mediaUrl && (msg.messageType === "image" || msg.messageType?.startsWith("image")) && (
                             <div className="mb-2">
                               <img
-                                src={msg.mediaUrl}
+                                src={resolveMediaUrl(msg.mediaUrl, msg.id)}
                                 alt="Imagem recebida"
                                 className="max-w-full max-h-64 object-contain rounded cursor-pointer"
-                                onClick={() => window.open(msg.mediaUrl!, '_blank')}
+                                onClick={() => window.open(resolveMediaUrl(msg.mediaUrl, msg.id), '_blank')}
                               />
                             </div>
                           )}
                           {msg.mediaUrl && (msg.messageType === "video" || msg.messageType?.startsWith("video")) && (
                             <div className="mb-2">
                               <video
-                                src={msg.mediaUrl}
+                                src={resolveMediaUrl(msg.mediaUrl, msg.id)}
                                 controls
                                 className="max-w-full max-h-64 rounded"
                               />
@@ -546,7 +556,7 @@ export default function Inbox() {
                             <div className="mb-2 p-2 bg-blue-50 rounded flex items-center gap-2">
                               <Paperclip className="w-4 h-4 text-blue-600" />
                               <iframe
-                                src={msg.mediaUrl}
+                                src={resolveMediaUrl(msg.mediaUrl, msg.id)}
                                 className="w-full h-64 rounded border border-blue-200"
                                 title="Visualizar documento"
                               />
@@ -627,7 +637,7 @@ export default function Inbox() {
                           msg.messageType === "audio" &&
                           msg.mediaUrl && (
                             <AudioTranscription
-                              audioUrl={msg.mediaUrl}
+                              audioUrl={resolveMediaUrl(msg.mediaUrl, msg.id)}
                               messageId={parseInt(msg.id) || 0}
                             />
                           )}
