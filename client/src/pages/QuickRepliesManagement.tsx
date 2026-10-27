@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import FarmaDashboardLayout from "@/components/FarmaDashboardLayout";
 
 interface QuickReply {
   id: number;
@@ -154,7 +155,8 @@ export default function QuickRepliesManagement() {
   };
 
   return (
-    <div className="container mx-auto py-8">
+    <FarmaDashboardLayout>
+      <div className="container mx-auto py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Gerenciar Respostas Rápidas
@@ -305,5 +307,6 @@ export default function QuickRepliesManagement() {
         </DialogContent>
       </Dialog>
     </div>
+    </FarmaDashboardLayout>
   );
 }
