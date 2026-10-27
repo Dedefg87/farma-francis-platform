@@ -4,6 +4,15 @@ import { getDb } from "./db";
 import { receivedMessages, messages, customers, conversationMessages, conversations, users, employees } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
+// Converte caminho relativo do R2 em URL absoluta. Nao mexe em URLs que ja sao http/data/blob.
+function toAbsoluteMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  const base = (process.env.R2_PUBLIC_URL || process.env.PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev").replace(/\/+$/, "");
+  return base + "/" + url.replace(/^\/+/, "");
+}
+
 
 /**
  * Inbox router for managing conversations
@@ -190,7 +199,7 @@ export const inboxRouter = router({
         direction: msg.senderType === "agent" ? "outbound" : "inbound",
         content: msg.content || (msg.messageType === "reaction" ? msg.reaction || "" : ""),
         messageType: msg.messageType,
-        mediaUrl: msg.fileUrl,
+        mediaUrl: toAbsoluteMediaUrl(msg.fileUrl),
         timestamp: msg.createdAt instanceof Date ? msg.createdAt.getTime() : new Date(msg.createdAt).getTime(),
         createdAt: msg.createdAt,
         fromName: msg.fromName || null,
