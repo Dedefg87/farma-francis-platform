@@ -1,5 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, LogOut, Award, Gift, HardDrive, Menu } from "lucide-react";
+import { LayoutDashboard, Users, MessageSquare, UsersRound, FileText, Mail, Zap, LogOut, Award, Gift, HardDrive, Menu, MessageSquareText } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -14,6 +14,7 @@ const navigationItems = [
   { icon: UsersRound, label: "Funcionários", path: "/employees" },
   { icon: FileText, label: "Relatórios", path: "/reports" },
   { icon: Mail, label: "Mensagens", path: "/messages" },
+  { icon: MessageSquareText, label: "Mensagens Prontas", path: "/admin/quick-replies" },
   { icon: Zap, label: "Automação", path: "/automation" },
   { icon: Gift, label: "Chá de Bebê", path: "/baby-shower" },
   { icon: Award, label: "Performance", path: "/agent-performance" },
