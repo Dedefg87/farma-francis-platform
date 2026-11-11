@@ -146,7 +146,7 @@ export async function getLoggedInAgents(): Promise<number[]> {
     const uniq = [...new Set(connectedUsers)];
     const res = await db.execute(sql`
       SELECT id FROM users
-      WHERE role = 'user'
+      WHERE role IN ('user', 'admin')
         AND id IN (${sql.join(uniq.map((id: number) => sql`${id}`), sql`, `)})
     `);
     const rows = rowsOf(res) as Array<any>;

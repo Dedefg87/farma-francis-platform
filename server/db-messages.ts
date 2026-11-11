@@ -17,78 +17,56 @@ import { fetchEvolutionProfile } from "./messaging";
 import { normalizeWhatsAppNumber, generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
 
 // Cache para evitar queries repetitivas de agent assignment
-const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
-const CACHE_TTL_MS = 30 * 1000; // 30 segundos
+// __FIX_SSE_V4__ cache de atribuicao removido
 
 async function pickLeastLoadedOnlineAgent(params: {
   provider: "whatsapp" | "instagram";
 }) {
+  // __FIX_SSE_V4__ cache por provider REMOVIDO: congelava o mesmo agente por 30s
+  // em todas as conversas do canal, fazendo quem entrava depois nunca receber
+  // mensagem em tempo real. A escolha agora e sempre por menor carga real.
   const db = await getDb();
   if (!db) return null;
 
-
-  const cacheKey = params.provider;
-  const cached = agentAssignmentCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-    return cached.agentId ? { userId: cached.agentId, loadCount: 0, lastSignedIn: null } : null;
-  }
-
   const connected = sseManager
     .getConnectedUsers()
-    .map(id => Number(id))
-    .filter(id => Number.isFinite(id) && id > 0);
+    .map((id: any) => Number(id))
+    .filter((id: number) => Number.isFinite(id) && id > 0);
 
-  // FALLBACK: If no agents are connected via SSE, find any active agent
-  // This prevents conversations from being created without assignment
-  // when SSE connections drop (Railway kills long connections)
-    if (connected.length === 0) {
-    console.log("[pickAgent] ⚠️ No agents online via SSE — conversation left UNASSIGNED (regra: somente atendentes logados recebem)");
-    agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+  if (connected.length === 0) {
+    console.log("[pickAgent] Nenhum atendente conectado via SSE — conversa fica SEM atribuicao");
     return null;
   }
-if (connected.length > 0) {
-    const rows = (await db.execute(sql`
-      SELECT 
-        u.id AS userId,
-        COUNT(c.id) AS loadCount,
-        MAX(u.lastSignedIn) AS lastSignedIn
-      FROM users u
-      LEFT JOIN agent_pauses p
-        ON p.agent_id = u.id AND p.status = 'active'
-      LEFT JOIN conversations c
-        ON c.assigned_to = u.id
-       AND c.status IN ('open','assigned')
-       AND c.channel = ${params.provider}
-      WHERE u.role IN ('user', 'admin')
-        AND u.id IN (${sql.join(
-          connected.map(id => sql`${id}`),
-          sql`, `
-        )})
-        AND p.id IS NULL
-      GROUP BY u.id
-      ORDER BY loadCount ASC, u.id DESC
-    `)) as any[];
 
-    if (Array.isArray(rows) && rows.length > 0) {
-      const minLoad = Number(rows[0]?.loadCount ?? 0);
-      const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
-      const chosenId = Number(minRows[0]?.userId);
-      if (!Number.isFinite(chosenId) || chosenId <= 0) {
-        agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
-        return null;
-      }
-      agentAssignmentCache.set(cacheKey, { agentId: chosenId, timestamp: Date.now() });
-      return {
-        userId: chosenId,
-        candidates: rows.length,
-        minLoad,
-        source: "sse",
-      };
-    }
-  }
+  const rows = (await db.execute(sql`
+    SELECT
+      u.id AS userId,
+      COUNT(c.id) AS loadCount,
+      MAX(u.lastSignedIn) AS lastSignedIn
+    FROM users u
+    LEFT JOIN agent_pauses p
+      ON p.agent_id = u.id AND p.status = 'active'
+    LEFT JOIN conversations c
+      ON c.assigned_to = u.id
+     AND c.status IN ('open','assigned')
+     AND c.channel = ${params.provider}
+    WHERE u.role IN ('user', 'admin')
+      AND u.id IN (${sql.join(connected.map((id: number) => sql`${id}`), sql`, `)})
+      AND p.id IS NULL
+    GROUP BY u.id
+    ORDER BY loadCount ASC, u.id DESC
+  `)) as any;
 
-  agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
-  return null;
+  const list: any[] = Array.isArray(rows) && Array.isArray(rows[0]) ? rows[0] : rows;
+  if (!Array.isArray(list) || list.length === 0) return null;
+
+  const minLoad = Number(list[0]?.loadCount ?? 0);
+  const minRows = list.filter((r: any) => Number(r.loadCount ?? 0) === minLoad);
+  const chosenId = Number(minRows[0]?.userId);
+  if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
+
+  console.log("[pickAgent] escolhido userId=" + chosenId + " | carga=" + minLoad + " | candidatos=" + list.length);
+  return { userId: chosenId, candidates: list.length, minLoad, source: "sse" };
 }
 
 /**
@@ -662,6 +640,8 @@ export async function ingestInboundConversationMessage(message: {
     return null;
   }
   console.log("[DB-INSERT] Inbound message - externalId:", message.externalId, "remoteJid:", (message as any).remoteJid, "provider:", message.provider, "replyToExternalId:", message.replyToExternalId);
+  let insertResult: any;
+  try {
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId ?? null,
@@ -678,6 +658,21 @@ export async function ingestInboundConversationMessage(message: {
     replyToContent: message.replyToContent ?? null,
     createdAt: now,
   });
+    } catch (e: any) {
+      // __FIX_SSE_V4__ corrida MobileSync x webhook: duplicidade nao pode estourar
+      const errno = e?.errno ?? e?.cause?.errno ?? e?.code;
+      const emsg = String(e?.message || "");
+      if (errno === 1062 || emsg.includes("ER_DUP_ENTRY") || emsg.includes("Duplicate entry")) {
+        const [_dup] = await db
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, message.externalId ?? ""))
+          .limit(1);
+        console.log("[ingestOutbound] Duplicidade ignorada (ER_DUP_ENTRY):", message.externalId, "-> id", _dup?.id);
+        return { conversationId, customerId: customer.id, messageDbId: _dup?.id };
+      }
+      throw e;
+    }
 
   const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
   const messageDbId = Number(rawMessageId) || undefined;
@@ -805,7 +800,8 @@ export async function ingestInboundConversationMessage(message: {
     // Also notify ALL because admins need to see the update in the list
     sseManager.emitToAll(sseConvUpdate);
   } else {
-    // No assigned agent — notify all connected users (Admins/Available Agents)
+    // __FIX_SSE_V4__ fallback: sem agente atribuido, broadcast para todos
+    console.log("[ingestInbound] Sem agente atribuido — broadcast para todos:", sseManager.getConnectedUsers().join(", ") || "(nenhum)");
     sseManager.emitToAll(sseMessage);
     sseManager.emitToAll(sseConvUpdate);
   }
