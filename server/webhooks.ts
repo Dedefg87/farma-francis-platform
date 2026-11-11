@@ -571,6 +571,19 @@ router.post("/evolution", async (req: Request, res: Response) => {
   return handleEvolutionWebhook(req, res);
 });
 
+// __FIX_EVO_ROUTE__ [fix] Evolution com webhookByEvents=true envia /evolution/<evento>.
+// Sem esta rota o Express devolvia 404 e o CRM nunca processava as mensagens.
+// Funciona com webhookByEvents true E false.
+router.post("/evolution/:event", async (req: Request, res: Response) => {
+  const evt = String(req.params.event || "").replace(/^\/+/, "");
+  console.log("🔵 [Evolution Route] /evolution/" + evt + " apikey:", String(req.query.apikey || "").substring(0, 20));
+  if (evt && !req.body?.event && !req.body?.data?.event) {
+    // injeta o nome do evento para o handler detectar corretamente
+    req.body = { ...(req.body || {}), event: evt.replace(/_/g, ".") };
+  }
+  return handleEvolutionWebhook(req, res);
+});
+
 // Keep the original WhatsApp verification route (was incorrectly overridden above)
 router.get("/whatsapp", async (req: Request, res: Response) => {
   try {
