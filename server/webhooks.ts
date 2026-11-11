@@ -2507,7 +2507,8 @@ async function processEvolutionWebhook(body: unknown) {
             _replyToContent = qm.conversation || qm.extendedTextMessage?.text || qm.imageMessage?.caption || qm.videoMessage?.caption || "";
           }
           console.log("8. [Evolution] 🎯 Chamando ingestInboundConversationMessage para", { fromNumber, messageType, hasReply: !!_replyToExternalId });
-          await ingestInboundConversationMessage({
+          // [fix-sse] captura o retorno para saber conversa e responsavel
+          const _ingestRes: any = await ingestInboundConversationMessage({
             provider: "whatsapp",
             instanceName: ((body as any)?.instance) || ((body as any)?.data?.instance) || null,
             fromNumber,
@@ -2526,6 +2527,34 @@ async function processEvolutionWebhook(body: unknown) {
             replyToContent: parsed.replyToContent,
           });
           console.log("9. [Evolution] ✅ ingestInboundConversationMessage concluído");
+
+          // [fix-sse] emit inbound: entrega em tempo real ao operador responsavel
+          try {
+            const _convId = Number(_ingestRes?.conversationId || _ingestRes?.id || 0);
+            const _assigned = _ingestRes?.assignedUserId ? Number(_ingestRes.assignedUserId) : null;
+            const _payload = {
+              conversationId: _convId || null,
+              messageId: _ingestRes?.messageDbId || null,
+              content: (messageText || caption || "").slice(0, 200),
+              senderType: "customer",
+              customerName: pushName || null,
+              customerPhone: fromNumber,
+              assignedTo: _assigned,
+              createdAt: new Date().toISOString(),
+            };
+            if (_assigned && Number.isFinite(_assigned) && _assigned > 0) {
+              sseManager.emitToUser(String(_assigned), { type: EVENTS.MESSAGE_NEW, data: _payload, timestamp: Date.now() });
+              sseManager.emitToUser(String(_assigned), { type: EVENTS.CONVERSATION_UPDATE, data: _payload, timestamp: Date.now() });
+              console.log("[fix-sse] SSE -> usuario", _assigned, "| conversa", _convId);
+            } else {
+              // sem responsavel: todos os operadores conectados recebem
+              sseManager.emitToAll({ type: EVENTS.MESSAGE_NEW, data: _payload, timestamp: Date.now() });
+              sseManager.emitToAll({ type: EVENTS.CONVERSATION_UPDATE, data: _payload, timestamp: Date.now() });
+              console.log("[fix-sse] SSE -> TODOS (sem responsavel) | conversa", _convId);
+            }
+          } catch (_sseErr: any) {
+            console.error("[fix-sse] falha ao emitir SSE:", _sseErr?.message || _sseErr);
+          }
         } else {
           console.log("[Evolution] Pulando ingest (survey response)");
         }

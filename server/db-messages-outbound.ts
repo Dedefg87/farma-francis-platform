@@ -180,22 +180,34 @@ export async function ingestOutboundConversationMessage(message: {
     return null;
   }
   // 4. Insert message into conversation_messages
-  const insertResult = await db.insert(conversationMessages).values({
-    conversationId,
-    externalId: (message.externalId || message.key?.id) ?? null,
-    senderId: message.fromUserId,
-    senderType: "agent",
-    content,
-    fileUrl: message.mediaUrl || null,
-    fileName: message.fileName || null,
-    fileType: message.mimeType || null,
-    fileSize: message.fileSize || null,
-    reaction: message.reaction || null,
-    replyToMessageId: message.replyToMessageId || null,
+  // [fix-sse] guard ER_DUP_ENTRY - webhook duplicado insere o mesmo externalId
+  let insertResult: any;
+  try {
+    insertResult = await db.insert(conversationMessages).values({
+      conversationId,
+      externalId: (message.externalId || message.key?.id) ?? null,
+      senderId: message.fromUserId,
+      senderType: "agent",
+      content,
+      fileUrl: message.mediaUrl || null,
+      fileName: message.fileName || null,
+      fileType: message.mimeType || null,
+      fileSize: message.fileSize || null,
+      reaction: message.reaction || null,
+      replyToMessageId: message.replyToMessageId || null,
       replyToExternalId: message.replyToExternalId || null,
       replyToContent: message.replyToContent || null,
-    createdAt: message.createdAt || new Date(),
-  });
+      createdAt: message.createdAt || new Date(),
+    });
+  } catch (_insErr: any) {
+    const _code = _insErr?.cause?.code || _insErr?.code || "";
+    const _msg = String(_insErr?.cause?.sqlMessage || _insErr?.message || "");
+    if (_code === "ER_DUP_ENTRY" || _msg.indexOf("Duplicate entry") >= 0) {
+      console.log("[ingestOutbound] duplicata ignorada (fix-sse):", message.externalId || message.key?.id);
+      return { conversationId, customerId: customer.id, messageDbId: undefined as any };
+    }
+    throw _insErr;
+  }
   
   // LOG para depurar problemas com externalId (obrigatório para investigação)
   console.log("[DB-INSERT] externalId gravado (insertion):", message.externalId ? "PRESENTE - " + message.externalId : "NULL (erro)");
