@@ -373,7 +373,7 @@ export default function AgentMessages() {
     {},
     {
       enabled: hasSession(),
-      refetchInterval: 1000, // Atualizar a cada 1 segundo
+      refetchInterval: 15000, // Atualizar a cada 1 segundo
     }
   );
 
@@ -483,7 +483,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     {
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 800 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
+      refetchInterval: selectedConversationId ? 8000 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
       onSuccess: (data) => {
         if (data && data.length > 0) {
         }
