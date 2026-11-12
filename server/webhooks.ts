@@ -720,8 +720,8 @@ async function processEvolutionWebhookAsync(req: Request) {
     // Extrair remoteJid (identificador da conversa) de várias estruturas possíveis
     const remoteJid =
       body?.data?.key?.remoteJid ||
+      body?.data?.messages?.[0]?.key?.remoteJid ||
       body?.data?.remoteJid ||
-      body?.destination ||
       body?.data?.message?.key?.remoteJid ||
       "";
 
