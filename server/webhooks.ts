@@ -932,6 +932,7 @@ async function processWhatsAppWebhook(body: unknown) {
             await db.insert(receivedMessages).values({
               provider: "whatsapp",
               externalId: messageId,
+              remoteJid: remoteJid || null,
               fromNumber: from,
               fromName: fromName,
               messageType: [
