@@ -2410,6 +2410,7 @@ async function processEvolutionWebhook(body: unknown) {
         const messageValues = {
           provider: "whatsapp" as const,
           externalId: messageId,
+          remoteJid: remoteJid || null,
           fromNumber,
           fromName: pushName || null,
           fromProfilePic: profilePic,
@@ -2422,7 +2423,8 @@ async function processEvolutionWebhook(body: unknown) {
           longitude: null,
           timestamp: messageTimestamp,
           rawPayload: JSON.stringify({ ...body, mediaDownloaded: !!mediaUrl }),
-          processed: 0,
+          processed: 1,
+          processedAt: new Date(),
           customerId: existing?.customerId || null, // Manter customerId se já existir
         };
 
