@@ -191,6 +191,7 @@ async function processWhatsAppMessage(message: unknown, value: unknown) {
     await db.insert(receivedMessages).values({
       provider: "whatsapp",
       externalId: messageId,
+      remoteJid: (message?.key?.remoteJid as string) || null,
       fromNumber,
       fromName,
       messageType: messageType as any,
