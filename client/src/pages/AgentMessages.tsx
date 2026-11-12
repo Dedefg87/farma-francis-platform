@@ -312,7 +312,7 @@ export default function AgentMessages() {
       eventSource?.close();
       clearTimeout(reconnectTimeout);
     };
-  }, [user?.id, notificationsMuted, playNotificationSound, queryClient]);
+  }, [user?.id, notificationsMuted, queryClient]); // playNotificationSound removido: recriava o EventSource a cada render
 
   // Atualizar localStorage quando ordenação mudar
   useEffect(() => {
@@ -373,7 +373,7 @@ export default function AgentMessages() {
     {},
     {
       enabled: hasSession(),
-      refetchInterval: 15000, // Atualizar a cada 1 segundo
+      refetchInterval: 10000, // Atualizar lista de conversas a cada 10s
     }
   );
 
@@ -483,7 +483,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     {
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 8000 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
+      refetchInterval: selectedConversationId ? 3000 : false, // Atualizar mensagens a cada 3s (fallback quando SSE cai no Railway)
       onSuccess: (data) => {
         if (data && data.length > 0) {
         }
