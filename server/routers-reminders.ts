@@ -86,9 +86,9 @@ export const remindersRouter = router({
           priority: row.reminder.priority,
           title: row.reminder.title,
           description: row.reminder.description,
-          eventDate: row.reminder.eventDate.toISOString(),
+          eventDate: toIsoSafe(row.reminder.eventDate),
           status: row.reminder.status,
-          snoozedUntil: row.reminder.snoozedUntil?.toISOString(),
+          snoozedUntil: toIsoSafe(row.reminder.snoozedUntil),
           metadata: row.reminder.metadata,
         });
       }
@@ -361,6 +361,23 @@ export const remindersRouter = router({
     };
   }),
 });
+
+/**
+ * Converte Date | string | null em ISO string sem quebrar.
+ * O driver MySQL pode retornar datetime como string, o que faz
+ * .toISOString() lancar TypeError e derrubar a procedure com 500.
+ */
+function toIsoSafe(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  if (typeof value === "string") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return null;
+}
 
 /**
  * Calcula prioridade baseada no tipo e proximidade da data
