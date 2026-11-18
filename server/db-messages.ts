@@ -478,6 +478,19 @@ export async function ingestInboundConversationMessage(message: {
       .limit(1);
     conversationId = existingConversation?.id;
   }
+  // [fix-reopen] Cliente mandou mensagem nova: reabre a conversa fechada em vez de descartar
+  if (existingConversation && existingConversation.status === "closed") {
+    await db.update(conversations).set({ status: "open", closedAt: null, closeReason: null }).where(eq(conversations.id, existingConversation.id));
+    console.log("[fix-reopen] Conversa", existingConversation.id, "reaberta por mensagem nova");
+  } else if (!conversationId) {
+    const [ultimaFechada] = await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.customerId, customer.id), eq(conversations.status, "closed"))).orderBy(desc(conversations.lastMessageAt)).limit(1);
+    if (ultimaFechada) {
+      await db.update(conversations).set({ status: "open", closedAt: null, closeReason: null }).where(eq(conversations.id, ultimaFechada.id));
+      conversationId = ultimaFechada.id;
+      console.log("[fix-reopen] Conversa", ultimaFechada.id, "reaberta (ultima fechada)");
+    }
+  }
+
 
   // Se a conversa encontrada pertence a outro customerId, usar o correto
   if (existingConversation && existingConversation.customerId !== customer.id) {
