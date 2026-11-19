@@ -986,6 +986,14 @@ export async function ingestOutboundConversationMessage(message: {
       return null;
     }
   }
+// [diag-media] o que o webhook entrega no outbound
+  console.log("[diag-media] OUTBOUND:", JSON.stringify({
+    messageType: message.messageType,
+    mediaUrl: message.mediaUrl ? String(message.mediaUrl).substring(0,90) : null,
+    mimeType: message.mimeType || null,
+    fileName: message.fileName || null,
+    externalId: message.externalId || message.key?.id || null,
+  }));
     // FIX: Reconstruir URL completa do R2 se o webhook limpou para caminho relativo
     let fileUrlToSave = message.mediaUrl || null;
     if (fileUrlToSave && !fileUrlToSave.startsWith("http") && !fileUrlToSave.startsWith("evolution-api")) {
