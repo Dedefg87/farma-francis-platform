@@ -483,7 +483,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     {
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 3000 : false, // Atualizar mensagens a cada 3s (fallback quando SSE cai no Railway)
+      refetchInterval: selectedConversationId ? 4000 : false, // Atualizar mensagens a cada 3s (fallback quando SSE cai no Railway)
       onSuccess: (data) => {
         if (data && data.length > 0) {
         }

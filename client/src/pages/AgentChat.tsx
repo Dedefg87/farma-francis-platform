@@ -98,7 +98,7 @@ export default function AgentChat() {
       { conversation_id: selectedConversation! },
       {
         enabled: !!selectedConversation,
-        refetchInterval: 3000, // Atualizar mensagens a cada 3 segundos
+        refetchInterval: 4000, // Atualizar mensagens a cada 3 segundos
       }
     );
 
