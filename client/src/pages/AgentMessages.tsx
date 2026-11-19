@@ -295,7 +295,7 @@ export default function AgentMessages() {
           eventSource?.close();
 
           // Reconnect with exponential backoff (cap at 60s to avoid too many failed connections)
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 60000);
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 5000);
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
             connect();

@@ -54,8 +54,8 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
     undefined,
     {
       enabled: hasSession(),
-      refetchInterval: 4000, // Verificar a cada 1 segundo
-      refetchIntervalInBackground: true, // Continuar verificando mesmo em background
+      refetchInterval: 15000, // Verificar a cada 1 segundo
+      refetchIntervalInBackground: false, // Continuar verificando mesmo em background
     }
   );
 
