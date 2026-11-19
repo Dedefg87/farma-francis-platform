@@ -1003,7 +1003,9 @@ export async function ingestOutboundConversationMessage(message: {
       console.log("[ingestOutbound] Reconstructed full R2 URL:", fileUrlToSave);
     }
     
-    const insertResult = await db.insert(conversationMessages).values({
+    let insertResult: any;
+    try {
+    insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId || null,
     replyToExternalId: message.replyToExternalId || null, // ✅ Salvar referência do reply
@@ -1023,6 +1025,27 @@ export async function ingestOutboundConversationMessage(message: {
     fileSize: message.fileSize || null,
     createdAt: message.createdAt || new Date(),
   });
+    } catch (_insErr: any) {
+      const _code = String(_insErr?.cause?.code || _insErr?.code || "");
+      const _constraint = String(_insErr?.cause?.constraint || _insErr?.constraint || "");
+      const _detail = String(_insErr?.cause?.detail || _insErr?.detail || "");
+      const _msg = String(_insErr?.cause?.message || _insErr?.message || "");
+      if (_code === "23505" || _code === "ER_DUP_ENTRY" || /duplicate key|duplicate entry/i.test(_msg + " " + _detail)) {
+        console.log("[ingestOutbound] duplicata ignorada (constraint):", message.externalId || message.key?.id);
+        return { conversationId, customerId: customer.id, messageDbId: undefined as any };
+      }
+      console.error("[ingestOutbound] FALHA NO INSERT", JSON.stringify({
+        code: _code, constraint: _constraint, detail: _detail.slice(0, 300), msg: _msg.slice(0, 200),
+        externalId: message.externalId || null, messageType: message.messageType || null,
+        fileUrl: fileUrlToSave ? String(fileUrlToSave).slice(0, 90) : null,
+        fileName: message.fileName || null, fileType: message.mimeType || null,
+        fileSize: message.fileSize || null,
+        contentLen: String(message.messageText || message.caption || "").length,
+        replyToExternalId: message.replyToExternalId || null,
+        replyToMessageId: message.replyToMessageId || null,
+      }));
+      throw _insErr;
+    }
 
   const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
   const messageDbId = Number(rawMessageId) || undefined;
