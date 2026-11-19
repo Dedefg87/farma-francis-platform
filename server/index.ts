@@ -19,6 +19,7 @@ import whatsappPairingRouter from "./whatsapp-pairing";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import cors from "cors";
+import { startWebhookGuard } from "./evolution-webhook-guard";
 
 // In CJS (esbuild --format=cjs), __dirname is provided by the Node.js module wrapper
 // No need to define it via import.meta.url
@@ -613,6 +614,8 @@ async function startServer() {
 
   const PORT = process.env.PORT || 3000;
   console.log(`[Server] Attempting to listen on port ${PORT}...`);
+
+startWebhookGuard();
 
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("[Server] ✅ Successfully listening on port", PORT);
