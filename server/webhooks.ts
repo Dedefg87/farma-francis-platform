@@ -33,6 +33,7 @@ import { enqueueMobileSyncJob } from "./queue/mobile-sync";
 import crypto from "crypto";
 import { sseManager, EVENTS } from "./_core/sse";
 import { formatPhoneBR } from "./utils/phone";
+import { guardHistorico } from './historico.guard';
 
 // Import debug module
 let debugModule: unknown = null;
@@ -786,6 +787,7 @@ async function processEvolutionWebhookAsync(req: Request) {
 
     console.log("[Evolution Webhook] 🚀 Starting message processing...");
     // Processar evento de mensagem
+  if (guardHistorico({ ...body, event: eventName })) return;
     await processEvolutionWebhook({ ...body, event: eventName });
     console.log("[Evolution Webhook] ✅ Message processing completed");
   } catch (error) {
