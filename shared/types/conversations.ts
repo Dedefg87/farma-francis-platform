@@ -51,10 +51,14 @@ export interface ConversationMessage {
   senderType: 'customer' | 'agent' | 'system';
   senderId: string | null;
   senderName: string | null;
+  senderPosition: string | null; // Cargo/posição do agente (ex: "Gerente")
   attachments: Attachment[];
   metadata: Record<string, unknown>;
   isRead: boolean;
   createdAt: string;
+  // Reply/Quoted message fields
+  replyToExternalId?: string; // Evolution ID da mensagem respondida
+  replyToContent?: string;    // Conteúdo da mensagem respondida (para exibição)
 }
 
 export interface Attachment {

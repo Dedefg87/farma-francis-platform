@@ -14,9 +14,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { trpc } from "@/lib/trpc";
 import { hasSession } from "@/lib/auth";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
+import { shouldNotifyAgent, conversationOwner } from "@/lib/notificationGuard";
 import { useEffect, useRef, useState } from "react";
 
 export default function AgentTopBar({ compact = false }: { compact?: boolean }) {
@@ -52,8 +54,8 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
     undefined,
     {
       enabled: hasSession(),
-      refetchInterval: 1000, // Verificar a cada 1 segundo
-      refetchIntervalInBackground: true, // Continuar verificando mesmo em background
+      refetchInterval: 15000, // Verificar a cada 1 segundo
+      refetchIntervalInBackground: false, // Continuar verificando mesmo em background
     }
   );
 
@@ -64,6 +66,8 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
     let hasNewMessage = false;
 
     conversations.forEach(conv => {
+    // Ignora conversas de outros atendentes: som so para as minhas ou sem dono
+    if (!shouldNotifyAgent(conversationOwner(conv), user?.id)) return;
 // @ts-ignore
       const previousCount = previousMessagesRef.current.get(conv.id) || 0;
       const currentCount = conv.unreadCount || 0;
@@ -102,9 +106,7 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
           {!compact && (
             <>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">FF</span>
-                </div>
+                <img src="/logo-farma-francis.jpg" alt="Farma Francis" className="h-16 w-auto object-contain" />
                 <div>
                   <h1 className="text-lg font-semibold text-gray-900">
                     Farma Francis
@@ -176,9 +178,18 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
                     </div>
                   )}
                   <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-semibold text-sm">
-                      {user?.name?.charAt(0).toUpperCase()}
-                    </span>
+                    {user?.photo ? (
+                      <Avatar className="w-8 h-8">
+                        <AvatarImage src={user.photo} />
+                      </Avatar>
+                    ) : (
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="text-white font-semibold text-sm">
+                          { (user?.name ?? '').charAt(0).toUpperCase() || 'U' }
+                        </AvatarFallback>
+                      </Avatar>
+                    )
+                    }
                   </div>
                 </button>
               </DropdownMenuTrigger>

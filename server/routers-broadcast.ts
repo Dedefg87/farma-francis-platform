@@ -5,6 +5,7 @@ import {
   broadcastMessages,
   broadcastMembersSent,
   customers,
+  conversations,
 } from "../drizzle/schema";
 import { eq, sql, asc, desc, and, or, inArray, notInArray } from "drizzle-orm";
 import { z } from "zod";
@@ -17,7 +18,7 @@ export const broadcastRouter = router({
   list: protectedProcedure
     .input(z.object({
       page: z.number().int().min(1).optional().default(1),
-      limit: z.number().int().min(1).max(100).optional().default(20),
+      limit: z.number().int().min(1).max(1000).optional().default(20),
     }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
@@ -381,15 +382,26 @@ export const broadcastRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
+      // [FIX] Regra 5: apenas clientes que conversaram com a farmacia nas ultimas 24h
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentRows = await db
+        .select({ customerId: conversations.customerId })
+        .from(conversations)
+        .where(sql`${conversations.lastMessageAt} >= ${cutoff}`);
+      const recentIds = Array.from(new Set(recentRows.map(r => r.customerId).filter(Boolean)));
+      
       const members = await db.select({
         customerId: broadcastListMembers.customerId,
         phone: customers.phone,
       })
         .from(broadcastListMembers)
         .leftJoin(customers, eq(broadcastListMembers.customerId, customers.id))
-        .where(eq(broadcastListMembers.listId, input.listId));
+        .where(and(
+          eq(broadcastListMembers.listId, input.listId),
+          inArray(broadcastListMembers.customerId, recentIds)
+        ));
 
-      if (members.length === 0) throw new Error("Lista não tem membros");
+      if (members.length === 0) throw new Error("Nenhum cliente ativo nas ultimas 24h nesta lista (ou lista vazia)");
 
       const values = {
         listId: input.listId,

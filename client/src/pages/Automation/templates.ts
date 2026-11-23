@@ -1,787 +1,644 @@
-import { Node, Edge } from "reactflow";
-import { FlowTemplate } from "./types";
-import {
-  MessageSquare,
-  Sparkles,
-  UserCheck,
-  Calendar,
-  Star,
-  AlertTriangle,
-  Shield,
-  Package,
-  FileText,
-  BarChart,
-  Bot,
-  Clock,
-  Bell,
-  Activity,
-} from "lucide-react";
+// Templates de fluxos de automação
+// Adicione novos templates aqui
+
+export interface FlowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  iconName: string;
+  color: string;
+  nodes: any[];
+  edges: any[];
+}
+
+// Helper to generate unique IDs
+let _id = 0;
+const nid = () => `node-${++_id}`;
 
 export const flowTemplates: FlowTemplate[] = [
-  // ===== TEMPLATE 1: Recepcionista Digital Inteligente =====
-  {
-    id: "receptionist-ia",
-    name: "🤖 Boas-Vindas Omnichannel com IA",
-    description: "Recepcionista digital que envia boas-vindas personalizadas, cria contatos e atribui agentes",
-    icon: Bot,
-    color: "bg-blue-700",
-    nodes: [
+  // ============================================================
+  // TEMPLATE 1 — Fluxo Básico de Atendimento (Iniciante)
+  // Objetivo: receber mensagem > identificar cliente > registrar tarefa
+  // ============================================================
+  (() => {
+    _id = 0;
+    const nodes = [
       {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "📩 Nova Mensagem (WA/IG)", config: { event: "message_received", channels: ["whatsapp", "instagram"] } },
-      },
-      {
-        id: "condition-new-contact",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "É Novo Contato?", config: { condition: "is_new_contact" } },
-      },
-      {
-        id: "condition-working-hours",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Horário Comercial?", config: { condition: "working_hours", schedule: { start: "08:00", end: "18:00" } } },
-      },
-      {
-        id: "message-welcome",
-        type: "default",
-        position: { x: 700, y: 50 },
+        id: nid(),
+        type: 'customNode',
+        position: { x: 120, y: 100 },
         data: {
-          label: "Enviar Boas-Vindas",
-          config: {
-            message: "Olá {{nome}}, aqui é da Farma Francis 💊\nEm que posso ajudar?\n1️⃣ Comprar medicamento\n2️⃣ Falar com farmacêutico\n3️⃣ Consultar pedido",
-            buttons: ["1", "2", "3"],
+          label: 'Webhook — Nova Mensagem',
+          nodeType: 'webhook-trigger',
+          inputs: [],
+          outputs: [{ id: 'out', label: 'Dados recebidos', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método HTTP', type: 'select', options: [
+              { value: 'POST', label: 'POST' },
+              { value: 'GET', label: 'GET' },
+            ], defaultValue: 'POST' },
+            { key: 'path', label: 'Caminho do Webhook', type: 'string', defaultValue: '/api/webhook/mensagem' },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 380, y: 100 },
+        data: {
+          label: 'IF — Cliente Existe?',
+          nodeType: 'if-node',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [
+            { id: 'true', label: 'Sim (existe)', type: 'success' },
+            { id: 'false', label: 'Não (novo)', type: 'error' },
+          ],
+          config: [
+            { key: 'conditions', label: 'Condições (JSON)', type: 'json', defaultValue: { field: 'contact.id', operator: 'exists' } },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 640, y: 40 },
+        data: {
+          label: 'HTTP — Buscar Contato',
+          nodeType: 'http-request-node',
+          inputs: [{ id: 'in', label: 'ID do cliente', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Dados do contato', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [
+              { value: 'GET', label: 'GET' },
+            ], defaultValue: 'GET' },
+            { key: 'url', label: 'URL da API', type: 'string', defaultValue: '/api/contatos/{{$json.contact.id}}' },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 640, y: 180 },
+        data: {
+          label: 'HTTP — Criar Contato',
+          nodeType: 'http-request-node',
+          inputs: [{ id: 'in', label: 'Dados do cliente', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Contato criado', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [
+              { value: 'POST', label: 'POST' },
+            ], defaultValue: 'POST' },
+            { key: 'url', label: 'URL da API', type: 'string', defaultValue: '/api/contatos' },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 900, y: 100 },
+        data: {
+          label: 'Set — Organizar Dados',
+          nodeType: 'set-node',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Dados organizados', type: 'success' }],
+          config: [
+            { key: 'mode', label: 'Modo', type: 'select', options: [
+              { value: 'manual', label: 'Manual' },
+              { value: 'auto', label: 'Automático' },
+            ], defaultValue: 'manual' },
+          ],
+        },
+      },
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 1160, y: 100 },
+        data: {
+          label: 'HTTP — Criar Tarefa',
+          nodeType: 'http-request-node',
+          inputs: [{ id: 'in', label: 'Dados do atendimento', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Tarefa criada', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [
+              { value: 'POST', label: 'POST' },
+            ], defaultValue: 'POST' },
+            { key: 'url', label: 'URL da API', type: 'string', defaultValue: '/api/tarefas' },
+          ],
+        },
+      },
+    ];
+
+    const edges = [
+      { id: 'e1', source: nodes[0].id, target: nodes[1].id, sourceHandle: 'out', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+      { id: 'e2', source: nodes[1].id, target: nodes[2].id, sourceHandle: 'true', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#22c55e', strokeWidth: 2 }, label: 'Sim' },
+      { id: 'e3', source: nodes[1].id, target: nodes[3].id, sourceHandle: 'false', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#ef4444', strokeWidth: 2 }, label: 'Não' },
+      { id: 'e4', source: nodes[2].id, target: nodes[4].id, sourceHandle: 'out', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+      { id: 'e5', source: nodes[3].id, target: nodes[4].id, sourceHandle: 'out', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+      { id: 'e6', source: nodes[4].id, target: nodes[5].id, sourceHandle: 'out', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+    ];
+
+    return { id: 'fluxo-basico-atendimento', name: 'Fluxo Básico de Atendimento', description: 'Recebe mensagem via webhook, identifica se o cliente existe no CRM, cria contato se necessário e registra tarefa automaticamente. Ideal para iniciar automação de WhatsApp.', iconName: 'Zap', color: '#3b82f6', nodes, edges };
+  })(),
+
+  // ============================================================
+  // TEMPLATE 2 — Atendimento Inteligente Unificado (Completo)
+  // 12 nós: trigger > buscar contato > if existe > criar >
+  // organizar > if horário > boas-vindas/ausência > tarefa >
+  // atribuir agente > fim
+  // ============================================================
+  (() => {
+    _id = 0;
+
+    // --- NÓS ---
+
+    // [0] TRIGGER — Nova Mensagem (WA/IG)
+    const nTrigger = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 80, y: 200 },
+      data: {
+        label: '📩 Nova Mensagem (WA/IG)',
+        nodeType: 'webhook-trigger',
+        inputs: [],
+        outputs: [{ id: 'out', label: 'Dados recebidos', type: 'success' }],
+        config: [
+          {
+            key: 'method', label: 'Método HTTP', type: 'select',
+            options: [{ value: 'POST', label: 'POST' }, { value: 'GET', label: 'GET' }],
+            defaultValue: 'POST',
           },
-        },
-      },
-      {
-        id: "action-create-contact",
-        type: "default",
-        position: { x: 700, y: 150 },
-        data: { label: "Criar Contato", config: { action: "create_contact", tags: ["Novo Cliente"], origin: "{{channel}}" } },
-      },
-      {
-        id: "action-assign-agent",
-        type: "default",
-        position: { x: 900, y: 100 },
-        data: { label: "Atribuir Agente", config: { action: "assign_agent", queue: "general", fallback: "plantao" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "condition-new-contact" },
-      { id: "e2-3", source: "condition-new-contact", target: "condition-working-hours", label: "Sim" },
-      { id: "e3-4", source: "condition-working-hours", target: "message-welcome", label: "Sim" },
-      { id: "e3-5", source: "condition-working-hours", target: "action-assign-agent", label: "Não (Plantão)" },
-      { id: "e4-5", source: "message-welcome", target: "action-create-contact" },
-      { id: "e5-6", source: "action-create-contact", target: "action-assign-agent" },
-    ],
-  },
-
-  // ===== TEMPLATE 2: Triage de Receita Médica =====
-  {
-    id: "receipt-triage",
-    name: "💊 Detector de Receita com IA",
-    description: "Classifica receitas médicas, valida documentos e encaminha para farmacêuticos",
-    icon: FileText,
-    color: "bg-green-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "📎 Documento Anexado", config: { event: "document_received", types: ["pdf", "image"] } },
-      },
-      {
-        id: "ai-classify",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "IA Classifica Documento", config: { action: "ai_classify", types: ["receita", "exame", "rg", "comprovante"] } },
-      },
-      {
-        id: "condition-controlled",
-        type: "default",
-        position: { x: 500, y: 50 },
-        data: { label: "Receita Controlada?", config: { condition: "receipt_type == 'controlled'" } },
-      },
-      {
-        id: "action-create-task",
-        type: "default",
-        position: { x: 700, y: 50 },
-        data: { label: "Criar Tarefa Urgente", config: { action: "create_task", priority: "high", assignee: "pharmacist_1", title: "📋 Validar receita de {{nome}}" } },
-      },
-      {
-        id: "action-notify",
-        type: "default",
-        position: { x: 700, y: 150 },
-        data: { label: "Notificar Admin", config: { action: "notify_admin", sound: true } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "ai-classify" },
-      { id: "e2-3", source: "ai-classify", target: "condition-controlled" },
-      { id: "e3-4", source: "condition-controlled", target: "action-create-task", label: "Sim" },
-      { id: "e3-5", source: "condition-controlled", target: "action-notify", label: "Sim" },
-    ],
-  },
-
-  // ===== TEMPLATE 3: Urgência Médica Detector =====
-  {
-    id: "urgency-detector",
-    name: "🚨 Alerta de Urgência Médica",
-    description: "Detecta palavras de urgência, prioriza atendimento e notifica agentes",
-    icon: AlertTriangle,
-    color: "bg-red-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "📩 Mensagem Recebida", config: { event: "message_received" } },
-      },
-      {
-        id: "ai-urgency",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "IA Detecta Urgência", config: { action: "detect_urgency", keywords: ["urgência", "emergência", "dor forte", "sangrando"] } },
-      },
-      {
-        id: "action-prioritize",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Priorizar URGENTE", config: { action: "add_tag", tag: "🚨 URGENTE", color: "#e74c3c" } },
-      },
-      {
-        id: "action-notify-agents",
-        type: "default",
-        position: { x: 700, y: 100 },
-        data: { label: "Notificar Agentes", config: { action: "notify_all_agents", alert: "🔴 URGÊNCIA — {{nome}}", repeat: 30 },
-        },
-      },
-      {
-        id: "message-urgency",
-        type: "default",
-        position: { x: 900, y: 100 },
-        data: { label: "Responder Urgência", config: { message: "🔴 Estamos vendo sua mensagem com URGÊNCIA.\nUm farmacêutico vai te responder INSTANTANEAMENTE.\nSe for emergência médica, ligue 192." } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "ai-urgency" },
-      { id: "e2-3", source: "ai-urgency", target: "action-prioritize", label: "Sim" },
-      { id: "e3-4", source: "action-prioritize", target: "action-notify-agents" },
-      { id: "e4-5", source: "action-notify-agents", target: "message-urgency" },
-    ],
-  },
-
-  // ===== TEMPLATE 4: Lembrete Inteligente de Retorno =====
-  {
-    id: "recall-automation",
-    name: "🔔 Recall Automático de Clientes",
-    description: "Envia lembretes personalizados para clientes inativos com base no histórico",
-    icon: Clock,
-    color: "bg-yellow-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "⏰ Agendado (Diário)", config: { schedule: "0 9 * * *", timezone: "America/Sao_Paulo" } },
-      },
-      {
-        id: "filter-contacts",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Filtrar Clientes", config: { filter: "status: finalizado, last_interaction >= 7d, has_purchased: true" } },
-      },
-      {
-        id: "ai-personalize",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "IA Personaliza Mensagem", config: { action: "personalize_message", history: true } },
-      },
-      {
-        id: "message-recall",
-        type: "default",
-        position: { x: 700, y: 100 },
-        data: { label: "Enviar Lembrete", config: { message: "Olá {{nome}}! Passando pra saber como você está.\n{{personalized_message}}", rate_limit: "30s" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "filter-contacts" },
-      { id: "e2-3", source: "filter-contacts", target: "ai-personalize" },
-      { id: "e3-4", source: "ai-personalize", target: "message-recall" },
-    ],
-  },
-
-  // ===== TEMPLATE 5: Roteamento Inteligente =====
-  {
-    id: "smart-routing",
-    name: "👤 Roteamento por Especialidade",
-    description: "Roteia atendimentos para o departamento correto baseado em palavras-chave",
-    icon: Activity,
-    color: "bg-purple-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "📩 Nova Mensagem", config: { event: "message_received" } },
-      },
-      {
-        id: "ai-intent",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "IA Analisa Intent", config: { action: "detect_intent", keywords: { pharmacist: ["receita", "farmácia"], support: ["troca", "cancelar"], sales: ["preço", "orçamento"], admin: ["gerente", "reclamar"] } } },
-      },
-      {
-        id: "action-route",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Roteear para Agente", config: { action: "assign_agent", fallback: "anderson" } },
-      },
-      {
-        id: "message-routing",
-        type: "default",
-        position: { x: 700, y: 100 },
-        data: { label: "Informar Cliente", config: { message: "Vou transferir você para o {{agente}} 🧑‍⚕️\nTempo estimado: {{tempo_fila}}" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "ai-intent" },
-      { id: "e2-3", source: "ai-intent", target: "action-route" },
-      { id: "e3-4", source: "action-route", target: "message-routing" },
-    ],
-  },
-
-  // ===== TEMPLATE 6: Follow-up Pós-Venda =====
-  {
-    id: "post-sale-followup",
-    name: "📋 Follow-up Pós-Venda",
-    description: "Envia pesquisa NPS automática e recomenda produtos após atendimento",
-    icon: Star,
-    color: "bg-orange-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "🔄 Atendimento Finalizado", config: { event: "ticket_closed", duration: ">2min" } },
-      },
-      {
-        id: "delay-1",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Aguardar 30min", config: { delay: 1800 } },
-      },
-      {
-        id: "message-nps",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Enviar NPS", config: { message: "👋 {{nome}}, como foi seu atendimento?\nDe 0 a 10, quanto você recomendaria a gente?", buttons: ["😁", "😐", "🙁"] } },
-      },
-      {
-        id: "ai-analyze",
-        type: "default",
-        position: { x: 700, y: 100 },
-        data: { label: "Analisar Resposta", config: { action: "analyze_nps", tags: { promoter: "Cliente Promotor", neutral: "Cliente Neutro", detractor: "Cliente Detrator" } } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "delay-1" },
-      { id: "e2-3", source: "delay-1", target: "message-nps" },
-      { id: "e3-4", source: "message-nps", target: "ai-analyze" },
-    ],
-  },
-
-  // ===== TEMPLATE 7: Anti-Fraude =====
-  {
-    id: "anti-fraud",
-    name: "🛡️ Validador de Documentos",
-    description: "Valida documentos com IA e detecta possíveis fraudes",
-    icon: Shield,
-    color: "bg-teal-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "📎 Documento Anexado", config: { event: "document_received", types: ["image/jpeg", "image/png"] } },
-      },
-      {
-        id: "ai-vision",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "IA Analisa Documento", config: { action: "vision_analyze", extract: ["nome", "CPF", "data_nascimento"] } },
-      },
-      {
-        id: "condition-fraud",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Score de Risco", config: { condition: "fraud_score > 60" } },
-      },
-      {
-        id: "action-block",
-        type: "default",
-        position: { x: 700, y: 50 },
-        data: { label: "Bloquear Cadastro", config: { action: "block_account", notify: "anderson" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "ai-vision" },
-      { id: "e2-3", source: "ai-vision", target: "condition-fraud" },
-      { id: "e3-4", source: "condition-fraud", target: "action-block", label: "Alto Risco" },
-    ],
-  },
-
-  // ===== TEMPLATE 8: Notificação de Estoque =====
-  {
-    id: "stock-notification",
-    name: "📦 Alerta de Estoque",
-    description: "Notifica clientes na fila de espera quando medicamento chega",
-    icon: Package,
-    color: "bg-cyan-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "📡 Webhook Estoque", config: { event: "stock_updated", medicine: "{{medicine}}" } },
-      },
-      {
-        id: "filter-waitlist",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Buscar Fila de Espera", config: { filter: "waiting_for: {{medicine}}", limit: 10 } },
-      },
-      {
-        id: "message-stock",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Notificar Cliente", config: { message: "🎉 {{nome}}, a {{medicine}} chegou!\n📦 {{quantity}} unidades disponíveis.\nQuer reservar o seu? Responda SIM! 👇" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "filter-waitlist" },
-      { id: "e2-3", source: "filter-waitlist", target: "message-stock" },
-    ],
-  },
-
-  // ===== TEMPLATE 9: Auditoria e Compliance =====
-  {
-    id: "audit-compliance",
-    name: "📝 Log de Auditoria",
-    description: "Registra todas as ações do sistema para conformidade e detecção de anomalias",
-    icon: FileText,
-    color: "bg-gray-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "🎯 Ação no Sistema", config: { event: "any_action", log: true } },
-      },
-      {
-        id: "action-capture",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Capturar Metadados", config: { action: "capture_metadata", fields: ["timestamp", "agent", "action", "ip"] } },
-      },
-      {
-        id: "action-store",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Armazenar Log", config: { action: "store_log", table: "log_auditoria", retention: "90d" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "action-capture" },
-      { id: "e2-3", source: "action-capture", target: "action-store" },
-    ],
-  },
-
-  // ===== TEMPLATE 10: Dashboard de Desempenho =====
-  {
-    id: "performance-dashboard",
-    name: "📊 Dashboard de Desempenho",
-    description: "Coleta métricas de automação e gera relatórios em tempo real",
-    icon: BarChart,
-    color: "bg-indigo-700",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "⏰ Agendado (Hora)", config: { schedule: "0 * * * *", timezone: "America/Sao_Paulo" } },
-      },
-      {
-        id: "action-collect",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Coletar Métricas", config: { action: "collect_metrics", types: ["automations", "messages", "documents"] } },
-      },
-      {
-        id: "action-calculate",
-        type: "default",
-        position: { x: 500, y: 100 },
-        data: { label: "Calcular KPIs", config: { action: "calculate_kpis", metrics: ["taxa_automacao", "roi", "precisao_ia"] } },
-      },
-      {
-        id: "action-notify-admin",
-        type: "default",
-        position: { x: 700, y: 100 },
-        data: { label: "Notificar Admin", config: { action: "send_report", channel: "telegram", target: "anderson" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "action-collect" },
-      { id: "e2-3", source: "action-collect", target: "action-calculate" },
-      { id: "e3-4", source: "action-calculate", target: "action-notify-admin" },
-    ],
-  },
-  {
-    id: "welcome",
-    name: "Boas-vindas Automáticas",
-    description: "Mensagem de boas-vindas personalizada para novos contatos",
-    icon: MessageSquare,
-    color: "bg-blue-600",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "Novo Contato", config: { event: "new_contact" } },
-      },
-      {
-        id: "condition-1",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Horário Comercial?", config: { condition: "working_hours" } },
-      },
-      {
-        id: "message-1",
-        type: "default",
-        position: { x: 500, y: 50 },
-        data: {
-          label: "Boas-vindas Imediato",
-          config: { message: "Olá! 👋 Bem-vindo(a) à Farma Francis! Como posso ajudar?" },
-        },
-      },
-      {
-        id: "message-2",
-        type: "default",
-        position: { x: 500, y: 150 },
-        data: {
-          label: "Boas-vindas Fora de Horário",
-          config: { message: "Olá! 👋 Estamos fora do horário de atendimento. Retornaremos em breve!" },
-        },
-      },
-      {
-        id: "tag-1",
-        type: "default",
-        position: { x: 700, y: 50 },
-        data: { label: "Adicionar Tag", config: { action: "add_tag", tag: "novo_cliente" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "condition-1" },
-      { id: "e2-3", source: "condition-1", target: "message-1", label: "Sim" },
-      { id: "e2-4", source: "condition-1", target: "message-2", label: "Não" },
-      { id: "e3-5", source: "message-1", target: "tag-1" },
-    ],
-  },
-  {
-    id: "faq",
-    name: "FAQ com IA",
-    description: "Responde perguntas frequentes usando inteligência artificial",
-    icon: Sparkles,
-    color: "bg-pink-600",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 100 },
-        data: { label: "Mensagem Recebida", config: { event: "message_received" } },
-      },
-      {
-        id: "condition-1",
-        type: "default",
-        position: { x: 300, y: 100 },
-        data: { label: "Contém Pergunta?", config: { condition: "contains_question" } },
-      },
-      {
-        id: "ai-1",
-        type: "default",
-        position: { x: 500, y: 50 },
-        data: {
-          label: "Consultar IA",
-          config: {
-            model: "gpt-4",
-            systemPrompt: "Você é um assistente da Farma Francis. Responda perguntas sobre medicamentos, horários e serviços.",
+          {
+            key: 'path', label: 'Caminho do Webhook', type: 'string',
+            defaultValue: '/api/webhook/mensagem',
           },
-        },
+        ],
       },
-      {
-        id: "message-1",
-        type: "default",
-        position: { x: 700, y: 50 },
-        data: { label: "Enviar Resposta IA", config: { message: "{{ai_response}}" } },
-      },
-      {
-        id: "human-1",
-        type: "default",
-        position: { x: 500, y: 150 },
-        data: { label: "Transferir Humano", config: { action: "transfer_to_human" } },
-      },
-      {
-        id: "log-1",
-        type: "default",
-        position: { x: 900, y: 50 },
-        data: { label: "Registrar Interação", config: { action: "log", category: "faq_ia" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "condition-1" },
-      { id: "e2-3", source: "condition-1", target: "ai-1", label: "Sim" },
-      { id: "e2-4", source: "condition-1", target: "human-1", label: "Não" },
-      { id: "e3-4", source: "ai-1", target: "message-1" },
-      { id: "e4-5", source: "message-1", target: "log-1" },
-    ],
-  },
-  {
-    id: "qualification",
-    name: "Qualificação de Leads",
-    description: "Qualifica leads automaticamente com perguntas",
-    icon: UserCheck,
-    color: "bg-green-600",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 150 },
-        data: { label: "Novo Lead", config: { event: "new_lead" } },
-      },
-      {
-        id: "message-1",
-        type: "default",
-        position: { x: 300, y: 150 },
-        data: {
-          label: "Pergunta 1: Interesse",
-          config: { message: "Qual tipo de produto você procura?\n1️⃣ Medicamentos\n2️⃣ Cosméticos\n3️⃣ Suplementos" },
-        },
-      },
-      {
-        id: "wait-1",
-        type: "default",
-        position: { x: 500, y: 150 },
-        data: { label: "Aguardar Resposta", config: { timeout: 300 } },
-      },
-      {
-        id: "message-2",
-        type: "default",
-        position: { x: 700, y: 150 },
-        data: {
-          label: "Pergunta 2: Urgência",
-          config: { message: "Quando você precisa?\n1️⃣ Hoje\n2️⃣ Esta semana\n3️⃣ Sem pressa" },
-        },
-      },
-      {
-        id: "condition-1",
-        type: "default",
-        position: { x: 900, y: 100 },
-        data: { label: "Lead Qualificado?", config: { condition: "score >= 7" } },
-      },
-      {
-        id: "crm-1",
-        type: "default",
-        position: { x: 1100, y: 50 },
-        data: { label: "Adicionar ao CRM (Quente)", config: { action: "add_to_crm", status: "hot" } },
-      },
-      {
-        id: "crm-2",
-        type: "default",
-        position: { x: 1100, y: 150 },
-        data: { label: "Adicionar ao CRM (Frio)", config: { action: "add_to_crm", status: "cold" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "message-1" },
-      { id: "e2-3", source: "message-1", target: "wait-1" },
-      { id: "e3-4", source: "wait-1", target: "message-2" },
-      { id: "e4-5", source: "message-2", target: "condition-1" },
-      { id: "e5-6", source: "condition-1", target: "crm-1", label: "Sim" },
-      { id: "e5-7", source: "condition-1", target: "crm-2", label: "Não" },
-    ],
-  },
-  {
-    id: "scheduling",
-    name: "Agendamento de Consultas",
-    description: "Permite agendamento automático de consultas",
-    icon: Calendar,
-    color: "bg-purple-600",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 150 },
-        data: { label: "Solicitar Agendamento", config: { keyword: "agendar" } },
-      },
-      {
-        id: "api-1",
-        type: "default",
-        position: { x: 300, y: 150 },
-        data: { label: "Verificar Disponibilidade", config: { endpoint: "/api/availability", method: "GET" } },
-      },
-      {
-        id: "message-1",
-        type: "default",
-        position: { x: 500, y: 150 },
-        data: { label: "Mostrar Horários", config: { message: "Horários disponíveis:\n{{available_slots}}" } },
-      },
-      {
-        id: "wait-1",
-        type: "default",
-        position: { x: 700, y: 150 },
-        data: { label: "Aguardar Escolha", config: { timeout: 600 } },
-      },
-      {
-        id: "api-2",
-        type: "default",
-        position: { x: 900, y: 150 },
-        data: { label: "Confirmar Agendamento", config: { endpoint: "/api/appointments", method: "POST" } },
-      },
-      {
-        id: "message-2",
-        type: "default",
-        position: { x: 1100, y: 100 },
-        data: { label: "Confirmação", config: { message: "✅ Agendamento confirmado para {{date}} às {{time}}!" } },
-      },
-      {
-        id: "notification-1",
-        type: "default",
-        position: { x: 1100, y: 200 },
-        data: { label: "Enviar Lembrete", config: { action: "schedule_reminder", time: "-1 day" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "api-1" },
-      { id: "e2-3", source: "api-1", target: "message-1" },
-      { id: "e3-4", source: "message-1", target: "wait-1" },
-      { id: "e4-5", source: "wait-1", target: "api-2" },
-      { id: "e5-6", source: "api-2", target: "message-2" },
-      { id: "e5-7", source: "api-2", target: "notification-1" },
-    ],
-  },
-  {
-    id: "satisfaction",
-    name: "Pesquisa de Satisfação",
-    description: "Coleta feedback dos clientes após atendimento",
-    icon: Star,
-    color: "bg-yellow-600",
-    nodes: [
-      {
-        id: "trigger-1",
-        type: "default",
-        position: { x: 100, y: 150 },
-        data: { label: "Atendimento Finalizado", config: { event: "ticket_closed" } },
-      },
-      {
-        id: "delay-1",
-        type: "default",
-        position: { x: 300, y: 150 },
-        data: { label: "Aguardar 5min", config: { delay: 300 } },
-      },
-      {
-        id: "message-1",
-        type: "default",
-        position: { x: 500, y: 150 },
-        data: {
-          label: "Solicitar Avaliação",
-          config: {
-            message: "Como foi seu atendimento?\n⭐ 1 - Péssimo\n⭐⭐ 2 - Ruim\n⭐⭐⭐ 3 - Regular\n⭐⭐⭐⭐ 4 - Bom\n⭐⭐⭐⭐⭐ 5 - Excelente",
+    };
+
+    // [1] HTTP — Buscar Contato
+    const nBuscarContato = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 340, y: 200 },
+      data: {
+        label: '🔍 Buscar Contato',
+        nodeType: 'http-request-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Resultado', type: 'success' }],
+        config: [
+          {
+            key: 'method', label: 'Método', type: 'select',
+            options: [{ value: 'GET', label: 'GET' }],
+            defaultValue: 'GET',
           },
+          {
+            key: 'url', label: 'URL da API', type: 'string',
+            defaultValue: '/api/contatos?telefone={{$json.fromNumber}}',
+          },
+          {
+            key: 'headers', label: 'Headers (JSON)', type: 'json',
+            defaultValue: { 'Content-Type': 'application/json' },
+          },
+          {
+            key: 'body', label: 'Body (JSON)', type: 'json',
+            defaultValue: {},
+          },
+        ],
+      },
+    };
+
+    // [2] IF — Contato Existe?
+    const nIfContato = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 600, y: 200 },
+      data: {
+        label: '❓ Contato Existe?',
+        nodeType: 'if-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [
+          { id: 'true', label: 'Sim (existe)', type: 'success' },
+          { id: 'false', label: 'Não (novo)', type: 'error' },
+        ],
+        config: [
+          {
+            key: 'conditions', label: 'Condições (JSON)', type: 'json',
+            defaultValue: { field: 'found', operator: '===', value: true },
+          },
+        ],
+      },
+    };
+
+    // [3] HTTP — Criar Contato (quando NÃO existe)
+    const nCriarContato = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 880, y: 340 },
+      data: {
+        label: '👤 Criar Contato',
+        nodeType: 'http-request-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Contato criado', type: 'success' }],
+        config: [
+          {
+            key: 'method', label: 'Método', type: 'select',
+            options: [{ value: 'POST', label: 'POST' }],
+            defaultValue: 'POST',
+          },
+          {
+            key: 'url', label: 'URL da API', type: 'string',
+            defaultValue: '/api/contatos',
+          },
+          {
+            key: 'body', label: 'Body (JSON)', type: 'json',
+            defaultValue: {
+              nome: '{{$json.nome}}',
+              telefone: "{{$json.fromNumber}}",
+              origem: '{{$json.origem}}',
+            },
+          },
+        ],
+      },
+    };
+
+    // [4] SET — Organizar Dados
+    const nOrganizarDados = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 1160, y: 200 },
+      data: {
+        label: '📋 Organizar Dados',
+        nodeType: 'set-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Dados organizados', type: 'success' }],
+        config: [
+          {
+            key: 'mode', label: 'Modo', type: 'select',
+            options: [{ value: 'manual', label: 'Manual' }, { value: 'auto', label: 'Automático' }],
+            defaultValue: 'manual',
+          },
+          {
+            key: 'fields', label: 'Campos (JSON)', type: 'json',
+            defaultValue: {
+              contato_id: '{{$json.id}}',
+              nome: '{{$json.nome}}',
+              telefone: "{{$json.fromNumber}}",
+              mensagem: '{{$json.mensagem}}',
+              origem: '{{$json.origem}}',
+              timestamp: '{{$now}}',
+            },
+          },
+        ],
+      },
+    };
+
+    // [5] IF — Horário Comercial? (usa DaySchedule do ConfigSettings)
+    const nIfHorario = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 1420, y: 200 },
+      data: {
+        label: '🕐 Horário Comercial?',
+        nodeType: 'if-business-hours',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [
+          { id: 'true', label: 'Dentro horário', type: 'success' },
+          { id: 'false', label: 'Fora do horário', type: 'error' },
+        ],
+        config: [
+          {
+            key: 'checkType', label: 'Tipo de verificação', type: 'select',
+            options: [{ value: 'business', label: 'Horário comercial' }, { value: 'holiday', label: 'Horário feriado' }],
+            defaultValue: 'business',
+          },
+          {
+            key: 'timezone', label: 'Fuso horário', type: 'string',
+            defaultValue: 'America/Sao_Paulo',
+          },
+        ],
+      },
+    };
+
+    // [6] WELCOME AGENT — Enviar Boas-Vindas com nome do atendente
+    const nBoasVindas = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 1700, y: 100 },
+      data: {
+        label: '👋 Enviar Boas-Vindas',
+        nodeType: 'welcome-agent',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
+        config: [
+          {
+            key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+            defaultValue: 'Olá, eu sou {{agent_name}}! Como posso te ajudar?',
+          },
+          {
+            key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean',
+            defaultValue: true,
+          },
+          {
+            key: 'fallbackName', label: 'Nome fallback', type: 'string',
+            defaultValue: 'Assistente Virtual',
+          },
+        ],
+      },
+    };
+
+    // [7] MESSAGE — Mensagem de Ausência (fora do horário)
+    const nAusencia = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 1700, y: 320 },
+      data: {
+        label: '🌙 Mensagem de Ausência',
+        nodeType: 'message',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
+        config: [
+          {
+            key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+            defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!',
+          },
+        ],
+      },
+    };
+
+    // [8] MERGE — Juntar Boas-Vindas + Ausência (continuar fluxo)
+    const nMergeMensagens = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 1960, y: 200 },
+      data: {
+        label: '🔀 Continuar Fluxo',
+        nodeType: 'set-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Dados unificados', type: 'success' }],
+        config: [
+          {
+            key: 'mode', label: 'Modo', type: 'select',
+            options: [{ value: 'auto', label: 'Automático' }],
+            defaultValue: 'auto',
+          },
+        ],
+      },
+    };
+
+    // [9] HTTP — Criar Tarefa
+    const nCriarTarefa = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 2220, y: 200 },
+      data: {
+        label: '📌 Criar Tarefa',
+        nodeType: 'http-request-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Tarefa criada', type: 'success' }],
+        config: [
+          {
+            key: 'method', label: 'Método', type: 'select',
+            options: [{ value: 'POST', label: 'POST' }],
+            defaultValue: 'POST',
+          },
+          {
+            key: 'url', label: 'URL da API', type: 'string',
+            defaultValue: '/api/tarefas',
+          },
+          {
+            key: 'body', label: 'Body (JSON)', type: 'json',
+            defaultValue: {
+              titulo: 'Atendimento automático',
+              descricao: 'Mensagem recebida: {{$json.mensagem}}',
+              status: 'aberta',
+              contato_id: '{{$json.contato_id}}',
+              telefone: "{{$json.fromNumber}}",
+              origem: '{{$json.origem}}',
+              timestamp: '{{$now}}',
+            },
+          },
+        ],
+      },
+    };
+
+    // [10] HTTP — Atribuir Agente
+    const nAtribuirAgente = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 2480, y: 200 },
+      data: {
+        label: '👨‍💼 Atribuir Agente',
+        nodeType: 'http-request-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Atribuído', type: 'success' }],
+        config: [
+          {
+            key: 'method', label: 'Método', type: 'select',
+            options: [{ value: 'PUT', label: 'PUT' }],
+            defaultValue: 'PUT',
+          },
+          {
+            key: 'url', label: 'URL da API', type: 'string',
+            defaultValue: '/api/atendimentos/atribuir',
+          },
+          {
+            key: 'body', label: 'Body (JSON)', type: 'json',
+            defaultValue: {
+              telefone: "{{$json.fromNumber}}",
+              mensagem: 'Novo atendimento disponível.',
+            },
+          },
+        ],
+      },
+    };
+
+    // [11] SET — Fim do Fluxo
+    const nFim = {
+      id: nid(),
+      type: 'customNode',
+      position: { x: 2740, y: 200 },
+      data: {
+        label: '🏁 Fim do Fluxo',
+        nodeType: 'set-node',
+        inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+        outputs: [{ id: 'out', label: 'Finalizado', type: 'success' }],
+        config: [
+          {
+            key: 'mode', label: 'Modo', type: 'select',
+            options: [{ value: 'manual', label: 'Manual' }],
+            defaultValue: 'manual',
+          },
+          {
+            key: 'fields', label: 'Campos (JSON)', type: 'json',
+            defaultValue: { status: 'finalizado' },
+          },
+        ],
+      },
+    };
+
+    const nodes = [
+      nTrigger, nBuscarContato, nIfContato, nCriarContato,
+      nOrganizarDados, nIfHorario, nBoasVindas, nAusencia,
+      nMergeMensagens, nCriarTarefa, nAtribuirAgente, nFim,
+    ];
+
+    // --- CONEXÕES (edges) ---
+    const edges = [
+      // 0 → 1: Trigger → Buscar Contato
+      { id: 'e01', source: nTrigger.id, target: nBuscarContato.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 1 → 2: Buscar Contato → IF Contato Existe?
+      { id: 'e12', source: nBuscarContato.id, target: nIfContato.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 2 → 3: IF false → Criar Contato (não existe)
+      { id: 'e23', source: nIfContato.id, target: nCriarContato.id,
+        sourceHandle: 'false', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#ef4444', strokeWidth: 2 },
+        label: 'Não' },
+
+      // 2 → 4: IF true → Organizar Dados (existe, pula criação)
+      { id: 'e24', source: nIfContato.id, target: nOrganizarDados.id,
+        sourceHandle: 'true', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#22c55e', strokeWidth: 2 },
+        label: 'Sim' },
+
+      // 3 → 4: Criar Contato → Organizar Dados (veio da criação)
+      { id: 'e34', source: nCriarContato.id, target: nOrganizarDados.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 4 → 5: Organizar Dados → IF Horário Comercial?
+      { id: 'e45', source: nOrganizarDados.id, target: nIfHorario.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 5 → 6: IF true → Boas-Vindas (dentro do horário)
+      { id: 'e56', source: nIfHorario.id, target: nBoasVindas.id,
+        sourceHandle: 'true', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#22c55e', strokeWidth: 2 },
+        label: 'Dentro' },
+
+      // 5 → 7: IF false → Ausência (fora do horário)
+      { id: 'e57', source: nIfHorario.id, target: nAusencia.id,
+        sourceHandle: 'false', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#ef4444', strokeWidth: 2 },
+        label: 'Fora' },
+
+      // 6 → 8: Boas-Vindas → Merge
+      { id: 'e68', source: nBoasVindas.id, target: nMergeMensagens.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 7 → 8: Ausência → Merge
+      { id: 'e78', source: nAusencia.id, target: nMergeMensagens.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 8 → 9: Merge → Criar Tarefa
+      { id: 'e89', source: nMergeMensagens.id, target: nCriarTarefa.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 9 → 10: Criar Tarefa → Atribuir Agente
+      { id: 'e910', source: nCriarTarefa.id, target: nAtribuirAgente.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+
+      // 10 → 11: Atribuir Agente → Fim do Fluxo
+      { id: 'e1011', source: nAtribuirAgente.id, target: nFim.id,
+        sourceHandle: 'out', targetHandle: 'in',
+        type: 'custom', animated: false, style: { stroke: '#94a3b8', strokeWidth: 2 } },
+    ];
+
+    return {
+      id: 'atendimento-inteligente-unificado',
+      name: '🤖 Atendimento Inteligente Unificado',
+      description: 'Fluxo completo de 12 nós para atendimento automático via WhatsApp e Instagram. Recebe mensagem, busca/cria contato no CRM, verifica horário comercial (usa DaySchedule do ConfigSettings), envia boas-vindas com nome do atendente ou mensagem de ausência, cria tarefa no sistema e atribui agente. Pronto para uso.',
+      iconName: 'Bot',
+      color: '#8b5cf6',
+      nodes,
+      edges,
+    };
+  })(),
+
+  // ============================================================
+  // TEMPLATE 3 — Chatbot de Atendimento (IA)
+  // Objetivo: receber mensagem > verificar horário > responder com IA
+  // ============================================================
+  (() => {
+    _id = 0;
+    const nodes = [
+      {
+        id: nid(),
+        type: 'customNode',
+        position: { x: 120, y: 100 },
+        data: {
+          label: 'Webhook — Trigger',
+          nodeType: 'webhook-trigger',
+          inputs: [],
+          outputs: [{ id: 'out', label: 'Dados', type: 'success' }],
+          config: [
+            { key: 'method', label: 'Método', type: 'select', options: [{ value: 'POST', label: 'POST' }], defaultValue: 'POST' },
+            { key: 'path', label: 'Caminho', type: 'string', defaultValue: '/api/webhook/chatbot' },
+          ],
         },
       },
       {
-        id: "wait-1",
-        type: "default",
-        position: { x: 700, y: 150 },
-        data: { label: "Aguardar Resposta", config: { timeout: 600 } },
+        id: nid(),
+        type: 'customNode',
+        position: { x: 380, y: 100 },
+        data: {
+          label: 'If — Horário Comercial',
+          nodeType: 'if-business-hours',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [
+            { id: 'true', label: 'Dentro (08-18h)', type: 'success' },
+            { id: 'false', label: 'Fora do horário', type: 'error' },
+          ],
+          config: [
+            { key: 'checkType', label: 'Tipo', type: 'select', options: [{ value: 'business', label: 'Horário comercial' }], defaultValue: 'business' },
+          ],
+        },
       },
       {
-        id: "condition-1",
-        type: "default",
-        position: { x: 900, y: 100 },
-        data: { label: "Nota >= 4?", config: { condition: "rating >= 4" } },
+        id: nid(),
+        type: 'customNode',
+        position: { x: 640, y: 40 },
+        data: {
+          label: 'HTTP — Enviar Boas-Vindas',
+          nodeType: 'welcome-agent',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
+          config: [
+            { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true, defaultValue: 'Olá, eu sou {{agent_name}}! Como posso te ajudar?' },
+            { key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean', defaultValue: true },
+          ],
+        },
       },
       {
-        id: "message-2",
-        type: "default",
-        position: { x: 1100, y: 50 },
-        data: { label: "Agradecer", config: { message: "🙏 Obrigado pelo feedback positivo!" } },
+        id: nid(),
+        type: 'customNode',
+        position: { x: 640, y: 180 },
+        data: {
+          label: 'Mensagem — Ausência',
+          nodeType: 'message',
+          inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+          outputs: [{ id: 'out', label: 'Enviado', type: 'success' }],
+          config: [
+            { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true, defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!' },
+          ],
+        },
       },
-      {
-        id: "message-3",
-        type: "default",
-        position: { x: 1100, y: 150 },
-        data: { label: "Pedir Detalhes", config: { message: "Sentimos muito. Pode nos contar o que aconteceu?" } },
-      },
-      {
-        id: "database-1",
-        type: "default",
-        position: { x: 1300, y: 100 },
-        data: { label: "Salvar Feedback", config: { action: "save_to_database", table: "feedback" } },
-      },
-    ],
-    edges: [
-      { id: "e1-2", source: "trigger-1", target: "delay-1" },
-      { id: "e2-3", source: "delay-1", target: "message-1" },
-      { id: "e3-4", source: "message-1", target: "wait-1" },
-      { id: "e4-5", source: "wait-1", target: "condition-1" },
-      { id: "e5-6", source: "condition-1", target: "message-2", label: "Sim" },
-      { id: "e5-7", source: "condition-1", target: "message-3", label: "Não" },
-      { id: "e6-8", source: "message-2", target: "database-1" },
-      { id: "e7-8", source: "message-3", target: "database-1" },
-    ],
-  },
-  {
-    id: "chatbot-atendimento",
-    name: "Chatbot de Atendimento",
-    description: "Fluxo inteligente: Horário → Ligação → Finalização → Saudação",
-    icon: MessageSquare,
-    color: "bg-indigo-600",
-    nodes: [
-      { id: "trigger-1", type: "default", position: { x: 50, y: 200 }, data: { label: "📩 Nova Mensagem", config: { event: "message_received" } } },
-      { id: "condition-horario", type: "default", position: { x: 250, y: 200 }, data: { label: "🕐 Horário Comercial?", config: { condition: "working_hours", schedule: { mon_sat: { start: "08:00", end: "19:40" }, sun_holiday: { start: "08:00", end: "11:40" } } } } },
-      { id: "message-fora-horario", type: "default", position: { x: 450, y: 100 }, data: { label: "⛔ Fora de Horário", config: { message: "Nosso horário de atendimento é de 08h as 20h de Segunda a Sábado\nAos Domingos e Feriados de 8h ás 12h\nRetornaremos no próximo horário disponível." } } },
-      { id: "condition-ligacao", type: "default", position: { x: 450, y: 200 }, data: { label: "📞 É Ligação?", config: { condition: 'message_type == "call" || message_type == "video"' } } },
-      { id: "message-ligacao", type: "default", position: { x: 650, y: 100 }, data: { label: "❌ Recusar Ligação", config: { message: "Não atendemos ligações de áudio ou vídeo pelo WhatsApp, por favor envie *UMA MENSAGEM* ou ligue pelo no número de telefone 3180-0030 e 3180-0033." } } },
-      { id: "condition-venda", type: "default", position: { x: 650, y: 200 }, data: { label: "💰 Fechou Venda?", config: { condition: 'close_reason == "venda"' } } },
-      { id: "message-venda", type: "default", position: { x: 850, y: 150 }, data: { label: "⭐ Pesquisa Venda", config: { message: "Para aperfeiçoar nosso atendimento, nos diga como foi a sua experiência neste atendimento?\n\nDigite 5️⃣ Muito satisfeito 😍\nDigite 4️⃣ Satisfeito 😀\nDigite 3️⃣ Indiferente 😐\nDigite 2️⃣ Insatisfeito ☹️\nDigite 1️⃣ Muito insatisfeito 😞" } } },
-      { id: "condition-orcamento", type: "default", position: { x: 850, y: 250 }, data: { label: "📋 Foi Orçamento?", config: { condition: 'close_reason == "orcamento"' } } },
-      { id: "message-orcamento", type: "default", position: { x: 1050, y: 200 }, data: { label: "✅ Agradecer Orçamento", config: { message: "Agradecemos seu contato, e estaremos sempre à disposição.😉" } } },
-      { id: "condition-silencio", type: "default", position: { x: 1050, y: 300 }, data: { label: "🤫 Silêncio?", config: { condition: 'close_reason == "conversa_anterior" || close_reason == "engano"' } } },
-      { id: "action-silencio", type: "default", position: { x: 1250, y: 250 }, data: { label: "🔇 Não Responder", config: { action: "no_response" } } },
-      { id: "condition-logado", type: "default", position: { x: 1250, y: 350 }, data: { label: "👤 Agente Logado?", config: { condition: "agent_logged_in" } } },
-      { id: "function-saudacao", type: "default", position: { x: 1450, y: 300 }, data: { label: "🌅 Gerar Saudação", config: { function: "get_greeting", variables: { saudacao: "{{greeting}}", nome: "{{agent_name}}" } } } },
-      { id: "message-logado", type: "default", position: { x: 1650, y: 300 }, data: { label: "💬 Saudação Personalizada", config: { message: "{{greeting}} eu sou {{agent_name}}, como posso te ajudar?" } } },
-      { id: "message-nao-logado", type: "default", position: { x: 1450, y: 400 }, data: { label: "💬 Saudação Genérica", config: { message: "{{greeting}} um momento que já já vamos te atender!" } } },
-    ],
-    edges: [
-      { id: "e1-horario", source: "trigger-1", target: "condition-horario" },
-      { id: "e-hora-nao", source: "condition-horario", target: "message-fora-horario", label: "Não" },
-      { id: "e-hora-sim", source: "condition-horario", target: "condition-ligacao", label: "Sim" },
-      { id: "e-lig-sim", source: "condition-ligacao", target: "message-ligacao", label: "Sim" },
-      { id: "e-lig-nao", source: "condition-ligacao", target: "condition-venda", label: "Não" },
-      { id: "e-venda-sim", source: "condition-venda", target: "message-venda", label: "Sim" },
-      { id: "e-venda-nao", source: "condition-venda", target: "condition-orcamento", label: "Não" },
-      { id: "e-orc-sim", source: "condition-orcamento", target: "message-orcamento", label: "Sim" },
-      { id: "e-orc-nao", source: "condition-orcamento", target: "condition-silencio", label: "Não" },
-      { id: "e-sil-sim", source: "condition-silencio", target: "action-silencio", label: "Sim" },
-      { id: "e-sil-nao", source: "condition-silencio", target: "condition-logado", label: "Não" },
-      { id: "e-log-sim", source: "condition-logado", target: "function-saudacao", label: "Sim" },
-      { id: "e-func-saud", source: "function-saudacao", target: "message-logado" },
-      { id: "e-log-nao", source: "condition-logado", target: "message-nao-logado", label: "Não" },
-    ],
-  },
+    ];
+    const edges = [
+      { id: 'ce1', source: nodes[0].id, target: nodes[1].id, sourceHandle: 'out', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#94a3b8' } },
+      { id: 'ce2', source: nodes[1].id, target: nodes[2].id, sourceHandle: 'true', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#22c55e' }, label: 'Dentro' },
+      { id: 'ce3', source: nodes[1].id, target: nodes[3].id, sourceHandle: 'false', targetHandle: 'in', type: 'custom', animated: false, style: { stroke: '#ef4444' }, label: 'Fora' },
+    ];
+    return { id: 'chatbot-atendimento', name: 'Chatbot de Atendimento', description: 'Chatbot IA que verifica horário comercial e envia mensagens automáticas.', iconName: 'Bot', color: '#3b82f6', nodes, edges };
+  })(),
 ];

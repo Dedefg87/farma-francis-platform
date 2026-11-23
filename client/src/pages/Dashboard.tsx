@@ -18,7 +18,7 @@ import {
   ResponsiveContainer, Legend,
 } from "recharts";
 import { trpc } from "@/lib/trpc";
-import { TabbedPieCard } from "@/components/TabbedPieCard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   DashboardStatsOutput,
   AgentStatsOutput,
@@ -30,34 +30,9 @@ import type {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#FF19AF'];
 
-// Dados mockados para gráficos com abas
-const mockFilaData = [
-  { name: "Suporte Farmácia", value: 45, color: "#3b82f6" },
-  { name: "Vendas", value: 28, color: "#10b981" },
-  { name: "Financeiro", value: 17, color: "#ef4444" },
-  { name: "Sem fila", value: 10, color: "#6b7280" },
-];
 
-const mockStatusData = [
-  { name: "Finalizados", value: 65, color: "#10b981" },
-  { name: "Em andamento", value: 22, color: "#f59e0b" },
-  { name: "Aguardando", value: 13, color: "#3b82f6" },
-];
 
-const mockUraData = [
-  { name: "Opção 1 - Vendas", value: 40, color: "#3b82f6" },
-  { name: "Opção 2 - Suporte", value: 35, color: "#10b981" },
-  { name: "Opção 3 - Financeiro", value: 15, color: "#ef4444" },
-  { name: "Direto com agente", value: 10, color: "#8b5cf6" },
-];
 
-const mockFechamentoData = [
-  { name: "Venda concluída", value: 38, color: "#10b981" },
-  { name: "Orçamento", value: 25, color: "#f59e0b" },
-  { name: "Fora de estoque", value: 15, color: "#ef4444" },
-  { name: "Cliente não respondeu", value: 12, color: "#6b7280" },
-  { name: "Outros", value: 10, color: "#8b5cf6" },
-];
 
 /**
  * SkeletonLoader: Componente de placeholder para carregamento
@@ -128,7 +103,7 @@ export default function Dashboard() {
   const channelData = (channelQuery.data ?? []) as ConversationsByChannelOutput[];
   const statusData = (statusQuery.data ?? []) as ConversationsByStatusOutput[];
   const hourData = hourQuery.data ?? [];
-  const agentData = (agentQuery.data ?? []) as AgentStatsOutput[];
+  const agentData = ((agentQuery.data ?? []) as AgentStatsOutput[]).filter(Boolean);
 
   const isLoading = statsQuery.isLoading || channelQuery.isLoading || statusQuery.isLoading || hourQuery.isLoading || agentQuery.isLoading;
   const isError = statsQuery.isError || channelQuery.isError || statusQuery.isError || hourQuery.isError || agentQuery.isError;
@@ -295,7 +270,7 @@ export default function Dashboard() {
                   stats.avgPerAgent?.toFixed(1) ?? "0.0"
                 )}
                 {renderMetricCard("TMA Médio", calculateAverageTMA)}
-                {renderMetricCard("% SLA", "—")}
+                {renderMetricCard("% SLA", stats.sla)}
               </>
             ) : (
               <div className="lg:col-span-7 p-4 text-center text-gray-500 bg-white rounded-lg shadow-sm border border-gray-100">
@@ -331,73 +306,69 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            {/* GRÁFICOS DE CANAL E STATUS */}
+            {/* GRÁFICOS DE CANAL E STATUS — abas */}
             <div className="space-y-6">
-              {/* Gráfico de Canais */}
-              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-800 mb-4">Distribuição por Canal</h3>
-                {channelQuery.isLoading ? (
-                  <SkeletonLoader height="h-64" />
-                ) : channelQuery.isError ? (
-                  renderErrorState(`Falha ao carregar gráfico por canal: ${channelQuery.error?.message || 'Erro desconhecido'}`, channelQuery.refetch)
-                ) : channelData && channelData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={channelData.map(c => ({ name: c.channel, value: c.count }))}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="name"
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      >
-                        {channelData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  renderEmptyState("Sem dados de canais neste período.")
-                )}
-              </Card>
-
-              {/* Gráfico de Status */}
-              <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-800 mb-4">Status das Conversas</h3>
-                {statusQuery.isLoading ? (
-                  <SkeletonLoader height="h-64" />
-                ) : statusQuery.isError ? (
-                  renderErrorState(`Falha ao carregar gráfico por status: ${statusQuery.error?.message || 'Erro desconhecido'}`, statusQuery.refetch)
-                ) : statusData && statusData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={statusData.map(s => ({ name: s.status, value: s.count }))}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        nameKey="name"
-                        label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                      >
-                        {statusData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  renderEmptyState("Sem dados de status neste período.")
-                )}
-              </Card>
+            <Card className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-800 mb-4">Distribuição</h3>
+            <Tabs defaultValue="canal">
+            <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="canal">Canal</TabsTrigger>
+            <TabsTrigger value="status">Status</TabsTrigger>
+            </TabsList>
+            <TabsContent value="canal">
+            {channelQuery.isLoading ? (
+            <SkeletonLoader height="h-64" />
+            ) : channelQuery.isError ? (
+            renderErrorState(`Falha ao carregar gráfico por canal: ${channelQuery.error?.message || 'Erro desconhecido'}`, channelQuery.refetch)
+            ) : channelData && channelData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={340}>
+            <PieChart>
+            <Pie
+            data={channelData.map(c => ({ name: c.channel, value: c.count }))}
+            cx="50%" cy="50%" outerRadius={66} fill="#8884d8" dataKey="value" nameKey="name"
+            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            labelLine={false}
+            >
+            {channelData.map((_, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+            </Pie>
+            <Tooltip />
+            <Legend />
+            </PieChart>
+            </ResponsiveContainer>
+            ) : (
+            renderEmptyState("Sem dados de canais neste período.")
+            )}
+            </TabsContent>
+            <TabsContent value="status">
+            {statusQuery.isLoading ? (
+            <SkeletonLoader height="h-64" />
+            ) : statusQuery.isError ? (
+            renderErrorState(`Falha ao carregar gráfico por status: ${statusQuery.error?.message || 'Erro desconhecido'}`, statusQuery.refetch)
+            ) : statusData && statusData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={340}>
+            <PieChart>
+            <Pie
+            data={statusData.map(s => ({ name: s.status, value: s.count }))}
+            cx="50%" cy="50%" outerRadius={66} fill="#8884d8" dataKey="value" nameKey="name"
+            label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                            labelLine={false}
+            >
+            {statusData.map((_, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+            </Pie>
+            <Tooltip />
+            <Legend />
+            </PieChart>
+            </ResponsiveContainer>
+            ) : (
+            renderEmptyState("Sem dados de status neste período.")
+            )}
+            </TabsContent>
+            </Tabs>
+            </Card>
             </div>
 
           </div>
@@ -409,7 +380,7 @@ export default function Dashboard() {
               {agentQuery.isLoading ? (
                 <SkeletonLoader height="h-64" />
               ) : agentQuery.isError ? (
-                renderErrorState(`Falha ao carregar tabela de agentes: ${agentQuery.error?.message || 'Erro desconhecido'}`, agentQuery.refetch)
+                renderErrorState(`Nao foi possivel carregar a tabela de agentes neste periodo. Clique para tentar novamente.`, agentQuery.refetch)
               ) : agentData.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -427,7 +398,16 @@ export default function Dashboard() {
                     <tbody className="divide-y divide-gray-200">
                       {agentData.slice(0, 20).map((agent) => (
                         <tr key={agent.agentId} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
+                          <td className="px-4 py-3 flex items-center space-x-3">
+     {agent.photo ? (
+       <img src={agent.photo} alt={agent.agentName} className="h-8 w-8 rounded-full object-cover" />
+     ) : (
+       <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500">
+         {(agent.agentName || "?").charAt(0).toUpperCase()}
+       </div>
+     )}
+     <span className="font-medium text-gray-900">{agent.agentName}</span>
+   </td>
                           <td className="px-4 py-3 text-sm text-gray-600">{agent.totalConversations}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{agent.daysActive}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{(agent.avgPerDay ?? 0).toFixed(1)}</td>

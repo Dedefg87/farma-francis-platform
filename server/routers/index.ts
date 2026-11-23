@@ -1,6 +1,7 @@
 import { router } from "../_core/trpc";
 import { authRouter } from "../routers-auth";
 import { agentsRouter } from "../routers-agents";
+import { adminRouter } from "../routers-admin"; // ✅ LGPD - Direitos do Titular
 import { customersRouter } from "../routers-crm";
 import { aiRouter } from "../routers-ai";
 import { apiConfigRouter } from "../routers-api-config";
@@ -23,6 +24,7 @@ import { migrationRouter } from "../routers-migration";
 import { pausesRouter } from "../routers-pauses";
 import { queuesRouter } from "../routers-queues";
 import { quickRepliesRouter } from "../routers-quick-replies";
+import { remindersRouter } from "../routers-reminders";
 import { surveyRouter } from "../routers-survey";
 import { systemRouter } from "../routers-system";
 import { tagsRouter } from "../routers-tags";
@@ -31,11 +33,12 @@ import { testRouter } from "../routers-test";
 import { approvalsRouter } from "../routers-approvals";
 import { internalMessagesRouter } from "../routers-internal-messages";
 import { ticketsRouter } from "../routers-tickets";
+import { businessHoursRouter } from "../routers-business-hours";
 
 export const appRouter = router({
   auth: authRouter,
   agents: agentsRouter,
-  customers: customersRouter,
+  crm: customersRouter,
   employees: employeesRouter,
   ai: aiRouter,
   apiConfig: apiConfigRouter,
@@ -50,6 +53,7 @@ export const appRouter = router({
   dashboardStats: dashboardStatsRouter,
   dashboard: dashboardRouter,
   executions: executionsRouter,
+  admin: adminRouter, // ✅ LGPD endpoints
   inbox: inboxRouter,
   logs: logsRouter,
   messages: messagesRouter,
@@ -57,14 +61,16 @@ export const appRouter = router({
   pauses: pausesRouter,
   queues: queuesRouter,
   quickReplies: quickRepliesRouter,
+  reminders: remindersRouter,
   survey: surveyRouter,
   system: systemRouter,
   tags: tagsRouter,
   telemetry: telemetryRouter,
   test: testRouter,
-    approvals: approvalsRouter,
+  approvals: approvalsRouter,
   internalMessages: internalMessagesRouter,
   tickets: ticketsRouter,
+  businessHours: businessHoursRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -9,6 +9,7 @@ import {
   queues,
   users,
   processedWebhookMessages,
+  integrationSettings,
 } from "../drizzle/schema";
 import { eq, desc, and, or, sql, like, inArray, gte, lte } from "drizzle-orm";
 import { sseManager, EVENTS } from "./_core/sse";
@@ -16,109 +17,56 @@ import { fetchEvolutionProfile } from "./messaging";
 import { normalizeWhatsAppNumber, generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
 
 // Cache para evitar queries repetitivas de agent assignment
-const agentAssignmentCache = new Map<string, { agentId: number | null; timestamp: number }>();
-const CACHE_TTL_MS = 30 * 1000; // 30 segundos
+// __FIX_SSE_V4__ cache de atribuicao removido
 
 async function pickLeastLoadedOnlineAgent(params: {
   provider: "whatsapp" | "instagram";
 }) {
+  // __FIX_SSE_V4__ cache por provider REMOVIDO: congelava o mesmo agente por 30s
+  // em todas as conversas do canal, fazendo quem entrava depois nunca receber
+  // mensagem em tempo real. A escolha agora e sempre por menor carga real.
   const db = await getDb();
   if (!db) return null;
 
-  const cacheKey = params.provider;
-  const cached = agentAssignmentCache.get(cacheKey);
-  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL_MS) {
-    return cached.agentId ? { userId: cached.agentId, loadCount: 0, lastSignedIn: null } : null;
-  }
-
   const connected = sseManager
     .getConnectedUsers()
-    .map(id => Number(id))
-    .filter(id => Number.isFinite(id) && id > 0);
+    .map((id: any) => Number(id))
+    .filter((id: number) => Number.isFinite(id) && id > 0);
 
-  // FALLBACK: If no agents are connected via SSE, find any active agent
-  // This prevents conversations from being created without assignment
-  // when SSE connections drop (Railway kills long connections)
   if (connected.length === 0) {
-    console.log("[pickAgent] ⚠️ No agents online via SSE — using offline fallback");
-    // NOTE: users table does NOT have is_active column
-    // We check agent_pauses to exclude agents on break
-    const offlineResult = await db.execute(sql`
-      SELECT 
-        u.id AS userId,
-        COUNT(c.id) AS loadCount
-      FROM users u
-      LEFT JOIN agent_pauses p
-        ON p.agent_id = u.id AND p.status = 'active'
-      LEFT JOIN conversations c
-        ON c.assigned_to = u.id
-       AND c.status IN ('open','assigned')
-      WHERE u.role IN ('user', 'admin')
-        AND p.id IS NULL
-      GROUP BY u.id
-      ORDER BY loadCount ASC, u.id DESC
-      LIMIT 1
-    `);
-
-    // drizzle execute returns [rows, fields] for mysql2
-    const offlineRows = Array.isArray(offlineResult) ? offlineResult[0] : offlineResult;
-
-    if (Array.isArray(offlineRows) && offlineRows.length > 0) {
-      const fallbackId = Number(offlineRows[0]?.userId);
-      if (Number.isFinite(fallbackId) && fallbackId > 0) {
-        console.log("[pickAgent] 🔄 Offline fallback assigned to agent", fallbackId);
-        agentAssignmentCache.set(cacheKey, { agentId: fallbackId, timestamp: Date.now() });
-        return { userId: fallbackId, loadCount: Number(offlineRows[0]?.loadCount ?? 0), lastSignedIn: null };
-      }
-    }
-
-    agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
+    console.log("[pickAgent] Nenhum atendente conectado via SSE — conversa fica SEM atribuicao");
     return null;
   }
 
-  if (connected.length > 0) {
-    const rows = (await db.execute(sql`
-      SELECT 
-        u.id AS userId,
-        COUNT(c.id) AS loadCount,
-        MAX(u.lastSignedIn) AS lastSignedIn
-      FROM users u
-      LEFT JOIN agent_pauses p
-        ON p.agent_id = u.id AND p.status = 'active'
-      LEFT JOIN conversations c
-        ON c.assigned_to = u.id
-       AND c.status IN ('open','assigned')
-       AND c.channel = ${params.provider}
-      WHERE u.role IN ('user', 'admin')
-        AND u.id IN (${sql.join(
-          connected.map(id => sql`${id}`),
-          sql`, `
-        )})
-        AND p.id IS NULL
-      GROUP BY u.id
-      ORDER BY loadCount ASC, u.id DESC
-    `)) as any[];
+  const rows = (await db.execute(sql`
+    SELECT
+      u.id AS userId,
+      COUNT(c.id) AS loadCount,
+      MAX(u.lastSignedIn) AS lastSignedIn
+    FROM users u
+    LEFT JOIN agent_pauses p
+      ON p.agent_id = u.id AND p.status = 'active'
+    LEFT JOIN conversations c
+      ON c.assigned_to = u.id
+     AND c.status IN ('open','assigned')
+     AND c.channel = ${params.provider}
+    WHERE u.role IN ('user', 'admin')
+      AND u.id IN (${sql.join(connected.map((id: number) => sql`${id}`), sql`, `)})
+      AND p.id IS NULL
+    GROUP BY u.id
+    ORDER BY loadCount ASC, u.id DESC
+  `)) as any;
 
-    if (Array.isArray(rows) && rows.length > 0) {
-      const minLoad = Number(rows[0]?.loadCount ?? 0);
-      const minRows = rows.filter(r => Number(r.loadCount ?? 0) === minLoad);
-      const chosenId = Number(minRows[0]?.userId);
-      if (!Number.isFinite(chosenId) || chosenId <= 0) {
-        agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
-        return null;
-      }
-      agentAssignmentCache.set(cacheKey, { agentId: chosenId, timestamp: Date.now() });
-      return {
-        userId: chosenId,
-        candidates: rows.length,
-        minLoad,
-        source: "sse",
-      };
-    }
-  }
+  const list: any[] = Array.isArray(rows) && Array.isArray(rows[0]) ? rows[0] : rows;
+  if (!Array.isArray(list) || list.length === 0) return null;
 
-  agentAssignmentCache.set(cacheKey, { agentId: null, timestamp: Date.now() });
-  return null;
+  const minLoad = Number(list[0]?.loadCount ?? 0);
+  const minRows = list.filter((r: any) => Number(r.loadCount ?? 0) === minLoad);
+  const chosenId = Number(minRows[0]?.userId);
+  if (!Number.isFinite(chosenId) || chosenId <= 0) return null;
+
+  console.log("[pickAgent] escolhido userId=" + chosenId + " | carga=" + minLoad + " | candidatos=" + list.length);
+  return { userId: chosenId, candidates: list.length, minLoad, source: "sse" };
 }
 
 /**
@@ -351,6 +299,10 @@ function buildInboundContent(message: {
   if (message.caption?.trim()) return message.caption;
 
   switch (message.messageType) {
+    case "reaction":
+      // Reações são salvas apenas como campo `reaction` na mensagem original,
+      // mas se chegar aqui como mensagem isolada, mostra o emoji
+      return message.messageText || "";
     case "image":
       return "[Imagem]";
     case "audio":
@@ -366,8 +318,6 @@ function buildInboundContent(message: {
       return ""; // Sticker é renderizado como imagem no frontend
     case "extendedTextMessage":
       return "[Resposta a Status]";
-    case "reaction":
-      return "[Reacao]";
     case "contact":
       return "[Contato]";
     default:
@@ -380,6 +330,7 @@ function buildInboundContent(message: {
 // ==============================================
 export async function ingestInboundConversationMessage(message: {
   provider: "whatsapp" | "instagram";
+  instanceName?: string | null; // [FIX] instancia Evolution que recebeu
   fromNumber: string;
   fromName?: string | null;
   messageType: string;
@@ -391,6 +342,9 @@ export async function ingestInboundConversationMessage(message: {
   fileName?: string | null;
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
+  // Reply/Quoted fields
+  replyToExternalId?: string | null;
+  replyToContent?: string | null;
   createdAt?: Date;
 }) {
   console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
@@ -401,21 +355,47 @@ export async function ingestInboundConversationMessage(message: {
     return null;
   }
 
-  // 0. Deduplicação: verificar se mensagem já foi processada
+
+  // [fix70] Reação NUNCA cria cliente/conversa: processa e retorna antes do findOrCreate
+  if (['reaction','reaction_message','reactionmessage'].includes(String((message as any).messageType || (message as any).type || '').toLowerCase())) {
+    const _reEmoji = String((message as any).messageText || (message as any).reaction || (message as any).emoji || (message as any).reactionEmoji || '');
+    const _reTarget = (message as any).reactionTargetExternalId || (message as any).replyToExternalId || (message as any).reactionTargetId || (message as any).reactionMessageId || null;
+    try {
+      if (_reTarget && _reEmoji) {
+        const [_tgt] = await db.select({ id: conversationMessages.id }).from(conversationMessages).where(eq(conversationMessages.externalId, _reTarget)).limit(1);
+        if (_tgt) { await db.update(conversationMessages).set({ reaction: _reEmoji }).where(eq(conversationMessages.id, _tgt.id)); console.log('[fix70] Reação aplicada na mensagem', _tgt.id, '=', _reEmoji); }
+        else console.warn('[fix70] Alvo da reação não encontrado, ignorada (sem criar conversa):', _reTarget);
+      } else {
+        if (!_reTarget && !_reEmoji) console.warn('[fix70] Reação sem alvo/emoji, ignorada (sem criar conversa)');
+      }
+    } catch (e) { console.error('[fix70] Erro ao processar reação:', e); }
+    return null;
+  }  // 0. Deduplicação: verificar se mensagem já foi processada (com TTL de 24h)
   if (message.externalId) {
+    const TTL_HOURS = 24;
+    const cutoffTime = new Date(Date.now() - TTL_HOURS * 60 * 60 * 1000);
+    
     const existing = await db
       .select()
       .from(processedWebhookMessages)
-      .where(eq(processedWebhookMessages.id, message.externalId))
+      .where(
+        and(
+          eq(processedWebhookMessages.id, message.externalId),
+          sql`${processedWebhookMessages.processedAt} > ${cutoffTime.toISOString().slice(0, 19).replace('T', ' ')}`
+        )
+      )
       .limit(1);
 
     if (existing.length > 0) {
-      console.log(`[Webhook] Duplicate message ignored: ${message.externalId}`);
+      console.log(`[Webhook] Duplicate message ignored (within TTL): ${message.externalId}`);
       return null;
     }
 
     // Marcar como processada
-    await db.insert(processedWebhookMessages).values({ id: message.externalId });
+    await db.insert(processedWebhookMessages).values({ 
+      id: message.externalId,
+      provider: message.provider 
+    });
     console.log(`[Webhook] New message registered: ${message.externalId}`);
   }
 
@@ -426,8 +406,13 @@ export async function ingestInboundConversationMessage(message: {
   );
 
   // 2. Fetch profile picture in background (non-blocking)
-  // Download from WhatsApp CDN and upload to R2 (avoids 403 in browser)
-  if (message.provider === "whatsapp" && !customer?.photoUrl && customer?.id) {
+  // Download from WhatsApp CDN (proxied via Evolution API) and upload to R2.
+  // Re-download if missing OR if the stored URL is a (now-expired) WhatsApp CDN link.
+  const isExpiredCdn =
+    !!customer?.photoUrl &&
+    (customer.photoUrl.includes('whatsapp.net') ||
+      customer.photoUrl.includes('whatsapp.com'));
+  if (message.provider === "whatsapp" && customer?.id && (!customer?.photoUrl || isExpiredCdn)) {
     setImmediate(async () => {
       try {
         const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
@@ -436,6 +421,21 @@ export async function ingestInboundConversationMessage(message: {
         // Silently fail - photo is not critical
       }
     });
+  }
+
+  // 2b. CRITICAL: link received_messages to the customer so getConversations
+  // LEFT JOIN (customers.id = receivedMessages.customerId) and the profile-pic
+  // update resolve correctly. Without this, photos never show in the inbox.
+  if (customer?.id) {
+    await db
+      .update(receivedMessages)
+      .set({ customerId: customer.id })
+      .where(
+        and(
+          eq(receivedMessages.fromNumber, message.fromNumber),
+          eq(receivedMessages.provider, message.provider)
+        )
+      );
   }
 
   const now = message.createdAt ?? new Date();
@@ -458,24 +458,59 @@ export async function ingestInboundConversationMessage(message: {
 
   // 5. Find existing conversation by PHONE (últimos 8 dígitos)
   // Resolve problema de clientes duplicados com formatos diferentes de telefone
-  const found = await findConversationByPhone(db, customer.phone, conversations, customers);
+  const found = await findConversationByPhone(db, customer.phone, conversations, customers, message.instanceName);
 
   let conversationId = found?.conversationId;
   let existingConversation: unknown = null;
 
   if (conversationId) {
     [existingConversation] = await db
-      .select()
+      .select({
+        id: conversations.id,
+        customerId: conversations.customerId,
+        status: conversations.status,
+        closeReason: conversations.closeReason,
+        assignedTo: conversations.assignedTo,
+        unreadCount: conversations.unreadCount,
+      })
       .from(conversations)
       .where(eq(conversations.id, conversationId))
       .limit(1);
     conversationId = existingConversation?.id;
   }
+  // [fix-reopen] Cliente mandou mensagem nova: reabre a conversa fechada em vez de descartar
+  if (existingConversation && existingConversation.status === "closed") {
+    await db.update(conversations).set({ status: "open", closedAt: null, closeReason: null }).where(eq(conversations.id, existingConversation.id));
+    console.log("[fix-reopen] Conversa", existingConversation.id, "reaberta por mensagem nova");
+  } else if (!conversationId) {
+    const [ultimaFechada] = await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.customerId, customer.id), eq(conversations.status, "closed"))).orderBy(desc(conversations.lastMessageAt)).limit(1);
+    if (ultimaFechada) {
+      await db.update(conversations).set({ status: "open", closedAt: null, closeReason: null }).where(eq(conversations.id, ultimaFechada.id));
+      conversationId = ultimaFechada.id;
+      console.log("[fix-reopen] Conversa", ultimaFechada.id, "reaberta (ultima fechada)");
+    }
+  }
+
 
   // Se a conversa encontrada pertence a outro customerId, usar o correto
   if (existingConversation && existingConversation.customerId !== customer.id) {
     // Usar o customer da conversa existente (para manter consistência)
     console.log(`[ingestInbound] 🔄 Customer ID ajustado: ${customer.id} → ${existingConversation.customerId} (mesmo telefone)`);
+  }
+
+  // VERIFICAR DUPLICATA ANTES DE TUDO — se a mensagem já existe, não reabrir conversa
+  if (message.externalId) {
+    const duplicateMsgCheck = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(
+        eq(conversationMessages.externalId, message.externalId),
+        eq(conversationMessages.provider, message.provider || "whatsapp")
+      ))
+      .limit(1);
+    if (duplicateMsgCheck.length > 0) {
+      console.log(`[Ingest] Mensagem duplicata detectada antes do update: ${message.externalId}`);
+      return null;
+    }
   }
 
   // 6. Create or update conversation
@@ -486,11 +521,13 @@ export async function ingestInboundConversationMessage(message: {
       customerName: customer.name,
       customerPhone: customer.phone,
       channel: message.provider || "whatsapp", // fallback para whatsapp se undefined
+      instanceName: message.instanceName || null, // [FIX] grava a instancia do numero chamado
       status: assignedUserId ? "assigned" : "open",
       assignedTo: assignedUserId,
       queueId: assignedUserId ? null : (defaultQueue?.id ?? null),
       openedAt: now,
       lastMessageAt: now,
+      ...(message.instanceName ? { instanceName: message.instanceName } : {}), // [FIX] sem sobrescrever quando ausente
       unreadCount: 1,
     });
 
@@ -503,14 +540,22 @@ export async function ingestInboundConversationMessage(message: {
 
     conversationId = newConversation?.id;
   } else {
-    // Update existing conversation (ou reabrir conversa fechada)
-    const isReopening = existingConversation?.status === "closed";
+    // Update existing conversation (ou reabrir conversa fechada apenas se closeReason válido)
+    // Não reabrir se encerramento foi com motivo que envia mensagem de fechamento obrigatória
+    // venda, orcamento e engano enviam mensagem de encerramento e NAO devem reabrir; apenas conversa_anterior (fechamento silencioso) pode reabrir.
+    const closingReasonsWithMandatoryMessage: string[] = []; // [FIX] Pesquisa de satisfacao nao bloqueia mais o contato: nova mensagem do cliente sempre reabre a conversa fechada
+    // Se conversa está fechada com motivo obrigatório de mensagem (ex: venda → pesquisa 1-5), NÃO reabrir.
+    // Se closeReason é outro motivo ou nulo/vazio, pode reabrir.
+    const hasMandatoryCloseMessage = !!existingConversation?.closeReason &&
+      closingReasonsWithMandatoryMessage.includes(existingConversation.closeReason);
+    const isReopening = existingConversation && existingConversation.status === "closed" && !hasMandatoryCloseMessage;
     const shouldAssign = !existingConversation?.assignedTo && assignedUserId;
     await db
       .update(conversations)
       .set({
         lastMessageAt: now,
         unreadCount: isReopening ? 1 : sql<number>`unread_count + 1`,
+    ...(message.instanceName ? { instanceName: message.instanceName } : {}), // [FIX] atualiza instancia no reuso
         // Reabrir conversa fechada
         ...(isReopening
           ? {
@@ -535,7 +580,7 @@ export async function ingestInboundConversationMessage(message: {
 
   // 7. ECONOMIA DE ESPAÇO: salvar apenas URL original (não baixar como base64)
   // O endpoint /api/media/:id fará fetch da Evolution API quando necessário
-  const fileUrlToSave = message.mediaUrl || null;
+  let fileUrlToSave = message.mediaUrl || null;
 
   // 8. Insert conversation message — guard contra duplicata por externalId
   let duplicateCheck;
@@ -569,9 +614,52 @@ export async function ingestInboundConversationMessage(message: {
 
   console.log(`[EvolutionDeduplication] Nova mensagem, processando: ${message.externalId || 'sem externalId'}`);
 
+  // IDEMPOTENCY: skip if message with same externalId + provider already exists
+  const externalIdToCheck = message.externalId ?? null;
+  if (externalIdToCheck) {
+    const existing = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, externalIdToCheck), eq(conversationMessages.provider, message.provider || "whatsapp")))
+      .limit(1);
+    if (existing.length > 0) {
+      console.log(`[EvolutionDeduplication] ⏭️ Skipping duplicate message: ${externalIdToCheck}`);
+      return null;
+    }
+  }
+  
+  // [fix69] Reacao NUNCA vira balao: aplica na mensagem original e sai sem inserir
+  if (['reaction','reaction_message','reactionmessage'].includes(String((message as any).messageType || (message as any).type || '').toLowerCase())) {
+    const emoji = (message as any).messageText || (message as any).reactionEmoji || null;
+    const targetId = (message as any).reactionTargetExternalId || (message as any).replyToExternalId || (message as any).reactionTargetId || null;
+    try {
+      if (targetId && emoji) {
+        const [tgt] = await db
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, targetId))
+          .limit(1);
+        if (tgt) {
+          await db.update(conversationMessages).set({ reaction: emoji }).where(eq(conversationMessages.id, tgt.id));
+          console.log('[fix69] Reacao aplicada a mensagem', tgt.id, '=', emoji);
+        } else {
+          console.warn('[fix69] Alvo da reacao nao encontrado, ignorada (sem balao):', targetId);
+        }
+      } else {
+        console.warn('[fix69] Reacao sem alvo/emoji, ignorada (sem balao)');
+      }
+    } catch (err) {
+      console.error('[fix69] Erro ao processar reacao:', err);
+    }
+    return null;
+  }
+  console.log("[DB-INSERT] Inbound message - externalId:", message.externalId, "remoteJid:", (message as any).remoteJid, "provider:", message.provider, "replyToExternalId:", message.replyToExternalId);
+  let insertResult: any;
+  try {
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
-    externalId: message.externalId || null,
+    externalId: message.externalId ?? null,
+    remoteJid: (message as any).remoteJid ?? null,
+    provider: message.provider || "whatsapp",
     senderId: null,
     senderType: "customer",
     content: buildInboundContent(message),
@@ -579,8 +667,25 @@ export async function ingestInboundConversationMessage(message: {
     fileName: message.fileName || null,
     fileType: message.mimeType || null,
     fileSize: message.fileSize || null,
+    replyToExternalId: message.replyToExternalId ?? null,
+    replyToContent: message.replyToContent ?? null,
     createdAt: now,
   });
+    } catch (e: any) {
+      // __FIX_SSE_V4__ corrida MobileSync x webhook: duplicidade nao pode estourar
+      const errno = e?.errno ?? e?.cause?.errno ?? e?.code;
+      const emsg = String(e?.message || "");
+      if (errno === 1062 || emsg.includes("ER_DUP_ENTRY") || emsg.includes("Duplicate entry")) {
+        const [_dup] = await db
+          .select({ id: conversationMessages.id })
+          .from(conversationMessages)
+          .where(eq(conversationMessages.externalId, message.externalId ?? ""))
+          .limit(1);
+        console.log("[ingestOutbound] Duplicidade ignorada (ER_DUP_ENTRY):", message.externalId, "-> id", _dup?.id);
+        return { conversationId, customerId: customer.id, messageDbId: _dup?.id };
+      }
+      throw e;
+    }
 
   const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
   const messageDbId = Number(rawMessageId) || undefined;
@@ -592,7 +697,7 @@ export async function ingestInboundConversationMessage(message: {
     message.externalId &&
     (
       // Case 1: has WhatsApp CDN URL
-      (fileUrlToSave && fileUrlToSave.includes("mmg.whatsapp.net")) ||
+      (fileUrlToSave?.includes("mmg.whatsapp.net") || fileUrlToSave?.includes("pps.whatsapp.net")) ||
       // Case 2: has media but no URL (stickers, etc.) — mediaId or mimeType indicates media
       (!fileUrlToSave && (message.mediaId || ["sticker", "stickerMessage", "image", "audio", "video", "document"].includes(message.messageType || "")))
     );
@@ -662,10 +767,11 @@ export async function ingestInboundConversationMessage(message: {
   // 10. Notify connected agents via SSE (real-time update)
   const messageContent = message.messageText || message.caption || "[Mídia]";
   const sseMessage = {
-    type: EVENTS.MESSAGE_NEW,
-    data: {
-      conversationId,
-      message: {
+  type: EVENTS.MESSAGE_NEW,
+  data: {
+  conversationId,
+  assignedTo: assignedUserId,
+  message: {
         id: messageDbId,
         content: buildInboundContent(message),
         senderType: "customer",
@@ -707,7 +813,8 @@ export async function ingestInboundConversationMessage(message: {
     // Also notify ALL because admins need to see the update in the list
     sseManager.emitToAll(sseConvUpdate);
   } else {
-    // No assigned agent — notify all connected users (Admins/Available Agents)
+    // __FIX_SSE_V4__ fallback: sem agente atribuido, broadcast para todos
+    console.log("[ingestInbound] Sem agente atribuido — broadcast para todos:", sseManager.getConnectedUsers().join(", ") || "(nenhum)");
     sseManager.emitToAll(sseMessage);
     sseManager.emitToAll(sseConvUpdate);
   }
@@ -748,4 +855,206 @@ export async function listReceivedMessages(filters?: {
   });
 
   return stats;
+
+  // 11. Trigger automation flows (WhatsApp/Business) - fire and forget
+  setImmediate(async () => {
+    try {
+      const { findAndExecuteFlowForTrigger } = await import("./flow-engine");
+      await findAndExecuteFlowForTrigger(message.fromNumber, customer, conversationId);
+    } catch (err) {
+      console.error("[Flow Engine] Error:", err);
+    }
+  });
+
+  return { conversationId, customerId: customer.id };
+}
+// ==============================================
+// Ingest outbound conversation message (WhatsApp/Instagram)
+// ==============================================
+export async function ingestOutboundConversationMessage(message: {
+  provider: "whatsapp" | "instagram";
+  toNumber: string;
+  fromUserId: number; // ID do agente que enviou
+  fromUserName?: string | null; // Nome do agente
+  fromUserPosition?: string | null; // Cargo do agente
+  messageType: string;
+  messageText?: string | null;
+  caption?: string | null;
+  mediaUrl?: string | null;
+  mediaId?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  externalId?: string | null; // Evolution API message ID
+  replyToExternalId?: string | null; // ✅ ID da mensagem respondida (reply)
+  createdAt?: Date;
+}) {
+  console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
+  
+  const db = await getDb();
+  if (!db) {
+    console.error("[ingestOutbound] Database not available!");
+    return null;
+  }
+
+  // [fix48] Idempotência: não duplicar outbound já persistido (MobileSync + webhook disputam o mesmo externalId)
+  if (message.externalId) {
+    try {
+      const existingOut = await db.query.conversationMessages.findFirst({
+        where: (cm, { eq }) => eq(cm.externalId, message.externalId as string),
+      });
+      if (existingOut) {
+        console.log("[ingestOutbound] ✅ Duplicado ignorado (externalId já existe):", message.externalId);
+        return existingOut;
+      }
+    } catch (dupErr) {
+      console.error("[ingestOutbound] check dup falhou (segue):", (dupErr as Error).message);
+    }
+  }
+
+  // 1. Find customer by phone number
+  const customer = await findOrCreateCustomerByPhone(
+    message.toNumber,
+    undefined,
+    null
+  );
+
+  if (!customer) {
+    console.error("[ingestOutbound] Customer not found for:", message.toNumber);
+    return null;
+  }
+
+  // 2. Find existing conversation or create new one
+  let found = await findConversationByPhone(db, customer.phone, conversations, customers);
+  
+  // Try phone variants if not found (Brazilian number normalization)
+  if (!found) {
+    const variants = generatePhoneVariants(customer.phone);
+    for (const variant of variants) {
+
+      found = await findConversationByPhone(db, variant, conversations, customers);
+      if (found) {
+        console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
+        break;
+      }
+    }
+  }
+  
+  let conversationId: number;
+  // Create conversation if not found
+  if (!found) {
+    console.log("[ingestOutbound] ⚠️ No conversation found for", customer.phone, "→ creating new one");
+    const [newConv] = await db.insert(conversations).values({
+      customerId: customer.id,
+      customerName: customer.name || null,
+      customerPhone: customer.phone,
+      channel: message.provider || "whatsapp",
+      status: "open",
+      assignedTo: message.fromUserId || null,
+    }).returning();
+    found = { conversationId: newConv.id };
+  }
+  
+  if (found?.conversationId) {
+    conversationId = found.conversationId;
+  } else {
+    // Create new conversation
+    const [newConv] = await db.insert(conversations).values({
+      customerId: customer.id,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      channel: message.provider,
+      status: "open",
+      assignedTo: message.fromUserId,
+      openedAt: message.createdAt || new Date(),
+      lastMessageAt: message.createdAt || new Date(),
+      unreadCount: 0,
+    });
+    conversationId = newConv.id;
+  }
+
+  // 3. Insert message into conversation_messages
+  // IDEMPOTENCY: skip if outbound message with same externalId already exists
+  const outboundExtId = message.key?.id || message.messageId || null;
+  if (outboundExtId) {
+    const existingOut = await db.select({ id: conversationMessages.id })
+      .from(conversationMessages)
+      .where(and(eq(conversationMessages.externalId, outboundExtId), eq(conversationMessages.provider, "whatsapp")))
+      .limit(1);
+    if (existingOut.length > 0) {
+      console.log("[ingestOutbound] ⏭️ Skipping duplicate outbound message:", outboundExtId);
+      return null;
+    }
+  }
+// [diag-media] o que o webhook entrega no outbound
+  console.log("[diag-media] OUTBOUND:", JSON.stringify({
+    messageType: message.messageType,
+    mediaUrl: message.mediaUrl ? String(message.mediaUrl).substring(0,90) : null,
+    mimeType: message.mimeType || null,
+    fileName: message.fileName || null,
+    externalId: message.externalId || message.key?.id || null,
+  }));
+    // FIX: Reconstruir URL completa do R2 se o webhook limpou para caminho relativo
+    let fileUrlToSave = message.mediaUrl || null;
+    if (fileUrlToSave && !fileUrlToSave.startsWith("http") && !fileUrlToSave.startsWith("evolution-api")) {
+      const r2Base = process.env.R2_PUBLIC_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev";
+      const key = fileUrlToSave.startsWith("media/") ? fileUrlToSave : "media/" + fileUrlToSave;
+      fileUrlToSave = r2Base + "/" + key;
+      console.log("[ingestOutbound] Reconstructed full R2 URL:", fileUrlToSave);
+    }
+    
+    let insertResult: any;
+    try {
+    insertResult = await db.insert(conversationMessages).values({
+    conversationId,
+    externalId: message.externalId || null,
+    replyToExternalId: message.replyToExternalId || null, // ✅ Salvar referência do reply
+    replyToContent: message.replyToContent || null, // ✅ Salvar conteúdo da mensagem respondida
+    senderId: message.fromUserId,
+    senderName: message.fromUserName || null,
+    senderPosition: message.fromUserPosition || null,
+    senderType: "agent",
+    content: message.messageText || message.caption || buildInboundContent({
+      messageType: message.messageType,
+      messageText: message.messageText,
+      caption: message.caption,
+    } as any),
+    fileUrl: fileUrlToSave || null,
+    fileName: message.fileName || null,
+    fileType: message.mimeType || null,
+    fileSize: message.fileSize || null,
+    createdAt: message.createdAt || new Date(),
+  });
+    } catch (_insErr: any) {
+      const _code = String(_insErr?.cause?.code || _insErr?.code || "");
+      const _constraint = String(_insErr?.cause?.constraint || _insErr?.constraint || "");
+      const _detail = String(_insErr?.cause?.detail || _insErr?.detail || "");
+      const _msg = String(_insErr?.cause?.message || _insErr?.message || "");
+      if (_code === "23505" || _code === "ER_DUP_ENTRY" || /duplicate key|duplicate entry/i.test(_msg + " " + _detail)) {
+        console.log("[ingestOutbound] duplicata ignorada (constraint):", message.externalId || message.key?.id);
+        return { conversationId, customerId: customer.id, messageDbId: undefined as any };
+      }
+      console.error("[ingestOutbound] FALHA NO INSERT", JSON.stringify({
+        code: _code, constraint: _constraint, detail: _detail.slice(0, 300), msg: _msg.slice(0, 200),
+        externalId: message.externalId || null, messageType: message.messageType || null,
+        fileUrl: fileUrlToSave ? String(fileUrlToSave).slice(0, 90) : null,
+        fileName: message.fileName || null, fileType: message.mimeType || null,
+        fileSize: message.fileSize || null,
+        contentLen: String(message.messageText || message.caption || "").length,
+        replyToExternalId: message.replyToExternalId || null,
+        replyToMessageId: message.replyToMessageId || null,
+      }));
+      throw _insErr;
+    }
+
+  const rawMessageId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId || insertResult?.lastInsertRowid;
+  const messageDbId = Number(rawMessageId) || undefined;
+
+  console.log("[ingestOutbound] ✅ Message ingested successfully:", {
+    conversationId,
+    messageDbId,
+    content: (message.messageText || message.caption || "[Mídia]").substring(0, 50),
+  });
+
+  return { conversationId, customerId: customer.id, messageDbId };
 }

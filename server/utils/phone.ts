@@ -96,9 +96,10 @@ export async function findConversationByPhone(
   db: unknown,
   phone: string,
   conversationsTable: unknown,
-  customersTable: unknown
+  customersTable: unknown,
+  instanceName?: string | null, // [FIX] instancia Evolution que recebeu
 ): Promise<{ conversationId: number; customerId: number; status: string } | null> {
-  const { eq, desc, inArray, like, or } = await import('drizzle-orm');
+  const { eq, desc, inArray, like, or, and } = await import('drizzle-orm');
   
   const last8 = phoneLast8(phone);
   if (last8.length < 8) return null;
@@ -114,17 +115,25 @@ export async function findConversationByPhone(
 
   const customerIds = matchedCustomers.map((c: unknown) => c.id);
 
-  // Buscar conversa mais recente de QUALQUER um desses clientes
+  // Buscar conversa mais recente — preferencialmente da MESMA instância (quando informada)
   const [conversation] = await db
     .select({
       id: conversationsTable.id,
       customerId: conversationsTable.customerId,
       status: conversationsTable.status,
+      closeReason: conversationsTable.closeReason,
     })
     .from(conversationsTable)
-    .where(inArray(conversationsTable.customerId, customerIds))
+    .where(
+      instanceName && String(instanceName).trim()
+        ? and(
+            inArray(conversationsTable.customerId, customerIds),
+            eq(conversationsTable.instanceName, String(instanceName).trim())
+          )
+        : inArray(conversationsTable.customerId, customerIds)
+    )
     .orderBy(desc(conversationsTable.lastMessageAt))
     .limit(1);
 
-  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status } : null;
+  return conversation ? { conversationId: conversation.id, customerId: conversation.customerId, status: conversation.status, closeReason: conversation.closeReason || null } : null;
 }

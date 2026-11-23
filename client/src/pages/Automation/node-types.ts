@@ -1,11 +1,29 @@
-import { 
-  MessageSquare, Webhook, Clock, GitBranch, Filter, GitMerge, Repeat, 
-  Send, Mail, Smartphone, Bell, Bot, Brain, GitCompare, 
-  Database, Globe, Code, ArrowRight, AlertTriangle, 
-  Pause, UserCheck, CreditCard, Package, Phone, Instagram, FileText
+import React from "react";
+import {
+  Upload, FileText, Brain, Pill, Package, MessageSquare, ShieldCheck,
+  Calendar, Tag, DollarSign, Truck, UserPlus, Award, ScanLine, Thermometer,
+  Stethoscope, Search, Bot, Clock, AlertTriangle, CheckCircle, Camera,
+  MapPin, Mail, Phone, Wifi, Database, Lock, Globe, Zap, Heart,
+  Activity, BarChart3, ClipboardList, FileCheck, QrCode, CreditCard,
+  RefreshCw, Settings, Bell, Users, Building2, Archive, TrendingUp,
+  ShoppingCart, Receipt, Syringe, Microscope, BookOpen, Cloud, HardDrive,
+  FileX, CreditCard as CreditCardIcon, Store, Video, ShoppingBag,
+  Calculator, Send as SendIcon, Shield, FileSearch, BarChart, DollarSign as DollarIcon,
+  Link2, ClipboardCheck, AlertCircle, TrendingDown, UserCheck, FileSpreadsheet,
+  Receipt as ReceiptIcon, Smartphone, Megaphone, Clipboard, Eye,
+  Code, Layers, Hash, StickyNote, Filter, GitBranch, GitCompare, GitMerge,
+  Landmark, Building, CreditCard as CreditCard2, Banknote, Wallet, PiggyBank,
+  ShoppingBasket, Utensils, Truck as Truck2, Mail as Mail2, FileInput, FileOutput,
+  UserCog, LineChart, Megaphone as Megaphone2, Radio, Tv, MonitorSpeaker, Volume2
 } from "lucide-react";
 
 // ==================== TYPES ====================
+
+export interface NodeError {
+  field: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
 
 export interface WorkflowNode {
   id: string;
@@ -16,8 +34,13 @@ export interface WorkflowNode {
   color: string;
   category: string;
   inputs?: NodePort[];
+
   outputs?: NodePort[];
+
   config?: ConfigField[];
+
+  errors?: NodeError[];
+
 }
 
 export interface NodePort {
@@ -29,9 +52,10 @@ export interface NodePort {
 export interface ConfigField {
   key: string;
   label: string;
-  type: 'string' | 'number' | 'boolean' | 'select' | 'json' | 'prompt' | 'password' | 'file';
+  type: 'string' | 'number' | 'boolean' | 'select' | 'json' | 'prompt' | 'password' | 'file' | 'multiselect';
   options?: { value: string; label: string }[];
-  defaultValue?: any;
+
+defaultValue?: any;
   placeholder?: string;
   multiline?: boolean;
 }
@@ -39,834 +63,2389 @@ export interface ConfigField {
 // ==================== CATEGORIES ====================
 
 export const CATEGORIES = [
-  { id: 'triggers', label: 'Gatilhos', color: 'bg-green-100 text-green-800', icon: GitBranch },
-  { id: 'logic', label: 'Condições/Lógica', color: 'bg-yellow-100 text-yellow-800', icon: Filter },
-  { id: 'messages', label: 'Mensagens/Comunicação', color: 'bg-blue-100 text-blue-800', icon: Send },
-  { id: 'ai', label: 'IA/Inteligência', color: 'bg-purple-100 text-purple-800', icon: Brain },
-  { id: 'actions', label: 'Ações/Automação', color: 'bg-teal-100 text-teal-800', icon: Code },
-  { id: 'wait', label: 'Aguardar/Tempo', color: 'bg-gray-100 text-gray-800', icon: Pause },
-  { id: 'integrations', label: 'API/Integrações', color: 'bg-emerald-100 text-emerald-800', icon: Globe },
-  { id: 'flow', label: 'Transferir/Fluxo', color: 'bg-orange-100 text-orange-800', icon: ArrowRight },
-  { id: 'pharmacy', label: 'Farmácia-Específico', color: 'bg-blue-100 text-blue-800', icon: Package },
+  { id: 'entrada', label: 'Entrada / Documentos / Compliance', color: 'bg-blue-100 text-blue-800', icon: FileCheck },
+  { id: 'ia', label: 'IA / Assistente Clínico', color: 'bg-purple-100 text-purple-800', icon: Brain },
+  { id: 'saude', label: 'Saúde / Segurança', color: 'bg-red-100 text-red-800', icon: Heart },
+  { id: 'erp', label: 'ERP / Estoque', color: 'bg-orange-100 text-orange-800', icon: Package },
+  { id: 'comunicacao', label: 'Comunicação / Automação', color: 'bg-green-100 text-green-800', icon: MessageSquare },
+  { id: 'compliance', label: 'Compliance / Validação', color: 'bg-yellow-100 text-yellow-800', icon: ShieldCheck },
+  { id: 'agenda', label: 'Agenda / Saúde', color: 'bg-cyan-100 text-cyan-800', icon: Calendar },
+  { id: 'marketing', label: 'Marketing / IA', color: 'bg-pink-100 text-pink-800', icon: TrendingUp },
+  { id: 'financeiro', label: 'Financeiro / Regulatório', color: 'bg-emerald-100 text-emerald-800', icon: DollarSign },
+  { id: 'logistica', label: 'Logística / Delivery', color: 'bg-indigo-100 text-indigo-800', icon: Truck },
+  { id: 'crm', label: 'CRM / Saúde', color: 'bg-teal-100 text-teal-800', icon: UserPlus },
+  { id: 'iot', label: 'IoT / Compliance', color: 'bg-slate-100 text-slate-800', icon: Thermometer },
+  { id: 'fiscal', label: 'Fiscal / ERP', color: 'bg-amber-100 text-amber-800', icon: FileX },
+  { id: 'beneficios', label: 'Financeiro / Benefícios', color: 'bg-lime-100 text-lime-800', icon: CreditCardIcon },
+  { id: 'atendimento_ia', label: 'IA / Atendimento', color: 'bg-fuchsia-100 text-fuchsia-800', icon: Bot },
+  { id: 'estoque_seg', label: 'Estoque / Segurança', color: 'bg-orange-100 text-orange-800', icon: ClipboardCheck },
+  { id: 'automacao_proc', label: 'Automação / Processos', color: 'bg-gray-100 text-gray-800', icon: RefreshCw },
+  { id: 'ecommerce', label: 'E-commerce / Integração', color: 'bg-violet-100 text-violet-800', icon: Store },
+  { id: 'telemedicina', label: 'Saúde / Atendimento', color: 'bg-sky-100 text-sky-800', icon: Video },
+  { id: 'marketing_ia', label: 'IA / Marketing', color: 'bg-pink-100 text-pink-800', icon: ShoppingBag },
+  { id: 'financeiro_erp', label: 'Financeiro / ERP', color: 'bg-emerald-100 text-emerald-800', icon: Calculator },
+  { id: 'comunicacao_mkt', label: 'Comunicação / Marketing', color: 'bg-green-100 text-green-800', icon: Megaphone },
+  { id: 'compliance_anvisa', label: 'Compliance / ANVISA', color: 'bg-yellow-100 text-yellow-800', icon: Shield },
+  { id: 'saude_ia', label: 'Saúde / IA', color: 'bg-red-100 text-red-800', icon: Clipboard },
+  { id: 'analytics', label: 'BI / Analytics', color: 'bg-rose-100 text-rose-800', icon: BarChart },
+  { id: 'pagamentos', label: 'Pagamentos / Financeiro', color: 'bg-teal-100 text-teal-800', icon: DollarIcon },
+  { id: 'ia_compliance', label: 'IA / Compliance', color: 'bg-purple-100 text-purple-800', icon: Eye },
+  { id: 'core_triggers', label: 'Core / Triggers', color: 'bg-green-100 text-green-800', icon: Zap },
+  { id: 'core_logic', label: 'Core / Lógica', color: 'bg-yellow-100 text-yellow-800', icon: GitBranch },
+  { id: 'core_actions', label: 'Core / Ações', color: 'bg-blue-100 text-blue-800', icon: Code },
+  { id: 'core_data', label: 'Core / Dados', color: 'bg-indigo-100 text-indigo-800', icon: Database },
+  { id: 'integrations', label: 'Integrações / Apps', color: 'bg-cyan-100 text-cyan-800', icon: Globe },
+  { id: 'ai_generic', label: 'IA / Genérica', color: 'bg-violet-100 text-violet-800', icon: Brain },
+  { id: 'payments', label: 'Pagamentos / Financeiro', color: 'bg-green-100 text-green-800', icon: CreditCardIcon },
+  { id: 'integrations_br', label: 'Integrações Brasil', color: 'bg-yellow-100 text-yellow-800', icon: Landmark },
+  { id: 'delivery_br', label: 'Delivery / E-commerce BR', color: 'bg-orange-100 text-orange-800', icon: ShoppingBasket },
+  { id: 'fiscal_br', label: 'Fiscal / Governo BR', color: 'bg-blue-100 text-blue-800', icon: Building },
+  { id: 'marketing_br', label: 'Marketing / CRM BR', color: 'bg-pink-100 text-pink-800', icon: Megaphone2 },
+  { id: 'erp_br', label: 'ERP / Contabilidade BR', color: 'bg-emerald-100 text-emerald-800', icon: LineChart },
+  // ===== CORE / BUSINESS HOURS =====
+
+  {
+    id: 'if-business-hours',
+    type: 'condition',
+    label: '🕐 Horário Comercial',
+    description: 'Verifica se está dentro do horário de atendimento (lê valores da aba Horários)',
+    icon: Clock,
+    color: '#0891b2',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [
+      { id: 'open', label: 'Dentro horário', type: 'success' },
+      { id: 'closed', label: 'Fora horário', type: 'data' }
+    ],
+    config: [
+      { key: 'checkType', label: 'Tipo de verificação', type: 'select', options: [
+        { value: 'business', label: 'Horário comercial' },
+        { value: 'holiday', label: 'Horário feriado' },
+      ], defaultValue: 'business' },
+      { key: 'timezone', label: 'Fuso horário', type: 'string', defaultValue: 'America/Sao_Paulo' },
+      { key: 'closedMessage', label: 'Mensagem fechado', type: 'prompt', defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!' },
+    ]
+  },
+
+  // ===== WELCOME MESSAGE WITH AGENT NAME =====
+
+  {
+    id: 'welcome-agent',
+    type: 'action',
+    label: '👋 Boas-vindas com Nome',
+    description: 'Mensagem de boas-vindas com nome do atendente logado automaticamente',
+    icon: MessageSquare,
+    color: '#059669',
+    category: 'comunicacao',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [{ id: 'sent', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+        defaultValue: 'Olá! Eu sou {{agent_name}}! Como posso te ajudar?' },
+      { key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean', defaultValue: true },
+      { key: 'fallbackName', label: 'Nome fallback', type: 'string', defaultValue: 'Assistente Virtual' },
+    ]
+  },
+
 ];
 
 // ==================== NODE DEFINITIONS ====================
 
 export const NODE_TYPES: WorkflowNode[] = [
-  // ===== TRIGGERS (Verde) =====
+
+  // ===== ENTRADA / DOCUMENTOS / COMPLIANCE =====
+
   {
-    id: 'whatsapp-incoming',
+    id: 'recebimento-receita-digital',
     type: 'trigger',
-    label: '📱 WhatsApp Incoming',
-    description: 'Recebe mensagens de WhatsApp Business API',
-    icon: Phone,
-    color: '#25D366',
-    category: 'triggers',
+    label: '📄 Recebimento de Receita Digital',
+    description: 'Recebe e processa receitas digitais com OCR e validação',
+    icon: FileCheck,
+    color: '#2563EB',
+    category: 'entrada',
     outputs: [
-      { id: 'default', label: 'Mensagem recebida', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: 'success', label: 'Receita processada', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' },
     ],
     config: [
-      { key: 'phoneNumberId', label: 'Phone Number ID', type: 'string', placeholder: 'ID do número verificado' },
-      { key: 'verifyToken', label: 'Verify Token', type: 'password', placeholder: 'Token de verificação' },
-    ]
-  },
-  {
-    id: 'instagram-dm',
-    type: 'trigger',
-    label: '📸 Instagram DM',
-    description: 'Recebe DMs do Instagram',
-    icon: Instagram,
-    color: '#E4405F',
-    category: 'triggers',
-    outputs: [
-      { id: 'default', label: 'DM recebida', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'accessToken', label: 'Access Token', type: 'password' },
-      { key: 'verifyToken', label: 'Verify Token', type: 'password' },
-    ]
-  },
-  {
-    id: 'webhook-trigger',
-    type: 'trigger',
-    label: '🔗 API Webhook',
-    description: 'Recebe chamadas HTTP POST/GET',
-    icon: Globe,
-    color: '#338AF3',
-    category: 'triggers',
-    outputs: [
-      { id: 'default', label: 'Payload recebido', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'path', label: 'Caminho', type: 'string', placeholder: '/webhook/meu-endpoint', defaultValue: '/webhook/automation' },
-      { key: 'methods', label: 'Métodos', type: 'select', options: [
-        { value: 'POST', label: 'POST' },
-        { value: 'GET', label: 'GET' },
-        { value: 'ALL', label: 'Todos' },
-      ]}
-    ]
-  },
-  {
-    id: 'schedule-trigger',
-    type: 'trigger',
-    label: '⏰ Schedule (CRON)',
-    description: 'Executa em horários agendados',
-    icon: Clock,
-    color: '#338AF3',
-    category: 'triggers',
-    outputs: [
-      { id: 'default', label: 'Execução agendada', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'expression', label: 'Expressão CRON', type: 'string', placeholder: '0 * * * *' },
-      { key: 'timezone', label: 'Timezone', type: 'select', options: [
-        { value: 'America/Sao_Paulo', label: 'America/Sao_Paulo' },
-        { value: 'UTC', label: 'UTC' },
-      ], defaultValue: 'America/Sao_Paulo' }
+      { key: 'allowedFormats', label: 'Formatos aceitos', type: 'multiselect', options: [
+        { value: 'pdf', label: 'PDF' }, { value: 'jpg', label: 'JPG' }, { value: 'png', label: 'PNG' },
+      ], defaultValue: ['pdf', 'jpg', 'png'] },
+      { key: 'ocrEnabled', label: 'OCR ativado', type: 'boolean', defaultValue: true },
+      { key: 'ocrLanguage', label: 'Idioma OCR', type: 'select', options: [
+        { value: 'por', label: 'Português' }, { value: 'eng', label: 'Inglês' }, { value: 'spa', label: 'Espanhol' },
+      ], defaultValue: 'por' },
+      { key: 'maxFileSize', label: 'Limite tamanho arquivo (MB)', type: 'number', defaultValue: 10 },
+      { key: 'autoValidateCrm', label: 'Validação automática CRM/CRO', type: 'boolean', defaultValue: true },
+      { key: 'digitalSignature', label: 'Assinatura digital ICP-Brasil', type: 'boolean', defaultValue: true },
+      { key: 'anvisaVerification', label: 'Verificação ANVISA', type: 'boolean', defaultValue: true },
+      { key: 'extractMedications', label: 'Extração automática de medicamentos', type: 'boolean', defaultValue: true },
+      { key: 'whatsappIntegration', label: 'Integração WhatsApp/API', type: 'boolean', defaultValue: false },
+      { key: 'encryptedStorage', label: 'Armazenamento criptografado', type: 'boolean', defaultValue: true },
     ]
   },
 
-  // ===== LOGIC (Amarelo) =====
-  {
-    id: 'if-else',
-    type: 'logic',
-    label: '🔀 If/Else',
-    description: 'Condição verdadeiro/falso',
-    icon: GitBranch,
-    color: '#EAB308',
-    category: 'logic',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
-    outputs: [
-      { id: 'true', label: 'Verdadeiro', type: 'success' },
-      { id: 'false', label: 'Falso', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'condition', label: 'Condição', type: 'json', placeholder: 'Ex: {{input.message}} contains "urgente"' },
-    ]
-  },
-  {
-    id: 'switch',
-    type: 'logic',
-    label: '🔀 Switch (Multi-ramificação)',
-    description: 'Múltiplos casos de saída',
-    icon: GitCompare,
-    color: '#EAB308',
-    category: 'logic',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
-    outputs: [
-      { id: 'case1', label: 'Caso 1', type: 'success' },
-      { id: 'case2', label: 'Caso 2', type: 'success' },
-      { id: 'default', label: 'Padrão', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'cases', label: 'Casos (JSON)', type: 'json', placeholder: '[{"key": "value", "output": "case1"}]' },
-    ]
-  },
-  {
-    id: 'filter',
-    type: 'logic',
-    label: '🔍 Filter (Regex/Dados)',
-    description: 'Filtra dados por regex ou condição',
-    icon: Filter,
-    color: '#EAB308',
-    category: 'logic',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
-    outputs: [
-      { id: 'match', label: 'Filtrado', type: 'success' },
-      { id: 'no-match', label: 'Sem match', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'pattern', label: 'Padrão (Regex)', type: 'string', placeholder: 'Ex: \\d{4,5}-\\d{4}' },
-      { key: 'flags', label: 'Flags', type: 'string', placeholder: 'gi', defaultValue: 'gi' }
-    ]
-  },
+  // ===== IA / ASSISTENTE CLÍNICO =====
 
-  // ===== MESSAGES (Azul) =====
   {
-    id: 'whatsapp-send',
-    type: 'action',
-    label: '📱 WhatsApp Send',
-    description: 'Envia mensagem via WhatsApp Business',
-    icon: Phone,
-    color: '#25D366',
-    category: 'messages',
-    inputs: [
-      { id: 'in', label: 'Dados do contato', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Enviado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'to', label: 'Para (Número)', type: 'string', placeholder: '{{contact.phone}} ou 5511999999999' },
-      { key: 'body', label: 'Mensagem', type: 'prompt', placeholder: 'Olá {{contact.name}}, sua receita...', multiline: true },
-      { key: 'mediaUrl', label: 'Mídia (URL)', type: 'string', placeholder: 'https://exemplo.com/imagem.jpg' },
-    ]
-  },
-  {
-    id: 'email-send',
-    type: 'action',
-    label: '📧 Email (Gmail/Outlook)',
-    description: 'Envia email via SMTP',
-    icon: Mail,
-    color: '#EA4335',
-    category: 'messages',
-    inputs: [
-      { id: 'in', label: 'Dados do email', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Enviado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'to', label: 'Para', type: 'string', placeholder: 'cliente@exemplo.com' },
-      { key: 'subject', label: 'Assunto', type: 'string', placeholder: 'Sua compra na Farma Francis' },
-      { key: 'body', label: 'Corpo (HTML)', type: 'prompt', multiline: true },
-    ]
-  },
-
-  // ===== AI (Roxo/Rosa) =====
-  {
-    id: 'openai-gpt',
+    id: 'ia-farmaceutica',
     type: 'ai',
-    label: '🤖 OpenAI GPT',
-    description: 'Executa modelo GPT (4o, 3.5, o1)',
+    label: '🧠 IA Farmacêutica',
+    description: 'Assistente IA especializado em farmácia clínica',
     icon: Brain,
-    color: '#10A37F',
-    category: 'ai',
-    inputs: [
-      { id: 'in', label: 'Prompt/Contexto', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    color: '#9333EA',
+    category: 'ia',
+    inputs: [{ id: 'in', label: 'Pergunta/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
     config: [
-      { key: 'apiKey', label: 'API Key (OpenAI)', type: 'password', placeholder: 'sk-...' },
-      { key: 'model', label: 'Modelo', type: 'select', options: [
-        { value: 'gpt-4o', label: 'GPT-4o (Recomendado)' },
-        { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-        { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-        { value: 'o1-preview', label: 'o1 Preview' },
+      { key: 'model', label: 'Modelo IA', type: 'select', options: [
+        { value: 'gpt-4o', label: 'ChatGPT (OpenAI)' }, { value: 'claude-3-5-sonnet', label: 'Claude (Anthropic)' },
+        { value: 'gemini-pro', label: 'Gemini (Google)' }, { value: 'deepseek', label: 'DeepSeek' }, { value: 'mistral', label: 'Mistral' },
       ], defaultValue: 'gpt-4o' },
-      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true, placeholder: 'Você é um assistente da farmácia...' },
-      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true, placeholder: 'Analise: {{input.message}}' },
-      { key: 'temperature', label: 'Temperatura (0-2)', type: 'number', defaultValue: 0.7 },
-      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 2048 },
+      { key: 'temperature', label: 'Temperatura (0-2)', type: 'number', defaultValue: 0.3 },
+      { key: 'maxTokens', label: 'Limite de tokens', type: 'number', defaultValue: 4096 },
+      { key: 'conversationMemory', label: 'Memória de conversa', type: 'boolean', defaultValue: true },
+      { key: 'medicalContext', label: 'Contexto médico personalizado', type: 'prompt', multiline: true, placeholder: 'Você é um farmacêutico clínico especializado em...' },
+      { key: 'lgpdRestrictions', label: 'Restrições LGPD', type: 'boolean', defaultValue: true },
+      { key: 'responseMode', label: 'Tipo de resposta', type: 'select', options: [
+        { value: 'technical', label: 'Técnica' }, { value: 'simplified', label: 'Simplificada' },
+      ], defaultValue: 'simplified' },
+      { key: 'languageTone', label: 'Tom de linguagem', type: 'select', options: [
+        { value: 'formal', label: 'Formal' }, { value: 'friendly', label: 'Amigável' }, { value: 'educational', label: 'Educativo' },
+      ], defaultValue: 'friendly' },
+      { key: 'knowledgeBase', label: 'Base de conhecimento própria', type: 'file', placeholder: 'URL ou arquivo da base' },
+      { key: 'sopTraining', label: 'Treinamento com SOP da farmácia', type: 'file', placeholder: 'URL ou arquivo do SOP' },
     ]
   },
+
   {
-    id: 'claude-anthropic',
+    id: 'leitor-ocr-bulas',
     type: 'ai',
-    label: '🤖 Claude (Anthropic)',
-    description: 'Executa modelo Claude (3.5 Sonnet, Opus)',
-    icon: Brain,
-    color: '#D4A574',
-    category: 'ai',
-    inputs: [
-      { id: 'in', label: 'Prompt/Contexto', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    label: '📖 Leitor OCR de Bulas',
+    description: 'Extrai e analisa informações de bulas com OCR e IA',
+    icon: ScanLine,
+    color: '#7C3AED',
+    category: 'ia',
+    inputs: [{ id: 'in', label: 'Imagem/PDF da bula', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados extraídos', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
     config: [
-      { key: 'apiKey', label: 'API Key (Anthropic)', type: 'password' },
-      { key: 'model', label: 'Modelo', type: 'select', options: [
-        { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-        { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
-      ], defaultValue: 'claude-3-5-sonnet-20241022' },
-      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true },
-      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true },
+      { key: 'ocrMultilingual', label: 'OCR multilíngue', type: 'boolean', defaultValue: true },
+      { key: 'extractPosology', label: 'Extração posologia', type: 'boolean', defaultValue: true },
+      { key: 'extractContraindications', label: 'Extração contraindicações', type: 'boolean', defaultValue: true },
+      { key: 'voiceConversion', label: 'Conversão voz (TTS)', type: 'boolean', defaultValue: false },
+      { key: 'aiSummary', label: 'Resumo IA', type: 'boolean', defaultValue: true },
+      { key: 'smartSearch', label: 'Busca inteligente', type: 'boolean', defaultValue: true },
+      { key: 'highlightRisks', label: 'Destaque riscos', type: 'boolean', defaultValue: true },
+      { key: 'autoTranslate', label: 'Tradução automática', type: 'boolean', defaultValue: false },
+      { key: 'exportPdf', label: 'Exportação PDF', type: 'boolean', defaultValue: true },
+      { key: 'chatbotIntegration', label: 'Integração chatbot', type: 'boolean', defaultValue: false },
     ]
   },
 
-  // ===== ACTIONS (Verde-Azulado) =====
   {
-    id: 'create-task',
+    id: 'prescricao-inteligente-ia',
+    type: 'ai',
+    label: '💊 Prescrição Inteligente IA',
+    description: 'Apoio clínico com IA para sugestão de medicamentos e posologia',
+    icon: Stethoscope,
+    color: '#A855F7',
+    category: 'ia',
+    inputs: [{ id: 'in', label: 'Dados do paciente/sintomas', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Sugestão prescrição', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'medicalModels', label: 'Modelos médicos IA', type: 'multiselect', options: [
+        { value: 'gpt-4o', label: 'GPT-4o Medical' }, { value: 'claude-3-5-sonnet', label: 'Claude Medical' },
+        { value: 'meditron', label: 'Meditron (meta)' }, { value: 'biogpt', label: 'BioGPT' },
+      ] },
+      { key: 'suggestMedications', label: 'Sugestão medicamentos', type: 'boolean', defaultValue: true },
+      { key: 'interactionAlerts', label: 'Alertas interação', type: 'boolean', defaultValue: true },
+      { key: 'clinicalProtocols', label: 'Base protocolos clínicos', type: 'file' },
+      { key: 'autoCid', label: 'CID automático', type: 'boolean', defaultValue: false },
+      { key: 'autoPosology', label: 'Posologia automática', type: 'boolean', defaultValue: true },
+      { key: 'generatePdf', label: 'Geração PDF', type: 'boolean', defaultValue: true },
+      { key: 'prontuarioIntegration', label: 'Integração prontuário', type: 'boolean', defaultValue: false },
+      { key: 'controlledRestriction', label: 'Restrição controlados', type: 'boolean', defaultValue: true },
+      { key: 'prescriptionHistory', label: 'Histórico prescrições', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== SAÚDE / SEGURANÇA =====
+
+  {
+    id: 'consulta-interacao-medicamentosa',
     type: 'action',
-    label: '✅ Create Task',
-    description: 'Cria tarefa no sistema (ex: farmacêutico revisa)',
-    icon: Code,
-    color: '#14B8A6',
-    category: 'actions',
-    inputs: [
-      { id: 'in', label: 'Dados da tarefa', type: 'data' }
-    ],
+    label: '⚠️ Consulta de Interação Medicamentosa',
+    description: 'Verifica interações entre medicamentos com bases oficiais',
+    icon: AlertTriangle,
+    color: '#DC2626',
+    category: 'saude',
+    inputs: [{ id: 'in', label: 'Lista de medicamentos', type: 'data' }],
     outputs: [
-      { id: 'success', label: 'Criado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: 'safe', label: 'Sem interação', type: 'success' },
+      { id: 'warning', label: 'Interação detectada', type: 'data' },
+      { id: 'critical', label: 'Interação crítica', type: 'error' }
     ],
     config: [
-      { key: 'title', label: 'Título', type: 'string', placeholder: 'Revisar receita de {{customer.name}}' },
-      { key: 'description', label: 'Descrição', type: 'prompt', multiline: true },
-      { key: 'assignTo', label: 'Atribuir para', type: 'string', placeholder: 'ID do usuário ou "pharmacist"' },
-      { key: 'dueInMinutes', label: 'Prazo (minutos)', type: 'number', defaultValue: 60 },
+      { key: 'baseAnvisa', label: 'Base ANVISA', type: 'boolean', defaultValue: true },
+      { key: 'baseDrugbank', label: 'Base DrugBank', type: 'boolean', defaultValue: true },
+      { key: 'minSeverity', label: 'Severidade mínima', type: 'select', options: [
+        { value: 'low', label: 'Baixa' }, { value: 'moderate', label: 'Moderada' }, { value: 'high', label: 'Alta' }, { value: 'critical', label: 'Crítica' },
+      ], defaultValue: 'moderate' },
+      { key: 'criticalAlerts', label: 'Alertas críticos', type: 'boolean', defaultValue: true },
+      { key: 'foodInteraction', label: 'Interações alimento-remédio', type: 'boolean', defaultValue: true },
+      { key: 'alcoholInteraction', label: 'Interação álcool', type: 'boolean', defaultValue: true },
+      { key: 'autoBula', label: 'Exibir bula automática', type: 'boolean', defaultValue: true },
+      { key: 'riskScore', label: 'Score de risco', type: 'boolean', defaultValue: true },
+      { key: 'pediatricMode', label: 'Modo pediátrico', type: 'boolean', defaultValue: false },
+      { key: 'checkHistory', label: 'Histórico de verificações', type: 'boolean', defaultValue: true },
     ]
   },
+
+  // ===== ERP / ESTOQUE =====
+
   {
-    id: 'http-request',
+    id: 'controle-estoque-inteligente',
     type: 'action',
-    label: '🌐 HTTP Request',
-    description: 'Faz requisição GET/POST/PUT/DELETE',
-    icon: Globe,
-    color: '#338AF3',
-    category: 'integrations',
-    inputs: [
-      { id: 'in', label: 'Dados para requisição', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'method', label: 'Método', type: 'select', options: [
-        { value: 'GET', label: 'GET' },
-        { value: 'POST', label: 'POST' },
-        { value: 'PUT', label: 'PUT' },
-        { value: 'DELETE', label: 'DELETE' },
-      ], defaultValue: 'POST' },
-      { key: 'url', label: 'URL', type: 'string', placeholder: 'https://api.exemplo.com/endpoint' },
-      { key: 'headers', label: 'Headers (JSON)', type: 'json', placeholder: '{"Authorization": "Bearer {{token}}"}' },
-      { key: 'body', label: 'Body (JSON)', type: 'json', placeholder: '{"key": "value"}' },
-      { key: 'authType', label: 'Auth', type: 'select', options: [
-        { value: 'none', label: 'Nenhum' },
-        { value: 'bearer', label: 'Bearer Token' },
-        { value: 'basic', label: 'Basic Auth' },
-      ], defaultValue: 'none' }
-    ]
-  },
-
-  // ===== WAIT (Cinza) =====
-  {
-    id: 'wait',
-    type: 'wait',
-    label: '⏳ Wait (Aguardar)',
-    description: 'Aguarda X segundos/minutos',
-    icon: Pause,
-    color: '#6B7280',
-    category: 'wait',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Continuar', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'duration', label: 'Duração', type: 'number', defaultValue: 5 },
-      { key: 'unit', label: 'Unidade', type: 'select', options: [
-        { value: 'seconds', label: 'Segundos' },
-        { value: 'minutes', label: 'Minutos' },
-      ], defaultValue: 'seconds' }
-    ]
-  },
-  {
-    id: 'human-approval',
-    type: 'wait',
-    label: '✋ Human Approval',
-    description: 'Aguarda aprovação humana (farmacêutico)',
-    icon: UserCheck,
-    color: '#6B7280',
-    category: 'wait',
-    inputs: [
-      { id: 'in', label: 'Dados para revisão', type: 'data' }
-    ],
-    outputs: [
-      { key: 'approved', label: 'Aprovado', type: 'success' },
-      { key: 'rejected', label: 'Rejeitado', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'assignTo', label: 'Atribuir para', type: 'string', placeholder: 'ID do farmacêutico' },
-      { key: 'timeoutMinutes', label: 'Timeout (minutos)', type: 'number', defaultValue: 1440 },
-      { key: 'message', label: 'Mensagem para revisor', type: 'prompt', multiline: true },
-    ]
-  },
-
-  // ===== PHARMACY-SPECIFIC (Azul-Marinho) =====
-  {
-    id: 'check-prescription',
-    type: 'pharmacy',
-    label: '💊 Check Receita',
-    description: 'Analisa receita médica (PDF/imagem) com IA',
+    label: '📦 Controle de Estoque Inteligente',
+    description: 'Gestão de estoque com IA, alertas e integração ERP',
     icon: Package,
-    color: '#1E40AF',
-    category: 'pharmacy',
-    inputs: [
-      { id: 'in', label: 'Dados da receita', type: 'data' }
-    ],
+    color: '#EA580C',
+    category: 'erp',
+    inputs: [{ id: 'in', label: 'Dados do produto', type: 'data' }],
     outputs: [
-      { id: 'valid', label: 'Válida', type: 'success' },
-      { id: 'invalid', label: 'Inválida', type: 'data' },
+      { id: 'ok', label: 'Estoque OK', type: 'success' },
+      { id: 'low', label: 'Estoque baixo', type: 'data' },
+      { id: 'critical', label: 'Estoque crítico', type: 'error' }
+    ],
+    config: [
+      { key: 'minStock', label: 'Estoque mínimo', type: 'number', defaultValue: 10 },
+      { key: 'maxStock', label: 'Estoque máximo', type: 'number', defaultValue: 1000 },
+      { key: 'autoAlert', label: 'Alerta automático', type: 'boolean', defaultValue: true },
+      { key: 'erpIntegration', label: 'Integração ERP', type: 'boolean', defaultValue: false },
+      { key: 'batchControl', label: 'Controle lote', type: 'boolean', defaultValue: true },
+      { key: 'expiryControl', label: 'Controle validade', type: 'boolean', defaultValue: true },
+      { key: 'branchSeparation', label: 'Separação por filial', type: 'boolean', defaultValue: false },
+      { key: 'abcCurve', label: 'Curva ABC', type: 'boolean', defaultValue: true },
+      { key: 'aiPurchaseSuggestion', label: 'Sugestão de compra IA', type: 'boolean', defaultValue: true },
+      { key: 'realtimeSync', label: 'Sincronização tempo real', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== COMUNICAÇÃO / AUTOMAÇÃO =====
+
+  {
+    id: 'atendimento-whatsapp',
+    type: 'action',
+    label: '💬 Atendimento WhatsApp Farmácia',
+    description: 'Automação completa de atendimento via WhatsApp',
+    icon: MessageSquare,
+    color: '#16A34A',
+    category: 'comunicacao',
+    inputs: [{ id: 'in', label: 'Mensagem recebida', type: 'data' }],
+    outputs: [
+      { id: 'auto', label: 'Resposta automática', type: 'success' },
+      { id: 'human', label: 'Encaminhado humano', type: 'data' },
       { id: 'error', label: 'Erro', type: 'error' }
     ],
     config: [
-      { key: 'fileUrl', label: 'URL do Arquivo (PDF/Imagem)', type: 'string', placeholder: '{{input.fileUrl}}' },
-      { key: 'aiModel', label: 'Modelo IA', type: 'select', options: [
-        { value: 'gpt-4o-vision-preview', label: 'GPT-4o Vision' },
-        { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' },
-      ], defaultValue: 'gpt-4o-vision-preview' },
-      { key: 'validationRules', label: 'Regras de Validação (JSON)', type: 'json' },
+      { key: 'whatsappCloudApi', label: 'API WhatsApp Cloud', type: 'password', placeholder: 'Token da API' },
+      { key: 'autoResponse', label: 'Resposta automática', type: 'boolean', defaultValue: true },
+      { key: 'interactiveMenu', label: 'Menu interativo', type: 'boolean', defaultValue: true },
+      { key: 'forwardHuman', label: 'Encaminhar humano', type: 'boolean', defaultValue: true },
+      { key: 'businessHours', label: 'Horário atendimento', type: 'string', placeholder: '08:00-18:00' },
+      { key: 'uploadPrescription', label: 'Upload receita', type: 'boolean', defaultValue: true },
+      { key: 'medicationCatalog', label: 'Catálogo medicamentos', type: 'boolean', defaultValue: true },
+      { key: 'integratedIa', label: 'IA integrada', type: 'boolean', defaultValue: true },
+      { key: 'audioToText', label: 'Áudio para texto', type: 'boolean', defaultValue: false },
+      { key: 'campaignDispatch', label: 'Disparo de campanhas', type: 'boolean', defaultValue: false },
     ]
   },
+
+  // ===== COMPLIANCE / VALIDAÇÃO =====
+
   {
-    id: 'pix-confirmation',
-    type: 'pharmacy',
-    label: '💰 Pix Confirmation',
-    description: 'Verifica pagamento Pix (webhook/polling)',
-    icon: CreditCard,
-    color: '#1E40AF',
-    category: 'pharmacy',
-    inputs: [
-      { id: 'in', label: 'Dados da transação', type: 'data' }
-    ],
+    id: 'verificacao-receita-controlada',
+    type: 'action',
+    label: '🔒 Verificação de Receita Controlada',
+    description: 'Validação completa de receitas controladas com auditoria',
+    icon: ShieldCheck,
+    color: '#CA8A04',
+    category: 'compliance',
+    inputs: [{ id: 'in', label: 'Dados da receita', type: 'data' }],
     outputs: [
-      { id: 'confirmed', label: 'Confirmado', type: 'success' },
+      { id: 'approved', label: 'Aprovada', type: 'success' },
+      { id: 'rejected', label: 'Rejeitada', type: 'error' },
+      { id: 'review', label: 'Revisão manual', type: 'data' }
+    ],
+    config: [
+      { key: 'prescriptionType', label: 'Tipo receita', type: 'select', options: [
+        { value: 'A', label: 'Tipo A (azul)' }, { value: 'B', label: 'Tipo B (branca)' }, { value: 'C', label: 'Tipo C (amarela)' }, { value: 'all', label: 'Todos' },
+      ], defaultValue: 'all' },
+      { key: 'signatureCheck', label: 'Conferência assinatura', type: 'boolean', defaultValue: true },
+      { key: 'crmCheck', label: 'Conferência CRM', type: 'boolean', defaultValue: true },
+      { key: 'expiryDate', label: 'Data validade receita', type: 'boolean', defaultValue: true },
+      { key: 'maxQuantity', label: 'Quantidade máxima', type: 'boolean', defaultValue: true },
+      { key: 'cpfValidation', label: 'Validação CPF paciente', type: 'boolean', defaultValue: true },
+      { key: 'autoRegisterSale', label: 'Registro automático venda', type: 'boolean', defaultValue: true },
+      { key: 'geolocation', label: 'Captura geolocalização', type: 'boolean', defaultValue: false },
+      { key: 'auditLog', label: 'Registro auditoria', type: 'boolean', defaultValue: true },
+      { key: 'sngpcIntegration', label: 'Integração SNGPC', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== AGENDA / SAÚDE =====
+
+  {
+    id: 'agendamento-vacinacao',
+    type: 'action',
+    label: '💉 Agendamento de Vacinação',
+    description: 'Sistema completo de agendamento de vacinas',
+    icon: Syringe,
+    color: '#0891B2',
+    category: 'agenda',
+    inputs: [{ id: 'in', label: 'Solicitação agendamento', type: 'data' }],
+    outputs: [
+      { id: 'scheduled', label: 'Agendado', type: 'success' },
+      { id: 'waitlist', label: 'Fila de espera', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'integratedCalendar', label: 'Calendário integrado', type: 'boolean', defaultValue: true },
+      { key: 'unitSelection', label: 'Escolha unidade', type: 'boolean', defaultValue: true },
+      { key: 'doseControl', label: 'Controle doses', type: 'boolean', defaultValue: true },
+      { key: 'whatsappConfirmation', label: 'Confirmação WhatsApp', type: 'boolean', defaultValue: true },
+      { key: 'autoReminder', label: 'Lembrete automático', type: 'boolean', defaultValue: true },
+      { key: 'patientRegistration', label: 'Cadastro paciente', type: 'boolean', defaultValue: true },
+      { key: 'waitlist', label: 'Fila de espera', type: 'boolean', defaultValue: true },
+      { key: 'onlinePayment', label: 'Pagamento online', type: 'boolean', defaultValue: false },
+      { key: 'qrCheckin', label: 'QR Check-in', type: 'boolean', defaultValue: true },
+      { key: 'googleCalendar', label: 'Integração Google Calendar', type: 'boolean', defaultValue: false },
+    ]
+  },
+
+  // ===== MARKETING / IA =====
+
+  {
+    id: 'motor-promocoes-inteligentes',
+    type: 'action',
+    label: '🏷️ Motor de Promoções Inteligentes',
+    description: 'Promoções personalizadas com IA e segmentação',
+    icon: Tag,
+    color: '#DB2777',
+    category: 'marketing',
+    inputs: [{ id: 'in', label: 'Dados do cliente/compra', type: 'data' }],
+    outputs: [{ id: 'promo', label: 'Promoção aplicada', type: 'success' }, { id: 'none', label: 'Sem promoção', type: 'data' }],
+    config: [
+      { key: 'cashback', label: 'Cashback', type: 'boolean', defaultValue: true },
+      { key: 'progressiveDiscount', label: 'Desconto progressivo', type: 'boolean', defaultValue: true },
+      { key: 'aiOffers', label: 'IA para ofertas', type: 'boolean', defaultValue: true },
+      { key: 'customerSegmentation', label: 'Segmentação clientes', type: 'boolean', defaultValue: true },
+      { key: 'autoCoupon', label: 'Cupom automático', type: 'boolean', defaultValue: true },
+      { key: 'timeBasedCampaigns', label: 'Campanhas por horário', type: 'boolean', defaultValue: false },
+      { key: 'promoValidity', label: 'Validade promoção', type: 'string', placeholder: '30 dias' },
+      { key: 'relatedProducts', label: 'Produtos relacionados', type: 'boolean', defaultValue: true },
+      { key: 'conditionalRules', label: 'Regras condicionais', type: 'json', placeholder: '{"minValue": 100, "discount": 10}' },
+      { key: 'limitPerCpf', label: 'Limite por CPF', type: 'number', defaultValue: 1 },
+    ]
+  },
+
+  // ===== FINANCEIRO / REGULATÓRIO =====
+
+  {
+    id: 'consulta-preco-cmed',
+    type: 'action',
+    label: '💰 Consulta de Preço CMED',
+    description: 'Consulta e monitoramento de preços CMED',
+    icon: DollarSign,
+    color: '#059669',
+    category: 'financeiro',
+    inputs: [{ id: 'in', label: 'Código medicamento', type: 'data' }],
+    outputs: [{ id: 'found', label: 'Preço encontrado', type: 'success' }, { id: 'notfound', label: 'Não encontrado', type: 'data' }],
+    config: [
+      { key: 'autoUpdate', label: 'Atualização automática', type: 'boolean', defaultValue: true },
+      { key: 'profitMargin', label: 'Margem lucro (%)', type: 'number', defaultValue: 30 },
+      { key: 'competitorComparison', label: 'Comparação concorrência', type: 'boolean', defaultValue: true },
+      { key: 'regionalTable', label: 'Tabela regional', type: 'boolean', defaultValue: false },
+      { key: 'priceHistory', label: 'Histórico preços', type: 'boolean', defaultValue: true },
+      { key: 'changeAlerts', label: 'Alertas alteração', type: 'boolean', defaultValue: true },
+      { key: 'erpIntegration', label: 'Integração ERP', type: 'boolean', defaultValue: false },
+      { key: 'discountSimulation', label: 'Simulação descontos', type: 'boolean', defaultValue: true },
+      { key: 'auditReport', label: 'Relatório auditoria', type: 'boolean', defaultValue: true },
+      { key: 'excelExport', label: 'Exportação Excel', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== LOGÍSTICA / DELIVERY =====
+
+  {
+    id: 'entrega-delivery-inteligente',
+    type: 'action',
+    label: '🚚 Entrega Delivery Inteligente',
+    description: 'Gestão de entregas com múltiplas integrações',
+    icon: Truck,
+    color: '#4F46E5',
+    category: 'logistica',
+    inputs: [{ id: 'in', label: 'Pedido de entrega', type: 'data' }],
+    outputs: [
+      { id: 'dispatched', label: 'Despachado', type: 'success' },
+      { id: 'tracking', label: 'Rastreamento', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'ifoodIntegration', label: 'Integração iFood', type: 'boolean', defaultValue: false },
+      { key: 'uberDirectIntegration', label: 'Integração Uber Direct', type: 'boolean', defaultValue: false },
+      { key: 'gpsTracking', label: 'Rastreamento GPS', type: 'boolean', defaultValue: true },
+      { key: 'freightCalc', label: 'Cálculo frete', type: 'boolean', defaultValue: true },
+      { key: 'expressDelivery', label: 'Entrega expressa', type: 'boolean', defaultValue: true },
+      { key: 'deliveryWindow', label: 'Janela entrega', type: 'string', placeholder: '2h' },
+      { key: 'digitalSignature', label: 'Assinatura digital recebimento', type: 'boolean', defaultValue: true },
+      { key: 'aiRouting', label: 'Roteirização IA', type: 'boolean', defaultValue: true },
+      { key: 'realtimeStatus', label: 'Status em tempo real', type: 'boolean', defaultValue: true },
+      { key: 'coverageArea', label: 'Área cobertura personalizada', type: 'json', placeholder: '{"radius": 10}' },
+    ]
+  },
+
+  // ===== CRM / SAÚDE =====
+
+  {
+    id: 'cadastro-paciente',
+    type: 'action',
+    label: '👤 Cadastro de Paciente',
+    description: 'Cadastro completo de pacientes com dados clínicos',
+    icon: UserPlus,
+    color: '#0D9488',
+    category: 'crm',
+    inputs: [{ id: 'in', label: 'Dados do paciente', type: 'data' }],
+    outputs: [
+      { id: 'created', label: 'Cadastrado', type: 'success' },
+      { id: 'updated', label: 'Atualizado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'cpfRequired', label: 'CPF obrigatório', type: 'boolean', defaultValue: true },
+      { key: 'susCard', label: 'Cartão SUS', type: 'boolean', defaultValue: true },
+      { key: 'patientPhoto', label: 'Foto paciente', type: 'boolean', defaultValue: false },
+      { key: 'clinicalHistory', label: 'Histórico clínico', type: 'boolean', defaultValue: true },
+      { key: 'medicationAllergies', label: 'Alergias medicamentosas', type: 'boolean', defaultValue: true },
+      { key: 'lgpdConsent', label: 'Consentimento LGPD', type: 'boolean', defaultValue: true },
+      { key: 'multipleAddresses', label: 'Endereços múltiplos', type: 'boolean', defaultValue: true },
+      { key: 'dependents', label: 'Dependentes', type: 'boolean', defaultValue: true },
+      { key: 'documentUpload', label: 'Upload documentos', type: 'boolean', defaultValue: true },
+      { key: 'loyaltyScore', label: 'Score fidelidade', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'programa-fidelidade',
+    type: 'action',
+    label: '⭐ Programa de Fidelidade',
+    description: 'Gestão de pontos, cashback e recompensas',
+    icon: Award,
+    color: '#0F766E',
+    category: 'crm',
+    inputs: [{ id: 'in', label: 'Dados da compra/cliente', type: 'data' }],
+    outputs: [{ id: 'points', label: 'Pontos creditados', type: 'success' }, { id: 'reward', label: 'Recompensa liberada', type: 'success' }],
+    config: [
+      { key: 'pointsPerPurchase', label: 'Pontos por compra', type: 'boolean', defaultValue: true },
+      { key: 'cashback', label: 'Cashback', type: 'boolean', defaultValue: true },
+      { key: 'vipLevels', label: 'Níveis VIP', type: 'boolean', defaultValue: true },
+      { key: 'autoRewards', label: 'Recompensas automáticas', type: 'boolean', defaultValue: true },
+      { key: 'pointsExpiry', label: 'Expiração pontos', type: 'string', placeholder: '365 dias' },
+      { key: 'appIntegration', label: 'Integração app', type: 'boolean', defaultValue: false },
+      { key: 'personalizedCoupons', label: 'Cupons personalizados', type: 'boolean', defaultValue: true },
+      { key: 'customerRanking', label: 'Ranking clientes', type: 'boolean', defaultValue: true },
+      { key: 'monthlyGoal', label: 'Meta mensal', type: 'boolean', defaultValue: false },
+      { key: 'autoRedeem', label: 'Resgate automático', type: 'boolean', defaultValue: false },
+    ]
+  },
+
+  // ===== IoT / COMPLIANCE =====
+
+  {
+    id: 'monitoramento-temperatura',
+    type: 'action',
+    label: '🌡️ Monitoramento de Temperatura',
+    description: 'Monitoramento IoT de temperatura para medicamentos',
+    icon: Thermometer,
+    color: '#64748B',
+    category: 'iot',
+    inputs: [{ id: 'in', label: 'Leitura do sensor', type: 'data' }],
+    outputs: [{ id: 'normal', label: 'Temperatura OK', type: 'success' }, { id: 'alert', label: 'Alerta temperatura', type: 'error' }],
+    config: [
+      { key: 'iotSensors', label: 'Sensores IoT', type: 'string', placeholder: 'IDs dos sensores' },
+      { key: 'smsAlerts', label: 'Alertas SMS', type: 'boolean', defaultValue: true },
+      { key: 'tempHistory', label: 'Histórico temperatura', type: 'boolean', defaultValue: true },
+      { key: 'minTemp', label: 'Limite mínimo (°C)', type: 'number', defaultValue: 2 },
+      { key: 'maxTemp', label: 'Limite máximo (°C)', type: 'number', defaultValue: 8 },
+      { key: 'autoReports', label: 'Relatórios automáticos', type: 'boolean', defaultValue: true },
+      { key: 'cloudBackup', label: 'Backup nuvem', type: 'boolean', defaultValue: true },
+      { key: 'fridgeMonitoring', label: 'Monitoramento geladeiras', type: 'boolean', defaultValue: true },
+      { key: 'anvisaAudit', label: 'Auditoria ANVISA', type: 'boolean', defaultValue: true },
+      { key: 'realtimeDashboard', label: 'Dashboard tempo real', type: 'boolean', defaultValue: true },
+      { key: 'mqttIntegration', label: 'Integração MQTT', type: 'string', placeholder: 'mqtt://broker:1883' },
+    ]
+  },
+
+  // ===== FISCAL / ERP =====
+
+  {
+    id: 'emissao-nota-fiscal',
+    type: 'action',
+    label: '🧾 Emissão de Nota Fiscal Farmacêutica',
+    description: 'Emissão de NF-e/NFC-e com integração SEFAZ',
+    icon: ReceiptIcon,
+    color: '#D97706',
+    category: 'fiscal',
+    inputs: [{ id: 'in', label: 'Dados da venda', type: 'data' }],
+    outputs: [
+      { id: 'authorized', label: 'Nota autorizada', type: 'success' },
+      { id: 'rejected', label: 'Rejeitada', type: 'error' },
+      { id: 'contingency', label: 'Contingência', type: 'data' }
+    ],
+    config: [
+      { key: 'invoiceType', label: 'Tipo nota', type: 'select', options: [
+        { value: 'nfe', label: 'NF-e' }, { value: 'nfce', label: 'NFC-e' },
+      ], defaultValue: 'nfce' },
+      { key: 'certificateType', label: 'Certificado digital', type: 'select', options: [
+        { value: 'A1', label: 'A1' }, { value: 'A3', label: 'A3' },
+      ], defaultValue: 'A1' },
+      { key: 'environment', label: 'Ambiente', type: 'select', options: [
+        { value: 'homologation', label: 'Homologação' }, { value: 'production', label: 'Produção' },
+      ], defaultValue: 'homologation' },
+      { key: 'fiscalSeries', label: 'Série fiscal', type: 'string', placeholder: '001' },
+      { key: 'sefazIntegration', label: 'Integração SEFAZ', type: 'boolean', defaultValue: true },
+      { key: 'danfePrint', label: 'Impressão DANFE', type: 'boolean', defaultValue: true },
+      { key: 'autoCancel', label: 'Cancelamento automático', type: 'boolean', defaultValue: false },
+      { key: 'offlineContingency', label: 'Contingência offline', type: 'boolean', defaultValue: true },
+      { key: 'accountantIntegration', label: 'Integração contador', type: 'boolean', defaultValue: false },
+      { key: 'autoXmlSend', label: 'Envio XML automático', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== FINANCEIRO / BENEFÍCIOS =====
+
+  {
+    id: 'consulta-convenios-pbm',
+    type: 'action',
+    label: '💳 Consulta de Convênios e PBM',
+    description: 'Integração com convênios e PBMs para autorização',
+    icon: CreditCardIcon,
+    color: '#65A30D',
+    category: 'beneficios',
+    inputs: [{ id: 'in', label: 'Dados do convênio/beneficiário', type: 'data' }],
+    outputs: [
+      { id: 'approved', label: 'Autorizado', type: 'success' },
+      { id: 'rejected', label: 'Negado', type: 'error' },
+      { id: 'review', label: 'Revisão manual', type: 'data' }
+    ],
+    config: [
+      { key: 'vidalinkIntegration', label: 'Integração Vidalink', type: 'boolean', defaultValue: true },
+      { key: 'funcionalCard', label: 'Funcional Card', type: 'boolean', defaultValue: true },
+      { key: 'ephramaIntegration', label: 'Integração ePharma', type: 'boolean', defaultValue: true },
+      { key: 'autoAuthorization', label: 'Autorização automática', type: 'boolean', defaultValue: true },
+      { key: 'cpfValidation', label: 'Validação CPF', type: 'boolean', defaultValue: true },
+      { key: 'benefitLimit', label: 'Limite benefício', type: 'number', defaultValue: 0 },
+      { key: 'usageHistory', label: 'Histórico uso', type: 'boolean', defaultValue: true },
+      { key: 'convenioCashback', label: 'Cashback convênio', type: 'boolean', defaultValue: false },
+      { key: 'discountTable', label: 'Tabela descontos', type: 'json', placeholder: '{"percent": 20}' },
+      { key: 'transactionLogs', label: 'Logs transações', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== IA / ATENDIMENTO =====
+
+  {
+    id: 'chatbot-farmaceutico-ia',
+    type: 'ai',
+    label: '🤖 Chatbot Farmacêutico IA',
+    description: 'Chatbot inteligente para atendimento farmacêutico',
+    icon: Bot,
+    color: '#C026D3',
+    category: 'atendimento_ia',
+    inputs: [{ id: 'in', label: 'Mensagem do cliente', type: 'data' }],
+    outputs: [
+      { id: 'response', label: 'Resposta', type: 'success' },
+      { id: 'human', label: 'Encaminhar humano', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'aiModel', label: 'Modelo IA', type: 'select', options: [
+        { value: 'gpt-4o', label: 'ChatGPT' }, { value: 'claude-3-5-sonnet', label: 'Claude' }, { value: 'gemini-pro', label: 'Gemini' },
+      ], defaultValue: 'gpt-4o' },
+      { key: 'customFlows', label: 'Fluxos personalizados', type: 'json', placeholder: '{"welcome": "Olá! Como posso ajudar?"}' },
+      { key: 'pharmaContext', label: 'Contexto farmacêutico', type: 'prompt', multiline: true, placeholder: 'Você é um farmacêutico atendendo clientes...' },
+      { key: 'humanFallback', label: 'Atendimento humano fallback', type: 'boolean', defaultValue: true },
+      { key: 'naturalVoice', label: 'Voz natural (TTS)', type: 'boolean', defaultValue: false },
+      { key: 'multimediaMessages', label: 'Mensagens multimídia', type: 'boolean', defaultValue: true },
+      { key: 'trainableFaq', label: 'FAQ treinável', type: 'file', placeholder: 'Arquivo FAQ' },
+      { key: 'clientMemory', label: 'Memória cliente', type: 'boolean', defaultValue: true },
+      { key: 'businessHours', label: 'Horário funcionamento', type: 'string', placeholder: '08:00-22:00' },
+      { key: 'omnichannel', label: 'Integração omnichannel', type: 'boolean', defaultValue: false },
+    ]
+  },
+
+  // ===== ESTOQUE / SEGURANÇA =====
+
+  {
+    id: 'controle-validade-medicamentos',
+    type: 'action',
+    label: '📅 Controle de Validade de Medicamentos',
+    description: 'Monitoramento de validade com alertas e bloqueio',
+    icon: ClipboardCheck,
+    color: '#C2410C',
+    category: 'estoque_seg',
+    inputs: [{ id: 'in', label: 'Dados do lote/produto', type: 'data' }],
+    outputs: [
+      { id: 'ok', label: 'Validade OK', type: 'success' },
+      { id: 'warning', label: 'Próximo do vencimento', type: 'data' },
+      { id: 'expired', label: 'Vencido', type: 'error' }
+    ],
+    config: [
+      { key: 'expiryAlert', label: 'Alerta vencimento (dias antes)', type: 'number', defaultValue: 30 },
+      { key: 'autoBatchSeparation', label: 'Separação automática lotes', type: 'boolean', defaultValue: true },
+      { key: 'fifoMethod', label: 'Método', type: 'select', options: [
+        { value: 'FIFO', label: 'FIFO (Primeiro a entrar, primeiro a sair)' },
+        { value: 'FEFO', label: 'FEFO (Primeiro a vencer, primeiro a sair)' },
+      ], defaultValue: 'FEFO' },
+      { key: 'lossReports', label: 'Relatórios perdas', type: 'boolean', defaultValue: true },
+      { key: 'qrCodeLabels', label: 'Etiquetas QR Code', type: 'boolean', defaultValue: true },
+      { key: 'stockIntegration', label: 'Integração estoque', type: 'boolean', defaultValue: true },
+      { key: 'blockExpired', label: 'Bloqueio venda vencidos', type: 'boolean', defaultValue: true },
+      { key: 'expiryDashboard', label: 'Dashboard validade', type: 'boolean', defaultValue: true },
+      { key: 'promotionSuggestion', label: 'Sugestão promoção estoque', type: 'boolean', defaultValue: true },
+      { key: 'csvExport', label: 'Exportação CSV', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== AUTOMAÇÃO / PROCESSOS =====
+
+  {
+    id: 'workflow-aprovacao-farmaceutica',
+    type: 'action',
+    label: '✅ Workflow de Aprovação Farmacêutica',
+    description: 'Aprovação em etapas com SLA e auditoria',
+    icon: RefreshCw,
+    color: '#374151',
+    category: 'automacao_proc',
+    inputs: [{ id: 'in', label: 'Solicitação de aprovação', type: 'data' }],
+    outputs: [
+      { id: 'approved', label: 'Aprovado', type: 'success' },
+      { id: 'rejected', label: 'Reprovado', type: 'error' },
+      { id: 'pending', label: 'Pendente', type: 'data' }
+    ],
+    config: [
+      { key: 'multiStepApproval', label: 'Aprovação em etapas', type: 'boolean', defaultValue: true },
+      { key: 'multipleResponsibles', label: 'Responsáveis múltiplos', type: 'string', placeholder: 'IDs separados por vírgula' },
+      { key: 'digitalSignature', label: 'Assinatura digital', type: 'boolean', defaultValue: true },
+      { key: 'approvalSla', label: 'SLA aprovação (horas)', type: 'number', defaultValue: 24 },
+      { key: 'internalComments', label: 'Comentários internos', type: 'boolean', defaultValue: true },
+      { key: 'auditLogs', label: 'Logs auditoria', type: 'boolean', defaultValue: true },
+      { key: 'autoReject', label: 'Reprovação automática (SLA)', type: 'boolean', defaultValue: false },
+      { key: 'emailIntegration', label: 'Integração email', type: 'boolean', defaultValue: true },
+      { key: 'pendingAlerts', label: 'Alertas pendência', type: 'boolean', defaultValue: true },
+      { key: 'changeHistory', label: 'Histórico alterações', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== E-COMMERCE / INTEGRAÇÃO =====
+
+  {
+    id: 'integracao-marketplace',
+    type: 'action',
+    label: '🛒 Integração Marketplace Farmácia',
+    description: 'Sincronização com marketplaces (ML, Amazon, etc)',
+    icon: Store,
+    color: '#7C3AED',
+    category: 'ecommerce',
+    inputs: [{ id: 'in', label: 'Dados do pedido/produto', type: 'data' }],
+    outputs: [
+      { id: 'synced', label: 'Sincronizado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'mercadoLivre', label: 'Mercado Livre', type: 'boolean', defaultValue: false },
+      { key: 'amazon', label: 'Amazon', type: 'boolean', defaultValue: false },
+      { key: 'magalu', label: 'Magalu', type: 'boolean', defaultValue: false },
+      { key: 'shopee', label: 'Shopee', type: 'boolean', defaultValue: false },
+      { key: 'stockSync', label: 'Sincronização estoque', type: 'boolean', defaultValue: true },
+      { key: 'priceUpdate', label: 'Atualização preços', type: 'boolean', defaultValue: true },
+      { key: 'autoOrders', label: 'Pedidos automáticos', type: 'boolean', defaultValue: true },
+      { key: 'deliveryTracking', label: 'Rastreamento entrega', type: 'boolean', defaultValue: true },
+      { key: 'adManagement', label: 'Gestão anúncios', type: 'boolean', defaultValue: false },
+      { key: 'customWebhooks', label: 'Webhooks personalizados', type: 'json', placeholder: '{"url": "https://..."}' },
+    ]
+  },
+
+  // ===== SAÚDE / ATENDIMENTO (TELEMEDICINA) =====
+
+  {
+    id: 'teleconsulta-farmaceutica',
+    type: 'action',
+    label: '📹 Teleconsulta Farmacêutica',
+    description: 'Atendimento remoto com vídeo e prescrição digital',
+    icon: Video,
+    color: '#0284C7',
+    category: 'telemedicina',
+    inputs: [{ id: 'in', label: 'Solicitação de consulta', type: 'data' }],
+    outputs: [
+      { id: 'scheduled', label: 'Agendada', type: 'success' },
+      { id: 'completed', label: 'Concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'videoCall', label: 'Vídeo chamada', type: 'boolean', defaultValue: true },
+      { key: 'integratedChat', label: 'Chat integrado', type: 'boolean', defaultValue: true },
+      { key: 'recordConsultation', label: 'Gravação consulta', type: 'boolean', defaultValue: false },
+      { key: 'digitalPrescription', label: 'Prescrição digital', type: 'boolean', defaultValue: true },
+      { key: 'documentSharing', label: 'Compartilhar documentos', type: 'boolean', defaultValue: true },
+      { key: 'virtualWaitingRoom', label: 'Sala espera virtual', type: 'boolean', defaultValue: true },
+      { key: 'agendaIntegration', label: 'Integração agenda', type: 'boolean', defaultValue: true },
+      { key: 'aiSummary', label: 'IA resumo consulta', type: 'boolean', defaultValue: true },
+      { key: 'electronicSignature', label: 'Assinatura eletrônica', type: 'boolean', defaultValue: true },
+      { key: 'endToEndEncryption', label: 'Criptografia ponta a ponta', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== IA / MARKETING =====
+
+  {
+    id: 'recomendacao-inteligente-produtos',
+    type: 'ai',
+    label: '🎯 Recomendação Inteligente de Produtos',
+    description: 'Cross-sell e upsell com IA baseada em comportamento',
+    icon: ShoppingBag,
+    color: '#BE185D',
+    category: 'marketing_ia',
+    inputs: [{ id: 'in', label: 'Dados do cliente/compra', type: 'data' }],
+    outputs: [{ id: 'recommendations', label: 'Recomendações', type: 'success' }],
+    config: [
+      { key: 'crossSell', label: 'Cross-sell', type: 'boolean', defaultValue: true },
+      { key: 'upsell', label: 'Upsell', type: 'boolean', defaultValue: true },
+      { key: 'aiBehavior', label: 'IA comportamento compra', type: 'boolean', defaultValue: true },
+      { key: 'complementaryProducts', label: 'Produtos complementares', type: 'boolean', defaultValue: true },
+      { key: 'ageSegmentation', label: 'Segmentação idade', type: 'boolean', defaultValue: false },
+      { key: 'diseaseSegmentation', label: 'Segmentação doenças', type: 'boolean', defaultValue: false },
+      { key: 'customRules', label: 'Regras personalizadas', type: 'json', placeholder: '{"minPurchase": 50}' },
+      { key: 'autoLearning', label: 'Aprendizado automático', type: 'boolean', defaultValue: true },
+      { key: 'crmIntegration', label: 'Integração CRM', type: 'boolean', defaultValue: true },
+      { key: 'conversionRanking', label: 'Ranking conversão', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== FINANCEIRO / ERP (CAIXA) =====
+
+  {
+    id: 'controle-caixa',
+    type: 'action',
+    label: '💵 Controle de Caixa',
+    description: 'Gestão financeira de caixa com múltiplos operadores',
+    icon: Calculator,
+    color: '#047857',
+    category: 'financeiro_erp',
+    inputs: [{ id: 'in', label: 'Transação', type: 'data' }],
+    outputs: [
+      { id: 'completed', label: 'Concluído', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'openCloseCash', label: 'Abertura/fechamento caixa', type: 'boolean', defaultValue: true },
+      { key: 'sangria', label: 'Sangria', type: 'boolean', defaultValue: true },
+      { key: 'multiOperators', label: 'Multioperadores', type: 'boolean', defaultValue: true },
+      { key: 'pixIntegration', label: 'PIX integrado', type: 'boolean', defaultValue: true },
+      { key: 'cardIntegration', label: 'Cartão crédito/débito', type: 'boolean', defaultValue: true },
+      { key: 'financialReports', label: 'Relatórios financeiros', type: 'boolean', defaultValue: true },
+      { key: 'transactionAudit', label: 'Auditoria transações', type: 'boolean', defaultValue: true },
+      { key: 'tefIntegration', label: 'Integração TEF', type: 'boolean', defaultValue: false },
+      { key: 'salesDashboard', label: 'Dashboard vendas', type: 'boolean', defaultValue: true },
+      { key: 'accountingExport', label: 'Exportação contábil', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== COMUNICAÇÃO / MARKETING =====
+
+  {
+    id: 'disparo-sms-notificacoes',
+    type: 'action',
+    label: '📱 Disparo de SMS e Notificações',
+    description: 'Campanhas de SMS, push e WhatsApp em massa',
+    icon: Megaphone,
+    color: '#15803D',
+    category: 'comunicacao_mkt',
+    inputs: [{ id: 'in', label: 'Lista de destinatários/mensagem', type: 'data' }],
+    outputs: [
+      { id: 'sent', label: 'Enviado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'bulkSms', label: 'SMS em massa', type: 'boolean', defaultValue: true },
+      { key: 'pushNotifications', label: 'Push notifications', type: 'boolean', defaultValue: true },
+      { key: 'whatsappApi', label: 'WhatsApp API', type: 'boolean', defaultValue: true },
+      { key: 'customerSegmentation', label: 'Segmentação clientes', type: 'boolean', defaultValue: true },
+      { key: 'sendTime', label: 'Horário envio', type: 'string', placeholder: '09:00' },
+      { key: 'customTemplates', label: 'Templates personalizados', type: 'json', placeholder: '{"welcome": "Olá {{nome}}!"}' },
+      { key: 'openTracking', label: 'Rastreamento abertura', type: 'boolean', defaultValue: true },
+      { key: 'shortLinks', label: 'Links curtos', type: 'boolean', defaultValue: true },
+      { key: 'autoCampaigns', label: 'Campanhas automáticas', type: 'boolean', defaultValue: true },
+      { key: 'dispatchLimit', label: 'Limite disparos', type: 'number', defaultValue: 1000 },
+    ]
+  },
+
+  // ===== COMPLIANCE / ANVISA (SNGPC) =====
+
+  {
+    id: 'controle-sngpc',
+    type: 'action',
+    label: '📋 Controle SNGPC',
+    description: 'Envio automático de dados para ANVISA/SNGPC',
+    icon: Shield,
+    color: '#A16207',
+    category: 'compliance_anvisa',
+    inputs: [{ id: 'in', label: 'Dados de movimentação', type: 'data' }],
+    outputs: [
+      { id: 'sent', label: 'Enviado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'autoSendAnvisa', label: 'Envio automático ANVISA', type: 'boolean', defaultValue: true },
+      { key: 'movementRegistration', label: 'Registro movimentações', type: 'boolean', defaultValue: true },
+      { key: 'controlledInventory', label: 'Inventário controlados', type: 'boolean', defaultValue: true },
+      { key: 'inconsistencyCorrection', label: 'Correção inconsistências', type: 'boolean', defaultValue: true },
+      { key: 'digitalCertificate', label: 'Certificado digital', type: 'password', placeholder: 'Senha do certificado' },
+      { key: 'auditLogs', label: 'Logs auditoria', type: 'boolean', defaultValue: true },
+      { key: 'officialReports', label: 'Relatórios oficiais', type: 'boolean', defaultValue: true },
+      { key: 'autoBackup', label: 'Backup automático', type: 'boolean', defaultValue: true },
+      { key: 'rejectionAlerts', label: 'Alertas rejeição', type: 'boolean', defaultValue: true },
+      { key: 'dailySync', label: 'Sincronização diária', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== SAÚDE / IA (ANAMNESE) =====
+
+  {
+    id: 'formulario-anamnese-inteligente',
+    type: 'action',
+    label: '📝 Formulário Inteligente de Anamnese',
+    description: 'Anamnese dinâmica com IA e fluxos condicionais',
+    icon: Clipboard,
+    color: '#B91C1C',
+    category: 'saude_ia',
+    inputs: [{ id: 'in', label: 'Dados do paciente', type: 'data' }],
+    outputs: [
+      { id: 'completed', label: 'Formulário preenchido', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'dynamicFields', label: 'Campos dinâmicos', type: 'boolean', defaultValue: true },
+      { key: 'aiInterpretation', label: 'IA interpretação respostas', type: 'boolean', defaultValue: true },
+      { key: 'conditionalFlows', label: 'Fluxos condicionais', type: 'boolean', defaultValue: true },
+      { key: 'examUpload', label: 'Upload exames', type: 'boolean', defaultValue: true },
+      { key: 'patientSignature', label: 'Assinatura paciente', type: 'boolean', defaultValue: true },
+      { key: 'riskScore', label: 'Score risco', type: 'boolean', defaultValue: true },
+      { key: 'pdfExport', label: 'Exportação PDF', type: 'boolean', defaultValue: true },
+      { key: 'prontuarioIntegration', label: 'Integração prontuário', type: 'boolean', defaultValue: true },
+      { key: 'reusableTemplates', label: 'Templates reutilizáveis', type: 'file' },
+      { key: 'mobileResponsive', label: 'Modo mobile responsivo', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== BI / ANALYTICS =====
+
+  {
+    id: 'dashboard-analitico-farmaceutico',
+    type: 'action',
+    label: '📊 Dashboard Analítico Farmacêutico',
+    description: 'BI com KPIs, gráficos e previsão de demanda',
+    icon: BarChart,
+    color: '#E11D48',
+    category: 'analytics',
+    inputs: [{ id: 'in', label: 'Dados para análise', type: 'data' }],
+    outputs: [{ id: 'report', label: 'Relatório gerado', type: 'success' }],
+    config: [
+      { key: 'realtimeCharts', label: 'Gráficos em tempo real', type: 'boolean', defaultValue: true },
+      { key: 'salesKpis', label: 'KPIs vendas', type: 'boolean', defaultValue: true },
+      { key: 'stockKpis', label: 'KPIs estoque', type: 'boolean', defaultValue: true },
+      { key: 'productHeatmap', label: 'Heatmap produtos', type: 'boolean', defaultValue: true },
+      { key: 'branchComparison', label: 'Comparação filiais', type: 'boolean', defaultValue: false },
+      { key: 'excelPdfExport', label: 'Exportação Excel/PDF', type: 'boolean', defaultValue: true },
+      { key: 'advancedFilters', label: 'Filtros avançados', type: 'boolean', defaultValue: true },
+      { key: 'aiDemandForecast', label: 'IA previsão demanda', type: 'boolean', defaultValue: true },
+      { key: 'autoReports', label: 'Relatórios automáticos', type: 'boolean', defaultValue: true },
+      { key: 'darkMode', label: 'Dark mode', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== PAGAMENTOS / FINANCEIRO (PIX) =====
+
+  {
+    id: 'integracao-pix-automatico',
+    type: 'action',
+    label: '🔗 Integração PIX Automático',
+    description: 'PIX com QR Code dinâmico, conciliação e split',
+    icon: DollarIcon,
+    color: '#0F766E',
+    category: 'pagamentos',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'paid', label: 'Pago', type: 'success' },
       { id: 'pending', label: 'Pendente', type: 'data' },
       { id: 'error', label: 'Erro', type: 'error' }
     ],
     config: [
-      { key: 'pixKey', label: 'Chave Pix', type: 'string', placeholder: 'exemplo@banco.com' },
-      { key: 'expectedAmount', label: 'Valor Esperado (R$)', type: 'number' },
-      { key: 'webhookUrl', label: 'Webhook de retorno', type: 'string' },
-    ]
-  },
-  {
-    id: 'attendance-create',
-    type: 'pharmacy',
-    label: '📞 Attendance Create',
-    description: 'Cria atendimento no CRM (/api/atendimentos)',
-    icon: Phone,
-    color: '#1E40AF',
-    category: 'pharmacy',
-    inputs: [
-      { id: 'in', label: 'Dados do cliente', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Criado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'customerId', label: 'Customer ID', type: 'string', placeholder: '{{customer.id}}' },
-      { key: 'channel', label: 'Canal', type: 'select', options: [
-        { value: 'whatsapp', label: 'WhatsApp' },
-        { value: 'instagram', label: 'Instagram' },
-        { value: 'chat', label: 'Chat Online' },
-      ], defaultValue: 'whatsapp' },
-      { key: 'priority', label: 'Prioridade', type: 'select', options: [
-        { value: 'normal', label: 'Normal' },
-        { value: 'urgent', label: 'Urgente' },
-      ], defaultValue: 'normal' }
+      { key: 'bankApi', label: 'Banco integração API', type: 'select', options: [
+        { value: 'itau', label: 'Itaú' }, { value: 'bradesco', label: 'Bradesco' },
+        { value: 'santander', label: 'Santander' }, { value: 'bb', label: 'Banco do Brasil' },
+      ], defaultValue: 'itau' },
+      { key: 'dynamicQrCode', label: 'QR Code dinâmico', type: 'boolean', defaultValue: true },
+      { key: 'autoReconciliation', label: 'Conciliação automática', type: 'boolean', defaultValue: true },
+      { key: 'splitPayment', label: 'Split pagamento', type: 'boolean', defaultValue: false },
+      { key: 'webhookConfirmation', label: 'Webhook confirmação', type: 'string', placeholder: 'URL webhook' },
+      { key: 'chargeExpiry', label: 'Expiração cobrança (min)', type: 'number', defaultValue: 30 },
+      { key: 'autoRefund', label: 'Estorno automático', type: 'boolean', defaultValue: false },
+      { key: 'multiAccounts', label: 'Multi contas', type: 'boolean', defaultValue: false },
+      { key: 'pixRecurring', label: 'PIX recorrente', type: 'boolean', defaultValue: false },
+      { key: 'financialLogs', label: 'Logs financeiros', type: 'boolean', defaultValue: true },
     ]
   },
 
-  // ===== MORE TRIGGERS =====
+  // ===== IA / COMPLIANCE (AUDITORIA) =====
+
   {
-    id: 'form-submit',
-    type: 'trigger',
-    label: '📝 Form Submit',
-    description: 'Recebe dados de formulário web',
-    icon: MessageSquare,
-    color: '#25D366',
-    category: 'triggers',
+    id: 'auditoria-inteligente-ia',
+    type: 'ai',
+    label: '🔍 Auditoria Inteligente IA',
+    description: 'Detecção de fraude e padrões suspeitos com IA',
+    icon: Eye,
+    color: '#7E22CE',
+    category: 'ia_compliance',
+    inputs: [{ id: 'in', label: 'Dados para auditoria', type: 'data' }],
     outputs: [
-      { id: 'default', label: 'Formulário enviado', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: 'clean', label: 'Sem anomalias', type: 'success' },
+      { id: 'alert', label: 'Anomalia detectada', type: 'error' }
     ],
     config: [
-      { key: 'formId', label: 'Form ID', type: 'string' },
-      { key: 'webhookPath', label: 'Caminho Webhook', type: 'string', defaultValue: '/webhook/form' }
-    ]
-  },
-  {
-    id: 'database-trigger',
-    type: 'trigger',
-    label: '💾 Database Trigger',
-    description: 'Disparo em mudança de BD (PostgreSQL/MySQL)',
-    icon: Database,
-    color: '#25D366',
-    category: 'triggers',
-    outputs: [
-      { id: 'default', label: 'Mudança detectada', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'connectionString', label: 'String de Conexão', type: 'password' },
-      { key: 'table', label: 'Tabela', type: 'string' },
-      { key: 'events', label: 'Eventos', type: 'select', options: [
-        { value: 'INSERT', label: 'INSERT' },
-        { value: 'UPDATE', label: 'UPDATE' },
-        { value: 'DELETE', label: 'DELETE' },
-      ]}
-    ]
-  },
-  {
-    id: 'file-upload',
-    type: 'trigger',
-    label: '📎 File Upload',
-    description: 'Disparo no upload de arquivo',
-    icon: FileText,
-    color: '#25D366',
-    category: 'triggers',
-    outputs: [
-      { id: 'default', label: 'Arquivo recebido', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'allowedTypes', label: 'Tipos Permitidos', type: 'string', placeholder: 'pdf, jpg, png' },
-      { key: 'maxSizeMB', label: 'Tamanho Máx (MB)', type: 'number', defaultValue: 10 }
+      { key: 'fraudDetection', label: 'Detecção fraude', type: 'boolean', defaultValue: true },
+      { key: 'suspiciousPatterns', label: 'Verificação padrões suspeitos', type: 'boolean', defaultValue: true },
+      { key: 'fullLogs', label: 'Logs completos', type: 'boolean', defaultValue: true },
+      { key: 'autoAlerts', label: 'Alertas automáticos', type: 'boolean', defaultValue: true },
+      { key: 'aiBehaviorAnalysis', label: 'IA análise comportamento', type: 'boolean', defaultValue: true },
+      { key: 'auditReports', label: 'Relatórios auditoria', type: 'boolean', defaultValue: true },
+      { key: 'userTracking', label: 'Rastreamento usuário', type: 'boolean', defaultValue: true },
+      { key: 'operationRiskScore', label: 'Score risco operação', type: 'boolean', defaultValue: true },
+      { key: 'erpIntegration', label: 'Integração ERP', type: 'boolean', defaultValue: false },
+      { key: 'complianceExport', label: 'Exportação compliance', type: 'boolean', defaultValue: true },
     ]
   },
 
-  // ===== MORE LOGIC =====
+
+  // ===== CORE / TRIGGERS =====
+
   {
-    id: 'loop',
-    type: 'logic',
-    label: '🔄 Loop',
-    description: 'Itera sobre lista de itens',
-    icon: Repeat,
-    color: '#EAB308',
-    category: 'logic',
-    inputs: [
-      { id: 'in', label: 'Lista de itens', type: 'data' }
-    ],
-    outputs: [
-      { id: 'item', label: 'Item atual', type: 'data' },
-      { id: 'complete', label: 'Concluído', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    id: 'webhook-trigger',
+    type: 'trigger',
+    label: '🌐 Webhook',
+    description: 'Recebe chamadas HTTP POST/GET para iniciar workflow',
+    icon: Globe,
+    color: '#10B981',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Payload recebido', type: 'data' }],
     config: [
-      { key: 'collection', label: 'Coleção (JSON)', type: 'json' },
-      { key: 'maxIterations', label: 'Máx Iterações', type: 'number', defaultValue: 100 }
+      { key: 'httpMethod', label: 'Método HTTP', type: 'select', options: [
+        { value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }, { value: 'DELETE', label: 'DELETE' }, { value: 'ALL', label: 'Todos' },
+      ], defaultValue: 'POST' },
+      { key: 'path', label: 'Caminho', type: 'string', placeholder: '/webhook/meu-endpoint', defaultValue: '/webhook' },
+      { key: 'responseMode', label: 'Modo resposta', type: 'select', options: [
+        { value: 'onReceived', label: 'Ao receber' }, { value: 'lastNode', label: 'Último nó' },
+      ], defaultValue: 'onReceived' },
+      { key: 'responseData', label: 'Dados resposta', type: 'select', options: [
+        { value: 'firstEntryJson', label: 'Primeiro item JSON' }, { value: 'noData', label: 'Sem dados' },
+      ], defaultValue: 'firstEntryJson' },
     ]
   },
+
   {
-    id: 'merge',
-    type: 'logic',
-    label: '🔀 Merge (Juntar Fluxos)',
-    description: 'Combina múltiplos fluxos num só',
-    icon: GitMerge,
-    color: '#EAB308',
-    category: 'logic',
-    inputs: [
-      { id: 'in1', label: 'Fluxo 1', type: 'data' },
-      { id: 'in2', label: 'Fluxo 2', type: 'data' }
-    ],
-    outputs: [
-      { id: 'merged', label: 'Fluxo combinado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'strategy', label: 'Estratégia', type: 'select', options: [
-        { value: 'append', label: 'Anexar' },
-        { value: 'merge', label: 'Mesclar' },
-      ]}
-    ]
-  },
-  {
-    id: 'rate-limit',
-    type: 'logic',
-    label: '⏱️ Rate Limit',
-    description: 'Limita frequência de execução',
+    id: 'schedule-trigger',
+    type: 'trigger',
+    label: '📅 Schedule (CRON)',
+    description: 'Executa workflow em intervalos agendados',
     icon: Clock,
+    color: '#059669',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Execução agendada', type: 'data' }],
+    config: [
+      { key: 'triggerInterval', label: 'Intervalo', type: 'select', options: [
+        { value: 'seconds', label: 'Segundos' }, { value: 'minutes', label: 'Minutos' }, { value: 'hours', label: 'Horas' }, { value: 'days', label: 'Dias' }, { value: 'weeks', label: 'Semanas' }, { value: 'months', label: 'Meses' }, { value: 'cron', label: 'Custom (CRON)' },
+      ], defaultValue: 'hours' },
+      { key: 'intervalValue', label: 'Valor do intervalo', type: 'number', defaultValue: 1 },
+      { key: 'cronExpression', label: 'Expressão CRON', type: 'string', placeholder: '0 * * * *' },
+      { key: 'timezone', label: 'Timezone', type: 'select', options: [
+        { value: 'America/Sao_Paulo', label: 'Brasília (GMT-3)' }, { value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'New York (EST)' },
+      ], defaultValue: 'America/Sao_Paulo' },
+    ]
+  },
+
+  {
+    id: 'email-trigger-imap',
+    type: 'trigger',
+    label: '📧 Email Trigger (IMAP)',
+    description: 'Dispara workflow ao receber email',
+    icon: Mail,
+    color: '#3B82F6',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Email recebido', type: 'data' }],
+    config: [
+      { key: 'mailbox', label: 'Caixa de entrada', type: 'string', placeholder: 'INBOX' },
+      { key: 'host', label: 'Servidor IMAP', type: 'string', placeholder: 'imap.gmail.com' },
+      { key: 'port', label: 'Porta', type: 'number', defaultValue: 993 },
+      { key: 'user', label: 'Usuário', type: 'string', placeholder: 'email@gmail.com' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'criteria', label: 'Critério', type: 'select', options: [
+        { value: 'ALL', label: 'Todos' }, { value: 'UNSEEN', label: 'Não lidos' }, { value: 'SEEN', label: 'Lidos' },
+      ], defaultValue: 'UNSEEN' },
+    ]
+  },
+
+  {
+    id: 'form-trigger',
+    type: 'trigger',
+    label: '📝 Form Trigger',
+    description: 'Dispara workflow ao enviar formulário',
+    icon: FileText,
+    color: '#8B5CF6',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Dados do formulário', type: 'data' }],
+    config: [
+      { key: 'formTitle', label: 'Título do formulário', type: 'string', placeholder: 'Meu Formulário' },
+      { key: 'formDescription', label: 'Descrição', type: 'string', placeholder: 'Preencha os campos abaixo' },
+      { key: 'responseTitle', label: 'Título de resposta', type: 'string', placeholder: 'Obrigado!' },
+      { key: 'responseDescription', label: 'Mensagem de resposta', type: 'string', placeholder: 'Seu envio foi recebido.' },
+    ]
+  },
+
+  {
+    id: 'file-trigger',
+    type: 'trigger',
+    label: '📁 File Trigger',
+    description: 'Dispara ao criar/modificar arquivo',
+    icon: HardDrive,
+    color: '#6366F1',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Arquivo detectado', type: 'data' }],
+    config: [
+      { key: 'eventType', label: 'Evento', type: 'select', options: [
+        { value: 'create', label: 'Criação' }, { value: 'change', label: 'Modificação' }, { value: 'delete', label: 'Exclusão' },
+      ], defaultValue: 'create' },
+      { key: 'path', label: 'Caminho monitorado', type: 'string', placeholder: '/data/uploads' },
+      { key: 'recursive', label: 'Monitorar subpastas', type: 'boolean', defaultValue: false },
+    ]
+  },
+
+  {
+    id: 'rss-trigger',
+    type: 'trigger',
+    label: '📡 RSS Feed Trigger',
+    description: 'Dispara ao atualizar feed RSS',
+    icon: Activity,
+    color: '#F59E0B',
+    category: 'core_triggers',
+    outputs: [{ id: 'default', label: 'Novo item RSS', type: 'data' }],
+    config: [
+      { key: 'feedUrl', label: 'URL do Feed RSS', type: 'string', placeholder: 'https://exemplo.com/feed.xml' },
+      { key: 'pollInterval', label: 'Intervalo de verificação (min)', type: 'number', defaultValue: 15 },
+    ]
+  },
+
+  // ===== CORE / LÓGICA =====
+
+  {
+    id: 'if-node',
+    type: 'logic',
+    label: '🔀 IF',
+    description: 'Condicional verdadeiro/falso',
+    icon: GitBranch,
     color: '#EAB308',
-    category: 'logic',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
     outputs: [
-      { id: 'allowed', label: 'Permitido', type: 'success' },
-      { id: 'blocked', label: 'Bloqueado', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: 'true', label: 'Verdadeiro', type: 'success' },
+      { id: 'false', label: 'Falso', type: 'data' },
     ],
     config: [
-      { key: 'maxRequests', label: 'Máx Requisições', type: 'number', defaultValue: 100 },
-      { key: 'period', label: 'Período (seg)', type: 'number', defaultValue: 60 }
+      { key: 'conditions', label: 'Condições (JSON)', type: 'json', placeholder: '{"conditions": [{"leftValue": "{{$json.status}}", "rightValue": "approved", "operator": "equals"}]}' },
     ]
   },
 
-  // ===== MORE AI =====
   {
-    id: 'grok-xai',
-    type: 'ai',
-    label: '🤖 Grok (xAI)',
-    description: 'Executa modelo Grok (2/3)',
-    icon: Bot,
-    color: '#1DA1F2',
-    category: 'ai',
-    inputs: [
-      { id: 'in', label: 'Prompt/Contexto', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'apiKey', label: 'API Key (xAI)', type: 'password' },
-      { key: 'model', label: 'Modelo', type: 'select', options: [
-        { value: 'grok-2', label: 'Grok 2' },
-        { value: 'grok-3', label: 'Grok 3' },
-      ], defaultValue: 'grok-2' },
-      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true },
-      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true },
-    ]
-  },
-  {
-    id: 'gemini-google',
-    type: 'ai',
-    label: '🤖 Gemini (Google)',
-    description: 'Executa modelo Gemini',
-    icon: Brain,
-    color: '#4285F4',
-    category: 'ai',
-    inputs: [
-      { id: 'in', label: 'Prompt/Contexto', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'apiKey', label: 'API Key (Google)', type: 'password' },
-      { key: 'model', label: 'Modelo', type: 'select', options: [
-        { value: 'gemini-pro', label: 'Gemini Pro' },
-        { value: 'gemini-pro-vision', label: 'Gemini Pro Vision' },
-      ], defaultValue: 'gemini-pro' },
-      { key: 'prompt', label: 'Prompt', type: 'prompt', multiline: true },
-    ]
-  },
-  {
-    id: 'llama-local',
-    type: 'ai',
-    label: '🦙 Llama (Local/Ollama)',
-    description: 'Executa modelo Llama localmente',
-    icon: Brain,
-    color: '#FF6B35',
-    category: 'ai',
-    inputs: [
-      { id: 'in', label: 'Prompt/Contexto', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'endpoint', label: 'Endpoint (Ollama)', type: 'string', defaultValue: 'http://localhost:11434' },
-      { key: 'model', label: 'Modelo', type: 'string', defaultValue: 'llama3' },
-      { key: 'prompt', label: 'Prompt', type: 'prompt', multiline: true },
-    ]
-  },
-
-  // ===== MORE ACTIONS =====
-  {
-    id: 'database-insert',
-    type: 'action',
-    label: '💾 Database Insert',
-    description: 'Insere dados no banco SQL',
-    icon: Database,
-    color: '#14B8A6',
-    category: 'actions',
-    inputs: [
-      { id: 'in', label: 'Dados para inserção', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Inserido', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'connectionString', label: 'String de Conexão', type: 'password' },
-      { key: 'table', label: 'Tabela', type: 'string' },
-      { key: 'data', label: 'Dados (JSON)', type: 'json' },
-    ]
-  },
-  {
-    id: 'google-sheets',
-    type: 'action',
-    label: '📊 Google Sheets',
-    description: 'Adiciona/editar linha em planilha',
+    id: 'switch-node',
+    type: 'logic',
+    label: '🔀 Switch',
+    description: 'Multi-ramificação por valor',
     icon: GitCompare,
-    color: '#14B8A6',
-    category: 'actions',
-    inputs: [
-      { id: 'in', label: 'Dados da linha', type: 'data' }
-    ],
+    color: '#F59E0B',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
     outputs: [
-      { id: 'success', label: 'Adicionado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: '0', label: 'Caso 1', type: 'success' },
+      { id: '1', label: 'Caso 2', type: 'success' },
+      { id: '2', label: 'Caso 3', type: 'success' },
+      { id: 'default', label: 'Padrão', type: 'data' },
     ],
     config: [
-      { key: 'spreadsheetId', label: 'Spreadsheet ID', type: 'string' },
-      { key: 'range', label: 'Range (ex: A1:D1)', type: 'string' },
-      { key: 'values', label: 'Valores (JSON)', type: 'json' },
-    ]
-  },
-  {
-    id: 'sms-send',
-    type: 'action',
-    label: '📱 SMS (Twilio)',
-    description: 'Envia SMS via Twilio',
-    icon: Phone,
-    color: '#14B8A6',
-    category: 'actions',
-    inputs: [
-      { id: 'in', label: 'Dados do SMS', type: 'data' }
-    ],
-    outputs: [
-      { id: 'success', label: 'Enviado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'accountSid', label: 'Account SID', type: 'password' },
-      { key: 'authToken', label: 'Auth Token', type: 'password' },
-      { key: 'to', label: 'Para (número)', type: 'string' },
-      { key: 'body', label: 'Mensagem', type: 'prompt', multiline: true },
+      { key: 'dataType', label: 'Tipo de dado', type: 'select', options: [
+        { value: 'string', label: 'Texto' }, { value: 'number', label: 'Número' }, { value: 'boolean', label: 'Booleano' },
+      ], defaultValue: 'string' },
+      { key: 'outputKey', label: 'Campo de comparação', type: 'string', placeholder: '{{$json.status}}' },
+      { key: 'fallbackOutput', label: 'Saída padrão', type: 'select', options: [
+        { value: 'none', label: 'Nenhuma' }, { value: 'extra', label: 'Saída extra' },
+      ], defaultValue: 'extra' },
     ]
   },
 
-  // ===== MORE INTEGRATIONS =====
   {
-    id: 'graphql-query',
-    type: 'integration',
-    label: '🔗 GraphQL Query',
-    description: 'Executa query GraphQL',
-    icon: Globe,
-    color: '#06B6D4',
-    category: 'integrations',
-    inputs: [
-      { id: 'in', label: 'Variáveis', type: 'data' }
-    ],
+    id: 'filter-node',
+    type: 'logic',
+    label: '🔍 Filter',
+    description: 'Filtra dados por condições',
+    icon: Filter,
+    color: '#8B5CF6',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
     outputs: [
-      { id: 'success', label: 'Resposta', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
+      { id: 'pass', label: 'Passou', type: 'success' },
+      { id: 'fail', label: 'Não passou', type: 'data' },
     ],
     config: [
-      { key: 'endpoint', label: 'Endpoint GraphQL', type: 'string' },
-      { key: 'query', label: 'Query', type: 'prompt', multiline: true },
-      { key: 'headers', label: 'Headers (JSON)', type: 'json' },
-    ]
-  },
-  {
-    id: 'websocket',
-    type: 'integration',
-    label: '🔌 WebSocket',
-    description: 'Envia/recebe via WebSocket',
-    icon: Globe,
-    color: '#06B6D4',
-    category: 'integrations',
-    inputs: [
-      { id: 'in', label: 'Dados para enviar', type: 'data' }
-    ],
-    outputs: [
-      { id: 'message', label: 'Mensagem recebida', type: 'data' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
-    config: [
-      { key: 'url', label: 'WebSocket URL', type: 'string', placeholder: 'ws://exemplo.com/socket' },
-      { key: 'message', label: 'Mensagem (JSON)', type: 'json' },
+      { key: 'conditions', label: 'Condições (JSON)', type: 'json', placeholder: '{"conditions": [{"value1": "{{$json.amount}}", "operation": "largerEqual", "value2": 100}]}' },
+      { key: 'combineConditions', label: 'Combinar condições', type: 'select', options: [
+        { value: 'AND', label: 'E (AND)' }, { value: 'OR', label: 'Ou (OR)' },
+      ], defaultValue: 'AND' },
     ]
   },
 
-  // ===== MORE FLOW =====
   {
-    id: 'jump-to-node',
-    type: 'flow',
-    label: '↪️ Jump to Node',
-    description: 'Pula para outro nó específico',
-    icon: ArrowRight,
-    color: '#F97316',
-    category: 'flow',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
-    outputs: [
-      { id: 'jumped', label: 'Pulado', type: 'success' },
-      { id: 'error', label: 'Erro', type: 'error' }
-    ],
+    id: 'merge-node',
+    type: 'logic',
+    label: '🔗 Merge',
+    description: 'Junta fluxos paralelos',
+    icon: GitMerge,
+    color: '#06B6D4',
+    category: 'core_logic',
+    inputs: [{ id: 'in1', label: 'Entrada 1', type: 'data' }, { id: 'in2', label: 'Entrada 2', type: 'data' }],
+    outputs: [{ id: 'merged', label: 'Dados mesclados', type: 'success' }],
     config: [
-      { key: 'targetNodeId', label: 'ID do Nó Destino', type: 'string' },
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'append', label: 'Anexar' }, { value: 'merge', label: 'Mesclar por chave' }, { value: 'multiplex', label: 'Multiplexar' },
+      ], defaultValue: 'append' },
+      { key: 'join', label: 'Junção', type: 'select', options: [
+        { value: 'inner', label: 'Inner Join' }, { value: 'left', label: 'Left Join' }, { value: 'outer', label: 'Outer Join' },
+      ], defaultValue: 'inner' },
     ]
   },
+
   {
-    id: 'error-handler',
-    type: 'flow',
+    id: 'wait-node',
+    type: 'logic',
+    label: '⏳ Wait',
+    description: 'Pausa o fluxo por tempo definido',
+    icon: Clock,
+    color: '#64748B',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'out', label: 'Dados de saída', type: 'success' }],
+    config: [
+      { key: 'amount', label: 'Quantidade', type: 'number', defaultValue: 1 },
+      { key: 'unit', label: 'Unidade', type: 'select', options: [
+        { value: 'seconds', label: 'Segundos' }, { value: 'minutes', label: 'Minutos' }, { value: 'hours', label: 'Horas' }, { value: 'days', label: 'Dias' },
+      ], defaultValue: 'seconds' },
+    ]
+  },
+
+  {
+    id: 'error-handler-node',
+    type: 'logic',
     label: '⚠️ Error Handler',
     description: 'Captura e trata erros do fluxo',
     icon: AlertTriangle,
-    color: '#F97316',
-    category: 'flow',
-    inputs: [
-      { id: 'in', label: 'Erro recebido', type: 'error' }
-    ],
+    color: '#EF4444',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Erro recebido', type: 'error' }],
     outputs: [
       { id: 'handled', label: 'Tratado', type: 'success' },
       { id: 'fallback', label: 'Fallback', type: 'data' },
     ],
     config: [
       { key: 'action', label: 'Ação', type: 'select', options: [
-        { value: 'retry', label: 'Tentar novamente' },
-        { value: 'notify', label: 'Notificar' },
-        { value: 'ignore', label: 'Ignorar' },
-      ]}
-    ]
-  },
-  {
-    id: 'parallel-execution',
-    type: 'flow',
-    label: '🔀 Parallel Execution',
-    description: 'Executa múltiplos ramos em paralelo',
-    icon: GitBranch,
-    color: '#F97316',
-    category: 'flow',
-    inputs: [
-      { id: 'in', label: 'Dados de entrada', type: 'data' }
-    ],
-    outputs: [
-      { id: 'branch1', label: 'Ramo 1', type: 'success' },
-      { id: 'branch2', label: 'Ramo 2', type: 'success' },
-      { id: 'allComplete', label: 'Todos concluídos', type: 'success' },
-    ],
-    config: [
-      { key: 'maxBranches', label: 'Máx Ramos', type: 'number', defaultValue: 2 },
+        { value: 'continue', label: 'Continuar' }, { value: 'stop', label: 'Parar workflow' }, { value: 'retry', label: 'Tentar novamente' },
+      ], defaultValue: 'continue' },
+      { key: 'maxRetries', label: 'Máx tentativas', type: 'number', defaultValue: 3 },
     ]
   },
 
-  // ===== MORE PHARMACY =====
   {
-    id: 'stock-alert',
-    type: 'pharmacy',
-    label: '📦 Stock Alert',
-    description: 'Alerta sobre estoque baixo',
-    icon: Package,
-    color: '#1E40AF',
-    category: 'pharmacy',
-    inputs: [
-      { id: 'in', label: 'Dados do produto', type: 'data' }
-    ],
+    id: 'stop-error-node',
+    type: 'logic',
+    label: '🛑 Stop And Error',
+    description: 'Para o workflow com erro',
+    icon: AlertCircle,
+    color: '#DC2626',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [],
+    config: [
+      { key: 'errorMessage', label: 'Mensagem de erro', type: 'string', placeholder: 'Erro no workflow' },
+    ]
+  },
+
+  // ===== CORE / AÇÕES =====
+
+  {
+    id: 'http-request-node',
+    type: 'action',
+    label: '🔗 HTTP Request',
+    description: 'Faz requisições HTTP (GET/POST/PUT/DELETE)',
+    icon: Globe,
+    color: '#2563EB',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'method', label: 'Método', type: 'select', options: [
+        { value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }, { value: 'PATCH', label: 'PATCH' }, { value: 'DELETE', label: 'DELETE' },
+      ], defaultValue: 'GET' },
+      { key: 'url', label: 'URL', type: 'string', placeholder: 'https://api.exemplo.com/endpoint' },
+      { key: 'headers', label: 'Headers (JSON)', type: 'json', placeholder: '{"Content-Type": "application/json"}' },
+      { key: 'body', label: 'Body (JSON)', type: 'json', placeholder: '{"key": "value"}' },
+      { key: 'authType', label: 'Autenticação', type: 'select', options: [
+        { value: 'none', label: 'Nenhuma' }, { value: 'basicAuth', label: 'Basic Auth' }, { value: 'headerAuth', label: 'Header Auth' }, { value: 'bearer', label: 'Bearer Token' },
+      ], defaultValue: 'none' },
+      { key: 'timeout', label: 'Timeout (ms)', type: 'number', defaultValue: 30000 },
+      { key: 'followRedirects', label: 'Seguir redirects', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'code-node',
+    type: 'action',
+    label: '💻 Code',
+    description: 'Executa JavaScript/Python customizado',
+    icon: Code,
+    color: '#7C3AED',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado', type: 'success' }],
+    config: [
+      { key: 'language', label: 'Linguagem', type: 'select', options: [
+        { value: 'javascript', label: 'JavaScript' }, { value: 'python', label: 'Python' },
+      ], defaultValue: 'javascript' },
+      { key: 'code', label: 'Código', type: 'prompt', multiline: true, placeholder: 'return items.map(item => ({ json: { ...item.json, processed: true } }));' },
+    ]
+  },
+
+  {
+    id: 'set-node',
+    type: 'action',
+    label: '📦 Set',
+    description: 'Define/manipula valores de dados',
+    icon: Settings,
+    color: '#0891B2',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados modificados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'manual', label: 'Manual' }, { value: 'expression', label: 'Expressão' },
+      ], defaultValue: 'manual' },
+      { key: 'fields', label: 'Campos (JSON)', type: 'json', placeholder: '{"nome": "valor", "timestamp": "{{$now}}"}' },
+    ]
+  },
+
+  {
+    id: 'email-send-node',
+    type: 'action',
+    label: '📧 Email Send',
+    description: 'Envia email via SMTP',
+    icon: SendIcon,
+    color: '#3B82F6',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados do email', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Enviado', type: 'success' }],
+    config: [
+      { key: 'from', label: 'De', type: 'string', placeholder: 'remetente@email.com' },
+      { key: 'to', label: 'Para', type: 'string', placeholder: 'destinatario@email.com' },
+      { key: 'subject', label: 'Assunto', type: 'string', placeholder: 'Assunto do email' },
+      { key: 'body', label: 'Corpo (HTML)', type: 'prompt', multiline: true, placeholder: '<h1>Olá!</h1>' },
+      { key: 'smtpHost', label: 'Servidor SMTP', type: 'string', placeholder: 'smtp.gmail.com' },
+      { key: 'smtpPort', label: 'Porta SMTP', type: 'number', defaultValue: 587 },
+      { key: 'smtpUser', label: 'Usuário SMTP', type: 'string' },
+      { key: 'smtpPassword', label: 'Senha SMTP', type: 'password' },
+    ]
+  },
+
+  {
+    id: 'execute-workflow-node',
+    type: 'action',
+    label: '📋 Execute Workflow',
+    description: 'Executa outro workflow como sub-fluxo',
+    icon: RefreshCw,
+    color: '#6366F1',
+    category: 'core_actions',
+    inputs: [{ id: 'in', label: 'Dados para sub-workflow', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado sub-workflow', type: 'success' }],
+    config: [
+      { key: 'workflowId', label: 'ID do Workflow', type: 'string', placeholder: 'ID do workflow a executar' },
+      { key: 'waitForCompletion', label: 'Aguardar conclusão', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  // ===== CORE / DADOS =====
+
+  {
+    id: 'aggregate-node',
+    type: 'action',
+    label: '📊 Aggregate',
+    description: 'Agrupa dados por campo comum',
+    icon: BarChart3,
+    color: '#8B5CF6',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados agrupados', type: 'success' }],
+    config: [
+      { key: 'aggregate', label: 'Agregação', type: 'select', options: [
+        { value: 'individualFields', label: 'Campos individuais' }, { value: 'allItemData', label: 'Todos os dados' },
+      ], defaultValue: 'individualFields' },
+      { key: 'groupByField', label: 'Agrupar por campo', type: 'string', placeholder: '{{$json.category}}' },
+    ]
+  },
+
+  {
+    id: 'split-batches-node',
+    type: 'action',
+    label: '✂️ Split In Batches',
+    description: 'Processa dados em lotes',
+    icon: Layers,
+    color: '#F59E0B',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'batch', label: 'Lote', type: 'data' }],
+    config: [
+      { key: 'batchSize', label: 'Tamanho do lote', type: 'number', defaultValue: 10 },
+    ]
+  },
+
+  {
+    id: 'remove-duplicates-node',
+    type: 'action',
+    label: '🚫 Remove Duplicates',
+    description: 'Remove itens duplicados',
+    icon: Archive,
+    color: '#EF4444',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados únicos', type: 'success' }],
+    config: [
+      { key: 'compare', label: 'Comparar por', type: 'select', options: [
+        { value: 'allFields', label: 'Todos os campos' }, { value: 'selectedFields', label: 'Campos selecionados' },
+      ], defaultValue: 'allFields' },
+      { key: 'fieldsToCompare', label: 'Campos', type: 'string', placeholder: 'email, nome' },
+    ]
+  },
+
+  {
+    id: 'sort-node',
+    type: 'action',
+    label: '📋 Sort',
+    description: 'Ordena dados por campo',
+    icon: TrendingUp,
+    color: '#10B981',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados ordenados', type: 'success' }],
+    config: [
+      { key: 'sortField', label: 'Campo para ordenar', type: 'string', placeholder: '{{$json.date}}' },
+      { key: 'sortOrder', label: 'Ordem', type: 'select', options: [
+        { value: 'ascending', label: 'Ascendente' }, { value: 'descending', label: 'Descendente' },
+      ], defaultValue: 'ascending' },
+    ]
+  },
+
+  {
+    id: 'limit-node',
+    type: 'action',
+    label: '🔢 Limit',
+    description: 'Limita quantidade de itens',
+    icon: Hash,
+    color: '#64748B',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados limitados', type: 'success' }],
+    config: [
+      { key: 'maxItems', label: 'Máximo de itens', type: 'number', defaultValue: 10 },
+      { key: 'keep', label: 'Manter', type: 'select', options: [
+        { value: 'first', label: 'Primeiros' }, { value: 'last', label: 'Últimos' },
+      ], defaultValue: 'first' },
+    ]
+  },
+
+  {
+    id: 'summarize-node',
+    type: 'action',
+    label: '📝 Summarize',
+    description: 'Resume dados em estatísticas',
+    icon: FileSearch,
+    color: '#7C3AED',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resumo', type: 'success' }],
+    config: [
+      { key: 'fieldsToSummarize', label: 'Campos para resumir', type: 'string', placeholder: 'amount, quantity' },
+    ]
+  },
+
+  {
+    id: 'sticky-note-node',
+    type: 'action',
+    label: '📌 Sticky Note',
+    description: 'Anotação visual no canvas',
+    icon: StickyNote,
+    color: '#FBBF24',
+    category: 'core_data',
+    inputs: [],
+    outputs: [],
+    config: [
+      { key: 'content', label: 'Conteúdo', type: 'prompt', multiline: true, placeholder: 'Anotação...' },
+      { key: 'color', label: 'Cor', type: 'select', options: [
+        { value: 'yellow', label: 'Amarelo' }, { value: 'blue', label: 'Azul' }, { value: 'green', label: 'Verde' }, { value: 'red', label: 'Vermelho' }, { value: 'purple', label: 'Roxo' },
+      ], defaultValue: 'yellow' },
+    ]
+  },
+
+  {
+    id: 'merge-by-key-node',
+    type: 'action',
+    label: '🔑 Merge by Key',
+    description: 'Junta dados por chave comum',
+    icon: Link2,
+    color: '#06B6D4',
+    category: 'core_data',
+    inputs: [{ id: 'in1', label: 'Entrada 1', type: 'data' }, { id: 'in2', label: 'Entrada 2', type: 'data' }],
+    outputs: [{ id: 'merged', label: 'Dados mesclados', type: 'success' }],
+    config: [
+      { key: 'propertyName', label: 'Nome da chave', type: 'string', placeholder: 'id' },
+    ]
+  },
+
+  {
+    id: 'item-lists-node',
+    type: 'action',
+    label: '📄 Item Lists',
+    description: 'Manipula listas de itens',
+    icon: ClipboardList,
+    color: '#8B5CF6',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Lista processada', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'concatenate', label: 'Concatenar' }, { value: 'removeDuplicates', label: 'Remover duplicatas' }, { value: 'flatten', label: 'Achatar' },
+      ], defaultValue: 'concatenate' },
+    ]
+  },
+
+  {
+    id: 'crypto-node',
+    type: 'action',
+    label: '🔐 Crypto',
+    description: 'Hash, encrypt/decrypt de dados',
+    icon: Lock,
+    color: '#DC2626',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados processados', type: 'success' }],
+    config: [
+      { key: 'action', label: 'Ação', type: 'select', options: [
+        { value: 'hash', label: 'Hash' }, { value: 'encrypt', label: 'Criptografar' }, { value: 'decrypt', label: 'Descriptografar' }, { value: 'hmac', label: 'HMAC' },
+      ], defaultValue: 'hash' },
+      { key: 'algorithm', label: 'Algoritmo', type: 'select', options: [
+        { value: 'md5', label: 'MD5' }, { value: 'sha256', label: 'SHA-256' }, { value: 'sha512', label: 'SHA-512' }, { value: 'aes-256-cbc', label: 'AES-256-CBC' },
+      ], defaultValue: 'sha256' },
+      { key: 'field', label: 'Campo', type: 'string', placeholder: 'password' },
+    ]
+  },
+
+  {
+    id: 'datetime-node',
+    type: 'action',
+    label: '🕐 Date/Time',
+    description: 'Manipulação de datas e horários',
+    icon: Calendar,
+    color: '#0891B2',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Data processada', type: 'success' }],
+    config: [
+      { key: 'action', label: 'Ação', type: 'select', options: [
+        { value: 'format', label: 'Formatar' }, { value: 'add', label: 'Adicionar' }, { value: 'subtract', label: 'Subtrair' }, { value: 'diff', label: 'Diferença' },
+      ], defaultValue: 'format' },
+      { key: 'field', label: 'Campo de data', type: 'string', placeholder: '{{$json.date}}' },
+      { key: 'format', label: 'Formato', type: 'string', placeholder: 'dd/MM/yyyy HH:mm' },
+    ]
+  },
+
+  {
+    id: 'xml-parse-node',
+    type: 'action',
+    label: '📄 XML Parse',
+    description: 'Parse e conversão de XML',
+    icon: FileText,
+    color: '#7C3AED',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados XML', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados parseados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'json', label: 'XML para JSON' }, { value: 'xml', label: 'JSON para XML' },
+      ], defaultValue: 'json' },
+    ]
+  },
+
+  {
+    id: 'csv-parse-node',
+    type: 'action',
+    label: '📄 CSV Parse',
+    description: 'Parse e conversão de CSV',
+    icon: FileSpreadsheet,
+    color: '#059669',
+    category: 'core_data',
+    inputs: [{ id: 'in', label: 'Dados CSV', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados parseados', type: 'success' }],
+    config: [
+      { key: 'mode', label: 'Modo', type: 'select', options: [
+        { value: 'json', label: 'CSV para JSON' }, { value: 'csv', label: 'JSON para CSV' },
+      ], defaultValue: 'json' },
+      { key: 'delimiter', label: 'Delimitador', type: 'string', placeholder: ',' },
+      { key: 'headerRow', label: 'Linha de cabeçalho', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+
+  // ===== INTEGRAÇÕES / APPS =====
+
+  {
+    id: 'google-sheets',
+    type: 'action',
+    label: '📊 Google Sheets',
+    description: 'Ler e escrever planilhas Google',
+    icon: FileSpreadsheet,
+    color: '#0F9D58',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados de entrada', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados da planilha', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'read', label: 'Ler' }, { value: 'write', label: 'Escrever' }, { value: 'append', label: 'Anexar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'read' },
+      { key: 'spreadsheetId', label: 'ID da Planilha', type: 'string', placeholder: 'ID do Google Sheets' },
+      { key: 'sheetName', label: 'Nome da Aba', type: 'string', placeholder: 'Sheet1' },
+      { key: 'range', label: 'Intervalo', type: 'string', placeholder: 'A1:Z100' },
+    ]
+  },
+
+  {
+    id: 'google-drive',
+    type: 'action',
+    label: '💾 Google Drive',
+    description: 'Upload e download de arquivos',
+    icon: HardDrive,
+    color: '#4285F4',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados/Arquivo', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Arquivo processado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'upload', label: 'Upload' }, { value: 'download', label: 'Download' }, { value: 'list', label: 'Listar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'upload' },
+      { key: 'fileName', label: 'Nome do arquivo', type: 'string', placeholder: 'arquivo.pdf' },
+      { key: 'folderId', label: 'ID da pasta', type: 'string', placeholder: 'ID da pasta no Drive' },
+    ]
+  },
+
+  {
+    id: 'telegram',
+    type: 'action',
+    label: '💬 Telegram',
+    description: 'Envia mensagens via Telegram Bot',
+    icon: SendIcon,
+    color: '#0088CC',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'botToken', label: 'Bot Token', type: 'password', placeholder: 'Token do @BotFather' },
+      { key: 'chatId', label: 'Chat ID', type: 'string', placeholder: 'ID do chat ou @username' },
+      { key: 'text', label: 'Mensagem', type: 'prompt', multiline: true, placeholder: 'Olá! Sua receita está pronta.' },
+      { key: 'parseMode', label: 'Formato', type: 'select', options: [
+        { value: 'HTML', label: 'HTML' }, { value: 'Markdown', label: 'Markdown' }, { value: 'none', label: 'Texto puro' },
+      ], defaultValue: 'HTML' },
+    ]
+  },
+
+  {
+    id: 'discord',
+    type: 'action',
+    label: '🎮 Discord',
+    description: 'Envia mensagens via webhook Discord',
+    icon: MessageSquare,
+    color: '#5865F2',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'webhookUrl', label: 'Webhook URL', type: 'string', placeholder: 'https://discord.com/api/webhooks/...' },
+      { key: 'content', label: 'Mensagem', type: 'prompt', multiline: true, placeholder: 'Notificação da farmácia' },
+      { key: 'username', label: 'Nome do bot', type: 'string', placeholder: 'Farma Bot' },
+    ]
+  },
+
+  {
+    id: 'slack',
+    type: 'action',
+    label: '💼 Slack',
+    description: 'Envia mensagens via Slack API',
+    icon: MessageSquare,
+    color: '#4A154B',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'token', label: 'Bot Token', type: 'password', placeholder: 'xoxb-...' },
+      { key: 'channel', label: 'Canal', type: 'string', placeholder: '#geral ou C012345' },
+      { key: 'text', label: 'Mensagem', type: 'prompt', multiline: true, placeholder: 'Notificação' },
+    ]
+  },
+
+  {
+    id: 'notion',
+    type: 'action',
+    label: '📝 Notion',
+    description: 'Cria e atualiza páginas no Notion',
+    icon: FileText,
+    color: '#000000',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Página criada', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create', label: 'Criar página' }, { value: 'update', label: 'Atualizar' }, { value: 'read', label: 'Ler' }, { value: 'search', label: 'Buscar' },
+      ], defaultValue: 'create' },
+      { key: 'databaseId', label: 'Database ID', type: 'string', placeholder: 'ID do database' },
+      { key: 'title', label: 'Título', type: 'string', placeholder: 'Nova página' },
+      { key: 'content', label: 'Conteúdo', type: 'prompt', multiline: true },
+    ]
+  },
+
+  {
+    id: 'airtable',
+    type: 'action',
+    label: '🗃️ Airtable',
+    description: 'CRUD em bases Airtable',
+    icon: Database,
+    color: '#18BFFF',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Registro processado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create', label: 'Criar' }, { value: 'read', label: 'Ler' }, { value: 'update', label: 'Atualizar' }, { value: 'delete', label: 'Excluir' }, { value: 'list', label: 'Listar' },
+      ], defaultValue: 'create' },
+      { key: 'baseId', label: 'Base ID', type: 'string', placeholder: 'appXXXXXXXX' },
+      { key: 'tableName', label: 'Nome da tabela', type: 'string', placeholder: 'Table 1' },
+    ]
+  },
+
+  {
+    id: 'mysql',
+    type: 'action',
+    label: '🗄️ MySQL',
+    description: 'Queries em banco MySQL',
+    icon: Database,
+    color: '#4479A1',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado da query', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'execute', label: 'Executar query' }, { value: 'insert', label: 'Inserir' }, { value: 'update', label: 'Atualizar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'execute' },
+      { key: 'host', label: 'Host', type: 'string', placeholder: 'localhost' },
+      { key: 'port', label: 'Porta', type: 'number', defaultValue: 3306 },
+      { key: 'database', label: 'Database', type: 'string', placeholder: 'farma_db' },
+      { key: 'user', label: 'Usuário', type: 'string' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'query', label: 'Query SQL', type: 'prompt', multiline: true, placeholder: 'SELECT * FROM products' },
+    ]
+  },
+
+  {
+    id: 'postgresql',
+    type: 'action',
+    label: '🐘 PostgreSQL',
+    description: 'Queries em banco PostgreSQL',
+    icon: Database,
+    color: '#336791',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado da query', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'execute', label: 'Executar query' }, { value: 'insert', label: 'Inserir' }, { value: 'update', label: 'Atualizar' },
+      ], defaultValue: 'execute' },
+      { key: 'host', label: 'Host', type: 'string', placeholder: 'localhost' },
+      { key: 'port', label: 'Porta', type: 'number', defaultValue: 5432 },
+      { key: 'database', label: 'Database', type: 'string' },
+      { key: 'user', label: 'Usuário', type: 'string' },
+      { key: 'password', label: 'Senha', type: 'password' },
+      { key: 'query', label: 'Query SQL', type: 'prompt', multiline: true },
+    ]
+  },
+
+  {
+    id: 'github',
+    type: 'action',
+    label: '🐙 GitHub',
+    description: 'Issues, PRs e commits no GitHub',
+    icon: GitBranch,
+    color: '#333333',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resultado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'issue', label: 'Criar Issue' }, { value: 'pr', label: 'Criar PR' }, { value: 'commit', label: 'Commit' }, { value: 'read', label: 'Ler' },
+      ], defaultValue: 'issue' },
+      { key: 'token', label: 'Personal Access Token', type: 'password' },
+      { key: 'owner', label: 'Owner', type: 'string', placeholder: 'usuario' },
+      { key: 'repo', label: 'Repositório', type: 'string', placeholder: 'repo-name' },
+      { key: 'title', label: 'Título', type: 'string' },
+      { key: 'body', label: 'Descrição', type: 'prompt', multiline: true },
+    ]
+  },
+
+  {
+    id: 'aws-s3',
+    type: 'action',
+    label: '☁️ AWS S3',
+    description: 'Upload e download de arquivos S3',
+    icon: Cloud,
+    color: '#FF9900',
+    category: 'integrations',
+    inputs: [{ id: 'in', label: 'Dados/Arquivo', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Arquivo processado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'upload', label: 'Upload' }, { value: 'download', label: 'Download' }, { value: 'list', label: 'Listar' }, { value: 'delete', label: 'Excluir' },
+      ], defaultValue: 'upload' },
+      { key: 'bucket', label: 'Bucket', type: 'string', placeholder: 'meu-bucket' },
+      { key: 'key', label: 'Chave do arquivo', type: 'string', placeholder: 'pasta/arquivo.pdf' },
+      { key: 'region', label: 'Região', type: 'string', placeholder: 'us-east-1' },
+    ]
+  },
+
+  // ===== IA / GENÉRICA =====
+
+  {
+    id: 'openai',
+    type: 'ai',
+    label: '🤖 OpenAI',
+    description: 'GPT-4, embeddings, DALL-E via OpenAI API',
+    icon: Brain,
+    color: '#10A37F',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Prompt/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta IA', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...' },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+      ], defaultValue: 'gpt-4o' },
+      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true, placeholder: 'Você é um assistente útil.' },
+      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true, placeholder: '{{$json.message}}' },
+      { key: 'temperature', label: 'Temperatura (0-2)', type: 'number', defaultValue: 0.7 },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 2048 },
+    ]
+  },
+
+  {
+    id: 'anthropic',
+    type: 'ai',
+    label: '🧠 Anthropic Claude',
+    description: 'Claude 3.5 Sonnet, Opus via Anthropic API',
+    icon: Brain,
+    color: '#D4A574',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Prompt/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta IA', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-ant-...' },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' }, { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' },
+      ], defaultValue: 'claude-3-5-sonnet-20241022' },
+      { key: 'systemPrompt', label: 'System Prompt', type: 'prompt', multiline: true },
+      { key: 'userPrompt', label: 'User Prompt', type: 'prompt', multiline: true },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 4096 },
+    ]
+  },
+
+  {
+    id: 'google-ai',
+    type: 'ai',
+    label: '🔮 Google Gemini',
+    description: 'Gemini Pro via Google AI API',
+    icon: Brain,
+    color: '#4285F4',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Prompt/Contexto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Resposta IA', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'AIza...' },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'gemini-pro', label: 'Gemini Pro' }, { value: 'gemini-pro-vision', label: 'Gemini Pro Vision' },
+      ], defaultValue: 'gemini-pro' },
+      { key: 'prompt', label: 'Prompt', type: 'prompt', multiline: true },
+    ]
+  },
+
+  // ===== PAGAMENTOS / FINANCEIRO =====
+
+  {
+    id: 'stripe',
+    type: 'action',
+    label: '💳 Stripe',
+    description: 'Cobranças e assinaturas via Stripe',
+    icon: CreditCardIcon,
+    color: '#635BFF',
+    category: 'payments',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Pagamento processado', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'charge', label: 'Cobrar' }, { value: 'refund', label: 'Estornar' }, { value: 'customer', label: 'Criar cliente' }, { value: 'subscription', label: 'Assinatura' },
+      ], defaultValue: 'charge' },
+      { key: 'amount', label: 'Valor (centavos)', type: 'number', placeholder: '1000' },
+      { key: 'currency', label: 'Moeda', type: 'select', options: [
+        { value: 'brl', label: 'BRL (Real)' }, { value: 'usd', label: 'USD (Dólar)' },
+      ], defaultValue: 'brl' },
+      { key: 'description', label: 'Descrição', type: 'string', placeholder: 'Compra na Farmácia' },
+    ]
+  },
+
+  {
+    id: 'twilio',
+    type: 'action',
+    label: '📱 Twilio',
+    description: 'SMS e chamadas via Twilio',
+    icon: Phone,
+    color: '#F22F46',
+    category: 'payments',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'SMS enviado', type: 'success' }],
+    config: [
+      { key: 'accountSid', label: 'Account SID', type: 'string' },
+      { key: 'authToken', label: 'Auth Token', type: 'password' },
+      { key: 'from', label: 'Número origem', type: 'string', placeholder: '+5511999999999' },
+      { key: 'to', label: 'Número destino', type: 'string', placeholder: '+5511999999999' },
+      { key: 'message', label: 'Mensagem', type: 'string', placeholder: 'Seu pedido está pronto!' },
+    ]
+  },
+
+  // ===== INTEGRAÇÕES BR =====
+
+  {
+    id: 'asaas-pagamentos',
+    type: 'action',
+    label: '💰 Asaas Pagamentos',
+    description: 'Cobranças PIX, boleto e cartão via Asaas',
+    icon: Wallet,
+    color: '#0080FF',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
     outputs: [
-      { id: 'low', label: 'Estoque baixo', type: 'data' },
-      { id: 'ok', label: 'Estoque OK', type: 'success' },
+      { id: 'success', label: 'Cobrança criada', type: 'success' },
       { id: 'error', label: 'Erro', type: 'error' }
     ],
     config: [
-      { key: 'productId', label: 'Product ID', type: 'string' },
-      { key: 'threshold', label: 'Limite mínimo', type: 'number', defaultValue: 10 },
-      { key: 'notifyTo', label: 'Notificar (email/phone)', type: 'string' },
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: '\$aact_...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'pix', label: 'PIX' }, { value: 'boleto', label: 'Boleto' }, { value: 'credit_card', label: 'Cartão de Crédito' }, { value: 'subscription', label: 'Assinatura' },
+      ], defaultValue: 'pix' },
+      { key: 'amount', label: 'Valor (centavos)', type: 'number', placeholder: '1000' },
+      { key: 'customerCpf', label: 'CPF/CNPJ do cliente', type: 'string', placeholder: '000.000.000-00' },
+      { key: 'description', label: 'Descrição', type: 'string', placeholder: 'Compra Farmácia' },
+      { key: 'dueDate', label: 'Data vencimento', type: 'string', placeholder: '2026-06-01' },
+      { key: 'callbackUrl', label: 'URL de callback', type: 'string', placeholder: 'https://...' },
+      { key: 'sandbox', label: 'Modo Sandbox', type: 'boolean', defaultValue: true },
     ]
   },
+
+  {
+    id: 'pagarme-pagamentos',
+    type: 'action',
+    label: '💳 Pagarme',
+    description: 'Split payments, recorrência e antifraude',
+    icon: CreditCard2,
+    color: '#4F46E5',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Pagamento OK', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'ak_live_...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'charge', label: 'Cobrar' }, { value: 'split', label: 'Split Payment' }, { value: 'recurring', label: 'Recorrência' },
+      ], defaultValue: 'charge' },
+      { key: 'amount', label: 'Valor (centavos)', type: 'number' },
+      { key: 'paymentMethod', label: 'Método', type: 'select', options: [
+        { value: 'pix', label: 'PIX' }, { value: 'credit_card', label: 'Cartão' }, { value: 'boleto', label: 'Boleto' },
+      ], defaultValue: 'pix' },
+      { key: 'installments', label: 'Parcelas', type: 'number', defaultValue: 1 },
+      { key: 'postbackUrl', label: 'Postback URL', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'mercado-pago',
+    type: 'action',
+    label: '🟦 Mercado Pago',
+    description: 'PIX, boleto, cartão e checkout via Mercado Pago',
+    icon: PiggyBank,
+    color: '#009EE3',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do pagamento', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Pagamento OK', type: 'success' },
+      { id: 'pending', label: 'Pendente', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'accessToken', label: 'Access Token', type: 'password', placeholder: 'APP_USR-...' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'pix', label: 'PIX' }, { value: 'checkout', label: 'Checkout Pro' }, { value: 'boleto', label: 'Boleto' },
+      ], defaultValue: 'pix' },
+      { key: 'amount', label: 'Valor', type: 'number', placeholder: '10.50' },
+      { key: 'description', label: 'Descrição', type: 'string' },
+      { key: 'payerEmail', label: 'Email do pagador', type: 'string' },
+      { key: 'externalReference', label: 'Referência externa', type: 'string', placeholder: 'PEDIDO-123' },
+    ]
+  },
+
+  {
+    id: 'consulta-cpf-receita',
+    type: 'action',
+    label: '🏛️ Consulta CPF/CNPJ',
+    description: 'Consulta dados na Receita Federal e Serpro',
+    icon: UserCheck,
+    color: '#1E40AF',
+    category: 'fiscal_br',
+    inputs: [{ id: 'in', label: 'CPF ou CNPJ', type: 'data' }],
+    outputs: [
+      { id: 'found', label: 'Dados encontrados', type: 'success' },
+      { id: 'notfound', label: 'Não encontrado', type: 'data' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiProvider', label: 'Provedor', type: 'select', options: [
+        { value: 'serpro', label: 'Serpro (gov.br)' }, { value: 'receitaws', label: 'ReceitaWS' }, { value: 'brasilapi', label: 'BrasilAPI' },
+      ], defaultValue: 'receitaws' },
+      { key: 'apiKey', label: 'API Key (se aplicável)', type: 'password' },
+      { key: 'documentType', label: 'Tipo documento', type: 'select', options: [
+        { value: 'cpf', label: 'CPF' }, { value: 'cnpj', label: 'CNPJ' },
+      ], defaultValue: 'cpf' },
+      { key: 'document', label: 'Número do documento', type: 'string', placeholder: '000.000.000-00' },
+      { key: 'includeAddress', label: 'Incluir endereço', type: 'boolean', defaultValue: true },
+      { key: 'includeSituation', label: 'Incluir situação cadastral', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'consulta-cep',
+    type: 'action',
+    label: '📍 Consulta CEP',
+    description: 'Busca endereço por CEP via ViaCEP/BrasilAPI',
+    icon: MapPin,
+    color: '#0891B2',
+    category: 'fiscal_br',
+    inputs: [{ id: 'in', label: 'CEP', type: 'data' }],
+    outputs: [
+      { id: 'found', label: 'Endereço encontrado', type: 'success' },
+      { id: 'notfound', label: 'CEP inválido', type: 'error' }
+    ],
+    config: [
+      { key: 'apiProvider', label: 'Provedor', type: 'select', options: [
+        { value: 'viacep', label: 'ViaCEP' }, { value: 'brasilapi', label: 'BrasilAPI' }, { value: 'postmon', label: 'Postmon' },
+      ], defaultValue: 'viacep' },
+      { key: 'cep', label: 'CEP', type: 'string', placeholder: '00000-000' },
+      { key: 'autoFillAddress', label: 'Preencher endereço automaticamente', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'correios-rastreamento',
+    type: 'action',
+    label: '📦 Correios Rastreamento',
+    description: 'Rastreia encomendas dos Correios',
+    icon: Truck2,
+    color: '#F59E0B',
+    category: 'delivery_br',
+    inputs: [{ id: 'in', label: 'Código de rastreio', type: 'data' }],
+    outputs: [
+      { id: 'tracking', label: 'Status rastreamento', type: 'success' },
+      { id: 'delivered', label: 'Entregue', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'trackingCode', label: 'Código de rastreio', type: 'string', placeholder: 'AB123456789BR' },
+      { key: 'apiProvider', label: 'Provedor', type: 'select', options: [
+        { value: 'sro', label: 'SRO Web Service' }, { value: 'linkcorreios', label: 'Link Correios' },
+      ], defaultValue: 'linkcorreios' },
+      { key: 'lastUpdate', label: 'Última atualização', type: 'boolean', defaultValue: true },
+      { key: 'notifyOnChange', label: 'Notificar ao mudar status', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'rd-station-marketing',
+    type: 'action',
+    label: '📣 RD Station',
+    description: 'Automação de marketing e CRM via RD Station',
+    icon: Megaphone2,
+    color: '#6D28D9',
+    category: 'marketing_br',
+    inputs: [{ id: 'in', label: 'Dados do contato', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Contato processado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_lead', label: 'Criar Lead' }, { value: 'update_lead', label: 'Atualizar Lead' }, { value: 'add_tag', label: 'Adicionar Tag' }, { value: 'conversion', label: 'Registrar Conversão' },
+      ], defaultValue: 'create_lead' },
+      { key: 'email', label: 'Email do contato', type: 'string' },
+      { key: 'name', label: 'Nome', type: 'string' },
+      { key: 'tags', label: 'Tags (separadas por vírgula)', type: 'string', placeholder: 'farmacia, cliente, vip' },
+      { key: 'lifecycleStage', label: 'Estágio do funil', type: 'select', options: [
+        { value: 'lead', label: 'Lead' }, { value: 'qualified', label: 'Qualificado' }, { value: 'customer', label: 'Cliente' }, { value: 'churned', label: 'Perdido' },
+      ], defaultValue: 'lead' },
+    ]
+  },
+
+  {
+    id: 'tiny-erp',
+    type: 'action',
+    label: '📊 Tiny ERP',
+    description: 'Integração com Tiny ERP (estoque, pedidos, NFe)',
+    icon: LineChart,
+    color: '#059669',
+    category: 'erp_br',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Operação concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Token', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_order', label: 'Criar Pedido' }, { value: 'update_stock', label: 'Atualizar Estoque' }, { value: 'emit_nfe', label: 'Emitir NFe' }, { value: 'list_products', label: 'Listar Produtos' },
+      ], defaultValue: 'create_order' },
+      { key: 'orderNumber', label: 'Número do pedido', type: 'string' },
+      { key: 'productSku', label: 'SKU do produto', type: 'string' },
+      { key: 'quantity', label: 'Quantidade', type: 'number', defaultValue: 1 },
+    ]
+  },
+
+  {
+    id: 'bling-erp',
+    type: 'action',
+    label: '🔷 Bling ERP',
+    description: 'Integração com Bling (estoque, pedidos, financeiro)',
+    icon: Building2,
+    color: '#2563EB',
+    category: 'erp_br',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Operação concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_order', label: 'Criar Pedido' }, { value: 'update_product', label: 'Atualizar Produto' }, { value: 'create_nfe', label: 'Criar NFe' }, { value: 'financial', label: 'Contas a Receber' },
+      ], defaultValue: 'create_order' },
+      { key: 'orderId', label: 'ID do pedido', type: 'string' },
+      { key: 'productId', label: 'ID do produto', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'ifood-delivery',
+    type: 'action',
+    label: '🍔 iFood',
+    description: 'Integração com iFood para delivery de farmácia',
+    icon: Utensils,
+    color: '#EA1D2C',
+    category: 'delivery_br',
+    inputs: [{ id: 'in', label: 'Dados do pedido', type: 'data' }],
+    outputs: [
+      { id: 'confirmed', label: 'Pedido confirmado', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'clientId', label: 'Client ID', type: 'string' },
+      { key: 'clientSecret', label: 'Client Secret', type: 'password' },
+      { key: 'merchantId', label: 'Merchant ID', type: 'string' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'confirm_order', label: 'Confirmar Pedido' }, { value: 'cancel_order', label: 'Cancelar Pedido' }, { value: 'list_orders', label: 'Listar Pedidos' },
+      ], defaultValue: 'confirm_order' },
+      { key: 'orderId', label: 'ID do pedido', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'mercado-livre',
+    type: 'action',
+    label: '🛒 Mercado Livre',
+    description: 'Integração com Mercado Livre (pedidos, produtos)',
+    icon: ShoppingBasket,
+    color: '#FFE600',
+    category: 'delivery_br',
+    inputs: [{ id: 'in', label: 'Dados', type: 'data' }],
+    outputs: [
+      { id: 'success', label: 'Operação concluída', type: 'success' },
+      { id: 'error', label: 'Erro', type: 'error' }
+    ],
+    config: [
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+      { key: 'userId', label: 'User ID', type: 'string' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'list_orders', label: 'Listar Pedidos' }, { value: 'update_stock', label: 'Atualizar Estoque' }, { value: 'create_listing', label: 'Criar Anúncio' },
+      ], defaultValue: 'list_orders' },
+      { key: 'sellerId', label: 'Seller ID', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'sendgrid-email',
+    type: 'action',
+    label: '📧 SendGrid',
+    description: 'Envio de emails transacionais via SendGrid',
+    icon: Mail2,
+    color: '#1A82E2',
+    category: 'marketing_br',
+    inputs: [{ id: 'in', label: 'Dados do email', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Email enviado', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'SG....' },
+      { key: 'from', label: 'Remetente', type: 'string', placeholder: 'farmacia@email.com' },
+      { key: 'to', label: 'Destinatário', type: 'string' },
+      { key: 'subject', label: 'Assunto', type: 'string' },
+      { key: 'htmlBody', label: 'Corpo HTML', type: 'prompt', multiline: true },
+      { key: 'templateId', label: 'Template ID (opcional)', type: 'string' },
+      { key: 'trackOpens', label: 'Rastrear aberturas', type: 'boolean', defaultValue: true },
+    ]
+  },
+
+  {
+    id: 'active-campaign',
+    type: 'action',
+    label: '🎯 ActiveCampaign',
+    description: 'Email marketing e automação via ActiveCampaign',
+    icon: Radio,
+    color: '#356AE6',
+    category: 'marketing_br',
+    inputs: [{ id: 'in', label: 'Dados do contato', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Contato processado', type: 'success' }],
+    config: [
+      { key: 'apiUrl', label: 'URL da API', type: 'string', placeholder: 'https://usuario.api-us1.com' },
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create_contact', label: 'Criar Contato' }, { value: 'add_to_list', label: 'Adicionar à Lista' }, { value: 'trigger_automation', label: 'Disparar Automação' },
+      ], defaultValue: 'create_contact' },
+      { key: 'email', label: 'Email', type: 'string' },
+      { key: 'firstName', label: 'Nome', type: 'string' },
+      { key: 'listId', label: 'ID da Lista', type: 'string' },
+    ]
+  },
+
+  {
+    id: 'serpro-integracao',
+    type: 'action',
+    label: '🏛️ Serpro API',
+    description: 'Integração com APIs do governo (CPF, CNPJ, CEP)',
+    icon: Building,
+    color: '#1E3A5F',
+    category: 'fiscal_br',
+    inputs: [{ id: 'in', label: 'Dados para consulta', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados retornados', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'apiType', label: 'Tipo de API', type: 'select', options: [
+        { value: 'cpf', label: 'Consulta CPF' }, { value: 'cnpj', label: 'Consulta CNPJ' }, { value: 'cep', label: 'Consulta CEP' },
+      ], defaultValue: 'cpf' },
+      { key: 'bearerToken', label: 'Bearer Token', type: 'password' },
+      { key: 'document', label: 'Documento', type: 'string', placeholder: 'CPF ou CNPJ' },
+    ]
+  },
+
+  {
+    id: 'whatsapp-business-api',
+    type: 'action',
+    label: '📱 WhatsApp Business API',
+    description: 'Envio avançado via WhatsApp Business Cloud API',
+    icon: Smartphone,
+    color: '#25D366',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados da mensagem', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Enviada', type: 'success' }, { id: 'error', label: 'Erro', type: 'error' }],
+    config: [
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+      { key: 'phoneNumberId', label: 'Phone Number ID', type: 'string' },
+      { key: 'to', label: 'Número destino', type: 'string', placeholder: '+5511999999999' },
+      { key: 'messageType', label: 'Tipo mensagem', type: 'select', options: [
+        { value: 'text', label: 'Texto' }, { value: 'template', label: 'Template' }, { value: 'image', label: 'Imagem' }, { value: 'document', label: 'Documento' },
+      ], defaultValue: 'text' },
+      { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true },
+      { key: 'templateName', label: 'Nome do template', type: 'string' },
+      { key: 'templateLanguage', label: 'Idioma do template', type: 'string', defaultValue: 'pt_BR' },
+    ]
+  },
+
+  {
+    id: 'google-calendar',
+    type: 'action',
+    label: '📅 Google Calendar',
+    description: 'Cria e gerencia eventos no Google Calendar',
+    icon: Calendar,
+    color: '#4285F4',
+    category: 'integrations_br',
+    inputs: [{ id: 'in', label: 'Dados do evento', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Evento criado', type: 'success' }],
+    config: [
+      { key: 'operation', label: 'Operação', type: 'select', options: [
+        { value: 'create', label: 'Criar Evento' }, { value: 'update', label: 'Atualizar' }, { value: 'delete', label: 'Excluir' }, { value: 'list', label: 'Listar' },
+      ], defaultValue: 'create' },
+      { key: 'calendarId', label: 'Calendar ID', type: 'string', placeholder: 'primary' },
+      { key: 'summary', label: 'Título', type: 'string' },
+      { key: 'description', label: 'Descrição', type: 'string' },
+      { key: 'startTime', label: 'Início (ISO)', type: 'string', placeholder: '2026-05-16T10:00:00-03:00' },
+      { key: 'endTime', label: 'Fim (ISO)', type: 'string', placeholder: '2026-05-16T11:00:00-03:00' },
+    ]
+  },
+
+  {
+    id: 'power-bi',
+    type: 'action',
+    label: '📊 Power BI',
+    description: 'Push de datasets e relatórios Power BI',
+    icon: MonitorSpeaker,
+    color: '#F2C811',
+    category: 'erp_br',
+    inputs: [{ id: 'in', label: 'Dados para push', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Dados enviados', type: 'success' }],
+    config: [
+      { key: 'workspaceId', label: 'Workspace ID', type: 'string' },
+      { key: 'datasetId', label: 'Dataset ID', type: 'string' },
+      { key: 'tableName', label: 'Nome da tabela', type: 'string' },
+      { key: 'accessToken', label: 'Access Token', type: 'password' },
+    ]
+  },
+
+  {
+    id: 'chatgpt-vision',
+    type: 'ai',
+    label: '👁️ ChatGPT Vision',
+    description: 'Análise de imagens com GPT-4 Vision',
+    icon: Eye,
+    color: '#10A37F',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Imagem + Prompt', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Análise', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'prompt', label: 'Prompt', type: 'prompt', multiline: true, placeholder: 'Descreva esta imagem em detalhes' },
+      { key: 'imageUrl', label: 'URL da imagem', type: 'string' },
+      { key: 'maxTokens', label: 'Max Tokens', type: 'number', defaultValue: 512 },
+      { key: 'detail', label: 'Nível de detalhe', type: 'select', options: [
+        { value: 'low', label: 'Baixo' }, { value: 'high', label: 'Alto' }, { value: 'auto', label: 'Auto' },
+      ], defaultValue: 'auto' },
+    ]
+  },
+
+  {
+    id: 'elevenlabs-tts',
+    type: 'ai',
+    label: '🔊 ElevenLabs TTS',
+    description: 'Texto para voz natural com ElevenLabs',
+    icon: Volume2,
+    color: '#FF6B35',
+    category: 'ai_generic',
+    inputs: [{ id: 'in', label: 'Texto', type: 'data' }],
+    outputs: [{ id: 'success', label: 'Áudio gerado', type: 'success' }],
+    config: [
+      { key: 'apiKey', label: 'API Key', type: 'password' },
+      { key: 'text', label: 'Texto', type: 'prompt', multiline: true },
+      { key: 'voiceId', label: 'Voice ID', type: 'string', placeholder: '21m00Tcm4TlvDq8ikWAM' },
+      { key: 'stability', label: 'Estabilidade (0-1)', type: 'number', defaultValue: 0.5 },
+      { key: 'similarityBoost', label: 'Similaridade (0-1)', type: 'number', defaultValue: 0.75 },
+      { key: 'model', label: 'Modelo', type: 'select', options: [
+        { value: 'eleven_multilingual_v2', label: 'Multilingual v2' }, { value: 'eleven_turbo_v2', label: 'Turbo v2' },
+      ], defaultValue: 'eleven_multilingual_v2' },
+    ]
+  },
+  // ===== CORE / BUSINESS HOURS =====
+
+  {
+    id: 'if-business-hours',
+    type: 'condition',
+    label: '🕐 Horário Comercial',
+    description: 'Verifica se está dentro do horário de atendimento (lê valores da aba Horários)',
+    icon: Clock,
+    color: '#0891b2',
+    category: 'core_logic',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [
+      { id: 'open', label: 'Dentro horário', type: 'success' },
+      { id: 'closed', label: 'Fora horário', type: 'data' }
+    ],
+    config: [
+      { key: 'checkType', label: 'Tipo de verificação', type: 'select', options: [
+        { value: 'business', label: 'Horário comercial' },
+        { value: 'holiday', label: 'Horário feriado' },
+      ], defaultValue: 'business' },
+      { key: 'timezone', label: 'Fuso horário', type: 'string', defaultValue: 'America/Sao_Paulo' },
+      { key: 'closedMessage', label: 'Mensagem fechado', type: 'prompt', defaultValue: 'No momento estamos fora do horário de atendimento, retornaremos assim que possível!' },
+    ]
+  },
+
+  // ===== WELCOME MESSAGE WITH AGENT NAME =====
+
+  {
+    id: 'welcome-agent',
+    type: 'action',
+    label: '👋 Boas-vindas com Nome',
+    description: 'Mensagem de boas-vindas com nome do atendente logado automaticamente',
+    icon: MessageSquare,
+    color: '#059669',
+    category: 'comunicacao',
+    inputs: [{ id: 'in', label: 'Entrada', type: 'data' }],
+    outputs: [{ id: 'sent', label: 'Mensagem enviada', type: 'success' }],
+    config: [
+      { key: 'message', label: 'Mensagem', type: 'prompt', multiline: true,
+        defaultValue: 'Olá! Eu sou {{agent_name}}! Como posso te ajudar?' },
+      { key: 'useAgentName', label: 'Usar nome do atendente', type: 'boolean', defaultValue: true },
+      { key: 'fallbackName', label: 'Nome fallback', type: 'string', defaultValue: 'Assistente Virtual' },
+    ]
+  },
+
 ];
 
 // ==================== HELPER FUNCTIONS ====================

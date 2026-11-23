@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
 import { getImageSrc } from "@/utils/image-url";
@@ -98,7 +98,7 @@ export default function AgentChat() {
       { conversation_id: selectedConversation! },
       {
         enabled: !!selectedConversation,
-        refetchInterval: 3000, // Atualizar mensagens a cada 3 segundos
+        refetchInterval: 4000, // Atualizar mensagens a cada 3 segundos
       }
     );
 
@@ -136,6 +136,32 @@ export default function AgentChat() {
       });
     },
   });
+
+
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferAgentId, setTransferAgentId] = useState<number | null>(null);
+  const transferAgentsQuery = trpc.queues.listTransferAgents.useQuery(undefined, {
+    enabled: transferOpen,
+  });
+  const transferConversation = trpc.queues.transferConversation.useMutation({
+    onSuccess: async () => {
+      setTransferOpen(false);
+      setTransferAgentId(null);
+      await utils.conversations.listActive.invalidate();
+      toast({ title: "Sucesso", description: "Conversa transferida com sucesso!" });
+    },
+    onError: error => {
+      toast({ title: "Erro", description: `Erro ao transferir: ${error.message}`, variant: "destructive" });
+    },
+  });
+  const handleTransferClick = () => {
+    setTransferAgentId(null);
+    setTransferOpen(true);
+  };
+  const handleConfirmTransfer = () => {
+    if (!selectedConversation || !transferAgentId) return;
+    transferConversation.mutate({ conversationId: selectedConversation, targetAgentId: transferAgentId });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -435,7 +461,7 @@ export default function AgentChat() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>Transferir conversa</DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleTransferClick}>Transferir conversa</DropdownMenuItem>
                     <DropdownMenuItem>Encerrar atendimento</DropdownMenuItem>
                     <DropdownMenuItem className="text-red-600">
                       Bloquear usuário
@@ -459,12 +485,34 @@ export default function AgentChat() {
                 <div className="space-y-4">
                   {messages.map(message => {
                     const isAgent = message.senderType === "agent";
-                    const senderName = message.senderName || "Agente";
                     return (
                       <div
                         key={message.id}
-                        className={`flex ${isAgent ? "justify-end" : "justify-start"}`}
+                        className="flex items-start mb-2"
                       >
+                        {/* Avatar do remetente */}
+                        <div className="flex-shrink-0 h-10 w-10 mr-3">
+                          {!isAgent && selectedConv?.customerAvatar ? (
+                            <AvatarImage
+                              src={getImageSrc(selectedConv.customerAvatar)}
+                              alt={selectedConv.customerName ?? "Cliente"}
+                            />
+                          ) : !isAgent ? (
+                            <AvatarFallback className="bg-blue-500 text-white">
+                              {selectedConv?.customerName?.charAt(0).toUpperCase() || "C"}
+                            </AvatarFallback>
+                          ) : user?.image ? (
+                            <AvatarImage
+                              src={getImageSrc(user.image)}
+                              alt={user.name ?? "Agente"}
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-blue-500 text-white">
+                              {user?.name?.charAt(0).toUpperCase() || "A"}
+                            </AvatarFallback>
+                          )}
+                        </div>
+                        {/* Mensagem */}
                         <div
                           className={`max-w-[70%] rounded-lg p-3 ${
                             isAgent
@@ -475,31 +523,29 @@ export default function AgentChat() {
                           {/* Nome do agente acima da mensagem */}
                           {isAgent && (
                             <p className="text-xs font-semibold text-blue-100 mb-1">
-                              {senderName}
+                              {message.senderPosition 
+                                ? `${message.senderName || "Atendente"}`
+                                : message.senderName || "Atendente"
+                              }
+                            </p>
+                          )}
+                          {/* Texto da mensagem */}
+                          {message.content && (
+                            <p className="text-sm whitespace-pre-wrap">
+                              {message.content}
                             </p>
                           )}
                           {/* Arquivo anexado */}
                           {message.fileUrl && (
                             <div className="mb-2">
                               {getMimeType(message.fileUrl, message.fileType)?.startsWith?.("image/") ? (
-                                <>
-                                  {/* DEBUG: Quadro vermelho para ver se a imagem está sendo renderizada */}
-                                  <div style={{ padding: '10px', background: '#ffebee', color: '#cc0000', borderRadius: '8px', marginBottom: '8px' }}>
-                                    <p><b>DEBUG IMAGEM:</b></p>
-                                    <p>fileUrl bruto: {String(message.fileUrl)}</p>
-                                    <p>URL calculada: {getImageSrc(message.fileUrl)}</p>
-                                    <p>Se isso apareceu, o Frontend sabe que é uma imagem!</p>
-                                  </div>
                                 <a
-                                  href={getImageSrc(message.fileUrl)}
+                                  href={getImageSrc(message.fileUrl, message.id)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                 >
                                   <img
-                                    src={getImageSrc(
-                                      message.fileUrl,
-                                      message.id
-                                    )}
+                                    src={getImageSrc(message.fileUrl, message.id)}
                                     alt={message.fileName || "Imagem"}
                                     className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
                                     style={{ maxHeight: "300px" }}
@@ -512,7 +558,6 @@ export default function AgentChat() {
                                     }}
                                   />
                                 </a>
-                                </>
                               ) : getMimeType(message.fileUrl, message.fileType)?.startsWith?.("video/") ? (
                                 <video
                                   src={getImageSrc(message.fileUrl)}
@@ -764,7 +809,38 @@ export default function AgentChat() {
               </div>
             </div>
 
-            {/* Modal de Respostas Rápidas */}
+      
+      {/* Modal de Transferência de Conversa */}
+      {transferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setTransferOpen(false)}>
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Transferir conversa</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {transferAgentsQuery.isLoading
+                ? "Carregando atendentes..."
+                : "Selecione o atendente que receberá esta conversa."}
+            </p>
+            <select
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              value={transferAgentId ?? ""}
+              onChange={e => setTransferAgentId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Selecione um atendente...</option>
+              {(transferAgentsQuery.data ?? []).map(agent => (
+                <option key={agent.id} value={agent.id}>{agent.name}</option>
+              ))}
+            </select>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setTransferOpen(false)}>Cancelar</Button>
+              <Button onClick={handleConfirmTransfer} disabled={!transferAgentId || transferConversation.isPending}>
+                {transferConversation.isPending ? "Transferindo..." : "Transferir"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Respostas Rápidas */}
             <QuickRepliesModal
               open={showQuickRepliesModal}
               onClose={() => setShowQuickRepliesModal(false)}

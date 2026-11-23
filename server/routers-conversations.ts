@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { and, eq, or, desc, inArray, like } from "drizzle-orm";
-import { conversations, customers, conversationMessages } from "../drizzle/schema";
+import { and, eq, or, desc, inArray, like, isNull } from "drizzle-orm";
+import { conversations, customers, conversationMessages, users } from "../drizzle/schema";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
 import { generatePhoneVariants, formatPhoneBR, findConversationByPhone } from "./utils/phone";
@@ -11,6 +11,8 @@ import {
   ConversationStatus,
   ConversationChannel,
 } from "@shared/types/conversations";
+import { closeConversation } from "./chatbot";
+import { autoAssignUnassigned, getAgentsForTransfer } from "./helpers/agent-availability";
 
 /**
  * Helper: Converte uma row do Drizzle para o tipo Conversation compartilhado.
@@ -18,7 +20,7 @@ import {
  * - Converte tipos numéricos para string onde necessário.
  * - Preenche campos ausentes com valores default.
  */
-function mapConversation(row: unknown): Conversation {
+function mapConversation(row: any): Conversation {
   // Mapeia status do banco para o enum compartilhado
   const statusMap: Record<string, ConversationStatus> = {
     open: ConversationStatus.OPEN,
@@ -54,7 +56,7 @@ function mapConversation(row: unknown): Conversation {
     // Campos extras do cliente
     customerName: row.customerName || undefined,
     customerPhone: row.customerPhone || undefined,
-    customerAvatar: row.customerAvatar || undefined,
+    customerAvatar: row.customerAvatar || (row as any).photoUrl || undefined,
   };
 }
 
@@ -99,6 +101,83 @@ export const conversationsRouter = router({
     }),
 
   /**
+   * Lista contatos recentes para encaminhamento de mensagens.
+   * Retorna clientes únicos com última interação, telefone e canal.
+   */
+  recentContacts: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().default(20),
+      }).optional()
+    )
+    .query(async ({ input }): Promise<Array<{
+      customerId: number;
+      customerName: string;
+      customerPhone: string;
+      channel: string;
+      lastMessageAt: Date | null;
+      lastMessagePreview: string | null;
+    }>> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const limit = input?.limit || 20;
+
+      // Buscar conversas recentes agrupadas por cliente (pegar a mais recente de cada cliente)
+      const [rows] = await db.execute(sql`
+        SELECT 
+          c.id as customer_id,
+          c.name as customer_name,
+          c.phone as customer_phone,
+          conv.channel,
+          conv.last_message_at,
+          (
+            SELECT cm.content 
+            FROM conversation_messages cm 
+            WHERE cm.conversation_id = conv.id 
+            ORDER BY cm.created_at DESC 
+            LIMIT 1
+          ) as last_message_preview
+        FROM conversations conv
+        INNER JOIN customers c ON conv.customer_id = c.id
+        WHERE conv.status IN ('open', 'assigned', 'closed')
+          AND c.phone IS NOT NULL
+          AND c.phone != ''
+        ORDER BY conv.last_message_at DESC
+        LIMIT ${limit}
+      `);
+
+      const contacts = (rows as any[]).map(row => ({
+        customerId: row.customer_id,
+        customerName: row.customer_name,
+        customerPhone: row.customer_phone,
+        channel: row.channel,
+        lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
+        lastMessagePreview: row.last_message_preview,
+      }));
+
+      // Deduplicar por telefone (manter o mais recente)
+      const uniqueContacts = new Map();
+      for (const contact of contacts) {
+        const key = contact.customerPhone.replace(/\D/g, '').slice(-8); // últimos 8 dígitos
+        if (!uniqueContacts.has(key) || 
+            (contact.lastMessageAt && uniqueContacts.get(key).lastMessageAt && 
+             contact.lastMessageAt > uniqueContacts.get(key).lastMessageAt)) {
+          uniqueContacts.set(key, contact);
+        }
+      }
+
+      return Array.from(uniqueContacts.values())
+        .sort((a, b) => {
+          if (!a.lastMessageAt && !b.lastMessageAt) return 0;
+          if (!a.lastMessageAt) return 1;
+          if (!b.lastMessageAt) return -1;
+          return b.lastMessageAt.getTime() - a.lastMessageAt.getTime();
+        })
+        .slice(0, limit);
+    }),
+
+  /**
    * Lista todas as conversas atribuídas ao agente logado.
    */
   list: protectedProcedure
@@ -108,7 +187,10 @@ export const conversationsRouter = router({
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
       // Antes: agents só viam suas próprias conversas — mudou porque conversas podem ser reatribuídas
-      const conditions = inArray(conversations.status, ["open", "assigned"]);
+      const isUserRole = (ctx as any)?.user?.role === 'user';
+      const conditions = isUserRole
+        ? and(inArray(conversations.status, ['open', 'assigned']), eq(conversations.assignedTo, ctx.user.id))
+        : and(inArray(conversations.status, ['open', 'assigned']));
 
       const rows = await db
         .select({
@@ -148,12 +230,16 @@ export const conversationsRouter = router({
   listActive: protectedProcedure
     .query(async ({ ctx }): Promise<Conversation[]> => {
       console.log('[Conversations] listActive called | ctx.user:', ctx.user?.name, '| role:', ctx.user?.role);
+      await autoAssignUnassigned().catch(() => {});
       
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
       // Todos veem todas as conversas ativas — qualquer agente pode atender qualquer cliente
-      const conditions = inArray(conversations.status, ["open", "assigned"]);
+      const isUserRole = (ctx as any)?.user?.role === 'user';
+      const conditions = isUserRole
+        ? and(inArray(conversations.status, ['open', 'assigned']), eq(conversations.assignedTo, ctx.user.id))
+        : and(inArray(conversations.status, ['open', 'assigned']));
 
       const rows = await db
         .select({
@@ -362,26 +448,35 @@ export const conversationsRouter = router({
             return mapConversation(existingConversation);
           }
 
-          // Conversa fechada — reabrir (preserva histórico!)
-          await db
-            .update(conversations)
-            .set({
-              status: "open",
-              assignedTo: ctx.user.id,
-              unreadCount: 0,
-              lastMessageAt: now,
-              ...(resolvedName ? { customerName: resolvedName } : {}),
-              ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
-            })
-            .where(eq(conversations.id, existingConversation.id));
+          // Conversa fechada — reabrir apenas se NÃO foi encerrada com motivo obrigatório
+          // venda, orcamento e engano enviam mensagem de encerramento e NAO devem ser reabertas automaticamente
+          const canReopen = true; // reabertura manual pelo atendente: sempre permitida (acao explicita)
+          if (canReopen) {
+            await db
+              .update(conversations)
+              .set({
+                status: "open",
+                assignedTo: ctx.user.id,
+                unreadCount: 0,
+                lastMessageAt: now,
+                ...(resolvedName ? { customerName: resolvedName } : {}),
+                ...(resolvedPhone ? { customerPhone: resolvedPhone } : {}),
+              })
+              .where(eq(conversations.id, existingConversation.id));
 
-          const [reopened] = await db
-            .select()
-            .from(conversations)
-            .where(eq(conversations.id, existingConversation.id));
+            const [reopened] = await db
+              .select()
+              .from(conversations)
+              .where(eq(conversations.id, existingConversation.id));
 
-          console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
-          return mapConversation(reopened);
+            console.log('[conversations.create] Reopened closed conversation:', reopened.id, '(had messages preserved)');
+            return mapConversation(reopened);
+          } else {
+            // Conversa fechada com motivo obrigatório (ex: venda → pesquisa) — NÃO reabrir automaticamente
+            // Retornar a conversa existente mas manter fechada (o cliente deve responder a pesquisa)
+            console.log('[conversations.create] Conversation closed with mandatory reason, not reopening:', existingConversation.closeReason);
+            return mapConversation(existingConversation);
+          }
         }
       }
 
@@ -493,34 +588,42 @@ export const conversationsRouter = router({
     }),
 
   /**
-   * Fecha uma conversa com um motivo.
-   */
-  close: protectedProcedure
-    .input(
-      z.object({
-        conversationId: z.number(),
-        reason: z.enum(["venda", "orcamento", "conversa_anterior", "engano"]),
-      })
-    )
-    .mutation(async ({ input }): Promise<{ success: boolean }> => {
-      const db = await getDb();
-      if (!db) throw new Error("Database not available");
+     * Fecha uma conversa com um motivo.
+     */
+    close: protectedProcedure
+      .input(
+        z.object({
+          conversationId: z.number(),
+          reason: z.enum(["venda", "orcamento", "conversa_anterior", "engano"]),
+        })
+      )
+      .mutation(async ({ input }): Promise<{ success: boolean }> => {
+        const db = await getDb();
+        if (!db) throw new Error("Database not available");
 
-      console.log(`[conversations.close] Closing conversation ${input.conversationId} with reason ${input.reason}`);
+        console.log(`[conversations.close] Closing conversation ${input.conversationId} with reason ${input.reason}`);
 
-      await db
-        .update(conversations)
-        .set({ status: "closed", closeReason: input.reason, closedAt: new Date() })
-        .where(eq(conversations.id, input.conversationId));
+        await db
+          .update(conversations)
+          .set({ status: "closed", closeReason: input.reason, closedAt: new Date() })
+          .where(eq(conversations.id, input.conversationId));
 
-      console.log(`[conversations.close] Conversation ${input.conversationId} closed successfully`);
+        console.log(`[conversations.close] Conversation ${input.conversationId} closed successfully`);
 
-      return { success: true };
-    }),
+        // Chamar a função do chatbot para enviar mensagem de fechamento/pesquisa
+        try {
+          await closeConversation(input.conversationId, input.reason, true); // skipDbUpdate=true pois já atualizamos acima
+        } catch (chatbotError) {
+          console.error("[conversations.close] Error calling chatbot closeConversation:", chatbotError);
+          // Não falha o request principal se o chatbot falhar
+        }
 
-  /**
-   * Exclui uma conversa permanentemente.
-   */
+        return { success: true };
+      }),
+
+    /**
+     * Exclui uma conversa permanentemente.
+     */
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
@@ -534,4 +637,57 @@ export const conversationsRouter = router({
 
       return { success: true };
     }),
+
+  /**
+   * Encerra todas as conversas abertas e atribuídas.
+   */
+  /**
+   * Lista agentes LOGADOS para o modal de transferencia (mesma fonte da distribuicao).
+   * Usado pela pagina /agent/messages (AgentMessages.tsx).
+   */
+  loggedAgents: protectedProcedure
+    .query(async ({ ctx }): Promise<{ id: number; name: string }[]> => {
+      const loggedIn = await getAgentsForTransfer();
+      if (loggedIn.length === 0) return [];
+      const db = await getDb();
+      if (!db) return [];
+      const set = new Set<number>(loggedIn);
+      const all = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.role, 'user'));
+      return all
+        .filter(u => u && u.id != null && set.has(Number(u.id)) && Number(u.id) !== ctx.user.id)
+        .map(u => ({ id: Number(u.id), name: String(u?.name || '') || ('Agente ' + u.id) }));
+    }),
+
+  /**
+   * Transfere uma conversa para outro agente (usado pela pagina /agent/messages).
+   */
+  transfer: protectedProcedure
+    .input(z.object({ conversationId: z.number(), agentId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [exists] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+      if (!exists) throw new Error('Conversa nao encontrada');
+      if (input.agentId === ctx.user.id) throw new Error('Nao e possivel transferir para voce mesmo');
+      await db.update(conversations).set({ assignedTo: input.agentId, status: 'assigned' }).where(eq(conversations.id, input.conversationId));
+      return { success: true, conversationId: input.conversationId };
+    }),
+
+  /**
+   * Encerra todas as conversas abertas e atribuidas.
+   */
+  closeAll: protectedProcedure
+    .mutation(async (): Promise<{ count: number }> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      
+      const now = new Date();
+      const result = await db.execute(
+        sql`UPDATE conversations SET status = 'closed', closed_at = ${now} WHERE status IN ('open', 'assigned')`
+      );
+      
+      return { count: result.affectedRows || 0 };
+    }),
 });
+
+

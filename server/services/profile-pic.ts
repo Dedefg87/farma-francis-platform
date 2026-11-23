@@ -1,86 +1,477 @@
 /**
- * Profile Picture Service
+ * Profile Picture Service v2
  *
- * Downloads WhatsApp profile pictures and uploads them to R2 Cloudflare.
- * This avoids 403 errors from pps.whatsapp.net when the browser tries
- * to load them directly.
+ * Downloads WhatsApp profile pictures.
+ * Strategy:
+ *   1) Direct fetch from WhatsApp CDN with WhatsApp-compatible User-Agent —
+ *      WhatsApp profile pics are public for any WhatsApp client UA.
+ *      2) Fallback: if direct download fails (privacy-restricted profile or CDN
+ *      block), use Evolution API authenticated proxy.
+ * The resulting bytes are uploaded to R2 and the permanent URL is persisted
+ * in customers.photoUrl. We NEVER point the UI at a raw WhatsApp CDN URL
+ * because those expire and are hotlink-protected for generic clients.
  */
 
+import { getEvolutionConfig } from './evolution-download';
 import { getDb } from '../db';
-import { customers } from '../../drizzle/schema';
+import { customers, receivedMessages } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { uploadToR2 } from '../r2-client';
-import { fetchEvolutionProfile } from '../messaging';
+
+// In-memory lock to prevent concurrent downloads for the same customer
+const downloadLocks = new Map<string, Promise<string | null>>();
+
+export function getCustomerInitials(phone: string): string {
+  const cleanPhone = phone.replace(/\D/g, '');
+  if (cleanPhone.length >= 4) return cleanPhone.slice(-4);
+  return 'USR';
+}
 
 /**
- * Download a WhatsApp profile picture, upload to R2, and update the customer record.
- * Returns the R2 URL or null if failed.
+ * Fetch profile pic URL or base64 from Evolution API /chat/fetchProfile
  */
+async function fetchProfileFromEvolution(phone: string): Promise<{
+  pictureUrl?: string;
+  pictureBase64?: string;
+  name?: string;
+  pushName?: string;
+} | null> {
+  const config = await getEvolutionConfig();
+  if (!config) return null;
+
+  const number = phone.replace(/\D/g, '');
+  if (!number) return null;
+
+  console.log('[ProfilePic] fetchProfile for', number, '→', config.apiUrl);
+
+  try {
+    // Endpoint principal: /chat/fetchProfile/{instance}
+    const res = await fetch(
+      `${config.apiUrl}/chat/fetchProfilePictureUrl/${config.instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: config.apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ number }),
+        signal: AbortSignal.timeout(20000),
+      }
+    );
+
+    if (!res.ok) {
+      console.log('[ProfilePic] fetchProfile failed:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    console.log('[ProfilePic] fetchProfile response keys:', Object.keys(data));
+
+    // Evolution pode retornar em vários formatos
+    const picture =
+      data.profilePictureUrl || data.url || data.profilePicture || data.picture || null;
+
+    if (!picture) return null;
+
+    const result: {
+      pictureUrl?: string;
+      pictureBase64?: string;
+      name?: string;
+      pushName?: string;
+    } = {};
+
+    if (picture.startsWith('data:')) {
+      result.pictureBase64 = picture;
+    } else if (picture.startsWith('http')) {
+      result.pictureUrl = picture;
+    }
+
+    if (data.name) result.name = data.name;
+    if (data.pushName) result.pushName = data.pushName;
+
+    return result;
+  } catch (err) {
+    console.error('[ProfilePic] fetchProfile error:', err);
+    return null;
+  }
+}
+/**
+ * Download bytes from a WhatsApp CDN URL via Evolution API proxy.
+ *
+ * CRITICAL FIX: WhatsApp CDN URLs (pps.whatsapp.net) require authentication.
+ * Direct fetch NEVER works. Must use Evolution's authenticated proxy endpoint.
+ *
+ * Solution: Use Evolution's /chat/getBase64FromMediaMessage endpoint which
+ * has access to the authenticated session and can fetch CDN resources.
+ */
+export async function downloadViaEvolutionProxy(url: string): Promise<Buffer | null> {
+  const config = await getEvolutionConfig();
+  if (!config) {
+    console.error('[ProfilePic] ❌ No Evolution config available');
+    return null;
+  }
+
+  console.log(
+    '[ProfilePic] Downloading WhatsApp CDN URL via Evolution proxy:',
+    url.substring(0, 80)
+  );
+
+  // ============================================================
+  // Use Evolution's getBase64FromMediaMessage endpoint
+  // This endpoint has authenticated access to WhatsApp CDN
+  // ============================================================
+  try {
+    // Extrair o número do telefone da URL se possível
+    // Formato típico: https://pps.whatsapp.net/v/t61.24694-24/123456_789012_345678901234567_1234567890123456789_n.jpg?...
+    // Não podemos extrair o número da URL, então precisamos fazer uma abordagem diferente
+
+    // Estratégia: Fazer fetch proxy via Evolution
+    // Evolution tem endpoint para baixar mídia através de sua sessão autenticada
+    const proxyUrl = `${config.apiUrl}/chat/getBase64FromMediaMessage/${config.instanceName}`;
+
+    const res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: {
+        apikey: config.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: {
+          key: {
+            remoteJid: 'status@broadcast',
+            fromMe: false,
+          },
+          message: {
+            imageMessage: {
+              url: url,
+            },
+          },
+        },
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) {
+      console.log('[ProfilePic] ❌ Proxy request failed:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+
+    // Se retornou base64 inline
+    const pic = data?.base64 || data?.picture || data?.profilePicture || null;
+    if (pic && pic.startsWith('data:')) {
+      const match = pic.match(/^data:([^;]+);base64,(.*)$/s);
+      if (match && match[2]) {
+        const buf = Buffer.from(match[2], 'base64');
+        if (buf.length > 100) {
+          console.log('[ProfilePic] ✅ Got base64 from Evolution proxy:', buf.length, 'bytes');
+          return buf;
+        }
+      }
+    } else if (pic && !pic.startsWith('data:')) {
+      // Base64 puro sem data: prefix
+      const buf = Buffer.from(pic, 'base64');
+      if (buf.length > 100) {
+        console.log('[ProfilePic] ✅ Got base64 from Evolution proxy (raw):', buf.length, 'bytes');
+        return buf;
+      }
+    }
+
+    console.log('[ProfilePic] ❌ No valid base64 in response');
+    return null;
+  } catch (err) {
+    console.error('[ProfilePic] ❌ Evolution proxy error:', err);
+    return null;
+  }
+}
+
+/**
+ * Upload buffer to R2 under profile-pics/ path
+ */
+async function uploadProfilePicToR2(
+  buffer: Buffer,
+  customerId: number,
+  mimetype: string = 'image/jpeg'
+): Promise<string | null> {
+  try {
+    const fileName = `profile-pics/${customerId}-${Date.now()}.jpg`;
+    const result = await uploadToR2(buffer, fileName, mimetype);
+    if (result?.url) {
+      console.log(
+        '[ProfilePic] ✅ R2 upload OK:',
+        result.url.substring(0, 80)
+      );
+      return result.url;
+    }
+    return null;
+  } catch (err) {
+    console.error('[ProfilePic] R2 upload failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Main function: resolve, download and upload profile pic for a customer.
+ * Returns the permanent R2 URL, or null if no picture available.
+ * Uses in-memory lock to prevent concurrent downloads for same phone.
+ */
+/**
+ * [fix38] Baixa a foto de perfil via endpoint oficial de avatar da Evolution:
+ * POST /chat/fetchProfilePicFromServer/{instance} com { number: remoteJid }.
+ * Usa a sessao autenticada (Baileys getProfilePicFromServer) e retorna Buffer.
+ * Este e o caminho correto para FOTO DE PERFIL (getBase64FromMediaMessage e para midia de mensagem).
+ */
+export async function fetchProfilePicViaEvolution(remoteJid: string): Promise<Buffer | null> {
+  const config = await getEvolutionConfig();
+  if (!config) { console.error('[ProfilePic] fix38: sem config Evolution'); return null; }
+  let base = (config.apiUrl || ''); if (base.endsWith('/')) base = base.slice(0, -1);
+  const url = base + '/chat/fetchProfilePicFromServer/' + config.instanceName;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: config.apiKey },
+      body: JSON.stringify({ number: remoteJid }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) { console.log('[ProfilePic] fix38: fetchProfilePicFromServer status ' + res.status + ' para ' + remoteJid); return null; }
+    const data = await res.json();
+    const b64 = data?.base64 || data?.profilePictureUrl || null;
+    if (!b64) { console.log('[ProfilePic] fix38: resposta sem base64 para ' + remoteJid); return null; }
+    const clean = String(b64).replace(/^data:[^;]+;base64,/, '');
+    const buf = Buffer.from(clean, 'base64');
+    if (buf.length < 100) { console.log('[ProfilePic] fix38: base64 invalido para ' + remoteJid); return null; }
+    console.log('[ProfilePic] fix38: foto obtida via fetchProfilePicFromServer para ' + remoteJid + ' (' + buf.length + ' bytes)');
+    return buf;
+  } catch (e) {
+    console.log('[ProfilePic] fix38: erro fetchProfilePicFromServer ' + remoteJid + ': ' + (e as Error).message);
+    return null;
+  }
+}
+
 export async function downloadAndUploadProfilePic(
-  customerPhone: string,
+  phone: string,
+  customerId: number
+): Promise<string | null> {
+  const lockKey = `${phone}:${customerId}`;
+
+  // Se já há um download em andamento para esse customer, reutilizar
+  const existing = downloadLocks.get(lockKey);
+  if (existing) {
+    console.log('[ProfilePic] Download already in progress for', lockKey);
+    return existing;
+  }
+
+  const promise = _downloadAndUploadProfilePic(phone, customerId).finally(
+    () => {
+      downloadLocks.delete(lockKey);
+    }
+  );
+
+  downloadLocks.set(lockKey, promise);
+  return promise;
+}
+
+async function _downloadAndUploadProfilePic(
+  phone: string,
   customerId: number
 ): Promise<string | null> {
   try {
-    // 1. Fetch profile from Evolution API
-    const profile = await fetchEvolutionProfile(customerPhone);
-    if (!profile?.profilePicture) {
-      return null;
-    }
-
-    const profilePicUrl = profile.profilePicture;
-
-    // 2. Check if already stored in R2 (not a whatsapp.net URL)
-    if (
-      !profilePicUrl.includes('whatsapp.net') &&
-      !profilePicUrl.includes('whatsapp.com')
-    ) {
-      return profilePicUrl;
-    }
-
-    // 3. Download the image from WhatsApp CDN
-    const imageResponse = await fetch(profilePicUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
-
-    if (!imageResponse.ok) {
-
-      return null;
-    }
-
-    // 4. Upload to R2
-    const buffer = Buffer.from(await imageResponse.arrayBuffer());
-    const contentType =
-      imageResponse.headers.get('content-type') || 'image/jpeg';
-    const ext = contentType.includes('png')
-      ? 'png'
-      : contentType.includes('webp')
-        ? 'webp'
-        : 'jpg';
-
-    const result = await uploadToR2(
-      buffer,
-      `profile_${customerId}_${Date.now()}.${ext}`,
-      contentType
+    console.log(
+      '[ProfilePic] Resolving profile pic for customer',
+      customerId,
+      'phone:',
+      phone
     );
 
-    // 5. Update customer record with R2 URL
+    // 1. Buscar perfil via Evolution API
+    const profile = await fetchProfileFromEvolution(phone);
+    if (!profile) {
+      console.log('[ProfilePic] No profile data from Evolution for', phone);
+      return null;
+    }
+
+    // Atualizar nome do cliente se disponível
+    if (profile.name || profile.pushName) {
+      try {
+        const db = await getDb();
+        if (db) {
+          await db
+            .update(customers)
+            .set({
+              name: profile.name || profile.pushName,
+              updatedAt: new Date(),
+            })
+            .where(eq(customers.id, customerId));
+        }
+      } catch {}
+    }
+
+    let buffer: Buffer | null = null;
+    let mimetype = 'image/jpeg';
+
+    // 2a. Base64 inline do Evolution
+    if (profile.pictureBase64) {
+      const match = profile.pictureBase64.match(/^data:([^;]+);base64,(.*)$/s);
+      if (match && match[1] && match[2]) {
+        mimetype = match[1];
+        buffer = Buffer.from(match[2], 'base64');
+      } else {
+        // base64 puro sem data: prefix
+        buffer = Buffer.from(profile.pictureBase64, 'base64');
+      }
+      console.log(
+        '[ProfilePic] Got base64 from Evolution:',
+        buffer.length,
+        'bytes'
+      );
+    }
+
+    // 2b. URL remota (WhatsApp CDN) — baixar SEMPRE via Evolution proxy (nunca direto)
+    // O Evolution tem a sessão autenticada com cookies do WhatsApp Web
+    if (!buffer && profile.pictureUrl) {
+      console.log(
+        '[ProfilePic] Downloading WhatsApp CDN URL via Evolution proxy...'
+      );
+      buffer = await downloadViaEvolutionProxy(profile.pictureUrl);
+    }
+
+    if (!buffer || buffer.length < 100) {
+      console.log(
+        '[ProfilePic] ❌ Could not resolve profile pic bytes for',
+        phone
+      );
+      return null;
+    }
+
+    console.log(
+      '[ProfilePic] Downloaded',
+      buffer.length,
+      'bytes for customer',
+      customerId
+    );
+
+    // 3. Upload para R2
+    const r2Url = await uploadProfilePicToR2(buffer, customerId, mimetype);
+    if (!r2Url) {
+  // R2 falhou: fallback para data URL inline (nao depende de credenciais R2).
+  // customers.photoUrl e varchar(500) — pequeno demais para base64, entao
+  // gravamos apenas em receivedMessages.fromProfilePic (longtext), que o
+  // COALESCE do Inbox ja usa para exibir o avatar.
+  const dataUrl = `data:${mimetype || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+  const dbF = await getDb();
+  if (dbF) {
+    await dbF
+      .update(receivedMessages)
+      .set({ fromProfilePic: dataUrl })
+      .where(eq(receivedMessages.customerId, customerId));
+  }
+  console.log(
+    '[ProfilePic] R2 falhou — fallback data URL inline para customer',
+    customerId,
+    '(' + buffer.length + ' bytes)'
+  );
+  return dataUrl;
+}
+
+    // 4. Persistir no DB
     const db = await getDb();
     if (db) {
       await db
         .update(customers)
-        .set({ photoUrl: result.url, updatedAt: new Date() })
+        .set({ photoUrl: r2Url, updatedAt: new Date() })
         .where(eq(customers.id, customerId));
+
+      // Atualizar também fromProfilePic nas received_messages deste cliente
+      await db
+        .update(receivedMessages)
+        .set({ fromProfilePic: r2Url })
+        .where(eq(receivedMessages.customerId, customerId));
+
+      console.log(
+        '[ProfilePic] ✅ DB updated for customer',
+        customerId,
+        '→',
+        r2Url.substring(0, 60)
+      );
     }
 
-    return result.url;
-  } catch (err: unknown) {
-
+    return r2Url;
+  } catch (err) {
+    console.error('[ProfilePic] Error for customer', customerId, ':', err);
     return null;
   }
+}
+
+/**
+ * Persiste a foto do perfil usando a profilePicUrl que o evento contacts.update
+ * ja entrega (URL fresca do CDN do WhatsApp). Baixa via proxy da Evolution e
+ * grava em R2 (primario) ou data URL inline (fallback, sem depender de credenciais).
+ */
+export async function persistProfilePicFromUrl(
+  phone: string,
+  customerId: number,
+  knownUrl: string
+): Promise<string | null> {
+  try {
+          // [fix41] Usar o endpoint oficial de avatar (base64 direto) em vez do proxy quebrado
+      let buffer = await fetchProfilePicViaEvolution(phone);
+      if (!buffer && knownUrl) {
+        console.log('[ProfilePic] fix41: fetchProfilePicFromServer falhou, tentando URL direta para', phone);
+        buffer = await fetchProfilePicBytes(knownUrl);
+      }
+    if (!buffer || buffer.length < 100) {
+      console.log('[ProfilePic] Could not download bytes from knownUrl for', phone);
+      return null;
+    }
+    const mimetype = 'image/jpeg';
+    const r2Url = await uploadProfilePicToR2(buffer, customerId, mimetype);
+    const db = await getDb();
+    if (db) {
+      if (r2Url) {
+        await db.update(customers).set({ photoUrl: r2Url, updatedAt: new Date() }).where(eq(customers.id, customerId));
+        await db.update(receivedMessages).set({ fromProfilePic: r2Url }).where(eq(receivedMessages.customerId, customerId));
+        return r2Url;
+      }
+      const dataUrl = `data:${mimetype};base64,${buffer.toString('base64')}`;
+      await db.update(receivedMessages).set({ fromProfilePic: dataUrl }).where(eq(receivedMessages.customerId, customerId));
+      console.log('[ProfilePic] persistProfilePicFromUrl fallback data URL para customer', customerId, '(' + buffer.length + ' bytes)');
+      return dataUrl;
+    }
+    return r2Url;
+  } catch (err) {
+    console.error('[ProfilePic] persistProfilePicFromUrl error for', phone, ':', err);
+    return null;
+  }
+}
+
+/**
+ * Baixa os bytes de uma foto de perfil do WhatsApp.
+ * Foto de perfil (pps.whatsapp.net) e publica para qualquer cliente com UA do WhatsApp.
+ * 1) Tenta fetch direto com User-Agent do WhatsApp (mais confiavel).
+ * 2) Fallback: proxy autenticado da Evolution.
+ */
+async function fetchProfilePicBytes(url: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'WhatsApp/2.23.20.0',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 100) {
+        console.log('[ProfilePic] fetchProfilePicBytes direto OK:', buf.length, 'bytes');
+        return buf;
+      }
+    } else {
+      console.log('[ProfilePic] fetch direto falhou status', res.status, '— tentando proxy Evolution');
+    }
+  } catch (err) {
+    console.log('[ProfilePic] fetch direto erro — tentando proxy Evolution:', (err as Error).message);
+  }
+  // Fallback: proxy autenticado da Evolution
+  return downloadViaEvolutionProxy(url);
 }

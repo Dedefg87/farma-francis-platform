@@ -44,8 +44,9 @@ export default function createSSERouter(): Router {
       }
 
       // Se ainda não conseguiu, tentar token do localStorage (via cookie especial)
+      // Suporta tanto authToken quanto jti (usado pelo frontend)
       if (!userId) {
-        const tokenCookie = req.cookies?.authToken;
+        const tokenCookie = req.cookies?.authToken || req.cookies?.jti;
         if (tokenCookie) {
           try {
             const decoded = jwt.verify(tokenCookie, JWT_SECRET) as any;

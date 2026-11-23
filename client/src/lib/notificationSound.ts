@@ -1,5 +1,5 @@
 // Sound types available
-export type SoundType = "ding" | "chime" | "bell" | "pop" | "none";
+export type SoundType = "ding" | "chime" | "bell" | "pop" | "suave" | "marimba" | "melodia" | "digital" | "triplo" | "whatsapp" | "none";
 
 export interface SoundOption {
   id: SoundType;
@@ -12,6 +12,12 @@ export const SOUND_OPTIONS: SoundOption[] = [
   { id: "chime", name: "Chime", description: "Sino gentil" },
   { id: "bell", name: "Bell", description: "Campainha" },
   { id: "pop", name: "Pop", description: "Pop divertido" },
+  { id: "suave", name: "Suave", description: "Tom baixo e delicado, discreto" },
+  { id: "marimba", name: "Marimba", description: "Notas curtas tipo xilofone" },
+  { id: "melodia", name: "Melodia", description: "Sequência curta e agradável de 4 notas" },
+  { id: "digital", name: "Digital", description: "Bipe moderno e limpo" },
+  { id: "triplo", name: "Triplo", description: "Três tons suaves ascendentes" },
+  { id: "whatsapp", name: "WhatsApp", description: "Som oficial do WhatsApp" },
   { id: "none", name: "Nenhum", description: "Sem som" },
 ];
 

@@ -14,9 +14,12 @@ import createSSERouter from "./routers-sse";
 import mediaRouter from "./routers-media";
 import { sseManager } from "./_core/sse";
 import webhooksRouter from "./webhooks";
+import { restRouter } from "./routers-rest";
+import whatsappPairingRouter from "./whatsapp-pairing";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import cors from "cors";
+import { startWebhookGuard } from "./evolution-webhook-guard";
 
 // In CJS (esbuild --format=cjs), __dirname is provided by the Node.js module wrapper
 // No need to define it via import.meta.url
@@ -65,6 +68,17 @@ async function startServer() {
     } catch (colErr: unknown) {
       console.warn("[DB] ⚠️ Could not add customers.source:", colErr.message);
     }
+
+    // Safety net: ensure received_messages.from_profile_pic column exists (foto do cliente)
+    try {
+      const [picCols] = await db.execute(sql`SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'received_messages' AND column_name = 'from_profile_pic'`);
+      if (!Array.isArray(picCols) || picCols.length === 0) {
+        await db.execute(sql`ALTER TABLE received_messages ADD COLUMN from_profile_pic LONGTEXT NULL AFTER from_name`);
+        console.log("[DB] ✅ received_messages.from_profile_pic column added");
+      }
+    } catch (picErr: unknown) {
+      console.warn("[DB] ⚠️ Could not add received_messages.from_profile_pic:", (picErr as Error).message);
+    }
   } catch (error) {
     console.error("[Startup Error]", error);
     throw error;
@@ -72,29 +86,29 @@ async function startServer() {
 
   const app = express();
   // Aumentar limite do body-parser para 50MB (padrão é 100kb)
-  // Helmet — headers de segurança (config customizada pra não quebrar iframes)
+  // Helmet — headers de segurança (config customizada pra não quebrar iframes/media)
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"], // TODO: remover unsafe-inline depois
-        workerSrc: ["'self'", "blob:"], // Permite workers (blob: para createObjectURL)
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        workerSrc: ["'self'", "blob:"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https://*"], // permite imagens do R2/externas
-        connectSrc: ["'self'", "https://innovative-enjoyment-production-ed8f.up.railway.app"],
+        imgSrc: ["'self'", "data:", "https://*"],
+        connectSrc: ["'self'", "https://farmafrancis.up.railway.app"],
+        frameSrc: ["'self'", "https://*"],
+        mediaSrc: ["'self'", "https://*"],
       },
     },
-    frameguard: { action: "sameorigin" }, // Permite iframe da mesma origem (PDF previews)
-    hsts: process.env.NODE_ENV === "production", // HSTS só em produção
+    frameguard: { action: "sameorigin" },
+    hsts: process.env.NODE_ENV === "production",
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-    crossOriginEmbedderPolicy: false,     // Necessário pra R2/embeds externos
+    crossOriginEmbedderPolicy: false,
   }));
-
-  // CORS — controla quem pode chamar a API de outros domínios
   // Frontend e backend são same-origin (mesmo domínio), então CORS não deve bloquear
   const allowedOrigins = [
     process.env.PUBLIC_BASE_URL,           // URL do frontend (Railway)
-    "https://innovative-enjoyment-production-ed8f.up.railway.app", // Railway URL
+    "https://farmafrancis.up.railway.app", // Railway URL
     "http://localhost:5173",                // Dev local
     "http://localhost:3000",                // Dev local alt
   ].filter(Boolean);
@@ -114,9 +128,19 @@ async function startServer() {
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }));
 
+  // 🟡 LOG DE REQUISIÇÃO ANTES DO BODY PARSER - para diagnosticar webhooks que não chegam
+  app.use((req, res, next) => {
+    if (process.env.VERBOSE_HTTP_LOG === "true") console.log('🟡 [RAW]', req.method, req.url, '| headers:', JSON.stringify({
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length'],
+      'user-agent': req.headers['user-agent']?.substring(0, 50),
+    }));
+    next();
+  });
+
   app.use(express.json({ limit: '50mb' }));
   app.use((req, res, next) => {
-    console.log('[BODY]', req.method, req.url, '| Body:', JSON.stringify(req.body).substring(0, 200));
+    if (process.env.VERBOSE_HTTP_LOG === "true") console.log('[BODY]', req.method, req.url, '| Body:', JSON.stringify(req.body).substring(0, 200));
     next();
   });
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -178,7 +202,7 @@ async function startServer() {
   });
 
   app.use("/api/trpc", (req, res, next) => {
-    console.log("[tRPC]", req.method, req.url);
+    if (process.env.VERBOSE_HTTP_LOG === "true") console.log("[tRPC]", req.method, req.url);
     next();
   });
 
@@ -196,6 +220,12 @@ async function startServer() {
   // Webhooks para WhatsApp, Instagram e Evolution API
   app.use("/api/webhooks", webhooksRouter);
   app.use("/api/media", mediaRouter);
+
+  // WhatsApp Pairing Code endpoints (para o novo método de conexão)
+  app.use("/api", whatsappPairingRouter);
+
+  // REST endpoints para templates de fluxo (contatos, mensagens, tarefas, atendimentos)
+  app.use("/api", restRouter);
 
   // Rotas REST do sistema (storage, clean, etc.)
   const systemRestRouter = require("./_core/routes/system").default;
@@ -229,7 +259,33 @@ async function startServer() {
     }
   });
 
+  // Debug: Get active visual flows
+  app.get("/api/debug/visual-flows", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const [result] = await db.execute(sql`SELECT id, name, is_active, template_type, created_at, LENGTH(flow_data) as flow_size FROM visual_flows WHERE is_active = 1 ORDER BY id DESC LIMIT 20`);
+      res.json({ flows: result, count: result.length });
+    } catch (err: unknown) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Debug: Check recent conversations and messages
+  // Debug: Close all open/assigned conversations (for admin actions)
+  app.post("/api/debug/close-all-conversations", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE status IN ('open', 'assigned')`);
+      res.json({ success: true, closed: result.affectedRows || 0 });
+    } catch (err: unknown) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/debug/conversations-status", async (_, res) => {
     try {
       const db = await getDb();
@@ -326,6 +382,13 @@ async function startServer() {
         assignedTo: { id: admin.id, name: admin.displayName || admin.name, role: admin.role },
         result: result,
       });
+  app.get("/api/debug/webhook-token", (_, res) => {
+    const token = process.env.WHATSAPP_VERIFY_TOKEN;
+    if (!token) {
+      return res.json({ present: false });
+    }
+    return res.json({ present: true, length: token.length, first: token[0], last: token[token.length - 1] });
+  });
     } catch (err: unknown) {
       res.status(500).json({ error: err.message, stack: err.stack });
     }
@@ -357,6 +420,72 @@ async function startServer() {
     }
   });
 
+  // Message reaction endpoint (Evolution API)
+    app.post("/api/messages/react", async (req, res) => {
+    try {
+      const { messageId, emoji } = req.body || {};
+      if (!messageId || !emoji) {
+        res.status(400).json({ error: "messageId e emoji sao obrigatorios" });
+        return;
+      }
+      const db = await getDb();
+      if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
+      const { conversationMessages, conversations } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const raw = String(messageId || "");
+      const clean = raw.replace(/^cm-/, "");
+      const numeric = Number(clean);
+      let target = null;
+      if (Number.isFinite(numeric)) {
+        const rows = await db.select().from(conversationMessages).where(eq(conversationMessages.id, numeric)).limit(1);
+        target = rows[0] || null;
+      }
+      if (!target && clean && clean !== String(numeric)) {
+        const rows = await db.select().from(conversationMessages).where(eq(conversationMessages.externalId, clean)).limit(1);
+        target = rows[0] || null;
+      }
+      if (!target) {
+        const rows = await db.select().from(conversationMessages).where(eq(conversationMessages.externalId, raw)).limit(1);
+        target = rows[0] || null;
+      }
+      if (!target) {
+        res.status(404).json({ error: "Mensagem nao encontrada para reacao", messageId: raw });
+        return;
+      }
+      await db.update(conversationMessages).set({ reaction: emoji }).where(eq(conversationMessages.id, target.id));
+      let remoteJid = String(target.remoteJid || "");
+      let to = remoteJid;
+      if (!remoteJid || !remoteJid.includes("@")) {
+        const convs = await db.select().from(conversations).where(eq(conversations.id, target.conversationId)).limit(1);
+        const phone = String(convs[0]?.customerPhone || "");
+        const digits = phone.replace(/\D/g, "");
+        if (digits) {
+          remoteJid = digits + "@s.whatsapp.net";
+          to = remoteJid;
+        }
+      }
+      if (remoteJid) {
+        try {
+          const { sendReaction } = await import("./messaging");
+          await sendReaction({ to, messageId: target.externalId || String(target.id), remoteJid, emoji, fromMe: target.senderType === "agent" });
+          console.log("[api/messages/react] Reacao enviada:", emoji, "para", remoteJid);
+        } catch (sendErr) {
+          console.error("[api/messages/react] Erro ao enviar reacao:", (sendErr as Error).message);
+        }
+      } else {
+        console.warn("[api/messages/react] Sem remoteJid — nao enviado:", target.id);
+      }
+      try {
+        const { sseManager } = await import("./_core/sse");
+        sseManager.emitToAll({ type: "message:reaction", data: { messageId: target.id, reaction: emoji }, timestamp: Date.now() });
+      } catch (e) { /* ignore */ }
+      res.json({ success: true, messageId: target.id });
+    } catch (err: unknown) {
+      console.error("[api/messages/react] Error:", (err as Error).message);
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   // Broadcast file upload
   app.post("/api/broadcast/upload-temp-file", async (req, res) => {
     try {
@@ -364,7 +493,9 @@ async function startServer() {
       const chunks: Buffer[] = [];
       req.on('data', (chunk: Buffer) => chunks.push(chunk));
       req.on('end', async () => {
+        try {
         const rawBody = Buffer.concat(chunks);
+        console.log('[broadcast/upload] Recebido', rawBody.length, 'bytes | ct:', String(req.headers['content-type']||'').slice(0,50));
         const contentType = req.headers['content-type'] || '';
         
         // Parse multipart form data
@@ -425,9 +556,14 @@ async function startServer() {
           fileType: mimetype,
           fileSize: fileBuffer.length,
         });
+        console.log('[broadcast/upload] OK:', originalName, fileBuffer.length + ' bytes ->', String(result.url).substring(0,70));
+        } catch (endErr: unknown) {
+          console.error('[broadcast/upload] Error no processamento:', (endErr as Error)?.message || String(endErr));
+          try { res.status(500).json({ error: (endErr as Error)?.message || 'Erro interno no upload' }); } catch (_e) {}
+        }
       });
     } catch (err: unknown) {
-      console.error('[broadcast/upload] Error:', err.message);
+      console.error('[broadcast/upload] Error:', (err as Error)?.message || String(err));
       res.status(500).json({ error: err.message });
     }
   });
@@ -438,6 +574,8 @@ async function startServer() {
     next();
   });
 
+
+  // Debug: Webhook token info (length and first/last char only for safety)
   app.get("*", (req, res) => {
     console.log('[SPA] Hit', req.method, req.originalUrl || req.url, req.path);
     if (!req.path.startsWith("/api")) {
@@ -477,6 +615,8 @@ async function startServer() {
   const PORT = process.env.PORT || 3000;
   console.log(`[Server] Attempting to listen on port ${PORT}...`);
 
+startWebhookGuard();
+
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log("[Server] ✅ Successfully listening on port", PORT);
     console.log("[Server] Environment:", process.env.NODE_ENV || "development");
@@ -487,7 +627,12 @@ async function startServer() {
       startBroadcastRecoveryWorker();
     }).catch(err => {
       console.warn('[Server] ⚠️ Failed to start broadcast recovery worker:', err.message);
-    });
+    })
+    import('./workers/storage-cleanup.js').then(({ startStorageCleanupWorker }) => {
+      startStorageCleanupWorker();
+    }).catch(err => {
+      console.warn('[Server] Failed to start storage cleanup worker:', err?.message || err);
+    });;
   });
 
   server.on('error', (error) => {
@@ -499,4 +644,6 @@ startServer().catch((err) => {
   console.error("[Server] Failed to start:", err);
   process.exit(1);
 });
-// Railway deploy: Mon May  4 14:22:25 -03 2026
+// Railway deploy: Tue Jun 10 12:25 -03 2026 - trigger deploy
+// Force redeploy 1781105277
+// Force redeploy 1782327700

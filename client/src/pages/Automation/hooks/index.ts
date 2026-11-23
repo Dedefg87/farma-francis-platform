@@ -1,2 +1,10 @@
 export { useFlowState } from "./useFlowState";
 export { useFlowValidation } from "./useFlowValidation";
+export { useNodeInteractionHandler } from "./useNodeInteractionHandler";
+export type { NodeInteractionActions, NodeInteractionState } from "./useNodeInteractionHandler";
+export { usePersistentEditorState } from "./usePersistentEditorState";
+export type { PersistentEditorState, PersistentEditorActions } from "./usePersistentEditorState";
+export { useAutoscroll } from "./useAutoscroll";
+export type { UseAutoscrollActions } from "./useAutoscroll";
+export { useFullCanvasView } from "./useFullCanvasView";
+export type { FullCanvasViewState } from "./useFullCanvasView";

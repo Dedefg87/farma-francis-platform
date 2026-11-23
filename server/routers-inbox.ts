@@ -1,9 +1,18 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
-import { receivedMessages, messages, customers } from "../drizzle/schema";
+import { receivedMessages, messages, customers, conversationMessages, conversations, users, employees } from "../drizzle/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { sendWhatsAppMessage, sendInstagramMessage } from "./messaging";
+// Converte caminho relativo do R2 em URL absoluta. Nao mexe em URLs que ja sao http/data/blob.
+function toAbsoluteMediaUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  const base = (process.env.R2_PUBLIC_URL || process.env.PUBLIC_R2_URL || "https://pub-33c481f0a9e94adb8870472308f49471.r2.dev").replace(/\/+$/, "");
+  return base + "/" + url.replace(/^\/+/, "");
+}
+
 
 /**
  * Inbox router for managing conversations
@@ -62,6 +71,7 @@ export const inboxRouter = router({
         .select({
           fromNumber: receivedMessages.fromNumber,
           fromName: receivedMessages.fromName,
+          fromProfilePic: sql<string | null>`COALESCE(NULLIF(${customers.photoUrl}, ''), MAX(${receivedMessages.fromProfilePic}))`,
           provider: receivedMessages.provider,
           lastMessage: receivedMessages.messageText,
           lastMessageType: receivedMessages.messageType,
@@ -70,7 +80,8 @@ export const inboxRouter = router({
           customerId: receivedMessages.customerId,
         })
         .from(receivedMessages)
-        .groupBy(receivedMessages.fromNumber, receivedMessages.provider)
+        .leftJoin(customers, eq(customers.id, receivedMessages.customerId))
+        .groupBy(receivedMessages.fromNumber, receivedMessages.provider, customers.photoUrl)
         .orderBy(desc(sql`MAX(${receivedMessages.timestamp})`))
         .limit(input.limit);
 
@@ -97,6 +108,53 @@ export const inboxRouter = router({
 
       const conversations = await query;
 
+      // Lazy load profile pictures in background if null or expired CDN URLs
+      conversations.forEach(conv => {
+        const hasNoPhoto = !conv.fromProfilePic;
+        const isExpiredWhatsAppCdn = conv.fromProfilePic && (
+          conv.fromProfilePic.includes("whatsapp.net") || 
+          conv.fromProfilePic.includes("whatsapp.com") ||
+          conv.fromProfilePic.includes("mmg.whatsapp.net") ||
+          conv.fromProfilePic.includes("pps.whatsapp.net")
+        );
+
+        if ((hasNoPhoto || isExpiredWhatsAppCdn) && conv.fromNumber && conv.provider === "whatsapp") {
+          setImmediate(async () => {
+            try {
+              // Resolve customerId if missing (old messages may not have it)
+              let custId = conv.customerId ? Number(conv.customerId) : null;
+              if (!custId) {
+                const { findOrCreateCustomerByPhone } = await import('./db-messages.js');
+                const c = await findOrCreateCustomerByPhone(conv.fromNumber);
+                custId = c?.id ?? null;
+                // Link old received_messages to the customer so JOIN + photo update work
+                if (custId) {
+                  const db = await getDb();
+                  if (db) {
+                    await db
+                      .update(receivedMessages)
+                      .set({ customerId: custId })
+                      .where(
+                        and(
+                          eq(receivedMessages.fromNumber, conv.fromNumber),
+                          eq(receivedMessages.provider, conv.provider)
+                        )
+                      );
+                  }
+                }
+              }
+              if (!custId) return;
+
+              console.log(`[Inbox Lazy Load] Resolving missing/expired profile pic for ${conv.fromNumber}...`);
+              const { downloadAndUploadProfilePic } = await import('./services/profile-pic.js');
+              await downloadAndUploadProfilePic(conv.fromNumber, custId);
+            } catch (err) {
+              console.error(`[Inbox Lazy Load] Failed resolving profile pic for ${conv.fromNumber}:`, err);
+            }
+          });
+        }
+      });
+
       return conversations.map(conv => ({
         ...conv,
         lastMessageTime: Number(conv.lastMessageTime),
@@ -119,59 +177,40 @@ export const inboxRouter = router({
       const db = await getDb();
       if (!db) return [];
 
-      // Get received messages
-      const received = await db
+      // Buscar conversa pelo número do cliente
+      const [conv] = await db
         .select()
-        .from(receivedMessages)
-        .where(
-          and(
-            eq(receivedMessages.fromNumber, input.fromNumber),
-            eq(receivedMessages.provider, input.provider)
-          )
-        )
-        .orderBy(desc(receivedMessages.timestamp))
-        .limit(input.limit);
+        .from(conversations)
+        .where(eq(conversations.customerPhone, input.fromNumber))
+        .limit(1);
 
-      // Get sent messages
-      const sent = await db
+      if (!conv) return [];
+
+      // Buscar mensagens da conversa usando a nova tabela conversation_messages
+      const msgs = await db
         .select()
-        .from(messages)
-        .where(
-          and(
-            eq(messages.channel, input.provider),
-            eq(messages.direction, "outbound")
-          )
-        )
-        .orderBy(desc(messages.createdAt))
-        .limit(input.limit);
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, conv.id))
+        .orderBy(conversationMessages.createdAt);
 
-      // Merge and sort by timestamp
-      const allMessages = [
-        ...received.map(msg => ({
-          id: `received-${msg.id}`,
-          direction: "inbound" as const,
-          content: msg.messageText || "[Media]",
-          messageType: msg.messageType,
-          mediaUrl: msg.mediaUrl,
-          timestamp: Number(msg.timestamp),
-          createdAt: msg.createdAt,
-          fromName: msg.fromName,
-          processed: msg.processed === 1,
-        })),
-        ...sent.map(msg => ({
-          id: `sent-${msg.id}`,
-          direction: "outbound" as const,
-          content: msg.content,
-          messageType: "text",
-          mediaUrl: null,
-          timestamp: msg.createdAt.getTime(),
-          createdAt: msg.createdAt,
-          fromName: null,
-          processed: true,
-        })),
-      ].sort((a, b) => b.timestamp - a.timestamp);
-
-      return allMessages;
+      // Enriquecer com nome/cargo do agente (senderName/senderPosition já vêm do DB agora)
+      return msgs.map(msg => ({
+        id: `cm-${msg.id}`,
+        direction: msg.senderType === "agent" ? "outbound" : "inbound",
+        content: msg.content || (msg.messageType === "reaction" ? msg.reaction || "" : ""),
+        messageType: msg.messageType,
+        mediaUrl: toAbsoluteMediaUrl(msg.fileUrl),
+        timestamp: msg.createdAt instanceof Date ? msg.createdAt.getTime() : new Date(msg.createdAt).getTime(),
+        createdAt: msg.createdAt,
+        fromName: msg.fromName || null,
+        senderId: msg.senderId,
+        senderName: msg.senderName || null,
+        senderPosition: msg.senderPosition || null,
+        reaction: msg.reaction || null,
+        replyToExternalId: (msg as any).replyToExternalId || null,
+        externalId: msg.externalId,
+        processed: true,
+      }));
     }),
 
   /**
@@ -197,6 +236,28 @@ export const inboxRouter = router({
           mediaUrl: input.fileUrl,
           caption: input.fileName,
         });
+
+        // 💾 Save outbound message to conversation history
+        try {
+          const { ingestOutboundConversationMessage } = await import('./db-messages-outbound');
+          await ingestOutboundConversationMessage({
+            provider: "whatsapp",
+            toNumber: input.to,
+            fromUserId: ctx.user?.id || 1,
+            messageType: input.fileUrl ? 'image' : 'text',
+            messageText: input.message,
+            mediaUrl: input.fileUrl,
+            fileName: input.fileName,
+            mimeType: input.fileType,
+            externalId: result?.messageId || result?.messages?.[0]?.id || `outbound-${Date.now()}`,
+            createdAt: new Date(),
+          });
+          console.log('[Inbox] Outbound message saved to conversation history');
+        } catch (saveError) {
+          console.error('[Inbox] Failed to save outbound message:', saveError);
+          // Non-critical - message was already sent
+        }
+
         return result;
       } else if (input.provider === "instagram") {
         const result = await sendInstagramMessage({

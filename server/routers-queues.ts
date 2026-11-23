@@ -2,9 +2,10 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import { queues, queueAgents, conversations, users } from "../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray, or } from "drizzle-orm";
 import type { Queue, RoutingRule, RoutingCondition, RoutingAction } from "../../shared/types/queues";
 import { ConversationChannel } from "../../shared/types/conversations";
+import { sseManager } from "./_core/sse";
 
 // Função auxiliar para transformar registro do Drizzle no tipo Queue compartilhado
 function toQueueType(
@@ -137,6 +138,65 @@ export const queuesRouter = router({
         .where(eq(conversations.id, nextConversation.id));
 
       return { success: true, conversationId: nextConversation.id };
+    }),
+  // Puxar da sala de espera: conversa aberta mais antiga sem dono (mesmo sem fila)
+  claimUnassignedConversation: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const _connIds = sseManager.getConnectedUsers().map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0);
+      const rows = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            inArray(conversations.status, ['open', 'assigned']),
+            or(
+              sql`${conversations.assignedTo} IS NULL`,
+              sql`${conversations.assignedTo} IN (SELECT agent_id FROM agent_pauses WHERE status = 'active')`,
+              and(
+                sql`NOT (${conversations.assignedTo} IN (SELECT id FROM users WHERE lastSignedIn IS NOT NULL AND lastSignedIn >= NOW() - INTERVAL 10 MINUTE))`,
+                _connIds.length > 0
+                  ? sql`NOT (${conversations.assignedTo} IN (${sql.raw(_connIds.join(","))}))`
+                  : sql`1=1`
+              )
+            )
+          )
+        )
+        .orderBy(conversations.openedAt);
+      if (rows.length === 0) throw new Error('Nenhuma conversa disponivel para puxar');
+      const _ids = rows.map((r: any) => r.id);
+      for (let i = 0; i < _ids.length; i += 500) {
+        await db.update(conversations).set({ assignedTo: ctx.user.id, status: 'assigned' }).where(inArray(conversations.id, _ids.slice(i, i + 500)));
+      }
+      return { success: true, count: _ids.length, conversationIds: _ids, conversationId: _ids[0] };
+    }),
+
+  // Transferir conversa para outro agente
+  transferConversation: protectedProcedure
+    .input(z.object({ conversationId: z.number(), targetAgentId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const [exists] = await db.select({ id: conversations.id }).from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+      if (!exists) throw new Error('Conversa nao encontrada');
+      await db.update(conversations).set({ assignedTo: input.targetAgentId, status: 'assigned' }).where(eq(conversations.id, input.conversationId));
+      return { success: true, conversationId: input.conversationId };
+    }),
+
+  // Listar agentes LOGADOS (mesma fonte da distribuicao: lastSignedIn < 24h, exclui admin)
+  listTransferAgents: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database not available');
+      const loggedIn = await getAgentsForTransfer();
+      if (loggedIn.length === 0) return [];
+      const set = new Set<number>(loggedIn);
+      const res = await db.execute(sql`SELECT id, name FROM users WHERE role = 'user' ORDER BY name ASC`);
+      const rows = (Array.isArray(res) && Array.isArray(res[0]) ? res[0] : (Array.isArray(res) ? res : ((res as any).rows ?? []))) as any[];
+      return (rows as Array<any>)
+        .filter(r => r && r.id != null && set.has(Number(r.id)) && Number(r.id) !== ctx.user.id)
+        .map(r => ({ id: Number(r.id), name: String(r?.name || '') || ('Agente ' + r.id) }));
     }),
 
   // Listar todas as filas (com estatísticas completas)

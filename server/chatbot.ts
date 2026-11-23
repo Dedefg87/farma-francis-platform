@@ -21,15 +21,10 @@ import {
  * Simple Chatbot Automation - Fixed Version
  */
 export async function processIncomingMessage(message: unknown) {
-
-
-
-
   console.log("[CHATBOT] Text:", message.messageText?.substring(0, 50));
 
   // Handle non-text messages
   if (message.messageType && message.messageType !== "text") {
-
     const db = await getDb();
     if (db) {
       await markMessageAsProcessed(message.id, {});
@@ -40,7 +35,6 @@ export async function processIncomingMessage(message: unknown) {
   try {
     const db = await getDb();
     if (!db) {
-
       return;
     }
 
@@ -50,7 +44,6 @@ export async function processIncomingMessage(message: unknown) {
     );
 
     if (!customer) {
-
       return;
     }
 
@@ -60,13 +53,11 @@ export async function processIncomingMessage(message: unknown) {
     const isSurveyResponse = rating >= 1 && rating <= 5;
 
     if (isSurveyResponse) {
-
       await handleSurveyResponse(message, customer);
       return;
     }
 
     // Non-survey messages are handled by Flow Engine (selected automation flow)
-
   } catch (error) {
     console.error("[CHATBOT] Error:", error);
   }
@@ -74,19 +65,42 @@ export async function processIncomingMessage(message: unknown) {
 
 /**
  * Close a conversation and send appropriate message
+ * @param conversationId - The conversation ID to close
+ * @param closeReason - The reason for closing (venda, orcamento, conversa_anterior, engano)
+ * @param skipDbUpdate - If true, skips the database update (use when DB already updated)
  */
 export async function closeConversation(
   conversationId: number,
-  closeReason: string
+  closeReason: string,
+  skipDbUpdate: boolean = false
 ) {
-
-
-
-
   try {
     const db = await getDb();
     if (!db) return;
 
+    // Only update DB if not skipping
+    if (!skipDbUpdate) {
+      const [conv] = await db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .limit(1);
+
+      if (!conv) {
+        return;
+      }
+
+      await db
+        .update(conversations)
+        .set({
+          status: "closed",
+          closedAt: new Date(),
+          closeReason: closeReason as any,
+        })
+        .where(eq(conversations.id, conversationId));
+    }
+
+    // Get conversation details for messaging
     const [conv] = await db
       .select()
       .from(conversations)
@@ -94,22 +108,11 @@ export async function closeConversation(
       .limit(1);
 
     if (!conv) {
-
       return;
     }
 
-    await db
-      .update(conversations)
-      .set({
-        status: "closed",
-        closedAt: new Date(),
-        closeReason: closeReason as any,
-      })
-      .where(eq(conversations.id, conversationId));
-
     const customerId = conv.customerId;
     if (!customerId) {
-
       return;
     }
 
@@ -120,7 +123,6 @@ export async function closeConversation(
       .limit(1);
 
     if (!customer || !customer.phone) {
-
       return;
     }
 
@@ -155,7 +157,6 @@ export async function closeConversation(
         message: closingMessage,
       });
     }
-
   } catch (error) {
     console.error("[CHATBOT] Error closing conversation:", error);
   }
@@ -165,11 +166,6 @@ export async function closeConversation(
  * Handle survey response from customer (1-5 rating)
  */
 export async function handleSurveyResponse(message: unknown, customer: unknown) {
-
-
-
-
-
   try {
     const db = await getDb();
     if (!db) return;
@@ -179,7 +175,6 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
     const rating = parseInt(ratingText?.replace(/[^0-9]/g, "") || "0");
 
     if (rating < 1 || rating > 5) {
-
       return;
     }
 
@@ -205,12 +200,11 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
         closeReason: recentConv?.closeReason || "venda",
         agentId: recentConv?.assignedTo || null,
       });
-
     } catch (e: unknown) {
       const code = e?.cause?.code || e?.code;
       const msg = String(e?.cause?.sqlMessage || e?.message || "");
       if (code === "ER_NO_SUCH_TABLE" || msg.includes("doesn't exist")) {
-
+        // Table doesn't exist yet, silently ignore
       } else {
         console.error("[CHATBOT] Error saving survey response:", e);
       }
@@ -230,34 +224,38 @@ export async function handleSurveyResponse(message: unknown, customer: unknown) 
         "Já anotamos seu feedback para melhorarmos!";
     }
 
-    if (message.provider === "whatsapp") {
+    // Determine provider from message
+    const provider = (message as any).provider || "whatsapp";
+
+    if (provider === "whatsapp") {
       await sendWhatsAppMessage({
-        to: message.fromNumber,
+        to: (message as any).fromNumber,
         message: thankYouMessage,
       });
-    } else if (message.provider === "instagram") {
+    } else if (provider === "instagram") {
       await sendInstagramMessage({
-        to: message.fromNumber,
+        to: (message as any).fromNumber,
         message: thankYouMessage,
       });
     }
 
     // Mark as processed - survey response is handled, no need to show in UI
-    await markMessageAsProcessed(message.id, {
-      customerId: customer.id,
+    await markMessageAsProcessed((message as any).id, {
+      customerId: (customer as any).id,
     });
 
     // Delete the original message from receivedMessages to prevent it from showing in UI
     // The survey response is already saved in surveyResponses table
     await db
       .delete(receivedMessages)
-      .where(eq(receivedMessages.id, message.id));
-
+      .where(eq(receivedMessages.id, (message as any).id));
   } catch (error) {
     // IMPORTANT: if we fail here, message may be re-processed forever.
     // Best-effort: mark processed to prevent loops.
     try {
-      await markMessageAsProcessed(message.id, { customerId: customer.id });
+      await markMessageAsProcessed((message as any).id, {
+        customerId: (customer as any).id,
+      });
     } catch {}
     console.error("[CHATBOT] Error handling survey response:", error);
   }
@@ -297,17 +295,11 @@ export async function processPendingMessages() {
  * Start the chatbot processor
  */
 export function startChatbot() {
-
-
-
-
   setTimeout(async () => {
-
     await processPendingMessages();
   }, 3000);
 
   setInterval(async () => {
     await processPendingMessages();
   }, 10000);
-
 }

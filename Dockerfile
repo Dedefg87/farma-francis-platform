@@ -1,9 +1,10 @@
+# deploy-trigger 1789670886384
 # -------------------------
 # STAGE 1 — BUILD
 # -------------------------
 FROM node:20-alpine AS builder
 
-ARG CACHEBUST=20260504-1822
+ARG CACHEBUST=20260519-1719
 
 WORKDIR /app
 

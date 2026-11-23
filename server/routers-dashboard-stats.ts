@@ -24,6 +24,7 @@ import type {
 
 // IMPORT DA FUNÇÃO getDateRangeFromPeriod
 import { getDateRangeFromPeriod } from "./utils/date-range";
+const SLA_TARGET_MINUTES = 120; // SLA de resolucao (min): venda fechada em ate 2h conta como dentro do SLA
 
 // Utilitário para formatar segundos em HH:MM:SS
 function formatSecondsToHMS(totalSeconds: number): string {
@@ -56,7 +57,7 @@ export const dashboardStatsRouter = router({
         input?.endDate
       );
 
-      console.log(`[getStats] Período: ${period}, Filtrando entre ${start.toISOString()} e ${end.toISOString()}`);
+      console.log(`[getStats] Período: ${period}, Filtrando entre ${start.toISOString()} e ${end.toISOString()} (TMA/SLA por conversas encerradas)`);
 
       const dateFilter = and(
         gte(conversations.openedAt, start),
@@ -111,12 +112,13 @@ export const dashboardStatsRouter = router({
 
       let avgHandlingTime = "00:00:00";
       const avgTimeResult = await db
-        .select({ avgMs: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))` })
+        .select({ avgMs: sql<number>`COALESCE(AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt})), 0)` })
         .from(conversations)
         .where(
           and(
-            dateFilter,
-            isNotNull(conversations.closedAt)
+            isNotNull(conversations.closedAt),
+            gte(conversations.closedAt, start),
+            lte(conversations.closedAt, end)
           )
         );
 
@@ -124,6 +126,27 @@ export const dashboardStatsRouter = router({
       const avgSeconds = avgMs / 1000000;
       avgHandlingTime = formatSecondsToHMS(avgSeconds);
 
+      const slaTotalResult = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(conversations)
+        .where(and(
+          eq(conversations.status, "closed"),
+          eq(conversations.closeReason, "venda"),
+          gte(conversations.closedAt, start),
+          lte(conversations.closedAt, end)
+        ));
+      const slaTargetResult = await db
+        .select({ n: sql<number>`count(*)` })
+        .from(conversations)
+        .where(and(
+          eq(conversations.status, "closed"),
+          eq(conversations.closeReason, "venda"),
+          gte(conversations.closedAt, start),
+          lte(conversations.closedAt, end),
+          sql`TIMESTAMPDIFF(MINUTE, ${conversations.openedAt}, ${conversations.closedAt}) <= ${SLA_TARGET_MINUTES}`
+        ));
+      const slaTotal = Number(slaTotalResult[0]?.n) || 0;
+      const slaMet = Number(slaTargetResult[0]?.n) || 0;
       return {
         totalConversations,
         uniqueCustomers,
@@ -131,6 +154,7 @@ export const dashboardStatsRouter = router({
         messagesReceived,
         avgPerAgent,
         avgHandlingTime,
+        sla: slaTotal > 0 ? Math.round((slaMet / slaTotal) * 100) : null,
       };
     }),
 
@@ -217,6 +241,7 @@ export const dashboardStatsRouter = router({
         .optional()
     )
     .query(async ({ input }): Promise<AgentStats[]> => {
+      try {
       const rawPeriod = input?.period || "mes";
       const db = await getDb();
       if (!db) throw new Error("Database not available");
@@ -242,14 +267,16 @@ export const dashboardStatsRouter = router({
         .select({
           agentId: users.id,
           agentName: users.name,
-          // Conversas no período (abertas no período)
+                    // Conversas no período (abertas no período)
           totalConversations: sql<number>`COUNT(DISTINCT ${conversations.id})`,
           daysActive: sql<number>`COUNT(DISTINCT DATE(${conversations.openedAt}))`,
           // TMA baseado apenas em conversas ENCERRADAS no período
-          avgHandlingTime: sql<number>`AVG(TIMESTAMPDIFF(MICROSECOND, ${conversations.openedAt}, ${conversations.closedAt}))`,
+          avgHandlingTime: sql<number>`COALESCE((SELECT AVG(TIMESTAMPDIFF(MICROSECOND, cc.opened_at, cc.closed_at)) FROM conversations cc WHERE cc.assigned_to = ${users.id} AND cc.closed_at IS NOT NULL AND cc.closed_at >= ${start} AND cc.closed_at <= ${end}), 0)`,
           // Mensagens no período VINCULADAS a conversas do período (senderType analisado via CASE)
           messagesSent: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'agent' THEN 1 ELSE 0 END)`,
           messagesReceived: sql<number>`SUM(CASE WHEN ${conversationMessages.senderType} = 'customer' THEN 1 ELSE 0 END)`,
+          slaTotal: sql<number>`(SELECT COUNT(*) FROM conversations cc WHERE cc.assigned_to = ${users.id} AND cc.status = 'closed' AND cc.close_reason = 'venda' AND cc.closed_at >= ${start} AND cc.closed_at <= ${end})`,
+          slaMet: sql<number>`(SELECT COUNT(*) FROM conversations cc WHERE cc.assigned_to = ${users.id} AND cc.status = 'closed' AND cc.close_reason = 'venda' AND cc.closed_at >= ${start} AND cc.closed_at <= ${end} AND TIMESTAMPDIFF(MINUTE, cc.opened_at, cc.closed_at) <= ${SLA_TARGET_MINUTES})`,
         })
         .from(users)
         // LEFT JOIN conversations: apenas conversas do agente no período
@@ -270,16 +297,23 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getAgentStats] Resultado:`, JSON.stringify(agentStats));
 
-      return agentStats.map((stat) => ({
+      const rows = Array.isArray(agentStats) ? agentStats : [];
+      return rows.map((stat) => ({
         agentId: stat.agentId,
-        agentName: stat.agentName,
+        agentName: String(stat.agentName || "").trim() || ("Agente " + String(stat.agentId || "")),
+        photo: null,
         totalConversations: Number(stat.totalConversations) || 0,
         daysActive: Number(stat.daysActive) || 0,
         avgPerDay: Number(stat.daysActive) > 0 ? Number(((Number(stat.totalConversations) || 0) / Number(stat.daysActive)).toFixed(1)) : 0,
         messagesSent: Number(stat.messagesSent) || 0,
         messagesReceived: Number(stat.messagesReceived) || 0,
+        sla: Number(stat.slaTotal) > 0 ? Math.round((Number(stat.slaMet) / Number(stat.slaTotal)) * 100) : null,
         tma: stat.avgHandlingTime ? formatSecondsToHMS(Number(stat.avgHandlingTime) / 1000000) : "00:00:00",
       }));
+      } catch (err: any) {
+        console.error("[getAgentStats] erro:", err?.message || err);
+        return [];
+      }
     }),
 
   getContactsByHour: publicProcedure
@@ -323,8 +357,8 @@ export const dashboardStatsRouter = router({
       // Consulta: contar conversas únicas por data+hora
       const result = await db
         .select({
-          date: sql<Date>`DATE(${conversationMessages.createdAt})`,
-          hour: sql<number>`HOUR(${conversationMessages.createdAt})`,
+          date: sql<Date>`DATE(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`,
+          hour: sql<number>`HOUR(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`,
           chats: sql<number>`COUNT(DISTINCT ${conversationMessages.conversationId})`,
         })
         .from(conversationMessages)
@@ -335,8 +369,8 @@ export const dashboardStatsRouter = router({
             lte(conversationMessages.createdAt, endDate)
           )
         )
-        .groupBy(sql`DATE(${conversationMessages.createdAt})`, sql`HOUR(${conversationMessages.createdAt})`)
-        .orderBy(sql`DATE(${conversationMessages.createdAt})`, sql`HOUR(${conversationMessages.createdAt})`);
+        .groupBy(sql`DATE(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`, sql`HOUR(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`)
+        .orderBy(sql`DATE(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`, sql`HOUR(CONVERT_TZ(${conversationMessages.createdAt}, '+00:00', '-03:00'))`);
 
       console.log(`[getContactsByHour] Resultado bruto:`, JSON.stringify(result));
 

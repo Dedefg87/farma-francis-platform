@@ -3,12 +3,14 @@
 export interface AgentStats {
   agentId: number;
   agentName: string;
+  photo: string | null;
   totalConversations: number;
   daysActive: number;
   avgPerDay: number;
   messagesSent: number;
   messagesReceived: number;
   tma: string;
+  sla?: number | null;
 }
 
 export interface DashboardSummary {
@@ -18,6 +20,7 @@ export interface DashboardSummary {
   messagesReceived: number;
   avgPerAgent: number;
   avgHandlingTime: string;
+  sla?: number | null;
 }
 
 export interface ChannelStats {

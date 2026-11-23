@@ -4,7 +4,7 @@
  * IMPORTANTE: Esta fila processa jobs em background SEM bloquear o webhook
  */
 import { getDb } from "../db";
-import { conversations, conversationMessages, customers, integrationSettings } from "../../drizzle/schema";
+import { conversations, conversationMessages, customers, integrationSettings, messages } from "../../drizzle/schema";
 import { eq, and, or, sql, gte, desc } from "drizzle-orm";
 import { generatePhoneVariants } from "../utils/phone";
 
@@ -20,6 +20,7 @@ interface MobileSyncJob {
   mediaUrl?: string | null;
   mimeType?: string | null;
   messageTimestamp: number;
+  fileName?: string | null;
 }
 
 // Fila simples em memória (Railway roda instância única)
@@ -175,7 +176,7 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     console.log("[MobileSync] Created new conversation:", conversationId, "for phone:", customerPhone);
   } else {
     conversationId = conv.id;
-    const isReopening = conv.status === "closed";
+    const isReopening = conv.status === "closed" && !["venda", "orcamento", "engano"].includes(conv.closeReason || "");
     // Atualizar lastMessageAt, unreadCount e reabrir se fechada
     await db
       .update(conversations)
@@ -212,9 +213,28 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   console.log("[MobileSync] Processing job:", job.id, "for conversation:", conversationId);
 
+  // Ignorar reações (não são mensagens — são processadas separadamente pelo endpoint /api/messages/react)
+  if (job.messageType === "reaction" || job.messageType === "reaction_message") {
+    console.log("[MobileSync] Ignorando job de reação (não é mensagem):", job.id, "emoji:", job.messageText || job.reaction);
+    return;
+  }
+
   // Preparar conteúdo da mensagem
   let content = job.messageText || job.caption || "";
+  if (!content && job.messageType) {
+    const typeLabels: Record<string, string> = {
+      image: "[Imagem]", audio: "[Áudio]", video: "[Vídeo]",
+      document: "[Documento]", sticker: "[Sticker]", location: "[Localização]",
+    };
+    content = typeLabels[job.messageType] || "";
+  }
 
+  // Guarda: nao inserir mensagem de encerramento/pesquisa no chat
+  const _normSync = String(content || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if (_normSync.indexOf("aperfeic") >= 0 && _normSync.indexOf("atendimento") >= 0) {
+    console.log("[MobileSync] Ignorando mensagem de encerramento/pesquisa:", content.substring(0, 40));
+    return;
+  }
   // Inserir mensagem na tabela conversation_messages
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
@@ -222,8 +242,8 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     senderType: "agent",
     content,
     fileUrl: job.mediaUrl || null,
-    fileName: null,
-    fileType: job.messageType || null,
+    fileName: job.fileName || null,
+    fileType: job.mimeType || null,
     fileSize: null,
     externalId: job.messageId,
     remoteJid: job.remoteJid,
@@ -232,11 +252,15 @@ async function processMobileSyncJob(job: MobileSyncJob) {
   const messageDbId = insertResult.insertId as number;
 
   // Se houver mídia com URL temporária do WhatsApp, baixar via Evolution API e subir para R2
-  if (
+  const shouldDownloadMedia =
     job.mediaUrl &&
-    job.mediaUrl.includes("mmg.whatsapp.net") &&
-    job.messageId
-  ) {
+    job.messageId &&
+    (job.mediaUrl.includes("mmg.whatsapp.net") || 
+     job.mediaUrl.includes("pps.whatsapp.net") ||
+     job.mediaUrl.includes("whatsapp.net") ||
+     job.mediaUrl.includes("whatsapp.com"));
+  
+  if (shouldDownloadMedia) {
     try {
       console.log("[MobileSync][S3] Triggering Evolution download for R2 upload, messageId:", job.messageId);
       const dbForUpload = await getDb();
@@ -254,41 +278,63 @@ async function processMobileSyncJob(job: MobileSyncJob) {
             ? JSON.parse(configRecord.config)
             : configRecord.config;
 
-        // Obter a instância "Meu" ou a primeira
-        const instance = (configData.instances as any[])?.find((i: unknown) => i.name === "Meu") || (configData.instances as any[])?.[0];
+        const normalizedUrl = (configData.apiUrl as string).replace(/\/$/, "");
+        const instanceName = configData.instanceName as string;
+        
+        // Usar endpoint que retorna bytes brutos (não JSON)
+        const downloadUrl = `${normalizedUrl}/message/download/${instanceName}/${job.messageId}`;
+        
+        const response = await fetch(downloadUrl, {
+          headers: {
+            apikey: configData.apiKey,
+          },
+          signal: AbortSignal.timeout(30000),
+        });
 
-        if (instance?.url && instance?.apiKey) {
-          const normalizedUrl = (instance.url as string).replace(/\/$/, "");
-          const downloadUrl = `${normalizedUrl}/message/download/${job.messageId}`;
-          console.log("[MobileSync][S3] Calling Evolution download endpoint:", downloadUrl);
-
-          const response = await fetch(downloadUrl, {
-            headers: {
-              apikey: instance.apiKey as string,
-            },
-            signal: AbortSignal.timeout(15000),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const r2Url = data?.url || data?.mediaUrl || null;
-            if (r2Url && r2Url.includes("r2.dev")) {
-              console.log("[MobileSync][S3] ✅ Got R2 URL, updating message:", r2Url);
-
-              await dbForUpload
-                .update(conversationMessages)
-                .set({ fileUrl: r2Url })
-                .where(eq(conversationMessages.id, messageDbId));
-
-              console.log("[MobileSync][S3] Message updated with R2 URL");
+        if (response.ok) {
+          // Verificar content-type para saber se é bytes ou JSON
+          const contentType = response.headers.get('content-type') || '';
+          
+          if (contentType.includes('image') || contentType.includes('audio') || 
+              contentType.includes('video') || contentType.includes('octet-stream')) {
+            // Resposta é bytes brutos - fazer upload direto para R2
+            const buffer = await response.arrayBuffer();
+            const bufferData = Buffer.from(buffer);
+            
+            if (bufferData.length > 100) {
+              // Fazer upload para R2
+              const mime = contentType.split(';')[0]; // image/jpeg, audio/ogg, etc
+              const ext = mime.split('/')[1] || 'bin';
+              const fileName = `media-${Date.now()}.${ext}`;
+              
+              const r2Key = `evolution-api/${fileName}`;
+              
+              // Import dinâmico do módulo R2
+              const { uploadToR2 } = await import('./r2-client.js');
+              const r2Url = await uploadToR2(bufferData, r2Key, mime);
+              
+              if (r2Url) {
+                console.log("[MobileSync][S3] ✅ Uploaded to R2:", r2Url);
+                
+                await dbForUpload
+                  .update(conversationMessages)
+                  .set({ fileUrl: r2Url, fileType: mime })
+                  .where(eq(conversationMessages.id, messageDbId));
+                
+                console.log("[MobileSync][S3] ✅ Message updated with R2 URL");
+              }
             }
           } else {
-            console.log("[MobileSync][S3] ❌ Download failed:", response.status, response.statusText);
+            // Resposta é JSON - log de erro
+            const data = await response.json();
+            console.log("[MobileSync][S3] ❌ Unexpected JSON response:", data);
           }
+        } else {
+          console.log("[MobileSync][S3] ❌ Download failed:", response.status, response.statusText);
         }
       }
     } catch (error) {
-      console.log("[MobileSync][S3] Error during R2 upload:", error);
+      console.error("[MobileSync][S3] Error during R2 upload:", error);
       // Non-critical - message still saved with original URL
     }
   }

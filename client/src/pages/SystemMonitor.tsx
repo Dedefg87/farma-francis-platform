@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -46,7 +46,7 @@ interface CleanResult {
 
 export default function SystemMonitor() {
   const [storage, setStorage] = useState<StorageData | null>(null);
-  const [dbSize, setDbSize] = useState<number>(0);
+  const [dbSize, setDbSize] = useState(0);
   const [tables, setTables] = useState<TableSize[]>([]);
   const [cleanResults, setCleanResults] = useState<CleanResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,36 +54,51 @@ export default function SystemMonitor() {
   const [cleaningDb, setCleaningDb] = useState(false);
   const [dbConfirmOpen, setDbConfirmOpen] = useState(false);
 
+  // Helper to get auth headers
+  const getAuthHeaders = (): Record<string, string> => {
+    const token = localStorage.getItem("jti") || sessionStorage.getItem("auth-token");
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Buscar informações de armazenamento
+      const headers = getAuthHeaders();
+
+      // Buscar informações de armazenamento (público)
       const storageRes = await fetch("/api/system/storage");
       if (storageRes.ok) {
         const storageData = await storageRes.json();
         setStorage(storageData);
       }
 
-  // Buscar tamanho do banco
-      // const dbSizeRes = await fetch("/api/system/database/size");
-      // if (dbSizeRes.ok) {
-      //   const dbSizeData = await dbSizeRes.json();
-      //   const size = Number(dbSizeData.size_mb) || 0;
-      //   setDbSize(size);
-      // }
+      // Buscar tamanho do banco (requer admin)
+      const dbSizeRes = await fetch("/api/system/database/size", { headers });
+      if (dbSizeRes.ok) {
+        const dbSizeData = await dbSizeRes.json();
+        const size = Number(dbSizeData.size_mb) || 0;
+        setDbSize(size);
+      } else if (dbSizeRes.status === 401) {
+        console.warn("[System] Não autenticado para buscar size do DB");
+      }
 
-      // Buscar estatísticas das tabelas
-      // const tablesRes = await fetch("/api/system/database/tables");
-      // if (tablesRes.ok) {
-      //   const tablesData = await tablesRes.json();
-      //   // Garantir que cada tabela tenha valores numéricos
-      //   const normalized = (tablesData.tables || []).map((t: unknown) => ({
-      //     table_name: t.table_name || "unknown",
-      //     size_mb: Number(t.size_mb) || 0,
-      //     table_rows: Number(t.table_rows) || 0,
-      //   }));
-      //   setTables(normalized);
-      // }
+      // Buscar estatísticas das tabelas (requer admin)
+      const tablesRes = await fetch("/api/system/database/tables", { headers });
+      if (tablesRes.ok) {
+        const tablesData = await tablesRes.json();
+        const normalized = (tablesData.tables || []).map((t: any) => ({
+          table_name: t.table_name || "unknown",
+          size_mb: Number(t.size_mb) || 0,
+          table_rows: Number(t.table_rows) || 0,
+        }));
+        setTables(normalized);
+      } else if (tablesRes.status === 401) {
+        console.warn("[System] Não autenticado para buscar tabelas");
+      }
     } catch (error) {
       console.error("Erro ao buscar dados:", error);
       toast.error("Erro ao carregar dados do sistema");
@@ -95,9 +110,15 @@ export default function SystemMonitor() {
   const handleClean = async (types?: string[]) => {
     setCleaning(true);
     try {
+      const token = localStorage.getItem("jti") || sessionStorage.getItem("auth-token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch("/api/system/clean", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ types }),
       });
 
@@ -105,7 +126,6 @@ export default function SystemMonitor() {
       if (data.success) {
         setCleanResults(data.results);
         toast.success("Limpeza concluída com sucesso!");
-        // Recarregar estatísticas
         fetchData();
       } else {
         toast.error("Erro na limpeza");
@@ -119,29 +139,28 @@ export default function SystemMonitor() {
   };
 
   const handleCleanDatabase = async () => {
-    // Funcionalidade temporariamente indisponível - endpoint não implementado
-    toast.error("Limpeza de banco de dados temporariamente indisponível");
-    setDbConfirmOpen(false);
-    return;
-    
-    /* Código original comentado:
     setCleaningDb(true);
     try {
+      const token = localStorage.getItem("jti") || sessionStorage.getItem("auth-token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch("/api/system/clean-database", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ confirm: true }),
       });
 
       const data = await response.json();
       if (data.success) {
         toast.success("Banco de dados limpo com sucesso!");
-        setCleanResults(prev => [...prev, ...data.results.map((r: unknown) => ({
+        setCleanResults(prev => [...prev, ...data.results.map((r: any) => ({
           type: "database." + r.table,
           deleted: r.rows,
           message: `Tabela ${r.table}: ${r.success ? 'limpa' : r.error}`
         }))]);
-        // Recarregar estatísticas
         fetchData();
       } else {
         toast.error(data.error || "Erro ao limpar banco de dados");
@@ -153,7 +172,6 @@ export default function SystemMonitor() {
       setCleaningDb(false);
       setDbConfirmOpen(false);
     }
-    */
   };
 
   useEffect(() => {
@@ -179,9 +197,6 @@ export default function SystemMonitor() {
   const safeTimestamp = storage?.timestamp ? new Date(storage.timestamp) : new Date();
   const safeDisk = storage?.disk || {};
   const safeAppSize = storage?.appSize || "N/A";
-
-  // Debug logs para verificar dados recebidos
-  console.log("[SystemMonitor] Debug:", { storage, dbSize, tables, topTables, totalTablesSize });
 
   if (loading) {
     return (
@@ -250,9 +265,9 @@ export default function SystemMonitor() {
               <Database className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dbSize.toFixed(2)} MB</div>
+              <div className="text-2xl font-bold">{formatBytes(dbSize)}</div>
               <p className="text-xs text-muted-foreground">
-                {tables.length} tabelas
+                {tables.length} tabelas{tables.length === 0 ? " - faça login como admin para ver dados" : ""}
               </p>
             </CardContent>
           </Card>
@@ -289,7 +304,7 @@ export default function SystemMonitor() {
                 <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-yellow-800">
                   <p className="font-semibold">Atenção</p>
-                  <p>A limpeza do banco de dados é irreversível. Apenas dados descartáveis (logs, sessões, mensagens antigas) são afetados.</p>
+                  <p>A limpeza agora é seletiva e automática: quando o armazenamento atinge 80%, são mantidos sempre os 20% mais recentes de conversas e mídias. Apenas dados descartáveis (logs, sessões, mensagens antigas) são afetados.</p>
                 </div>
               </div>
 
@@ -396,14 +411,15 @@ export default function SystemMonitor() {
               Tamanho das Tabelas
             </CardTitle>
             <CardDescription>
-              Total: <strong>{totalTablesSize.toFixed(2)} MB</strong> em {tables.length} tabela{tables.length !== 1 ? 's' : ''}
+              Total: <strong>{formatBytes(totalTablesSize)}</strong> em {tables.length} tabela{tables.length !== 1 ? 's' : ''}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {topTables.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Nenhuma tabela encontrada ou banco de dados vazio.</p>
+                <p>Nenhuma tabela encontrada ou necessária autenticação de admin.</p>
+                <p className="text-xs mt-2">Faça login como administrador para ver estatísticas do banco.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -425,7 +441,7 @@ export default function SystemMonitor() {
                         <tr key={table.table_name} className="border-b hover:bg-muted/50">
                           <td className="p-2 font-mono text-xs">{table.table_name}</td>
                           <td className="text-right p-2">{rows.toLocaleString()}</td>
-                          <td className="text-right p-2">{size.toFixed(2)} MB</td>
+                          <td className="text-right p-2">{formatBytes(size)}</td>
                           <td className="text-right p-2">{percent}%</td>
                         </tr>
                       );

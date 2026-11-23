@@ -3,7 +3,7 @@
 ## 📡 Base URL
 
 ```
-Production: https://innovative-enjoyment-production-ed8f.up.railway.app
+Production: https://farmafrancis.up.railway.app
 Development: http://localhost:3000
 ```
 

@@ -14,14 +14,22 @@ class SseManager extends EventEmitter {
     if (!this.clients.has(userId)) {
       this.clients.set(userId, new Set());
     }
-    this.clients.get(userId)!.add(res);
+    // Limpa conexoes mortas antes de adicionar (evita acumulo quando o proxy
+      // corta a conexao sem disparar 'close')
+      for (const dead of Array.from(this.clients.get(userId)!)) {
+        if ((dead as any).destroyed || (dead as any).writableEnded) {
+          this.clients.get(userId)!.delete(dead);
+        }
+      }
+      this.clients.get(userId)!.add(res);
     
     console.log(`[SSE] Client added. Total clients for userId=${userId}: ${this.clients.get(userId)!.size}`);
     console.log(`[SSE] All connected users: ${this.getConnectedUsers().join(", ")}`);
 
     res.on("close", () => {
 
-      this.clients.get(userId)?.delete(res);
+      try { this.clients.get(userId)?.delete(res); } catch (e) {}
+        try { (res as any).end(); } catch (e) {}
       if (this.clients.get(userId)?.size === 0) {
         this.clients.delete(userId);
       }

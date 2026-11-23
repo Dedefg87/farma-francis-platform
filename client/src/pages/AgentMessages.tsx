@@ -14,6 +14,7 @@ import { BroadcastListManager } from "@/components/BroadcastListManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +47,6 @@ function getMimeType(
   // Fallback para o fileType do banco
   return fileType || "";
 }
-
 import {
   MessageSquare,
   Clock,
@@ -71,6 +71,8 @@ import {
   Megaphone,
   Keyboard,
   Trash2,
+  Send,
+  CornerUpLeft,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -85,7 +87,10 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -105,6 +110,7 @@ import CRMPanel from "@/components/CRMPanel";
 import { useNotificationSound } from "@/hooks/useNotificationSound";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { shouldNotifyAgent, conversationOwner } from "@/lib/notificationGuard";
 import { useLocation } from "wouter";
 import { applyQuickReplyVariables } from "@/lib/quickReplyVariables";
 
@@ -160,9 +166,22 @@ export default function AgentMessages() {
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
+  const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
+  const [replyToMsg, setReplyToMsg] = useState<{ id: number; externalId?: string; content: string } | null>(null);
+  const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
+  const [forwardTargetAgentId, setForwardTargetAgentId] = useState<string>("");
+  const [forwardTargetCustomerPhone, setForwardTargetCustomerPhone] = useState<string>("");
+  const [forwardTargetProvider, setForwardTargetProvider] = useState<"whatsapp" | "instagram">("whatsapp");
+  const [manualPhoneInput, setManualPhoneInput] = useState<string>("");
   const [transferAgentId, setTransferAgentId] = useState<string>("");
   const [closeReason, setCloseReason] = useState("conversa_anterior");
+  const [showCloseAllDialog, setShowCloseAllDialog] = useState(false);
+  const [closeAllMessage, setCloseAllMessage] = useState("Obrigado pelo contato! Atendimento encerrado.");
+  const [closeAllLoading, setCloseAllLoading] = useState(false);
+  const [closeAllReason, setCloseAllReason] = useState("conversa_anterior");
   const [conferenceLink, setConferenceLink] = useState("");
   const [showCRMPanel, setShowCRMPanel] = useState(false);
   const [showNewOptionsModal, setShowNewOptionsModal] = useState(false);
@@ -176,6 +195,12 @@ export default function AgentMessages() {
   const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
   const queryClient = useQueryClient();
+
+  // Buscar contatos recentes para o dropdown de encaminhar para cliente
+  const { data: recentContacts = [], isLoading: loadingRecentContacts } = trpc.conversations.recentContacts.useQuery(
+    { limit: 30 },
+    { enabled: true }
+  );
 
   // DEBUG: Log component mount
   useEffect(() => {
@@ -219,10 +244,15 @@ export default function AgentMessages() {
               data.type === "MESSAGE_NEW" ||
               data.type === "conversation:update" ||
               data.type === "conversation:new" ||
-              data.type === "conversation:read"
+              data.type === "conversation:read" ||
+              (data.type === "messages.update" && data.data?.fromMe === false)
             ) {
               // Play notification sound if not muted (only for new messages)
-              if (!notificationsMuted && (data.type === "message:new" || data.type === "MESSAGE_NEW")) {
+              if (
+                !notificationsMuted &&
+                (data.type === "message:new" || data.type === "MESSAGE_NEW") &&
+                shouldNotifyAgent(data.data?.assignedTo ?? data.data?.assigned_to, user?.id)
+              ) {
                 playNotificationSound();
               }
 
@@ -233,17 +263,20 @@ export default function AgentMessages() {
               const conversationId = data.data?.conversationId;
               if (conversationId) {
                 queryClient.invalidateQueries({
-                  queryKey: ["messages", "list", { conversation_id: conversationId }]
+                  queryKey: ["trpc", "messages", "list", { conversation_id: conversationId }]
                 });
               }
 
               // Fallback: invalidate all messages queries
-              queryClient.invalidateQueries({ queryKey: ["messages"] });
+              queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
+
+  // [FIX] Auto-select no SSE REMOVIDO: mensagem nova NAO troca a conversa aberta.
+  // A lista atualiza, o som toca e o badge de nao-lida sinaliza; a troca e somente por clique.
 
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
                 queryClient.invalidateQueries({
-                  queryKey: ["messages", data.data.conversationId],
+                  queryKey: ["trpc", "messages", data.data.conversationId],
                 });
               }
             }
@@ -262,7 +295,7 @@ export default function AgentMessages() {
           eventSource?.close();
 
           // Reconnect with exponential backoff (cap at 60s to avoid too many failed connections)
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 60000);
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 5000);
           reconnectTimeout = setTimeout(() => {
             reconnectAttempt++;
             connect();
@@ -279,7 +312,7 @@ export default function AgentMessages() {
       eventSource?.close();
       clearTimeout(reconnectTimeout);
     };
-  }, [user?.id, notificationsMuted, playNotificationSound, queryClient]);
+  }, [user?.id, notificationsMuted, queryClient]); // playNotificationSound removido: recriava o EventSource a cada render
 
   // Atualizar localStorage quando ordenação mudar
   useEffect(() => {
@@ -340,7 +373,7 @@ export default function AgentMessages() {
     {},
     {
       enabled: hasSession(),
-      refetchInterval: 1000, // Atualizar a cada 1 segundo
+      refetchInterval: 10000, // Atualizar lista de conversas a cada 10s
     }
   );
 
@@ -450,7 +483,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     {
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 800 : false, // Atualizar mensagens a cada 800ms se conversa selecionada
+      refetchInterval: selectedConversationId ? 4000 : false, // Atualizar mensagens a cada 3s (fallback quando SSE cai no Railway)
       onSuccess: (data) => {
         if (data && data.length > 0) {
         }
@@ -467,6 +500,13 @@ export default function AgentMessages() {
     const query = messageSearchQuery.toLowerCase();
     return messages.filter(msg => msg.content?.toLowerCase().includes(query));
   }, [messages, messageSearchQuery]);
+
+  // [FIX] Primeira mensagem nao lida: ancora a rolagem ao abrir a conversa
+  const firstUnreadMessageId = useMemo(() => {
+    if (!filteredMessages || filteredMessages.length === 0) return null;
+    const m = filteredMessages.find((x: unknown) => (x as any).senderType === "customer" && !(x as any).readAt);
+    return m ? (m as any).id : null;
+  }, [filteredMessages]);
 
   const mediaItems = useMemo(() => {
     if (!messages) return [];
@@ -532,12 +572,36 @@ export default function AgentMessages() {
     },
   });
 
+  const closeAllConversationMutation = {
+    mutate: async () => {
+      setCloseAllLoading(true);
+      try {
+        const res = await fetch("/api/system/close-conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast.success(`${data.closed || 0} conversas encerradas`);
+          queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
+          refetchConversations();
+          setShowCloseAllDialog(false);
+        }
+      } catch (err) {
+        toast.error("Erro ao encerrar conversas");
+      } finally {
+        setCloseAllLoading(false);
+      }
+    },
+    isPending: closeAllLoading,
+  };
+
   // Bug 1 fix: Delete message mutation
   const deleteMessageMutation = trpc.messages.delete.useMutation({
     onSuccess: () => {
       toast.success("Mensagem excluída");
       // Force immediate cache invalidation
-      queryClient.invalidateQueries({ queryKey: ["messages"] });
+      queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
       queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
       refetchMessages();
     },
@@ -546,7 +610,25 @@ export default function AgentMessages() {
     },
   });
 
+  // Forward message mutation
+  const forwardMessageMutation = trpc.messages.forward.useMutation({
+    onSuccess: () => {
+      toast.success("Mensagem encaminhada com sucesso!");
+      setShowForwardDialog(false);
+      setForwardMessageId(null);
+      setForwardTargetAgentId("");
+      setForwardTargetCustomerPhone("");
+    },
+    onError: error => {
+      toast.error(`Erro ao encaminhar: ${error.message}`);
+    },
+  });
+
   // Função para selecionar conversa e marcar como lida
+
+  // [FIX] Auto-select de conversa com nao-lida REMOVIDO: o sistema nao pula mais sozinho
+  // para a conversa mais recente. Notificacoes (badge) continuam normais; a troca e somente manual (clique).
+
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
     setSelectedConversationId(conversationId);
@@ -607,13 +689,23 @@ export default function AgentMessages() {
     isAtBottomRef.current = isAtBottom;
   }, []);
 
-  // Scroll inicial quando carrega conversa
+  // Resets: when conversation changes, allow scroll to bottom on new conversation
   useEffect(() => {
-    if (!hasInitiallyScrolledRef.current && messages && messages.length > 0) {
+    hasInitiallyScrolledRef.current = false;
+    isAtBottomRef.current = true;
+  }, [selectedConversationId]);
+
+  // [FIX] Scroll inicial: posiciona na primeira mensagem nao lida; se nao houver, vai ao fim
+  useEffect(() => {
+    if (hasInitiallyScrolledRef.current || !messages || messages.length === 0) return;
+    const anchor = document.getElementById("first-unread-anchor");
+    if (anchor) {
+      anchor.scrollIntoView({ block: "start" });
+    } else {
       scrollToBottom(true);
-      hasInitiallyScrolledRef.current = true;
     }
-  }, [messages, scrollToBottom]);
+    hasInitiallyScrolledRef.current = true;
+  }, [messages, scrollToBottom, firstUnreadMessageId]);
 
   // Scroll condicional para novas mensagens
   useEffect(() => {
@@ -654,9 +746,12 @@ export default function AgentMessages() {
     }
 
     // Calcular total de mensagens não lidas
-    const currentTotalUnread = conversations.reduce(
-      (sum, c) => sum + (c.unreadCount || 0),
-      0
+    const myConversations = conversations.filter(
+    (c) => shouldNotifyAgent(conversationOwner(c), user?.id)
+    );
+    const currentTotalUnread = myConversations.reduce(
+    (sum, c) => sum + (c.unreadCount || 0),
+    0
     );
     const previousTotalUnread = previousTotalUnreadRef.current;
 
@@ -780,17 +875,23 @@ export default function AgentMessages() {
           fileName: selectedFile.name,
           fileType: selectedFile.type,
           fileSize: selectedFile.size,
+          replyToMessageId: replyToMsg?.id ?? undefined,
+          replyToExternalId: replyToMsg?.externalId,
         });
         setSelectedFile(null);
         setFilePreview(null);
         setMessage("");
+        setReplyToMsg(null);
       };
       reader.readAsDataURL(selectedFile);
     } else {
       sendMessageMutation.mutate({
         conversation_id: selectedConversationId,
         content: message,
+        replyToMessageId: replyToMsg?.id,
+        replyToExternalId: replyToMsg?.externalId,
       });
+      setReplyToMsg(null);
     }
   };
 
@@ -1218,34 +1319,141 @@ export default function AgentMessages() {
                   filteredMessages.map(msg => (
                     <div
                       key={msg.id}
-                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"}`}
+                      id={firstUnreadMessageId === msg.id ? "first-unread-anchor" : undefined}
+                      className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"} cursor-pointer`}
+                      onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}
                     >
                       <div
-                        className={`relative max-w-[70%] rounded-lg p-3 ${
+                        className={`relative max-w-[70%] rounded-2xl p-3.5 shadow-md ${
                           msg.senderType === "agent"
-                            ? "bg-blue-500 text-white"
-                            : "bg-white text-gray-900 border border-gray-200"
+                            ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-blue-200/40"
+                            : "bg-white text-gray-900 border border-gray-200/60 shadow-gray-200/50"
                         }`}
                       >
                         {/* Bug 1 fix: Delete button - appears on hover */}
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (confirm("Excluir esta mensagem?")) {
                               deleteMessageMutation.mutate({ messageId: msg.id });
                             }
                           }}
-                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-red-600 z-10`}
                           title="Excluir mensagem"
                           disabled={deleteMessageMutation.isPending}
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
+                        {/* Reply button - appears on hover */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                              setReplyToMsg({ 
+                                id: msg.id, 
+                                externalId: msg.externalId || undefined,
+                                content: msg.content || "" 
+                              });
+                          }}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-18" : "-right-18"} w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-green-600 z-10`}
+                          title="Responder mensagem"
+                        >
+                          <CornerUpLeft className="w-3 h-3" />
+                        </button>
+                        {/* Forward button - appears on hover */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setForwardMessageId(msg.id);
+                            setShowForwardDialog(true);
+                          }}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-10" : "-right-10"} w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-blue-600 z-10`}
+                          title="Encaminhar mensagem"
+                          disabled={forwardMessageMutation.isPending}
+                        >
+                          <Send className="w-3 h-3" />
+                        </button>
+                        {/* Reaction button - opens emoji picker on click */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const reactions = ["👍", "❤️", "😂", "😮", "😢", "🙏", "👏"];
+                            const current = (msg as any).reaction;
+                            const next = current ? reactions[(reactions.indexOf(current) + 1) % reactions.length] : reactions[0];
+                            const pickerId = `reaction-picker-${msg.id}`;
+                            let pickerEl = document.getElementById(pickerId);
+                            if (pickerEl) {
+                              pickerEl.remove();
+                              return;
+                            }
+                            pickerEl = document.createElement("div");
+                            pickerEl.id = pickerId;
+                            const btnRect = e.currentTarget.getBoundingClientRect();
+                            pickerEl.style.position = "fixed";
+                            pickerEl.style.top = `${btnRect.bottom + 6}px`;
+                            pickerEl.style.left = `${btnRect.left + btnRect.width/2 - 80}px`;
+                            pickerEl.className = `z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
+                            pickerEl.innerHTML = reactions.map(emo => `<button data-emoji="${emo}" class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
+                            pickerEl.onclick = (e2) => {
+                              e2.stopPropagation();
+                              const btn = e2.target.closest("button");
+                              if (btn && btn.getAttribute("data-emoji")) {
+                                const emoji = btn.getAttribute("data-emoji");
+                                // Envia reação via API para aparecer no celular
+                                fetch(`/api/messages/react`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ messageId: msg.id, emoji: emoji }),
+                                }).catch((e) => console.warn("[Reaction] Envio falhou:", e));
+                                const msgElForVisual = document.querySelector(`[key="${msg.id}"]`) || document.querySelector(`.group[data-msg-id="${msg.id}"]`);
+
+                                if (msgElForVisual) {
+                                  const bubble = msgElForVisual.querySelector(".relative");
+                                  let reactionEl = msgElForVisual.querySelector(".message-reaction");
+                                  if (!reactionEl && bubble) {
+                                    reactionEl = document.createElement("span");
+                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100/70 border border-gray-200/50 rounded-full px-2 py-0.5 text-sm mt-1.5 select-none backdrop-blur-sm";
+                                    bubble.appendChild(reactionEl);
+                                  }
+                                  if (reactionEl) reactionEl.innerText = emoji;
+                                }
+                              }
+                              pickerEl.remove();
+                            };
+                            document.body.appendChild(pickerEl);
+                            setTimeout(() => pickerEl?.remove(), 8000);
+                          }}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-yellow-500 z-10`}
+                          title="Reagir"
+                        >
+                          <Smile className="w-3 h-3" />
+                        </button>
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
                         </p>
-                        {msg.content && msg.content !== "null" && (
-                          <p className="text-sm">{renderContentWithLinks(msg.content)}</p>
+                        {/* Quoted/Reply message indicator */}
+                        {(msg as any).replyToExternalId && (
+                          <div className="mb-2 p-2 bg-green-50 border-l-3 border-green-500 rounded-r text-sm">
+                            <p className="text-xs text-green-700 font-medium mb-0.5">Respondendo a:</p>
+                            <p className="text-sm text-gray-700 line-clamp-1">
+                              {((msg as any).replyToContent || "").length > 100 
+                                ? ((msg as any).replyToContent || "Mensagem citada").substring(0, 100) + "..."
+                                : ((msg as any).replyToContent || "Mensagem citada")}
+                            </p>
+                          </div>
+                        )}
+                        {msg.content?.includes("📤") && (
+          <div className="text-[11px] italic text-gray-400 select-none mb-1">→ Encaminhado</div>
+        )}
+        {msg.content && msg.content !== "null" && (
+                          <p className="text-sm">{renderContentWithLinks(msg.content?.includes("📤") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)).replace(/^💬 /, "").trim() : (msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
+                        )}
+                        {msg.reaction && (
+                          <div className="mt-1 text-lg leading-none">
+                            <span className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm">
+                              {msg.reaction}
+                            </span>
+                          </div>
                         )}
                         {msg.fileUrl && (
                           <div className="mt-2">
@@ -1297,6 +1505,20 @@ export default function AgentMessages() {
               </div>
 
               {/* Input de Mensagem */}
+              {replyToMsg && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border-l-4 border-green-500 rounded text-sm">
+                  <CornerUpLeft className="w-4 h-4 text-green-600 shrink-0" />
+                  <span className="text-green-800 truncate flex-1">Respondendo: {replyToMsg.content}</span>
+                  <button
+                    onClick={() => setReplyToMsg(null)}
+                    className="text-green-600 hover:text-green-800 shrink-0"
+                    title="Cancelar resposta"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="bg-white border-t border-gray-200 p-4">
                 {/* File Preview */}
                 {selectedFile && (
@@ -1390,12 +1612,19 @@ export default function AgentMessages() {
                     )}
                   </div>
 
-                  <Input
+                  <Textarea
                     value={message}
                     onChange={e => setMessage(e.target.value)}
-                    onKeyPress={e => e.key === "Enter" && handleSendMessage()}
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1"
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                      // Shift+Enter permite nova linha (comportamento padrão do textarea)
+                    }}
+                    placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                    className="flex-1 min-h-[44px] max-h-48 resize-none"
+                    rows={1}
                   />
 
                   <Button
@@ -1630,7 +1859,223 @@ export default function AgentMessages() {
         </Dialog>
       </div>
 
-      {showQuickReplies && (
+      
+        <Dialog open={showCloseAllDialog} onOpenChange={setShowCloseAllDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Encerrar todas as conversas</DialogTitle>
+              <DialogDescription>Tem certeza? Esta ação fechará todas as conversas abertas e atribuídas.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Select value={closeAllReason} onValueChange={setCloseAllReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Motivo do enecerramento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="venda">Venda</SelectItem>
+                  <SelectItem value="orcamento">Orçamento</SelectItem>
+                  <SelectItem value="conversa_anterior">Conversa anterior</SelectItem>
+                  <SelectItem value="engano">Engano</SelectItem>
+                </SelectContent>
+              </Select>
+              <textarea
+                value={closeAllMessage}
+                onChange={e => setCloseAllMessage(e.target.value)}
+                placeholder="Mensagem de encerramento (opcional)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm min-h-[80px]"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowCloseAllDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => closeAllConversationMutation.mutate()}
+                disabled={closeAllConversationMutation.isPending || closeAllLoading}
+              >
+                Encerrar Todas
+              </Button>
+            </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={showForwardDialog} onOpenChange={setShowForwardDialog}>
+                      <DialogContent className="max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Encaminhar mensagem</DialogTitle>
+                          <DialogDescription>Escolha o destino para encaminhar a mensagem</DialogDescription>
+                        </DialogHeader>
+                        
+                        {/* Tipo de destino */}
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Encaminhar para</label>
+                            <Select value={forwardTargetType} onValueChange={setForwardTargetType}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo de destino" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="agent">👤 Outro atendente (sussurro interno)</SelectItem>
+                                <SelectItem value="customer">📱 Cliente (WhatsApp/Instagram)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Destino: Atendente */}
+                          {forwardTargetType === "agent" && (
+                            <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <label className="block text-sm font-medium text-gray-700">Atendente destino</label>
+                              <Select value={forwardTargetAgentId} onValueChange={setForwardTargetAgentId}>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione um atendente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {loggedAgents && loggedAgents.length > 0 ? (
+                                    loggedAgents.map(agent => (
+                                      <SelectItem key={agent.id} value={String(agent.id)}>
+                                        {agent.name || `Agente ${agent.id}`}
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <SelectItem value="none" disabled>
+                                      Nenhum atendente logado
+                                    </SelectItem>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
+                          {/* Destino: Cliente */}
+                          {forwardTargetType === "customer" && (
+                            <div className="space-y-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                              <label className="block text-sm font-medium text-gray-700">Selecionar cliente</label>
+                              <div className="relative">
+                                <Select
+                                  value={forwardTargetCustomerPhone}
+                                  onValueChange={setForwardTargetCustomerPhone}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Digite para buscar ou selecione um cliente recente..." />
+                                  </SelectTrigger>
+                                  <SelectContent position="popper">
+                                    <SelectGroup>
+                                      <label className="px-2 py-1.5 text-xs text-gray-500 font-medium">Clientes recentes (últimas interações)</label>
+                                      {loadingRecentContacts ? (
+                                        <div className="px-2 py-1.5 text-xs text-gray-500">
+                                          Carregando...
+                                        </div>
+                                      ) : recentContacts.length > 0 ? (
+                                        recentContacts.map(contact => (
+                                          <SelectItem 
+                                            key={contact.customerPhone} 
+                                            value={contact.customerPhone}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                                                {contact.customerName?.charAt(0)?.toUpperCase() || 'C'}
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">{contact.customerName}</div>
+                                                <div className="text-xs text-gray-500 truncate">{contact.customerPhone}</div>
+                                              </div>
+                                              <span className="text-xs text-gray-400">
+                                                {contact.channel === 'whatsapp' ? '📱' : '📷'} {contact.lastMessageAt ? new Date(contact.lastMessageAt).toLocaleDateString('pt-BR') : 'Sem data'}
+                                              </span>
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <div className="px-2 py-1.5 text-xs text-gray-500">
+                                          Nenhum cliente recente encontrado
+                                        </div>
+                                      )}
+                                    </SelectGroup>
+                                    <SelectSeparator />
+                                    <SelectItem value="__manual__">
+                                      <div className="flex items-center gap-2 text-blue-600">
+                                        <Plus className="w-4 h-4" />
+                                        <span>Inserir número manualmente</span>
+                                      </div>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              {/* Input manual quando selecionado "Inserir número manualmente" */}
+                              {forwardTargetCustomerPhone === "__manual__" && (
+                                <div className="space-y-2 mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <label className="block text-sm font-medium text-gray-700">Telefone do cliente (com DDD)</label>
+                                  <Input
+                                    type="tel"
+                                    placeholder="Ex: 5511999999999"
+                                    value={manualPhoneInput}
+                                    onChange={e => setManualPhoneInput(e.target.value)}
+                                    className="w-full"
+                                  />
+                                  <label className="block text-sm font-medium text-gray-700 mt-2">Canal</label>
+                                  <Select value={forwardTargetProvider} onValueChange={setForwardTargetProvider}>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione o canal" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="whatsapp">📱 WhatsApp</SelectItem>
+                                      <SelectItem value="instagram">📷 Instagram</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <DialogFooter>
+                          <Button
+                            variant="destructive"
+                            onClick={() => {
+                              if (!forwardMessageId) return;
+                              
+                              if (forwardTargetType === "agent") {
+                                if (
+                                  !forwardTargetAgentId ||
+                                  forwardTargetAgentId === "none"
+                                ) {
+                                  toast.error("Selecione um atendente");
+                                  return;
+                                }
+                                forwardMessageMutation.mutate({
+                                  messageId: forwardMessageId,
+                                  targetAgentId: Number(forwardTargetAgentId),
+                                });
+                              } else if (forwardTargetType === "customer") {
+                                if (!forwardTargetCustomerPhone.trim()) {
+                                  toast.error("Informe o telefone do cliente");
+                                  return;
+                                }
+                                if (!forwardTargetProvider) {
+                                  toast.error("Selecione o canal (WhatsApp/Instagram)");
+                                  return;
+                                }
+                                forwardMessageMutation.mutate({
+                                  messageId: forwardMessageId,
+                                  targetCustomerPhone: forwardTargetCustomerPhone.replace(/\D/g, ""),
+                                  targetProvider: forwardTargetProvider,
+                                });
+                              }
+                            }}
+                            disabled={forwardMessageMutation.isPending}
+                          >
+                            Encaminhar
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
+                  {showQuickReplies && (
         <QuickRepliesModal
           open={showQuickReplies}
           onClose={() => setShowQuickReplies(false)}

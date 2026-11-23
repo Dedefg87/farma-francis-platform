@@ -17,6 +17,8 @@ export async function ingestInboundConversationMessage(message: {
   fileName?: string | null;
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
+  replyToExternalId?: string | null; // ID da mensagem citada (reply)
+  replyToContent?: string | null; // Conteudo da mensagem citada
   createdAt?: Date;
 }) {
   console.log("[Ingest] Starting for message from", message.fromNumber, "type:", message.messageType);
@@ -141,6 +143,8 @@ export async function ingestInboundConversationMessage(message: {
   const insertResult = await db.insert(conversationMessages).values({
     conversationId,
     externalId: message.externalId || null,
+    replyToExternalId: message.replyToExternalId || null,
+    replyToContent: message.replyToContent || null,
     senderId: null,
     senderType: "customer",
     content: buildInboundContent(message),

@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-21T14:20:22.093Z",
+  "projectRoot": "/workspace/farma-francis-platform",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": true,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1784643622093
+}

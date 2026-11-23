@@ -49,11 +49,11 @@ export function FarmaDashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <TopBar />
       {/* Flex container to fill remaining height */}
       <main 
-        className="flex-1 flex flex-col px-4 md:px-6 py-4 md:py-6"
+        className="flex-1 flex flex-col px-4 md:px-6 py-4 md:py-6 min-h-0"
         style={{ paddingTop: 'var(--topbar-height, 80px)' }}
       >
         {children}

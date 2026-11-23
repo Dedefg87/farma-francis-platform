@@ -10,6 +10,8 @@ import {
   longtext,
   mysqlEnum,
   mysqlTable,
+  index,
+  uniqueIndex,
   text,
   timestamp,
   varchar,
@@ -469,6 +471,7 @@ export const messages = mysqlTable("messages", {
   customerId: int("customer_id").references(() => customers.id),
   ticketId: int("ticket_id").references(() => tickets.id),
   channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
+  instanceName: varchar("instance_name", { length: 100 }), // [FIX] instancia que recebeu a mensagem
   direction: mysqlEnum("direction", ["inbound", "outbound"]).notNull(),
   content: text("content").notNull(),
   messageId: varchar("message_id", { length: 255 }), // external message ID
@@ -629,6 +632,7 @@ export const receivedMessages = mysqlTable("received_messages", {
   externalId: varchar("external_id", { length: 255 }).notNull(), // Message ID from provider
   fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone number or Instagram user ID
   fromName: varchar("from_name", { length: 255 }), // Sender name if available
+  fromProfilePic: longtext("from_profile_pic"), // Sender profile picture URL (WhatsApp/Instagram)
   messageType: mysqlEnum("message_type", [
     "text",
     "image",
@@ -810,6 +814,7 @@ export const conversations = mysqlTable("conversations", {
   customerPhone: varchar("customer_phone", { length: 50 }),
   queueId: int("queue_id").references(() => queues.id), // Fila de atendimento
   channel: mysqlEnum("channel", ["whatsapp", "instagram"]).notNull(),
+  instanceName: varchar("instance_name", { length: 100 }), // [FIX] instancia que recebeu a mensagem (roteamento de resposta)
   status: mysqlEnum("status", ["open", "assigned", "closed"])
     .default("open")
     .notNull(),
@@ -954,12 +959,18 @@ export const conversationMessages = mysqlTable("conversation_messages", {
   provider: mysqlEnum("provider", ["whatsapp", "instagram"]).default("whatsapp"),
   senderId: int("sender_id").references(() => users.id), // ID do agente (null se for cliente)
   senderType: mysqlEnum("sender_type", ["agent", "customer"]).notNull(),
+  senderName: varchar("sender_name", { length: 255 }), // ✅ Nome do remetente
+  senderPosition: varchar("sender_position", { length: 255 }), // ✅ Cargo do remetente
   content: text("content").notNull(),
   // Campos de anexo
   fileUrl: longtext("file_url"), // Can contain base64 data URLs
   fileName: varchar("file_name", { length: 255 }),
   fileType: varchar("file_type", { length: 100 }), // MIME type
   fileSize: int("file_size"), // Tamanho em bytes
+  // ✅ NOVOS CAMPOS: Reply + Reaction
+  replyToExternalId: varchar("reply_to_external_id", { length: 255 }), // Evolution ID da mensagem respondida
+  replyToContent: text("reply_to_content"), // ✅ Conteúdo da mensagem respondida (para exibição)
+  reaction: varchar("reaction", { length: 10 }), // Emoji (❤️, 👍)
   readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -1097,11 +1108,28 @@ export const pharmaProducts = mysqlTable("pharma_products", {
   name: varchar("name", { length: 255 }).notNull(),
   category: mysqlEnum("category", [
     "medicamento",
+    "generico",
     "perfumaria",
+    "hpc",
+    "correlato",
+    "servico",
     "outros",
-  ]).default("outros"),
+  ]).default("medicamento").notNull(),
   substance: varchar("substance", { length: 255 }),
   daysDuration: int("days_duration"),
+  salePrice: decimal("sale_price", { precision: 12, scale: 2 }).default("0").notNull(),
+  avgCost: decimal("avg_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  defaultMargin: decimal("default_margin", { precision: 6, scale: 2 }).default("0").notNull(),
+  unit: varchar("unit", { length: 10 }).default("UN").notNull(),
+  controlled: int("controlled").default(0).notNull(),
+  requiresPrescription: int("requires_prescription").default(0).notNull(),
+  ncm: varchar("ncm", { length: 8 }),
+  icms: decimal("icms", { precision: 6, scale: 2 }),
+  pis: decimal("pis", { precision: 6, scale: 2 }),
+  cofins: decimal("cofins", { precision: 6, scale: 2 }),
+  st: decimal("st", { precision: 6, scale: 2 }),
+  active: int("active").default(1).notNull(),
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
 });
@@ -1148,6 +1176,67 @@ export const pharmaPurchaseItems = mysqlTable("pharma_purchase_items", {
 
 export type PharmaPurchaseItem = typeof pharmaPurchaseItems.$inferSelect;
 export type InsertPharmaPurchaseItem = typeof pharmaPurchaseItems.$inferInsert;
+
+/**
+ * PharmaCore - Suppliers (fornecedores)
+ */
+export const pharmaSuppliers = mysqlTable("pharma_suppliers", {
+  id: int("id").autoincrement().primaryKey(),
+  tradeName: varchar("trade_name", { length: 160 }).notNull(),
+  cnpj: varchar("cnpj", { length: 14 }).notNull(),
+  ie: varchar("ie", { length: 20 }),
+  contact: varchar("contact", { length: 120 }),
+  phone: varchar("phone", { length: 20 }),
+  email: varchar("email", { length: 120 }),
+  paymentTerms: varchar("payment_terms", { length: 40 }),
+  active: int("active").default(1).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  uniqueIndex("uq_suppliers_cnpj").on(t.cnpj),
+]);
+
+export type PharmaSupplier = typeof pharmaSuppliers.$inferSelect;
+export type InsertPharmaSupplier = typeof pharmaSuppliers.$inferInsert;
+
+/**
+ * PharmaCore - Product batches (lote + validade + estoque)
+ */
+export const pharmaProductBatches = mysqlTable("pharma_product_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  productEan: varchar("product_ean", { length: 32 }).notNull(),
+  lot: varchar("lot", { length: 40 }).notNull(),
+  expiry: date("expiry").notNull(),
+  quantity: decimal("quantity", { precision: 14, scale: 3 }).default("0").notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).default("0").notNull(),
+  entryDate: date("entry_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (t) => [
+  index("idx_batches_product").on(t.productEan),
+  index("idx_batches_expiry").on(t.expiry),
+]);
+
+export type PharmaProductBatch = typeof pharmaProductBatches.$inferSelect;
+export type InsertPharmaProductBatch = typeof pharmaProductBatches.$inferInsert;
+
+/**
+ * PharmaCore - Supplier products (preço de compra por fornecedor)
+ */
+export const pharmaSupplierProducts = mysqlTable("pharma_supplier_products", {
+  id: int("id").autoincrement().primaryKey(),
+  supplierId: int("supplier_id").notNull(),
+  productEan: varchar("product_ean", { length: 32 }).notNull(),
+  supplierCode: varchar("supplier_code", { length: 40 }),
+  purchasePrice: decimal("purchase_price", { precision: 12, scale: 2 }).default("0").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("uq_supplier_product").on(t.supplierId, t.productEan),
+  index("idx_sp_product").on(t.productEan),
+]);
+
+export type PharmaSupplierProduct = typeof pharmaSupplierProducts.$inferSelect;
+export type InsertPharmaSupplierProduct = typeof pharmaSupplierProducts.$inferInsert;
 
 /**
  * CRM - Tags para Segmentação de Clientes
@@ -1515,4 +1604,72 @@ export type InsertProcessedWebhookMessage =
   typeof processedWebhookMessages.$inferInsert;
 
 export * from './schema_logs';
+
+
+/**
+ * STORY CACHE - Cache de stories para correlacionar replies
+ * Quando alguém responde a um story, a Evolution API NÃO envia contextInfo
+ * Guardamos o story original e correlacionamos replies pelo timestamp (+/- 2 minutos)
+ */
+export const storyCache = mysqlTable("story_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  storyId: varchar("story_id", { length: 255 }).notNull(), // message.key.id do story
+  remoteJid: varchar("remote_jid", { length: 255 }).notNull(), // Quem enviou o story
+  fromNumber: varchar("from_number", { length: 100 }).notNull(), // Phone normalizado
+  fromName: varchar("from_name", { length: 255 }),
+  mediaUrl: longtext("media_url"), // URL da mídia no R2
+  rawUrl: longtext("raw_url"), // URL original antes do download
+  mediaType: mysqlEnum("media_type", ["image", "video", "audio", "document", "text"]).notNull(),
+  caption: text("caption"),
+  mimeType: varchar("mime_type", { length: 100 }),
+  fileName: varchar("file_name", { length: 255 }),
+  fileSize: int("file_size"),
+  messageTimestamp: int("message_timestamp").notNull(), // Unix timestamp
+  expiresAt: timestamp("expires_at").notNull(), // Stories expiram em 24h
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type StoryCache = typeof storyCache.$inferSelect;
+export type InsertStoryCache = typeof storyCache.$inferInsert;
+
+/**
+ * REMINDERS - Sistema de Lembretes para Atendentes
+ * Exibidos no login como pop-up com priorização inteligente
+ */
+export const reminders = mysqlTable("reminders", {
+  id: int("id").autoincrement().primaryKey(),
+  agentId: int("agent_id")
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(), // Atendente responsável
+  customerId: int("customer_id")
+    .references(() => customers.id, { onDelete: "cascade" })
+    .notNull(), // Cliente relacionado
+  type: mysqlEnum("type", [
+    "aniversario",
+    "medicamento_vencendo",
+    "follow_up",
+    "renovacao",
+    "custom"
+  ]).notNull(),
+  priority: mysqlEnum("priority", ["critica", "alta", "media", "baixa"]).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  eventDate: date("event_date").notNull(), // Data do evento (aniversário, vencimento, etc)
+  daysBefore: int("days_before").default(0), // Para medicamentos: dias antes do vencimento
+  metadata: json("metadata"), // Dados extras: { medicamento: "Dipirona", quantidade: 2, dosagem: "500mg" }
+  status: mysqlEnum("status", ["pendente", "dispensado", "adiado", "expirado"]).default("pendente").notNull(),
+  snoozedUntil: timestamp("snoozed_until"), // Para lembretes adiados
+  dismissedAt: timestamp("dismissed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Reminder = typeof reminders.$inferSelect;
+export type InsertReminder = typeof reminders.$inferInsert;
+
+// Índices para performance
+// CREATE INDEX idx_reminders_agent_status ON reminders(agent_id, status);
+// CREATE INDEX idx_reminders_customer ON reminders(customer_id);
+// CREATE INDEX idx_reminders_event_date ON reminders(event_date);
+// CREATE INDEX idx_reminders_snoozed ON reminders(snoozed_until);
 

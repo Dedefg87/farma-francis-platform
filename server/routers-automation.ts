@@ -30,7 +30,7 @@ const UpdateAutomationInput = z.object({
   name: z.string().min(1, "Nome é obrigatório").max(255, "Nome muito longo").optional(),
   description: z.string().max(1000, "Descrição muito longa").optional(),
   templateType: z.string().optional(),
-  flowData: z.record(z.any()).optional(),
+  flowData: z.any().optional(),
   isActive: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -399,15 +399,14 @@ export const automationRouter = router({
           return errorResponse("Automação não encontrada", "NOT_FOUND");
         }
 
-        // Soft delete (set isActive to false)
+        // Hard delete — remove from database completely
         await db
-          .update(visualFlows)
-          .set({ isActive: false, updatedAt: new Date() })
+          .delete(visualFlows)
           .where(eq(visualFlows.id, input.id));
 
         return successResponse(
           { id: input.id },
-          "Automação desativada com sucesso"
+          "Automação excluída com sucesso"
         );
       } catch (error) {
         console.error("Error deleting automation:", error);
@@ -901,6 +900,37 @@ export const automationRouter = router({
         console.error("Error executing flow by ID:", error);
         return errorResponse(
           "Falha ao executar fluxo",
+          (error as Error).message
+        );
+      }
+    }),
+
+  // -------------------- CLEANUP OBSOLETE FLOWS --------------------
+  /**
+   * Delete all inactive/obsolete flows
+   * DELETE /api/automation/cleanup
+   */
+  cleanup: protectedProcedure
+    .mutation(async () => {
+      try {
+        const db = await getDb();
+        if (!db) {
+          throw new Error("Database não disponível");
+        }
+
+        // Delete all inactive flows
+        const result = await db
+          .delete(visualFlows)
+          .where(eq(visualFlows.isActive, false));
+
+        return successResponse(
+          { deleted: true },
+          "Fluxos obsoletos removidos com sucesso"
+        );
+      } catch (error) {
+        console.error("Error cleaning up flows:", error);
+        return errorResponse(
+          "Falha ao limpar fluxos obsoletos",
           (error as Error).message
         );
       }
