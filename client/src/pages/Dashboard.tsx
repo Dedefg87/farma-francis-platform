@@ -425,7 +425,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {agentData.map((agent) => (
+                      {agentData.slice(0, 20).map((agent) => (
                         <tr key={agent.agentId} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{agent.agentName}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{agent.totalConversations}</td>
