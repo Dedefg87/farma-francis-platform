@@ -286,6 +286,19 @@ async function startServer() {
     }
   });
 
+  // Debug: Close EVERY conversation regardless of status (force clean panel)
+  app.post("/api/debug/close-all-conversations-force", async (_, res) => {
+    try {
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: "Database not available" });
+      const { sql } = await import("drizzle-orm");
+      const result = await db.execute(sql`UPDATE conversations SET status = 'closed', closed_at = CURRENT_TIMESTAMP`);
+      res.json({ success: true, closed: result.affectedRows || 0 });
+    } catch (err: unknown) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/debug/conversations-status", async (_, res) => {
     try {
       const db = await getDb();
