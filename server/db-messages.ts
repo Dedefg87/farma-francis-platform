@@ -440,13 +440,6 @@ export async function ingestInboundConversationMessage(message: {
 
   const now = message.createdAt ?? new Date();
 
-  // [fix-backfill] Descarta mensagens antigas vindas da sincronizacao de historico do WhatsApp
-  const MAX_IDADE_MS = 6 * 60 * 60 * 1000; // 6 horas
-  if (Date.now() - now.getTime() > MAX_IDADE_MS) {
-    console.log("[fix-backfill] Ignorada mensagem antiga:", now.toISOString(), message.fromNumber);
-    return null;
-  }
-
   // 3. Pick least loaded online agent
   let picked = await pickLeastLoadedOnlineAgent({ provider: message.provider });
   const assignedUserId = picked && Number.isFinite(picked.userId) && picked.userId > 0
