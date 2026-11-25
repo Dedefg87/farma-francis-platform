@@ -30,13 +30,16 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
   const totalFlows = flows.length;
 
   // Dados reais do backend com fallback
+  const statsData = stats?.data ?? null;
   const automationActive = activeFlows.length > 0;
-  const todayCount = stats?.totalExecutions ?? 0;
-  const avgResponseTime = stats?.avgResponseTime ? `${(stats.avgResponseTime / 1000).toFixed(1)}s` : "—";
-  const conversionCount = stats?.conversions ?? 0;
-  const conversionRate = stats?.totalExecutions && stats.totalExecutions > 0
-    ? `${((stats.conversions / stats.totalExecutions) * 100).toFixed(1)}%`
-    : "—";
+  const todayCount = statsData?.totalExecutions ?? 0;
+  const totalExecutions = statsData?.totalExecutions ?? 0;
+  const avgResponseTime = statsData?.avgDuration ? `${(statsData.avgDuration / 1000).toFixed(1)}s` : "—";
+  const conversionCount = statsData?.conversions ?? 0;
+  const conversionRate =
+    totalExecutions > 0
+      ? `${(((statsData?.conversions ?? 0) / totalExecutions) * 100).toFixed(1)}%`
+      : "—";
 
   const cards = [
     {
@@ -53,9 +56,9 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
       title: "Execuções Hoje",
       value: statsLoading ? "…" : String(todayCount),
       icon: <MessageSquare className="w-5 h-5 text-blue-600" />,
-      badge: stats?.executionsChange ? `${stats.executionsChange > 0 ? "+" : ""}${stats.executionsChange}%` : "—",
+      badge: statsData?.executionsChange ? `${statsData.executionsChange > 0 ? "+" : ""}${statsData.executionsChange}%` : "—",
       badgeColor: "bg-blue-100 text-blue-800",
-      subtext: stats?.avgPerMinute ? `Média: ${stats.avgPerMinute}/min` : "Dados em tempo real"
+      subtext: statsData?.avgPerMinute ? `Média: ${statsData.avgPerMinute}/min` : "Dados em tempo real"
     },
     {
       title: "Tempo Médio de Resposta",
@@ -63,7 +66,7 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
       icon: <Clock className="w-5 h-5 text-purple-600" />,
       badge: "Meta: <2s",
       badgeColor: "bg-purple-100 text-purple-800",
-      subtext: stats?.avgResponseTime && stats.avgResponseTime < 2000 ? "Dentro da meta ✓" : "Monitorando"
+      subtext: statsData?.avgDuration && statsData.avgDuration < 2000 ? "Dentro da meta ✓" : "Monitorando"
     },
     {
       title: "Conversões",
@@ -75,11 +78,20 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
     }
   ];
 
+  // Status real das integrações (tRPC apiConfig)
+  const { data: cfgWhatsapp } = trpc.apiConfig.get.useQuery({ integrationType: "whatsapp_business" });
+  const { data: cfgEvolution } = trpc.apiConfig.get.useQuery({ integrationType: "evolution_api" });
+  const { data: cfgInstagram } = trpc.apiConfig.get.useQuery({ integrationType: "instagram_graph" });
+  const { data: cfgTelegram } = trpc.apiConfig.get.useQuery({ integrationType: "telegram" });
+  const { data: cfgEmail } = trpc.apiConfig.get.useQuery({ integrationType: "email" });
+
+  const hasCfg = (cfg: any) => !!cfg && typeof cfg.config === "object" && Object.keys(cfg.config || {}).length > 0;
+
   const channels = [
-    { name: "WhatsApp", icon: <MessageSquare className="w-4 h-4" />, status: "Conectado", color: "text-green-600" },
-    { name: "Instagram", icon: <Instagram className="w-4 h-4" />, status: "Conectado", color: "text-pink-600" },
-    { name: "Site", icon: <Globe className="w-4 h-4" />, status: "Conectado", color: "text-blue-600" },
-    { name: "App", icon: <Smartphone className="w-4 h-4" />, status: "Conectado", color: "text-gray-600" },
+    { name: "WhatsApp", icon: <MessageSquare className="w-4 h-4" />, status: hasCfg(cfgWhatsapp) || hasCfg(cfgEvolution) ? "Conectado" : "Desconectado", color: "text-green-600" },
+    { name: "Instagram", icon: <Instagram className="w-4 h-4" />, status: hasCfg(cfgInstagram) ? "Conectado" : "Desconectado", color: "text-pink-600" },
+    { name: "Site", icon: <Globe className="w-4 h-4" />, status: hasCfg(cfgEmail) ? "Ativo" : "Desativado", color: "text-blue-600" },
+    { name: "App", icon: <Smartphone className="w-4 h-4" />, status: hasCfg(cfgTelegram) ? "Conectado" : "Desconectado", color: "text-gray-600" },
   ];
 
   return (
