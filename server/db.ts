@@ -36,8 +36,11 @@ export async function getDb() {
         database: url.pathname.slice(1),
         port: url.port ? parseInt(url.port) : 3306,
         waitForConnections: true,
-        connectionLimit: 50,
-        queueLimit: 0,
+        connectionLimit: 30,
+        // [fix-pool] FILA FINITA: se as 30 conexões se esgotarem, novas queries falham
+        // rapidamente em vez de travar para sempre (queueLimit: 0 = fila infinita).
+        queueLimit: 50,
+        acquireTimeout: 10000, // desiste depois de 10s esperando conexão
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
         // [fix-pool] Recicla conexoes ociosas para nao ficar preso quando o MySQL/proxy
@@ -59,7 +62,26 @@ export async function getDb() {
         internalMessages 
       } });
       _dbHealthCheck = Date.now();
-      console.log("[Database] New connection pool created (50 connections)");
+      console.log("[Database] New connection pool created (30 connections)");
+
+      // [fix-pool] Health check DEDICADO: roda a cada 30s mesmo se ninguém estiver
+      // chamando getDb(). Garante que o pool seja recriado se ficar doente/exaurido.
+      setInterval(() => {
+        void (async () => {
+          if (!_pool) return;
+          try {
+            const connection = await _pool.getConnection();
+            try { await connection.ping(); } finally { connection.release(); }
+            _dbHealthCheck = Date.now();
+          } catch (e) {
+            console.log("[Database] Dedicated health check failed, recreating pool...", (e as Error)?.message || e);
+            try { await _pool.end(); } catch {}
+            _db = null;
+            _pool = null;
+            void getDb(); // recria o pool
+          }
+        })();
+      }, 30000).unref?.();
     } catch (error) {
       console.error("[Database] Failed to connect:", error);
       _db = null;
