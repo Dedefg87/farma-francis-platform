@@ -399,6 +399,15 @@ export async function ingestInboundConversationMessage(message: {
     console.log(`[Webhook] New message registered: ${message.externalId}`);
   }
 
+  // [fix-backfill] Descarta mensagens antigas vindas da sincronizacao de historico do WhatsApp
+  // ANTES de criar cliente, para nao gerar clientes orfaos no banco
+  const now = message.createdAt ?? new Date();
+  const MAX_IDADE_MS = 24 * 60 * 60 * 1000; // 24 horas
+  if (Date.now() - now.getTime() > MAX_IDADE_MS) {
+    console.log("[fix-backfill] Ignorada mensagem antiga:", now.toISOString(), message.fromNumber);
+    return null;
+  }
+
   // 1. Find or create customer
   const customer = await findOrCreateCustomerByPhone(
     message.fromNumber,
@@ -436,15 +445,6 @@ export async function ingestInboundConversationMessage(message: {
           eq(receivedMessages.provider, message.provider)
         )
       );
-  }
-
-  const now = message.createdAt ?? new Date();
-
-  // [fix-backfill] Descarta mensagens antigas vindas da sincronizacao de historico do WhatsApp
-  const MAX_IDADE_MS = 24 * 60 * 60 * 1000; // 24 horas
-  if (Date.now() - now.getTime() > MAX_IDADE_MS) {
-    console.log("[fix-backfill] Ignorada mensagem antiga:", now.toISOString(), message.fromNumber);
-    return null;
   }
 
   // 3. Pick least loaded online agent
