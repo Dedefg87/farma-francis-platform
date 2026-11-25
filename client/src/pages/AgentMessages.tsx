@@ -1563,7 +1563,18 @@ export default function AgentMessages() {
                       key={msg.id}
                       id={firstUnreadMessageId === msg.id ? "first-unread-anchor" : undefined}
                       className={`group flex ${msg.senderType === "agent" ? "justify-end" : "justify-start"} cursor-pointer`}
-                      onClick={() => setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id)}
+                      onClick={() => {
+                        setSelectedMsgId(selectedMsgId === msg.id ? null : msg.id);
+                        // Ao clicar na mensagem, marcar a conversa como lida automaticamente
+                        if (selectedConversationId) {
+                          fetch(`/api/conversations/${selectedConversationId}/mark-read`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                          })
+                            .then(() => utils.conversations.list.invalidate())
+                            .catch(() => {});
+                        }
+                      }}
                     >
                       <div
                         className={`relative max-w-[70%] rounded-2xl p-3.5 shadow-md ${
