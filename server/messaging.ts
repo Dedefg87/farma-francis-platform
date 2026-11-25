@@ -450,20 +450,24 @@ export async function fetchInstagramProfile(igsid: string) {
 }
 
 /**
- * Send a text message via WhatsApp Business API
+ * Send a text or media message via WhatsApp Business API (Evolution API)
  */
 export async function sendWhatsAppMessage(params: {
   to: string;
-  message: string;
+  message?: string;
   replyToMessageId?: string;
   replyToRemoteJid?: string;
   replyToContent?: string; // texto da mensagem original (para quoted.conversation)
   replyToFromMe?: boolean; // se a mensagem original foi enviada por nos
   mediaUrl?: string;
+  mediaType?: string; // MIME type (ex: audio/ogg, image/webp, image/jpeg, video/mp4, application/pdf)
+  fileName?: string;
   caption?: string;
   senderId?: string | number;
   senderName?: string;
-  senderPosition?: string; instanceName?: string;
+  senderPosition?: string;
+  instanceName?: string;
+  viewOnce?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -477,19 +481,106 @@ export async function sendWhatsAppMessage(params: {
     finalMessage = `*${senderLabel}:*\n${finalMessage}`;
   }
 
-  // If mediaUrl is provided, send media message
+  // If mediaUrl is provided, send media message via appropriate Evolution API endpoint
   if (params.mediaUrl) {
+    const isAudio = params.mediaType?.startsWith("audio/");
+    const isSticker = params.mediaType?.includes("webp") || params.fileName?.endsWith(".webp");
+
+    // Áudio / voz: usar endpoint dedicado sendWhatsAppAudio
+    if (isAudio) {
+      const evolutionConfig = await getEvolutionConfig(resolvedInstance);
+      if (!evolutionConfig) throw new Error("Evolution API config not found for audio");
+
+      let mediaBase64: string;
+      let mediaMimetype: string;
+      try {
+        const fileKey = extractR2Key(params.mediaUrl!);
+        const media = await getMediaAsBase64(fileKey || params.mediaUrl!);
+        mediaBase64 = media.base64;
+        mediaMimetype = media.mimetype || "audio/ogg; codecs=opus";
+      } catch (err) {
+        console.error("[sendWhatsAppMessage] Erro ao preparar áudio:", err);
+        throw new Error("Falha ao preparar midia de audio: " + (err as Error).message);
+      }
+
+      const audioMimetype = mediaMimetype.includes("audio/") ? mediaMimetype : "audio/ogg; codecs=opus";
+      const response = await fetch(
+        `${evolutionConfig.apiUrl}/message/sendWhatsAppAudio/${evolutionConfig.instanceName}`,
+        {
+          method: "POST",
+          headers: { apikey: evolutionConfig.apiKey, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            number: normalizeWhatsAppNumber(params.to),
+            audio: mediaBase64,
+            encoding: "base64",
+            mimetype: audioMimetype,
+            fileName: params.fileName || "audio.ogg",
+          }),
+        }
+      );
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error("Evolution API audio error: " + response.status + " - " + error);
+      }
+      const result = await response.json();
+      await db.insert(messages).values({
+        channel: "whatsapp",
+        direction: "outbound",
+        content: params.caption || "",
+        messageId: result?.key?.id || null,
+        status: "sent",
+        metadata: JSON.stringify({
+          mediaUrl: params.mediaUrl,
+          mediaType: "audio",
+          caption: params.caption || "",
+        }),
+      });
+      await ingestOutboundConversationMessage({
+        provider: "whatsapp",
+        toNumber: params.to,
+        fromUserId: params.senderId ?? 1,
+        fromUserName: params.senderName || null,
+        fromUserPosition: params.senderPosition || null,
+        messageType: "audio",
+        messageText: params.caption || "",
+        externalId: result?.key?.id || null,
+      });
+      return { success: true, messageId: result?.key?.id || null, to: params.to };
+    }
+
+    // Imagem / vídeo / documento / figurinha: usar endpoint sendMedia
     const result = await sendWhatsAppViewOnceMedia({
       to: params.to,
       instanceName: resolvedInstance,
       mediaUrl: params.mediaUrl,
-      mediaType:
-        params.mediaUrl.startsWith("data:") ||
-        params.mediaUrl.includes("base64")
-          ? "image"
-          : "image",
+      mediaType: isSticker ? "image" : (params.mediaType?.startsWith("video/") ? "video" : "image"),
       caption: params.caption || finalMessage,
+      senderId: params.senderId,
+      senderName: params.senderName,
+      senderPosition: params.senderPosition,
     });
+
+    // Salvar no conversation_messages com o tipo correto
+    try {
+      const msgType = isSticker ? "image" : (params.mediaType?.startsWith("video/") ? "video" : (params.mediaType?.startsWith("audio/") ? "audio" : "file"));
+      await ingestOutboundConversationMessage({
+        provider: "whatsapp",
+        toNumber: params.to,
+        fromUserId: params.senderId ?? 1,
+        fromUserName: params.senderName || null,
+        fromUserPosition: params.senderPosition || null,
+        messageType: msgType,
+        messageText: params.caption || params.message || `[Mídia: ${params.fileName || "arquivo"}]`,
+        externalId: result?.messageId || null,
+        fileUrl: params.mediaUrl,
+        fileName: params.fileName,
+        fileType: params.mediaType,
+        fileSize: undefined,
+      });
+    } catch (saveErr) {
+      console.error("[sendWhatsAppMessage] Falha ao salvar mensagem de mídia:", saveErr);
+    }
+
     return result;
   }
 

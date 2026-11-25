@@ -73,6 +73,8 @@ import {
   Trash2,
   Send,
   CornerUpLeft,
+  Mic,
+  Pencil,
 } from "lucide-react";
 import { MessageMedia } from "@/components/shared/MessageMedia";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -169,6 +171,16 @@ export default function AgentMessages() {
   const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [showAudioRecorder, setShowAudioRecorder] = useState(false);
+  const [audioRecording, setAudioRecording] = useState(false);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [editedMessageId, setEditedMessageId] = useState<number | null>(null);
+  const [editMessageText, setEditMessageText] = useState("");
+  const [showDeleteOptions, setShowDeleteOptions] = useState<{ msgId: number | null; top: number; left: number } | null>(null);
+  const [messageReactions, setMessageReactions] = useState<Record<number, string>>({});
+  const [messageStatus, setMessageStatus] = useState<Record<number, string>>({});
   const [forwardMessageId, setForwardMessageId] = useState<number | null>(null);
   const [replyToMsg, setReplyToMsg] = useState<{ id: number; externalId?: string; content: string } | null>(null);
   const [forwardTargetType, setForwardTargetType] = useState<"agent" | "customer">("agent");
@@ -245,6 +257,7 @@ export default function AgentMessages() {
               data.type === "conversation:update" ||
               data.type === "conversation:new" ||
               data.type === "conversation:read" ||
+              data.type === "message:reaction" ||
               (data.type === "messages.update" && data.data?.fromMe === false)
             ) {
               // Play notification sound if not muted (only for new messages)
@@ -277,6 +290,24 @@ export default function AgentMessages() {
               if (data.type === "conversation:update" && data.data?.conversationId) {
                 queryClient.invalidateQueries({
                   queryKey: ["trpc", "messages", data.data.conversationId],
+                });
+              }
+
+              // Handle reaction events from SSE (realtime)
+              if (data.type === "message:reaction" && data.data) {
+                setMessageReactions(prev => {
+                  const next = { ...prev };
+                  if (data.data.messageId) {
+                    const msgId = Number(data.data.messageId);
+                    if (!isNaN(msgId)) {
+                      if (data.data.reaction) {
+                        next[msgId] = data.data.reaction;
+                      } else {
+                        delete next[msgId];
+                      }
+                    }
+                  }
+                  return next;
                 });
               }
             }
@@ -895,6 +926,201 @@ export default function AgentMessages() {
     }
   };
 
+  // === NOVAS FUNÇÕES: Stickers, Áudio (voz), Edição, Reações, Delete ===
+
+  // Stickers pré-definidos (pacote estilo WhatsApp)
+  const stickers = [
+    { id: 1, emoji: "😂", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute1.webp", name: "Rindo" },
+    { id: 2, emoji: "❤️", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute2.webp", name: "Amo" },
+    { id: 3, emoji: "😍", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute3.webp", name: "Paixão" },
+    { id: 4, emoji: "😮", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute4.webp", name: "Surpreso" },
+    { id: 5, emoji: "😭", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute5.webp", name: "Chorando" },
+    { id: 6, emoji: "👍", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute6.webp", name: "Aprovado" },
+    { id: 7, emoji: "🙏", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute7.webp", name: "Obrigado" },
+    { id: 8, emoji: "🎉", url: "https://github.com/WhatsApp/stickers/raw/main/cute/cute8.webp", name: "Parabéns" },
+  ];
+
+  const handleStickerSelect = (sticker: { id: number; emoji: string; url: string; name: string }) => {
+    if (!selectedConversationId) return;
+    setShowStickerPicker(false);
+    sendMessageMutation.mutate({
+      conversation_id: selectedConversationId,
+      content: `[Figurinha] ${sticker.emoji} ${sticker.name}`,
+      fileUrl: sticker.url,
+      fileName: `${sticker.name}.webp`,
+      fileType: "image/webp",
+      replyToMessageId: replyToMsg?.id ?? undefined,
+      replyToExternalId: replyToMsg?.externalId,
+    });
+    setReplyToMsg(null);
+  };
+
+  // Gravação de áudio (voice message)
+  const startAudioRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/ogg; codecs=opus" });
+      const chunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+        setAudioChunks(chunks);
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      mediaRecorder.onerror = (e) => {
+        console.error("[AudioRecorder] Error:", e);
+        stream.getTracks().forEach(t => t.stop());
+      };
+
+      // Guardar o recorder no window para acesso em stopAudioRecording
+      (window as any).__farmaRecorder = mediaRecorder;
+      mediaRecorder.start();
+      setAudioRecording(true);
+      setAudioUrl(null);
+    } catch (err) {
+      console.error("[AudioRecorder] Não foi possível acessar o microfone:", err);
+      toast.error("Não foi possível acessar o microfone");
+    }
+  };
+
+  const stopAudioRecording = () => {
+    const recorder = (window as any).__farmaRecorder;
+    if (recorder && audioRecording) {
+      recorder.stop();
+      setAudioRecording(false);
+    }
+  };
+
+  const sendAudioMessage = async () => {
+    if (!selectedConversationId || !audioUrl || !audioChunks.length) return;
+
+    try {
+      const blob = new Blob(audioChunks, { type: "audio/ogg; codecs=opus" });
+      // Converter blob para base64 para enviar via API
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const dataUrl = `data:audio/ogg;codecs=opus;base64,${base64}`;
+
+      sendMessageMutation.mutate({
+        conversation_id: selectedConversationId,
+        content: "[Áudio]",
+        fileUrl: dataUrl,
+        fileName: "voz.ogg",
+        fileType: "audio/ogg; codecs=opus",
+        fileSize: blob.size,
+        replyToMessageId: replyToMsg?.id ?? undefined,
+        replyToExternalId: replyToMsg?.externalId,
+      });
+
+      setAudioUrl(null);
+      setAudioChunks([]);
+      setShowAudioRecorder(false);
+      setReplyToMsg(null);
+      URL.revokeObjectURL(audioUrl);
+    } catch (err) {
+      console.error("[AudioRecorder] Erro ao enviar áudio:", err);
+      toast.error("Erro ao enviar mensagem de áudio");
+    }
+  };
+
+  const cancelAudioRecording = () => {
+    setAudioRecording(false);
+    setAudioUrl(null);
+    setAudioChunks([]);
+    setShowAudioRecorder(false);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    const recorder = (window as any).__farmaRecorder;
+    if (recorder && recorder.state === "recording") recorder.stop();
+  };
+
+  // Edição de mensagem
+  const handleEditMessage = (msgId: number, currentContent: string) => {
+    setEditedMessageId(msgId);
+    setEditMessageText(currentContent.replace(/^\[Figurinha\] /, "").replace(/^\[Áudio\] /, ""));
+  };
+
+  const saveEditMessage = async () => {
+    if (!editedMessageId || !editMessageText.trim()) return;
+    try {
+      await fetch(`/api/messages/${editedMessageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editMessageText.trim() }),
+      });
+      setEditedMessageId(null);
+      setEditMessageText("");
+      refetchMessages();
+      refetchConversations();
+      toast.success("Mensagem editada");
+    } catch (err) {
+      toast.error("Erro ao editar mensagem");
+    }
+  };
+
+  const cancelEditMessage = () => {
+    setEditedMessageId(null);
+    setEditMessageText("");
+  };
+
+  // Reações
+  const handleReactionSelect = (msgId: number, emoji: string) => {
+    const current = messageReactions[msgId];
+    setMessageReactions(prev => {
+      const next = { ...prev };
+      if (current === emoji) {
+        delete next[msgId]; // toggle off
+      } else {
+        next[msgId] = emoji;
+      }
+      return next;
+    });
+
+    // Enviar reação via API (trpc)
+    trpc.messages.react.mutate({ messageId: String(msgId), emoji }).catch(() => {});
+  };
+
+  const getReactionEmoji = (msgId: number) => messageReactions[msgId];
+
+  // Opções de deletar (para todos / para mim)
+  const handleShowDeleteOptions = (msgId: number, top: number, left: number) => {
+    setShowDeleteOptions({ msgId, top, left });
+  };
+
+  const handleDeleteForEveryone = async () => {
+    if (!showDeleteOptions?.msgId) return;
+    try {
+      deleteMessageMutation.mutate({ messageId: showDeleteOptions.msgId });
+      setShowDeleteOptions(null);
+    } catch (err) {
+      toast.error("Erro ao excluir para todos");
+    }
+  };
+
+  const handleDeleteForMe = async () => {
+    if (!showDeleteOptions?.msgId) return;
+    try {
+      await fetch(`/api/messages/${showDeleteOptions.msgId}/delete-for-me`, {
+        method: "DELETE",
+      });
+      setShowDeleteOptions(null);
+      refetchMessages();
+      toast.success("Mensagem removida para você");
+    } catch (err) {
+      toast.error("Erro ao remover mensagem");
+    }
+  };
+
+  const handleCancelDeleteOptions = () => {
+    setShowDeleteOptions(null);
+  };
+
   const handleQuickReplySelect = (content: string) => {
     setMessage(applyQuickReplyVariables(content, { agentName: user?.name }));
     setShowQuickReplies(false);
@@ -904,7 +1130,7 @@ export default function AgentMessages() {
     setMessage(prev => prev + emojiData.emoji);
   };
 
-  // Fechar emoji picker ao clicar fora
+  // Fechar emoji picker, sticker picker e delete options ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -913,14 +1139,22 @@ export default function AgentMessages() {
       ) {
         setShowEmojiPicker(false);
       }
+      // Fechar menu de exclusão se clicar fora
+      if (showDeleteOptions) {
+        setShowDeleteOptions(null);
+      }
+      // Fechar sticker picker se clicar fora
+      if (showStickerPicker) {
+        setShowStickerPicker(false);
+      }
     };
-    if (showEmojiPicker) {
+    if (showEmojiPicker || showDeleteOptions || showStickerPicker) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [showEmojiPicker]);
+  }, [showEmojiPicker, showDeleteOptions, showStickerPicker]);
 
   const selectedConversation = conversations?.find(
     c => Number(c.id) === selectedConversationId
@@ -1330,20 +1564,20 @@ export default function AgentMessages() {
                             : "bg-white text-gray-900 border border-gray-200/60 shadow-gray-200/50"
                         }`}
                       >
-                        {/* Bug 1 fix: Delete button - appears on hover */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm("Excluir esta mensagem?")) {
-                              deleteMessageMutation.mutate({ messageId: msg.id });
-                            }
-                          }}
-                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-red-600 z-10`}
-                          title="Excluir mensagem"
-                          disabled={deleteMessageMutation.isPending}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        {/* Delete options - aparece ao clicar no ícone de lixeira */}
+                        {msg.senderType === "agent" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              handleShowDeleteOptions(msg.id, rect.bottom + 6, rect.left);
+                            }}
+                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-red-600 z-10`}
+                            title="Excluir mensagem"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                         {/* Reply button - appears on hover */}
                         <button
                           onClick={(e) => {
@@ -1372,61 +1606,77 @@ export default function AgentMessages() {
                         >
                           <Send className="w-3 h-3" />
                         </button>
-                        {/* Reaction button - opens emoji picker on click */}
+                        {/* Reaction button - reações estilo WhatsApp */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            const reactions = ["👍", "❤️", "😂", "😮", "😢", "🙏", "👏"];
-                            const current = (msg as any).reaction;
-                            const next = current ? reactions[(reactions.indexOf(current) + 1) % reactions.length] : reactions[0];
-                            const pickerId = `reaction-picker-${msg.id}`;
-                            let pickerEl = document.getElementById(pickerId);
-                            if (pickerEl) {
-                              pickerEl.remove();
+                            const current = getReactionEmoji(msg.id);
+                            if (current) {
+                              // Remover reação atual
+                              setMessageReactions(prev => {
+                                const next = { ...prev };
+                                delete next[msg.id];
+                                return next;
+                              });
                               return;
                             }
-                            pickerEl = document.createElement("div");
-                            pickerEl.id = pickerId;
+                            // Abrir seletor de reações (dropdown simples)
+                            const reactions = ["👍", "❤️", "😂", "😮", "😢", "🙏", "👏"];
                             const btnRect = e.currentTarget.getBoundingClientRect();
+                            // Criar dropdown flutuante de reações
+                            const pickerEl = document.createElement("div");
+                            pickerEl.className = "z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1 shadow-xl";
                             pickerEl.style.position = "fixed";
                             pickerEl.style.top = `${btnRect.bottom + 6}px`;
-                            pickerEl.style.left = `${btnRect.left + btnRect.width/2 - 80}px`;
-                            pickerEl.className = `z-50 flex gap-1 bg-white border border-gray-200 rounded-full p-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150`;
-                            pickerEl.innerHTML = reactions.map(emo => `<button data-emoji="${emo}" class="text-xl hover:scale-125 transition-transform p-1">${emo}</button>`).join("");
+                            pickerEl.style.left = `${btnRect.left + btnRect.width / 2 - 80}px`;
+                            pickerEl.innerHTML = reactions.map(emo => {
+                              const isCurrent = current === emo;
+                              return `<button data-emoji="${emo}" class="text-xl hover:scale-125 transition-transform p-1 rounded ${isCurrent ? "bg-blue-100" : ""}" title="${emo}">${emo}</button>`;
+                            }).join("");
                             pickerEl.onclick = (e2) => {
                               e2.stopPropagation();
                               const btn = e2.target.closest("button");
                               if (btn && btn.getAttribute("data-emoji")) {
-                                const emoji = btn.getAttribute("data-emoji");
-                                // Envia reação via API para aparecer no celular
-                                fetch(`/api/messages/react`, {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ messageId: msg.id, emoji: emoji }),
-                                }).catch((e) => console.warn("[Reaction] Envio falhou:", e));
-                                const msgElForVisual = document.querySelector(`[key="${msg.id}"]`) || document.querySelector(`.group[data-msg-id="${msg.id}"]`);
-
-                                if (msgElForVisual) {
-                                  const bubble = msgElForVisual.querySelector(".relative");
-                                  let reactionEl = msgElForVisual.querySelector(".message-reaction");
-                                  if (!reactionEl && bubble) {
-                                    reactionEl = document.createElement("span");
-                                    reactionEl.className = "message-reaction inline-flex items-center gap-1 bg-gray-100/70 border border-gray-200/50 rounded-full px-2 py-0.5 text-sm mt-1.5 select-none backdrop-blur-sm";
-                                    bubble.appendChild(reactionEl);
-                                  }
-                                  if (reactionEl) reactionEl.innerText = emoji;
-                                }
+                                const emoji = btn.getAttribute("data-emoji")!;
+                                handleReactionSelect(msg.id, emoji);
                               }
                               pickerEl.remove();
                             };
                             document.body.appendChild(pickerEl);
-                            setTimeout(() => pickerEl?.remove(), 8000);
+                            setTimeout(() => pickerEl.remove(), 5000);
                           }}
-                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-yellow-500 z-10`}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-yellow-500 z-10`}
                           title="Reagir"
                         >
                           <Smile className="w-3 h-3" />
                         </button>
+                        {/* Edição de mensagem (apenas para agente) */}
+                        {msg.senderType === "agent" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditMessage(msg.id, msg.content || "");
+                            }}
+                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-34" : "-right-34"} w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-blue-600 z-10`}
+                            title="Editar mensagem"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
+                        {/* Delete options (for everyone / for me) */}
+                        {msg.senderType === "agent" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              handleShowDeleteOptions(msg.id, rect.bottom + 6, rect.left);
+                            }}
+                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-42" : "-right-42"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-red-600 z-10`}
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
@@ -1448,10 +1698,10 @@ export default function AgentMessages() {
         {msg.content && msg.content !== "null" && (
                           <p className="text-sm">{renderContentWithLinks(msg.content?.includes("📤") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)).replace(/^💬 /, "").trim() : (msg.content.split(String.fromCharCode(10))[0] && msg.content.startsWith("*") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)) : msg.content))}</p>
                         )}
-                        {msg.reaction && (
+                        {getReactionEmoji(msg.id) && (
                           <div className="mt-1 text-lg leading-none">
-                            <span className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm">
-                              {msg.reaction}
+                            <span className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5 text-sm animate-bounce">
+                              {getReactionEmoji(msg.id)}
                             </span>
                           </div>
                         )}
@@ -1488,6 +1738,15 @@ export default function AgentMessages() {
                             addSuffix: true,
                             locale: ptBR,
                           })}
+                          {msg.senderType === "agent" && (
+                            <span className="ml-1">
+                              {(msg as any).readAt ? (
+                                <span className="text-blue-200">✓✓</span>
+                              ) : (
+                                <span className="text-blue-100">✓</span>
+                              )}
+                            </span>
+                          )}
                         </span>
                       </div>
                     </div>
@@ -1569,7 +1828,7 @@ export default function AgentMessages() {
                     type="file"
                     id="file-upload-agent"
                     className="hidden"
-                    accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.webp"
                     onChange={handleFileSelect}
                   />
                   <Button
@@ -1582,6 +1841,81 @@ export default function AgentMessages() {
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowStickerPicker(!showStickerPicker)}
+                    title="Figurinhas"
+                    className={showStickerPicker ? "bg-blue-50" : ""}
+                  >
+                    <Smile className="w-4 h-4" />
+                  </Button>
+                  {showStickerPicker && (
+                    <div className="absolute bottom-12 left-0 z-50 w-64 p-2 bg-white border border-gray-200 rounded-lg shadow-xl">
+                      <div className="text-xs text-gray-500 mb-2">Figurinhas</div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {stickers.map(sticker => (
+                          <button
+                            key={sticker.id}
+                            onClick={() => handleStickerSelect(sticker)}
+                            className="p-1 hover:bg-gray-100 rounded"
+                            title={sticker.name}
+                          >
+                            <img src={sticker.url} alt={sticker.name} className="w-6 h-6" onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZ2JnIi8+PC9zdmc+'; }} />
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setShowStickerPicker(false)}
+                        className="w-full text-xs text-gray-500 mt-1 hover:text-gray-700"
+                      >
+                        Fechar
+                      </button>
+                    </div>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (audioRecording) {
+                        stopAudioRecording();
+                      } else {
+                        startAudioRecording();
+                      }
+                    }}
+                    title={audioRecording ? "Parar gravação de áudio" : "Gravar mensagem de áudio"}
+                    className={audioRecording ? "bg-red-50 text-red-600" : ""}
+                  >
+                    {audioRecording ? (
+                      <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </Button>
+                  {audioRecording && (
+                    <div className="flex items-center gap-2 px-2 py-1 bg-red-50 rounded text-xs text-red-600">
+                      <div className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+                      <span>Gravando...</span>
+                    </div>
+                  )}
+                  {showAudioRecorder && audioUrl && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                      <audio
+                        src={audioUrl}
+                        className="w-24"
+                        controls
+                        style={{ display: "block" }}
+                      />
+                      <Button variant="outline" size="sm" onClick={sendAudioMessage}>
+                        Enviar áudio
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={cancelAudioRecording}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  )}
 
                   <Button
                     variant="outline"
@@ -2081,6 +2415,59 @@ export default function AgentMessages() {
           onClose={() => setShowQuickReplies(false)}
           onSelect={handleQuickReplySelect}
         />
+      )}
+
+      {/* Delete options menu (para todos / para mim) */}
+      {showDeleteOptions && showDeleteOptions.msgId !== null && (
+        <div
+          className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-2 min-w-[140px]"
+          style={{
+            top: showDeleteOptions.top,
+            left: showDeleteOptions.left,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="text-xs text-gray-500 font-medium mb-1 px-2">Excluir mensagem</div>
+          <button
+            onClick={handleDeleteForEveryone}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50 rounded"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Excluir para todos</span>
+          </button>
+          <button
+            onClick={handleDeleteForMe}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50 rounded border-t border-gray-100"
+          >
+            <X className="w-4 h-4" />
+            <span>Excluir para mim</span>
+          </button>
+        </div>
+      )}
+
+      {/* Edit message overlay */}
+      {editedMessageId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={cancelEditMessage}>
+          <div className="bg-white rounded-lg p-4 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-semibold text-gray-900">Editar mensagem</h3>
+              <button onClick={cancelEditMessage} className="text-gray-500 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <Textarea
+              value={editMessageText}
+              onChange={e => setEditMessageText(e.target.value)}
+              className="w-full mb-3"
+              rows={3}
+              placeholder="Digite o texto editado..."
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={cancelEditMessage}>Cancelar</Button>
+              <Button onClick={saveEditMessage} disabled={!editMessageText.trim()}>Salvar</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       <NewConversationModal
