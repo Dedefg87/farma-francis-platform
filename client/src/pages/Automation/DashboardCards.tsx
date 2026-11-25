@@ -21,6 +21,22 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
     { refetchInterval: 30000 }
   );
 
+  // Status real das integrações (tRPC apiConfig) — hooks antes do early return
+  const { data: cfgWhatsapp } = trpc.apiConfig.get.useQuery({ integrationType: "whatsapp_business" });
+  const { data: cfgEvolution } = trpc.apiConfig.get.useQuery({ integrationType: "evolution_api" });
+  const { data: cfgInstagram } = trpc.apiConfig.get.useQuery({ integrationType: "instagram_graph" });
+  const { data: cfgTelegram } = trpc.apiConfig.get.useQuery({ integrationType: "telegram" });
+  const { data: cfgEmail } = trpc.apiConfig.get.useQuery({ integrationType: "email" });
+
+  const hasCfg = (cfg: any) => !!cfg && typeof cfg.config === "object" && Object.keys(cfg.config || {}).length > 0;
+
+  const channels = [
+    { name: "WhatsApp", icon: <MessageSquare className="w-4 h-4" />, status: hasCfg(cfgWhatsapp) || hasCfg(cfgEvolution) ? "Conectado" : "Desconectado", color: "text-green-600" },
+    { name: "Instagram", icon: <Instagram className="w-4 h-4" />, status: hasCfg(cfgInstagram) ? "Conectado" : "Desconectado", color: "text-pink-600" },
+    { name: "Site", icon: <Globe className="w-4 h-4" />, status: hasCfg(cfgEmail) ? "Ativo" : "Desativado", color: "text-blue-600" },
+    { name: "App", icon: <Smartphone className="w-4 h-4" />, status: hasCfg(cfgTelegram) ? "Conectado" : "Desconectado", color: "text-gray-600" },
+  ];
+
   if (statsLoading) {
     return <DashboardSkeleton darkMode={darkMode} />;
   }
@@ -76,22 +92,6 @@ export function DashboardCards({ darkMode }: DashboardCardsProps) {
       badgeColor: "bg-emerald-100 text-emerald-800",
       subtext: "Pedidos convertidos via automação"
     }
-  ];
-
-  // Status real das integrações (tRPC apiConfig)
-  const { data: cfgWhatsapp } = trpc.apiConfig.get.useQuery({ integrationType: "whatsapp_business" });
-  const { data: cfgEvolution } = trpc.apiConfig.get.useQuery({ integrationType: "evolution_api" });
-  const { data: cfgInstagram } = trpc.apiConfig.get.useQuery({ integrationType: "instagram_graph" });
-  const { data: cfgTelegram } = trpc.apiConfig.get.useQuery({ integrationType: "telegram" });
-  const { data: cfgEmail } = trpc.apiConfig.get.useQuery({ integrationType: "email" });
-
-  const hasCfg = (cfg: any) => !!cfg && typeof cfg.config === "object" && Object.keys(cfg.config || {}).length > 0;
-
-  const channels = [
-    { name: "WhatsApp", icon: <MessageSquare className="w-4 h-4" />, status: hasCfg(cfgWhatsapp) || hasCfg(cfgEvolution) ? "Conectado" : "Desconectado", color: "text-green-600" },
-    { name: "Instagram", icon: <Instagram className="w-4 h-4" />, status: hasCfg(cfgInstagram) ? "Conectado" : "Desconectado", color: "text-pink-600" },
-    { name: "Site", icon: <Globe className="w-4 h-4" />, status: hasCfg(cfgEmail) ? "Ativo" : "Desativado", color: "text-blue-600" },
-    { name: "App", icon: <Smartphone className="w-4 h-4" />, status: hasCfg(cfgTelegram) ? "Conectado" : "Desconectado", color: "text-gray-600" },
   ];
 
   return (
