@@ -98,7 +98,7 @@ export default function Messages() {
   // Buscar mensagens da conversa selecionada
   const { data: messages, isLoading: loadingMessages } =
     trpc.messages.list.useQuery(
-      { conversation_id: selectedConversation || 0 },
+      { conversation_id: Number(selectedConversation || 0) },
       { enabled: selectedConversation !== null }
     );
 
@@ -114,7 +114,7 @@ export default function Messages() {
   // Buscar mensagens internas da conversa selecionada
   const { data: internalMessages, isLoading: loadingInternalMessages } =
     trpc.internalMessages.list.useQuery(
-      { conversation_id: selectedConversation || 0 },
+      { conversation_id: Number(selectedConversation || 0) },
       { enabled: selectedConversation !== null && activeTab === "internal" }
     );
 
@@ -221,7 +221,7 @@ export default function Messages() {
       setSelectedFile(null);
       setFilePreview(null);
       setReplyingTo(null);
-      utils.internalMessages.list.invalidate({ conversation_id: selectedConversation || 0 });
+      utils.internalMessages.list.invalidate({ conversation_id: Number(selectedConversation || 0) });
     },
     onError: error => {
       toast.error(`Erro ao enviar sugestão: ${error.message}`);
@@ -303,8 +303,8 @@ export default function Messages() {
         : "📎 " + fileLabel + ": " + fileData.fileUrl;
     }
     sendMessageMutation.mutate({
-      conversation_id: selectedConversation,
-      recipient_id: selectedConversationData?.assignedTo ?? 0,
+      conversation_id: Number(selectedConversation),
+      recipient_id: Number(selectedConversationData?.assignedTo ?? 0),
       content: replyingTo
         ? "↩️ Respondendo a: " + String(replyingTo.content || "").split("\n")[0] + "\n" + suggestionContent
         : suggestionContent,
@@ -326,8 +326,8 @@ export default function Messages() {
     }
 
     sendInternalMessageMutation.mutate({
-      conversation_id: selectedConversation,
-      recipient_id: selectedConversationData.assignedTo,
+      conversation_id: Number(selectedConversation),
+      recipient_id: Number(selectedConversationData?.assignedTo ?? 0),
       content: internalMessageInput,
     });
   };
