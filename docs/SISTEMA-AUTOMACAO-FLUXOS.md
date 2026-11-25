@@ -67,6 +67,30 @@ como triggers, logic, messages, ai, actions, wait, integrations, pharmacy, etc.
 
 ## 7. Integrações (`automation.businessHours` + `apiConfig`)
 
+### 7.1 Horários por Dia da Semana (tabela `business_hour_schedules`)
+
+- Salvo via `businessHours.update` → `db.insert(...).onDuplicateKeyUpdate`.
+- ✅ Funciona: salva no banco (migração `server/database/migrations/20261130_business_hours_persistence.sql`).
+- Usado pelo `flow-engine` via `checkBusinessHours()` (fluxos com nó de
+  "Business Hours" usam `business_hour_schedules` e `business_hour_holidays`).
+
+### 7.2 Feriados (tabela `business_hour_holidays`)
+
+- Custom: `businessHours.upsertHoliday` (persistido).
+- Nacional/municipal: buscados via API (feriados.dev) — exibição; **nota:**
+  são meramente consultados, não persistem na tabela.
+- Deletar: `businessHours.deleteHoliday` (servidor) chamado pela
+  `ConfigSettings`.
+- `businessHours.getHolidays` devolve sempre feriados do ano atual
+  (`defaultHolidaysForYear(new Date().getFullYear())`) + salvos no banco.
+
+### 7.3 Regras de Prioridade (ConfigSettings aba "Regras")
+
+- Salvo em `localStorage` ("farma-automation-settings") e **lido agora no
+  mount** (`useEffect` em ConfigSettings).
+- Nonetheless nenhum consumer lida esses valores em server ou outro client
+  (auditoria: só definições e uso no formulário).
+
 - `businessHours`: getAll, update, checkNow, getHolidays, upsertHoliday,
   deleteHoliday.
 - `apiConfig` (admin): get, save, test, delete, generateQrCode, disconnectInstance.
