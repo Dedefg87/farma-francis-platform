@@ -130,6 +130,7 @@ export default function AgentMessages() {
   const [crmCustomerName, setCrmCustomerName] = useState<string>("");
   const [crmCustomerPhone, setCrmCustomerPhone] = useState<string>("");
   const [message, setMessage] = useState("");
+  const messageDraftsRef = useRef<Record<string, string>>({});
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
@@ -508,6 +509,16 @@ export default function AgentMessages() {
     }
   }, [filteredConversations, selectedConversationId]);
 
+  // Carrega o rascunho (draft) da conversa ao trocar de atendimento
+  useEffect(() => {
+    if (selectedConversationId == null) {
+      setMessage("");
+      return;
+    }
+    const key = String(selectedConversationId);
+    setMessage(messageDraftsRef.current[key] ?? "");
+  }, [selectedConversationId]);
+
   // Buscar mensagens da conversa selecionada
 
   const {
@@ -563,6 +574,9 @@ export default function AgentMessages() {
   // Mutation para enviar mensagem
   const sendMessageMutation = trpc.messages.send.useMutation({
     onSuccess: () => {
+      if (selectedConversationId != null) {
+        delete messageDraftsRef.current[String(selectedConversationId)];
+      }
       setMessage("");
       refetchMessages();
       refetchConversations();
@@ -1125,12 +1139,20 @@ export default function AgentMessages() {
   };
 
   const handleQuickReplySelect = (content: string) => {
-    setMessage(applyQuickReplyVariables(content, { agentName: user?.name }));
+    const next = applyQuickReplyVariables(content, { agentName: user?.name });
+    setMessage(next);
+    if (selectedConversationId != null) {
+      messageDraftsRef.current[String(selectedConversationId)] = next;
+    }
     setShowQuickReplies(false);
   };
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
-    setMessage(prev => prev + emojiData.emoji);
+    const next = message + emojiData.emoji;
+    setMessage(next);
+    if (selectedConversationId != null) {
+      messageDraftsRef.current[String(selectedConversationId)] = next;
+    }
   };
 
   // Fechar emoji picker, sticker picker e delete options ao clicar fora
@@ -1937,7 +1959,13 @@ export default function AgentMessages() {
 
                   <Textarea
                     value={message}
-                    onChange={e => setMessage(e.target.value)}
+                    onChange={e => {
+                      const value = e.target.value;
+                      setMessage(value);
+                      if (selectedConversationId != null) {
+                        messageDraftsRef.current[String(selectedConversationId)] = value;
+                      }
+                    }}
                     onKeyDown={e => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
