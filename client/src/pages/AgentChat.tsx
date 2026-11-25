@@ -89,7 +89,8 @@ export default function AgentChat() {
       {},
       {
         enabled: hasSession(),
-        refetchInterval: 5000, // Atualizar a cada 5 segundos
+        // SSE cuida das atualizações em tempo real, sem polling
+        refetchInterval: false,
       }
     );
 
@@ -98,7 +99,8 @@ export default function AgentChat() {
       { conversation_id: selectedConversation! },
       {
         enabled: !!selectedConversation,
-        refetchInterval: 4000, // Atualizar mensagens a cada 3 segundos
+        // SSE cuida das atualizações em tempo real, sem polling
+        refetchInterval: false,
       }
     );
 

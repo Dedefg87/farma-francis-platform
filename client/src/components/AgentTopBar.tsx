@@ -50,12 +50,13 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
   ];
 
   // Buscar todas as conversas ativas do agente (mesmo sem conversa selecionada)
+  // O SSE cuida das atualizações em tempo real, sem precisar de polling
   const { data: conversations } = trpc.conversations.listActive.useQuery(
     undefined,
     {
       enabled: hasSession(),
-      refetchInterval: 15000, // Verificar a cada 1 segundo
-      refetchIntervalInBackground: false, // Continuar verificando mesmo em background
+      refetchInterval: false, // Desabilitado - SSE cuida das atualizações
+      refetchIntervalInBackground: false,
     }
   );
 
