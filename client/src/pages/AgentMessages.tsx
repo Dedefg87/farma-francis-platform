@@ -577,6 +577,9 @@ export default function AgentMessages() {
     onSuccess: () => {
       utils.conversations.list.invalidate();
     },
+    onError: (err) => {
+      toast.error(`Erro ao marcar como não lida: ${err.message}`);
+    },
   });
 
   const handleMarkAsUnread = (id: string) => {
