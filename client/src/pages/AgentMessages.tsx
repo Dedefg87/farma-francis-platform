@@ -207,6 +207,7 @@ export default function AgentMessages() {
   const previousTotalUnreadRef = useRef<number>(0);
   const { playNotificationSound } = useNotificationSound();
   const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   // Buscar contatos recentes para o dropdown de encaminhar para cliente
   const { data: recentContacts = [], isLoading: loadingRecentContacts } = trpc.conversations.recentContacts.useQuery(
@@ -270,28 +271,20 @@ export default function AgentMessages() {
                 playNotificationSound();
               }
 
-              // Invalidate queries to refresh data
-              queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
+              // Invalidar via utils do tRPC (chaves de query do tRPC v11 são prefixadas por [rota])
+              utils.conversations.list.invalidate();
+              utils.conversations.listActive.invalidate();
 
-              // Invalidate specific message query for this conversation
               const conversationId = data.data?.conversationId;
-              if (conversationId) {
-                queryClient.invalidateQueries({
-                  queryKey: ["trpc", "messages", "list", { conversation_id: conversationId }]
-                });
-              }
-
-              // Fallback: invalidate all messages queries
-              queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
+              // Invalida as queries de mensagens (prefixo da procedure messages.list)
+              utils.messages.list.invalidate({ conversation_id: conversationId });
 
   // [FIX] Auto-select no SSE REMOVIDO: mensagem nova NAO troca a conversa aberta.
   // A lista atualiza, o som toca e o badge de nao-lida sinaliza; a troca e somente por clique.
 
               // For conversation:update, also force-refetch current messages
               if (data.type === "conversation:update" && data.data?.conversationId) {
-                queryClient.invalidateQueries({
-                  queryKey: ["trpc", "messages", data.data.conversationId],
-                });
+                utils.messages.list.invalidate();
               }
 
               // Handle reaction events from SSE (realtime)
@@ -331,7 +324,7 @@ export default function AgentMessages() {
           // ERR_HTTP2_PROTOCOL_ERROR is common on Railway (HTTP/2 proxy doesn't support SSE)
           // Don't log it loudly — it's expected behavior
           if (reconnectAttempt === 0) {
-            console.warn("[AgentSSE] Connection failed (Railway HTTP/2 proxy). Polling will handle updates.");
+            console.warn("[AgentSSE] Connection failed (Railway HTTP/2 proxy).");
           }
           setIsConnected(false);
           eventSource?.close();
@@ -354,7 +347,7 @@ export default function AgentMessages() {
       eventSource?.close();
       clearTimeout(reconnectTimeout);
     };
-  }, [user?.id, notificationsMuted, queryClient]); // playNotificationSound removido: recriava o EventSource a cada render
+  }, [user?.id, notificationsMuted, queryClient, utils]); // playNotificationSound removido: recriava o EventSource a cada render
 
   // Atualizar localStorage quando ordenação mudar
   useEffect(() => {
@@ -606,7 +599,7 @@ export default function AgentMessages() {
       setShowCloseDialog(false);
       setSelectedConversationId(null);
       sessionStorage.removeItem('selectedConversationId');
-      queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
+      utils.conversations.list.invalidate();
       refetchConversations();;
     },
     onError: error => {
@@ -625,7 +618,7 @@ export default function AgentMessages() {
         const data = await res.json();
         if (data.success) {
           toast.success(`${data.closed || 0} conversas encerradas`);
-          queryClient.invalidateQueries({ queryKey: ["trpc", "conversations", "list"] });
+          utils.conversations.list.invalidate();
           refetchConversations();
           setShowCloseAllDialog(false);
         }
@@ -643,8 +636,7 @@ export default function AgentMessages() {
     onSuccess: () => {
       toast.success("Mensagem excluída");
       // Force immediate cache invalidation
-      queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
-      queryClient.invalidateQueries({ queryKey: ["trpc", "messages"] });
+      utils.messages.list.invalidate();
       refetchMessages();
     },
     onError: error => {
