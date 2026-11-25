@@ -70,7 +70,14 @@ async function processQueue() {
         }
       } catch (error) {
         // Log mínimo, não quebra
-        console.error("[MobileSync] Job failed:", job.id, error.message);
+        const anyErr = error as any;
+        console.error(
+          "[MobileSync] Job failed:",
+          job.id,
+          anyErr?.message,
+          "| cause:",
+          anyErr?.cause?.message || anyErr?.code || ""
+        );
         // Job é descartado (não reenfileiramos para evitar loop)
       }
     }

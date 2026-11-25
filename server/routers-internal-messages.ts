@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { eq, desc, and, or } from "drizzle-orm";
+import { eq, desc, and, or, isNull } from "drizzle-orm";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
+import { internalMessages } from "../drizzle/schema";
 
 /**
  * Router: Mensagens Internas (sussurros do Admin para Agentes)
@@ -94,16 +95,17 @@ export const internalMessagesRouter = router({
       const { conversation_id, recipient_id, content } = input;
 
       try {
-        const [result] = await db.execute(
-          `INSERT INTO internal_messages (conversation_id, sender_id, recipient_id, content)
-           VALUES (?, ?, ?, ?)`,
-          [conversation_id, Number(userId), recipient_id, content]
-        );
+        const insertResult = await db.insert(internalMessages).values({
+          conversationId: Number(conversation_id),
+          senderId: Number(userId),
+          recipientId: recipient_id,
+          content,
+        });
 
-        const insertId = (result as any)?.insertId;
+        const insertId = (insertResult as any)?.insertId;
 
         return {
-          id: String(insertId),
+          id: String(insertId ?? 0),
           conversationId: String(conversation_id),
           senderId: String(userId),
           recipientId: String(recipient_id),
@@ -111,7 +113,13 @@ export const internalMessagesRouter = router({
           createdAt: new Date().toISOString(),
         };
       } catch (err: unknown) {
-        console.error("[internalMessages.send] Error:", err.message);
+        const anyErr = err as any;
+        console.error(
+          "[internalMessages.send] Error:",
+          anyErr?.message,
+          "| cause:",
+          anyErr?.cause?.message || anyErr?.code || ""
+        );
         throw new Error("Erro ao enviar mensagem interna");
       }
     }),
@@ -133,18 +141,26 @@ export const internalMessagesRouter = router({
       const { conversation_id } = input;
 
       try {
-        await db.execute(
-          `UPDATE internal_messages 
-           SET read_at = NOW() 
-           WHERE conversation_id = ? 
-             AND recipient_id = ? 
-             AND read_at IS NULL`,
-          [conversation_id, Number(userId)]
-        );
+        await db
+          .update(internalMessages)
+          .set({ readAt: new Date() })
+          .where(
+            and(
+              eq(internalMessages.conversationId, conversation_id),
+              eq(internalMessages.recipientId, Number(userId)),
+              isNull(internalMessages.readAt)
+            )
+          );
 
         return { success: true };
       } catch (err: unknown) {
-        console.error("[internalMessages.markRead] Error:", err.message);
+        const anyErr = err as any;
+        console.error(
+          "[internalMessages.markRead] Error:",
+          anyErr?.message,
+          "| cause:",
+          anyErr?.cause?.message || anyErr?.code || ""
+        );
         throw new Error("Erro ao marcar como lido");
       }
     }),
