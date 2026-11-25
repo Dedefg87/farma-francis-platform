@@ -698,13 +698,13 @@ export async function ingestInboundConversationMessage(message: {
   const messageDbId = Number(rawMessageId) || undefined;
 
   // 9. If it's a WhatsApp media message, trigger Evolution download to upload to R2
-  // Covers: images with WhatsApp CDN URLs AND stickers/media with only mediaId (no URL)
+  // Covers: images, audio, video, documents with WhatsApp CDN URLs AND stickers/media with only mediaId (no URL)
   const needsR2Upload =
     message.provider === "whatsapp" &&
     message.externalId &&
     (
-      // Case 1: has WhatsApp CDN URL
-      (fileUrlToSave?.includes("mmg.whatsapp.net") || fileUrlToSave?.includes("pps.whatsapp.net")) ||
+      // Case 1: any WhatsApp CDN URL (audio, image, video, document, profile pic, etc.)
+      (fileUrlToSave?.includes("whatsapp.net") || fileUrlToSave?.includes("whatsapp.com")) ||
       // Case 2: has media but no URL (stickers, etc.) — mediaId or mimeType indicates media
       (!fileUrlToSave && (message.mediaId || ["sticker", "stickerMessage", "image", "audio", "video", "document"].includes(message.messageType || "")))
     );

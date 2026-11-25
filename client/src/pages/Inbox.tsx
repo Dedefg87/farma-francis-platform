@@ -32,8 +32,15 @@ import { PDFPreview } from "@/components/PDFPreview";
 // absolutas (http...) passam intactas. NAO altera comportamento de instancias que ja funcionam.
 function resolveMediaUrl(url: string | null | undefined, messageId?: number | string): string {
   if (!url) return "";
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
   if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  // Se for URL absoluta do WhatsApp CDN, usar proxy para evitar expiração de URL
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    if (url.includes("whatsapp.net") || url.includes("whatsapp.com")) {
+      if (messageId) return `/api/media/${messageId}`;
+      return url; // fallback sem messageId
+    }
+    return url;
+  }
   if (messageId) return `/api/media/${messageId}`;
   return url;
 }
