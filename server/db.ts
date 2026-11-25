@@ -69,13 +69,6 @@ export async function getDb() {
             try {
               await connection.ping();
               _dbHealthCheck = Date.now();
-              // Log do status do pool para diagnostico
-              console.log(
-                "[Database] Pool status:",
-                "active=", _pool._allConnections.length,
-                "idle=", _pool._freeConnections.length,
-                "waiting=", _pool._connectionQueue.length
-              );
             } finally {
               connection.release();
             }
