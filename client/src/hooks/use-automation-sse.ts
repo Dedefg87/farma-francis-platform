@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { trpc } from "@/lib/trpc";
 
 /**
  * Hook for handling SSE events from automation
@@ -13,7 +13,7 @@ export function useAutomationSSE(customerId?: number) {
   const [lastEvent, setLastEvent] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   const handleNewMessage = useCallback((message: unknown) => {
     setMessages(prev => {
@@ -34,9 +34,10 @@ export function useAutomationSSE(customerId?: number) {
   }, []);
 
   const handleConversationUpdate = useCallback(() => {
-    // Invalidate conversations query to refresh the list
-    queryClient.invalidateQueries({ queryKey: ["conversations"] });
-  }, [queryClient]);
+    // Invalida via utils do tRPC (chaves de query do tRPC v11 são prefixadas por [rota])
+    utils.conversations.list.invalidate();
+    utils.conversations.listActive.invalidate();
+  }, [utils]);
 
   useEffect(() => {
     if (!customerId) return;

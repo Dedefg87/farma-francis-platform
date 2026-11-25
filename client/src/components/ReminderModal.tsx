@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -98,7 +97,7 @@ export function ReminderModal({
   reminders,
   onAllDismissed,
 }: ReminderModalProps) {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
   const [expandedClients, setExpandedClients] = useState<Set<number>>(new Set());
   const [snoozeState, setSnoozeState] = useState<{
     open: boolean;
@@ -108,8 +107,8 @@ export function ReminderModal({
 
   const dismissMutation = trpc.reminders.dismiss.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
       toast.success("Lembrete dispensado");
     },
     onError: (error) => toast.error(`Erro: ${error.message}`),
@@ -117,8 +116,8 @@ export function ReminderModal({
 
   const snoozeMutation = trpc.reminders.snooze.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
       setSnoozeState({ open: false, reminderId: null, customDate: "" });
       toast.success("Lembrete adiado com sucesso");
     },

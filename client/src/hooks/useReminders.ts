@@ -2,7 +2,6 @@
 
 import { useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 interface GroupedReminders {
@@ -23,7 +22,7 @@ interface GroupedReminders {
 }
 
 export function useReminders() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   // Buscar lembretes pendentes
   const { data: pendingReminders = [], isLoading, refetch } = trpc.reminders.getPending.useQuery(
@@ -44,15 +43,15 @@ export function useReminders() {
   // Mutations
   const dismissMutation = trpc.reminders.dismiss.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
     },
   });
 
   const snoozeMutation = trpc.reminders.snooze.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
     },
   });
 
@@ -90,12 +89,12 @@ export function useReminders() {
 
 // Hook para criar lembrete manual (usado no CRMPanel, etc)
 export function useCreateReminder() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   return trpc.reminders.create.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
       toast.success("Lembrete criado com sucesso");
     },
     onError: (error) => {

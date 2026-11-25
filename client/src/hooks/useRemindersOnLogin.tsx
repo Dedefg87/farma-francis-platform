@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
-import { useQueryClient } from "@tanstack/react-query";
 import { ReminderModal } from "@/components/ReminderModal";
 import type { GroupedReminders } from "@/components/ReminderModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,7 +11,6 @@ import { useAuth } from "@/contexts/AuthContext";
  * Busca lembretes pendentes e controla exibicao do modal
  */
 export function useRemindersOnLogin() {
-  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [reminders, setReminders] = useState<GroupedReminders[]>([]);
   const [hasChecked, setHasChecked] = useState(false);
@@ -98,19 +96,19 @@ export function ReminderLoginProvider({ children }: { children: React.ReactNode 
  * Hook simples para usar em qualquer componente
  */
 export function useReminders() {
-  const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
   const dismiss = trpc.reminders.dismiss.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
     },
   });
 
   const snooze = trpc.reminders.snooze.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["reminders", "pending"] });
-      queryClient.invalidateQueries({ queryKey: ["reminders", "stats"] });
+      utils.reminders.pending.invalidate();
+      utils.reminders.stats.invalidate();
     },
   });
 
