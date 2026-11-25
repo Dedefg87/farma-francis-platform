@@ -32,6 +32,17 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
       return false;
     }
   });
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   // Ref para rastrear mensagens anteriores
   const previousMessagesRef = useRef<Map<number, number>>(new Map());
@@ -98,26 +109,26 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
 
   return (
     <div className="bg-white border-b border-gray-200 shadow-sm">
-      <div className={compact ? "px-3 py-2" : "container mx-auto px-6"}>
+      <div className={compact ? "px-3 py-2" : isMobile ? "px-3 py-2" : "container mx-auto px-6"}>
         <div className={`
-          flex items-center justify-between h-16
+          flex items-center justify-between h-14 md:h-16
           ${compact ? "flex-row-reverse" : ""}
         `}>
           {/* Logo e Nome (escondido em compact) */}
           {!compact && (
             <>
-              <div className="flex items-center gap-3">
-                <img src="/logo-farma-francis.jpg" alt="Farma Francis" className="h-16 w-auto object-contain" />
+              <div className="flex items-center gap-2 md:gap-3">
+                <img src="/logo-farma-francis.jpg" alt="Farma Francis" className="h-10 md:h-16 w-auto object-contain" />
                 <div>
-                  <h1 className="text-lg font-semibold text-gray-900">
+                  <h1 className="text-base md:text-lg font-semibold text-gray-900">
                     Farma Francis
                   </h1>
                   <p className="text-xs text-gray-500">Painel do Agente</p>
                 </div>
               </div>
 
-              {/* Tabs de Navegação (apenas desktop) */}
-              <nav className="flex gap-1">
+              {/* Tabs de Navegação — mostradas em tamanho compacto na mobile */}
+              <nav className="flex gap-0.5">
                 {tabs.map(tab => {
                   const Icon = tab.icon;
                   const isActive = location === tab.path;
@@ -125,7 +136,8 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
                     <Link key={tab.path} href={tab.path}>
                       <a
                         className={`
-                          flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
+                          flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-all
+                          ${isMobile ? "gap-1" : ""}
                           ${
                             isActive
                               ? "bg-blue-50 text-blue-600 border border-blue-200"
@@ -134,7 +146,7 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
                         `}
                       >
                         <Icon className="w-4 h-4" />
-                        {tab.name}
+                        {!isMobile && tab.name}
                       </a>
                     </Link>
                   );
@@ -178,14 +190,14 @@ export default function AgentTopBar({ compact = false }: { compact?: boolean }) 
                       <p className="text-xs text-gray-500">Agente</p>
                     </div>
                   )}
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
                     {user?.photo ? (
-                      <Avatar className="w-8 h-8">
+                      <Avatar className="w-6 h-6 md:w-8 md:h-8">
                         <AvatarImage src={user.photo} />
                       </Avatar>
                     ) : (
-                      <Avatar className="w-8 h-8">
-                        <AvatarFallback className="text-white font-semibold text-sm">
+                      <Avatar className="w-6 h-6 md:w-8 md:h-8">
+                        <AvatarFallback className="text-white font-semibold text-xs md:text-sm">
                           { (user?.name ?? '').charAt(0).toUpperCase() || 'U' }
                         </AvatarFallback>
                       </Avatar>

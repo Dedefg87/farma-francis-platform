@@ -1434,7 +1434,7 @@ export default function AgentMessages() {
       />
 
       <AgentTopBar />
-      <div className="h-[calc(100vh-64px)] bg-gray-50 flex flex-col md:flex-row">
+      <div className="h-[calc(100vh-56px)] md:h-[calc(100vh-64px)] bg-gray-50 flex flex-col md:flex-row">
         {/* Lista de Conversas */}
         <div className={isMobile && selectedConversationId ? "hidden" : "w-full md:w-96 bg-white border-r border-gray-200 flex flex-col"}>
           <div className="p-4 border-b border-gray-200 space-y-3">
