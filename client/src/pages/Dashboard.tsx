@@ -45,6 +45,7 @@ const SkeletonLoader: React.FC<{ height?: string; width?: string }> = ({ height 
 export default function Dashboard() {
   // --- ESTADOS ---
   const [selectedPeriod, setSelectedPeriod] = useState<string>("mes");
+  const [selectedAgentId, setSelectedAgentId] = useState<string>("all");
   const [customStartDate, setCustomStartDate] = useState<string | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<string | undefined>(undefined);
   const [showCustomDatePicker, setShowCustomDatePicker] = useState<boolean>(false);
@@ -75,6 +76,57 @@ export default function Dashboard() {
     return { period: selectedPeriod };
   }, [selectedPeriod, customStartDate, customEndDate]);
 
+  // --- PERÍODO ANTERIOR (para comparação de tendência) ---
+  const previousPeriodInput = useMemo(() => {
+    const periodMap: Record<string, string> = {
+      hoje: "ontem",
+      semana: "mes_anterior", // aproximado
+      mes: "mes_anterior",
+      "30d": "30d", // será calculado com datas customizadas
+    };
+    if (selectedPeriod === "custom" && customStartDate && customEndDate) {
+      const start = new Date(customStartDate);
+      const end = new Date(customEndDate);
+      const duration = end.getTime() - start.getTime();
+      const prevEnd = new Date(start.getTime() - 1);
+      const prevStart = new Date(prevEnd.getTime() - duration);
+      return {
+        period: "custom",
+        startDate: prevStart.toISOString().split("T")[0],
+        endDate: prevEnd.toISOString().split("T")[0],
+      };
+    }
+    if (selectedPeriod === "30d") {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 30);
+      const sixtyDaysAgo = new Date(now);
+      sixtyDaysAgo.setUTCDate(sixtyDaysAgo.getUTCDate() - 60);
+      return {
+        period: "custom",
+        startDate: sixtyDaysAgo.toISOString().split("T")[0],
+        endDate: thirtyDaysAgo.toISOString().split("T")[0],
+      };
+    }
+    if (selectedPeriod === "365d") {
+      const now = new Date();
+      const yearAgo = new Date(now);
+      yearAgo.setUTCDate(yearAgo.getUTCDate() - 365);
+      const twoYearsAgo = new Date(now);
+      twoYearsAgo.setUTCDate(twoYearsAgo.getUTCDate() - 730);
+      return {
+        period: "custom",
+        startDate: twoYearsAgo.toISOString().split("T")[0],
+        endDate: yearAgo.toISOString().split("T")[0],
+      };
+    }
+    const prevPeriod = periodMap[selectedPeriod];
+    if (prevPeriod) {
+      return { period: prevPeriod };
+    }
+    return null;
+  }, [selectedPeriod, customStartDate, customEndDate]);
+
   // --- CONFIGURAÇÃO DAS QUERIES ---
   const queryConfig = {
     refetchOnWindowFocus: false,
@@ -84,6 +136,9 @@ export default function Dashboard() {
 
   // --- QUERIES TRPC ---
   const statsQuery = trpc.dashboardStats.getStats.useQuery(queryInput, queryConfig);
+  const prevStatsQuery = previousPeriodInput
+    ? trpc.dashboardStats.getStats.useQuery(previousPeriodInput, queryConfig)
+    : null;
   const channelQuery = trpc.dashboardStats.getConversationsByChannel.useQuery(queryInput, queryConfig);
   const statusQuery = trpc.dashboardStats.getConversationsByStatus.useQuery(queryInput, queryConfig);
   
@@ -100,6 +155,17 @@ export default function Dashboard() {
 
   // --- DADOS EXTRAÍDOS ---
   const stats = statsQuery.data as DashboardStatsOutput | undefined;
+  const prevStats = (prevStatsQuery?.data ?? null) as DashboardStatsOutput | null;
+
+  // --- CÁLCULO DE TENDÊNCIA ---
+  const calcTrend = useCallback((current: number | null | undefined, previous: number | null | undefined): { arrow: string; percent: string; color: string } | null => {
+    if (current === undefined || current === null || previous === undefined || previous === null || previous === 0) return null;
+    const diff = current - previous;
+    const pct = Math.round((diff / previous) * 100);
+    if (pct > 0) return { arrow: "↑", percent: `+${pct}%`, color: "text-green-600" };
+    if (pct < 0) return { arrow: "↓", percent: `${pct}%`, color: "text-red-600" };
+    return { arrow: "→", percent: "0%", color: "text-gray-500" };
+  }, []);
   const channelData = (channelQuery.data ?? []) as ConversationsByChannelOutput[];
   const statusData = (statusQuery.data ?? []) as ConversationsByStatusOutput[];
   const hourData = hourQuery.data ?? [];
@@ -131,12 +197,24 @@ export default function Dashboard() {
 
   // --- FUNÇÕES RENDERIZADORAS (MEMOIZADAS) ---
 
-  const renderMetricCard = useCallback((label: string, value: number | string | undefined): JSX.Element => (
-    <Card className="p-3 md:p-2 bg-white rounded-lg shadow-sm border border-gray-100">
-      <div className="text-gray-600 text-xs font-semibold uppercase truncate">{label}</div>
-      <div className="text-lg md:text-xl font-bold text-gray-900 mt-1">
-        {value === undefined || value === null ? "—" : (typeof value === 'string' && value.includes(':') ? value : value.toLocaleString('pt-BR'))}
+  const renderMetricCard = useCallback((label: string, value: number | string | undefined, tooltip?: string, trend?: { arrow: string; percent: string; color: string } | null): JSX.Element => (
+    <Card className="p-3 md:p-2 bg-white rounded-lg shadow-sm border border-gray-100" title={tooltip}>
+      <div className="text-gray-600 text-xs font-semibold uppercase truncate" title={tooltip}>{label}</div>
+      <div className="flex items-center gap-2 mt-1">
+        <div className="text-lg md:text-xl font-bold text-gray-900">
+          {value === undefined || value === null ? "—" : (typeof value === 'string' && value.includes(':') ? value : value.toLocaleString('pt-BR'))}
+        </div>
+        {trend && (
+          <span className={`text-xs font-bold ${trend.color}`} title="Comparação com período anterior">
+            {trend.arrow} {trend.percent}
+          </span>
+        )}
       </div>
+      {tooltip && (
+        <div className="text-[10px] text-gray-400 mt-1 leading-tight" title={tooltip}>
+          {tooltip}
+        </div>
+      )}
     </Card>
   ), []);
 
@@ -192,7 +270,20 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                {/* Filtro por agente */}
+                <select
+                  value={selectedAgentId}
+                  onChange={(e) => setSelectedAgentId(e.target.value)}
+                  className="px-3 py-2 rounded-md text-sm font-medium border border-gray-300 bg-white focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">Todos os agentes</option>
+                  {agentData.map((agent) => (
+                    <option key={agent.agentId} value={String(agent.agentId)}>
+                      {agent.agentName}
+                    </option>
+                  ))}
+                </select>
                 {periodOptions.map((option) => (
                   <button
                     key={option.value}
@@ -261,16 +352,18 @@ export default function Dashboard() {
               </div>
             ) : stats ? (
               <>
-                {renderMetricCard("Atendimentos", stats.totalConversations)}
-                {renderMetricCard("Clientes Únicos", stats.uniqueCustomers)}
-                {renderMetricCard("Msg Enviadas", stats.messagesSent)}
-                {renderMetricCard("Msg Recebidas", stats.messagesReceived)}
+                {renderMetricCard("Atendimentos", stats.totalConversations, "Total de conversas iniciadas no período selecionado", calcTrend(stats.totalConversations, prevStats?.totalConversations))}
+                {renderMetricCard("Clientes Únicos", stats.uniqueCustomers, "Quantidade de clientes diferentes que entraram em contato", calcTrend(stats.uniqueCustomers, prevStats?.uniqueCustomers))}
+                {renderMetricCard("Mensagens Enviadas", stats.messagesSent, "Mensagens enviadas pelos agentes no período", calcTrend(stats.messagesSent, prevStats?.messagesSent))}
+                {renderMetricCard("Mensagens Recebidas", stats.messagesReceived, "Mensagens recebidas dos clientes no período", calcTrend(stats.messagesReceived, prevStats?.messagesReceived))}
                 {renderMetricCard(
-                  "Méd. Atend./Agente",
-                  stats.avgPerAgent?.toFixed(1) ?? "0.0"
+                  "Média por Agente",
+                  stats.avgPerAgent?.toFixed(1) ?? "0.0",
+                  "Média de atendimentos por agente ativo",
+                  null
                 )}
-                {renderMetricCard("TMA Médio", calculateAverageTMA)}
-                {renderMetricCard("% SLA", stats.sla)}
+                {renderMetricCard("Tempo Médio de Atendimento", calculateAverageTMA, "Tempo médio entre abertura e fechamento da conversa", null)}
+                {renderMetricCard("% SLA", stats.sla, "Percentual de vendas fechadas em até 2 horas", null)}
               </>
             ) : (
               <div className="lg:col-span-7 p-4 text-center text-gray-500 bg-white rounded-lg shadow-sm border border-gray-100">
@@ -396,7 +489,10 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {agentData.slice(0, 20).map((agent) => (
+                      {agentData
+                        .filter((agent) => selectedAgentId === "all" || String(agent.agentId) === selectedAgentId)
+                        .slice(0, 20)
+                        .map((agent) => (
                         <tr key={agent.agentId} className="hover:bg-gray-50">
                           <td className="px-4 py-3 flex items-center space-x-3">
      {agent.photo ? (
