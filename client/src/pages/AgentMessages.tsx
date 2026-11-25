@@ -698,27 +698,19 @@ export default function AgentMessages() {
       }
     }
 
-    // Atualização otimista - zerar contador imediatamente na UI
-    queryClient.setQueryData(
-      ["trpc", "conversations", "listActive", { input: undefined }],
-      (old: unknown) => {
-        if (!old) return old;
-        return old.map((c: unknown) =>
-          Number(c.id) === conversationId ? { ...c, unreadCount: 0 } : c
-        );
-      }
-    );
-
-    // Chamar endpoint REST direto
+    // Chamar endpoint REST direto e sincronizar o cache após marcar como lida
     try {
-      await fetch(`/api/conversations/${conversationId}/mark-read`, {
+      const res = await fetch(`/api/conversations/${conversationId}/mark-read`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
+      if (res.ok) {
+        utils.conversations.list.invalidate();
+      }
     } catch (error) {
       console.error("[AgentMessages] Erro ao marcar como lida:", error);
     }
-  }, [queryClient]);
+  }, [utils]);
 
   // Scroll inteligente: só auto-scroll se estiver no final
   const scrollToBottom = useCallback((force = false) => {
@@ -825,24 +817,15 @@ export default function AgentMessages() {
     // Se a conversa ativa tem mensagens não lidas, marcar como lida
     if (activeConversation && activeConversation.unreadCount > 0) {
       
-      // Atualização otimista
-      queryClient.setQueryData(
-        ["trpc", "conversations", "listActive", { input: undefined }],
-        (old: unknown) => {
-          if (!old) return old;
-          return old.map((c: unknown) =>
-            Number(c.id) === selectedConversationId ? { ...c, unreadCount: 0 } : c
-          );
-        }
-      );
-
-      // Chamar endpoint REST
+      // Chamar endpoint REST e sincronizar o cache após marcar como lida
       fetch(`/api/conversations/${selectedConversationId}/mark-read`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-      }).catch(err => console.error("[AgentMessages] Erro auto-mark:", err));
+      })
+        .then(() => utils.conversations.list.invalidate())
+        .catch(err => console.error("[AgentMessages] Erro auto-mark:", err));
     }
-  }, [conversations, selectedConversationId, queryClient]);
+  }, [conversations, selectedConversationId, utils]);
 
   // Função para abrir lightbox de imagens
   const handleImageClick = useCallback(
