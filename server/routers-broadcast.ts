@@ -382,10 +382,10 @@ export const broadcastRouter = router({
       const db = await getDb();
       if (!db) throw new Error("Database not available");
 
-      // [FIX] Regra 5: apenas clientes que conversaram com a farmacia nas ultimas 24h
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      // [FIX] Apenas clientes que conversaram com a farmacia nas ultimas 96h
+      const cutoff = new Date(Date.now() - 96 * 60 * 60 * 1000);
       const recentRows = await db
-        .select({ customerId: conversations.customerId })
+        .select({ customerId: conversations.customerId, instanceName: conversations.instanceName })
         .from(conversations)
         .where(sql`${conversations.lastMessageAt} >= ${cutoff}`);
       const recentIds = Array.from(new Set(recentRows.map(r => r.customerId).filter(Boolean)));
@@ -401,7 +401,7 @@ export const broadcastRouter = router({
           inArray(broadcastListMembers.customerId, recentIds)
         ));
 
-      if (members.length === 0) throw new Error("Nenhum cliente ativo nas ultimas 24h nesta lista (ou lista vazia)");
+      if (members.length === 0) throw new Error("Nenhum cliente ativo nas ultimas 96h nesta lista (ou lista vazia)");
 
       const values = {
         listId: input.listId,

@@ -51,13 +51,40 @@ async function sendWhatsAppMessageWithRetry(
     name: string;
     type: string;
     size: number;
-  }
+  },
+  instanceNameOverride?: string | null
 ): Promise<{ success: boolean; error?: string }> {
   const variants = generatePhoneVariants(phone);
 
-  // Buscar configuração (com cache)
-  const { apiUrl, instanceName } = await getEvolutionConfigWithCache();
-  const apiKey = await getEvolutionApiKey();
+  // Buscar configuração da instância correta (query direta ao DB para suportar multi-instância)
+  let apiUrl: string;
+  let instanceName: string;
+  let apiKey: string;
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const rows = await db.select().from(integrationSettings).where(eq(integrationSettings.integrationType, "evolution_api"));
+  const parsed = rows.map((r: any) => {
+    let cfg = r.config;
+    if (typeof cfg === "string") { try { cfg = JSON.parse(cfg); } catch { /* */ } }
+    return cfg && typeof cfg === "object" ? cfg : {};
+  });
+  
+  let chosen: any = {};
+  if (instanceNameOverride) {
+    chosen = parsed.find((x: any) => x.instanceName && String(x.instanceName).trim().toLowerCase() === String(instanceNameOverride).trim().toLowerCase()) || {};
+  }
+  if (!chosen.apiUrl) {
+    chosen = parsed.find((x: any) => x.instanceName && x.apiUrl && x.apiKey) || parsed[0] || {};
+  }
+  
+  apiUrl = chosen.apiUrl || "";
+  instanceName = chosen.instanceName || "";
+  apiKey = chosen.apiKey || "";
+  
+  if (!apiUrl || !instanceName || !apiKey) {
+    throw new Error("Evolution API not configured for instance: " + (instanceNameOverride || "default"));
+  }
 
   for (let i = 0; i < variants.length; i++) {
     const variant = variants[i];
@@ -223,23 +250,73 @@ export async function processBroadcastMessage(messageId: number) {
       return;
     }
 
+    // [MULTI-INSTANCE] Buscar instância de cada membro (via conversa mais recente)
+    // Cada instância envia APENAS para seus próprios contatos
+    const membersWithInstance: any[] = [];
+    for (const sent of pendingSents) {
+      const targetPhone = sent.customerPhone || sent.phone;
+      // Buscar a conversa mais recente do cliente para saber a instância
+      const [conv] = await db
+        .select({ instanceName: conversations.instanceName, lastMessageAt: conversations.lastMessageAt })
+        .from(conversations)
+        .where(eq(conversations.customerPhone, targetPhone))
+        .orderBy(desc(conversations.lastMessageAt))
+        .limit(1);
+      
+      const memberInstance = conv?.instanceName || null;
+      
+      // Verificar janela de 96h
+      const lastContact = conv?.lastMessageAt ? new Date(conv.lastMessageAt) : null;
+      const cutoff96h = new Date(Date.now() - 96 * 60 * 60 * 1000);
+      if (!lastContact || lastContact < cutoff96h) {
+        console.log(`[Broadcast] Contato ${targetPhone} não conversou nas últimas 96h, pulando`);
+        await db.update(broadcastMembersSent).set({ status: "skipped", errorMessage: "Sem contato nas últimas 96h" }).where(eq(broadcastMembersSent.id, sent.id));
+        continue;
+      }
+      
+      membersWithInstance.push({ ...sent, instanceName: memberInstance, targetPhone });
+    }
+
+    if (membersWithInstance.length === 0) {
+      console.log(`[Broadcast] Nenhum membro elegível para envio (instância ou janela 96h)`);
+      return;
+    }
+
+    // Agrupar por instância para log
+    const byInstance: Record<string, number> = {};
+    for (const m of membersWithInstance) {
+      const key = m.instanceName || "sem-instancia";
+      byInstance[key] = (byInstance[key] || 0) + 1;
+    }
+    console.log(`[Broadcast] Distribuição por instância:`, byInstance);
+
     console.log(
-      `[Broadcast] Processando ${pendingSents.length} envios pendentes para mensagem ${messageId}`
+      `[Broadcast] Processando ${membersWithInstance.length} envios pendentes para mensagem ${messageId}`
     );
 
     let successCount = 0;
     let failCount = 0;
 
     // 3. Processar cada membro
-    for (const sent of pendingSents) {
+    for (const sent of membersWithInstance) {
       // Usar o telefone do customer se disponível, senão o phone do broadcastMembersSent
-      const targetPhone = sent.customerPhone || sent.phone;
+      const targetPhone = sent.targetPhone || sent.customerPhone || sent.phone;
       // [FIX] Regra 4: personalizar com o nome do contato antes da mensagem
       const customerName = (sent as any).name || "";
       const baseText = message.messageText || "";
-      const personalizedContent = customerName
-        ? (baseText ? `Olá ${customerName}!\n${baseText}` : `Olá ${customerName}!`)
-        : baseText;
+      
+      // [VARIÁVEIS] Substituir {nome}, {produto}, {desconto}, {data}
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR');
+      let personalizedContent = baseText
+        .replace(/\{nome\}/gi, customerName || "")
+        .replace(/\{produto\}/gi, (message as any).produto || "")
+        .replace(/\{desconto\}/gi, (message as any).desconto || "")
+        .replace(/\{data\}/gi, dateStr);
+      
+      if (customerName && !personalizedContent.includes(customerName)) {
+        personalizedContent = `Olá ${customerName}!\n${personalizedContent}`;
+      }
 
       const fileAttachment = resolvedFileUrl
         ? {
@@ -253,7 +330,8 @@ export async function processBroadcastMessage(messageId: number) {
       const result = await sendWhatsAppMessageWithRetry(
         targetPhone,
         personalizedContent,
-        fileAttachment
+        fileAttachment,
+        (sent as any).instanceName
       );
 
       if (result.success) {
@@ -286,10 +364,8 @@ export async function processBroadcastMessage(messageId: number) {
         failCount++;
       }
 
-      // Pequena pausa para evitar rate limit (0.5s entre envios)
-      // [FIX] Regra 6: intervalo aleatorio 30-90s entre envios (comportamento humano)
-      const randomDelay = 30000 + Math.floor(Math.random() * 60000); // 30s a 90s
-      await new Promise(resolve => setTimeout(resolve, randomDelay));
+      // [FIX] 1 envio por minuto por instância (60s entre envios)
+      await new Promise(resolve => setTimeout(resolve, 60000));
     }
 
     // 4. Atualizar contadores da mensagem

@@ -2065,6 +2065,43 @@ async function processEvolutionWebhook(body: unknown) {
                 } catch (_reErr70) { console.error('[fix70] Erro ao processar reação:', _reErr70); }
                 if (_react70) return;
 
+                // [OPT-OUT] Detectar resposta "SAIR" para remover de listas de broadcast
+                if (!isSentByMe) {
+                  const optOutKeywords = ["sair", "stop", "cancelar", "remover", "descadastrar", "unsubscribe"];
+                  const msgText = (messageText || "").trim().toLowerCase();
+                  if (optOutKeywords.includes(msgText)) {
+                    console.log("[Evolution Webhook] 🚪 Opt-out detectado de:", fromNumber);
+                    try {
+                      const db = await getDb();
+                      if (db) {
+                        const { broadcastListMembers, customers } = await import("../drizzle/schema");
+                        const { eq, inArray } = await import("drizzle-orm");
+                        // Encontrar o cliente pelo telefone
+                        const [customer] = await db.select({ id: customers.id }).from(customers).where(eq(customers.phone, fromNumber)).limit(1);
+                        if (customer) {
+                          // Remover de todas as listas de broadcast
+                          await db.delete(broadcastListMembers).where(eq(broadcastListMembers.customerId, customer.id));
+                          console.log("[Evolution Webhook] ✅ Cliente", customer.id, "removido de todas as listas de broadcast");
+                          // Enviar confirmação
+                          try {
+                            const { sendWhatsAppMessage } = await import("./messaging");
+                            await sendWhatsAppMessage({
+                              to: fromNumber,
+                              message: "Você foi removido de nossa lista de transmissão. Para voltar a receber mensagens, entre em contato conosco.",
+                              instanceName: ((body as any)?.instance) || ((body as any)?.data?.instance) || undefined,
+                            });
+                          } catch (sendErr) {
+                            console.error("[Evolution Webhook] Erro ao enviar confirmação de opt-out:", sendErr);
+                          }
+                        }
+                      }
+                    } catch (optErr) {
+                      console.error("[Evolution Webhook] Erro no opt-out:", optErr);
+                    }
+                    return; // Não processar como mensagem normal
+                  }
+                }
+
                 // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
                 const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
