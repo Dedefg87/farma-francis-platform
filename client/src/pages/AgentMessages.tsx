@@ -1572,7 +1572,7 @@ export default function AgentMessages() {
                               const rect = e.currentTarget.getBoundingClientRect();
                               handleShowDeleteOptions(msg.id, rect.bottom + 6, rect.left);
                             }}
-                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-red-600 z-10`}
+                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-2" : "-right-2"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-red-600 z-10`}
                             title="Excluir mensagem"
                           >
                             <Trash2 className="w-3 h-3" />
@@ -1645,7 +1645,7 @@ export default function AgentMessages() {
                             document.body.appendChild(pickerEl);
                             setTimeout(() => pickerEl.remove(), 5000);
                           }}
-                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-yellow-500 z-10`}
+                          className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-26" : "-right-26"} w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-yellow-500 z-10`}
                           title="Reagir"
                         >
                           <Smile className="w-3 h-3" />
@@ -1657,7 +1657,7 @@ export default function AgentMessages() {
                               e.stopPropagation();
                               handleEditMessage(msg.id, msg.content || "");
                             }}
-                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-34" : "-right-34"} w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-blue-600 z-10`}
+                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-34" : "-right-34"} w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-blue-600 z-10`}
                             title="Editar mensagem"
                           >
                             <Pencil className="w-3 h-3" />
@@ -1671,7 +1671,7 @@ export default function AgentMessages() {
                               const rect = e.currentTarget.getBoundingClientRect();
                               handleShowDeleteOptions(msg.id, rect.bottom + 6, rect.left);
                             }}
-                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-42" : "-right-42"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-red-600 z-10`}
+                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-42" : "-right-42"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-red-600 z-10`}
                             title="Excluir"
                           >
                             <Trash2 className="w-3 h-3" />
