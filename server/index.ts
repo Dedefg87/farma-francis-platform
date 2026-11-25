@@ -632,7 +632,26 @@ startWebhookGuard();
       startStorageCleanupWorker();
     }).catch(err => {
       console.warn('[Server] Failed to start storage cleanup worker:', err?.message || err);
-    });;
+    });
+    // [fix-worker] Iniciar workers de processamento de mensagens (CAUSA RAIZ do "para de chegar").
+    // startFlowEngine: processa pending_messages / automações / visual flows.
+    // startChatbot: processa fluxos de chatbot e pesquisas.
+    // startMobileSyncProcessor: processa fila de mensagens enviadas do celular (fromMe).
+    import('./flow-engine.js').then(({ startFlowEngine }) => {
+      startFlowEngine();
+    }).catch(err => {
+      console.warn('[Server] ⚠️ Failed to start flow engine worker:', err.message);
+    });
+    import('./chatbot.js').then(({ startChatbot }) => {
+      startChatbot();
+    }).catch(err => {
+      console.warn('[Server] ⚠️ Failed to start chatbot worker:', err.message);
+    });
+    import('./queue/mobile-sync.js').then(({ startMobileSyncProcessor }) => {
+      startMobileSyncProcessor();
+    }).catch(err => {
+      console.warn('[Server] ⚠️ Failed to start mobile sync worker:', err.message);
+    });
   });
 
   server.on('error', (error) => {

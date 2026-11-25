@@ -45,7 +45,6 @@ class SseManager extends EventEmitter {
     }
 
     const data = `data: ${JSON.stringify(event)}\n\n`;
-    console.log(`[SSE] 📤 SENDING EVENT to ${clientSet.size} client(s) for userId=${userId}:`, event);
 
     for (const res of clientSet) {
       try {

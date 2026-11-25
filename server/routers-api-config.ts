@@ -236,6 +236,7 @@ export const apiConfigRouter = router({
             headers: {
               apikey: input.accessToken,
             },
+            signal: AbortSignal.timeout(12000),
           });
 
           if (!response.ok) {
@@ -313,6 +314,7 @@ export const apiConfigRouter = router({
             qr: true,
             integration: "WHATSAPP",
           }),
+          signal: AbortSignal.timeout(15000),
         });
 
         const createText = await createResponse.text();
@@ -335,6 +337,7 @@ export const apiConfigRouter = router({
               headers: {
                 apikey: input.apiKey,
               },
+              signal: AbortSignal.timeout(12000),
             });
 
             if (qrResponse.ok) {
@@ -366,6 +369,7 @@ export const apiConfigRouter = router({
             headers: {
               apikey: input.apiKey,
             },
+            signal: AbortSignal.timeout(12000),
           });
 
           if (statusResponse.ok) {
@@ -448,6 +452,7 @@ export const apiConfigRouter = router({
             headers: {
               apikey: input.apiKey,
             },
+            signal: AbortSignal.timeout(15000),
           }
         );
 
