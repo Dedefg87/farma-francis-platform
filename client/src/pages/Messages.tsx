@@ -56,6 +56,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { renderContentWithLinks } from "@/utils/text-format";
 import { SoundSelector } from "@/components/SoundSelector";
 import { PDFPreview } from "@/components/PDFPreview";
+import { MessageMedia } from "@/components/shared/MessageMedia";
 
 export default function Messages() {
   const { user, isAdmin } = useAuth();
@@ -101,29 +102,14 @@ export default function Messages() {
       { enabled: selectedConversation !== null }
     );
 
-  // ✅ Hooks: Reply + Reaction
-  const replyToMessage = trpc.messages.send.useMutation({
-    onSuccess: () => {
-      toast.success("Resposta enviada!");
-      utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
-      utils.conversations.list.invalidate();
-    },
-    onError: error => {
-      toast.error(`Erro ao responder: ${error.message}`);
-    },
-  });
-
-  const reactToMessage = trpc.messages.send.useMutation({
-    onSuccess: () => {
-      utils.messages.list.invalidate({ conversation_id: selectedConversation || 0 });
-    },
-    onError: error => {
-      toast.error(`Erro ao reagir: ${error.message}`);
-    },
-  });
+  // ✅ Hooks: reações locais (página /messages é somente leitura)
 
   // ✅ Estado para mensagem que está sendo respondida
   const [replyingTo, setReplyingTo] = useState<{ id: number; externalId: string; content: string } | null>(null);
+  const [localReactions, setLocalReactions] = useState<Record<number, string>>({});
+  const handleReact = (msgId: number, emoji: string) => {
+    setLocalReactions(prev => ({ ...prev, [msgId]: prev[msgId] === emoji ? "" : emoji }));
+  };
 
   // Buscar mensagens internas da conversa selecionada
   const { data: internalMessages, isLoading: loadingInternalMessages } =
@@ -228,15 +214,17 @@ export default function Messages() {
     setFilePreview(null);
   };
 
-  const sendMessageMutation = trpc.messages.send.useMutation({
+  const sendMessageMutation = trpc.internalMessages.send.useMutation({
     onSuccess: () => {
-      toast.success("Mensagem enviada!");
+      toast.success("💡 Sugestão enviada ao agente responsável!");
       setMessageInput("");
       setSelectedFile(null);
       setFilePreview(null);
+      setReplyingTo(null);
+      utils.internalMessages.list.invalidate({ conversation_id: selectedConversation || 0 });
     },
     onError: error => {
-      toast.error(`Erro ao enviar: ${error.message}`);
+      toast.error(`Erro ao enviar sugestão: ${error.message}`);
     },
   });
 
@@ -307,12 +295,19 @@ export default function Messages() {
       }
     }
 
+    let suggestionContent = messageInput.trim();
+    if (selectedFile && fileData.fileUrl) {
+      const fileLabel = fileData.fileName || "Arquivo";
+      suggestionContent = suggestionContent
+        ? suggestionContent + "\n📎 " + fileLabel + ": " + fileData.fileUrl
+        : "📎 " + fileLabel + ": " + fileData.fileUrl;
+    }
     sendMessageMutation.mutate({
       conversation_id: selectedConversation,
-      content: messageInput,
-      ...fileData,
-      viewOnce: isViewOnce && selectedFile ? true : false,
-      ...(replyingTo ? { replyToMessageId: replyingTo.id } : {}),
+      recipient_id: selectedConversationData?.assignedTo ?? 0,
+      content: replyingTo
+        ? "↩️ Respondendo a: " + String(replyingTo.content || "").split("\n")[0] + "\n" + suggestionContent
+        : suggestionContent,
     });
     setReplyingTo(null);
 
@@ -927,88 +922,23 @@ export default function Messages() {
                                   <p className="text-sm">{renderContentWithLinks(msg.content?.includes("📤") ? msg.content.split(String.fromCharCode(10)).slice(1).join(String.fromCharCode(10)).replace(/^💬 /, "").trim() : msg.content)}</p>
                                 )}
                                 {/* ✅ Exibir reação (emoji) se existir */}
-                                {msg.reaction && (
-                                  <span className="text-base ml-1">{msg.reaction}</span>
+                                {(msg.reaction || localReactions[msg.id]) && (
+                                  <span className="text-base ml-1">{msg.reaction || localReactions[msg.id]}</span>
                                 )}
                                 {msg.fileUrl && (
                                   <div className="mt-2">
-                                    {msg.fileType?.includes("webp") && !msg.content ? (
-                                      // Sticker — sem fundo, tamanho fixo
-                                      <img
-                                        src={getImageSrc(msg.fileUrl, msg.id)}
-                                        alt="Sticker"
-                                        className="max-w-[150px] max-h-[150px] object-contain cursor-pointer drop-shadow-sm"
-                                        onClick={() =>
-                                          handleImageClick(
-                                            msg.fileUrl!,
-                                            String(msg.id)
-                                          )
-                                        }
-                                        onError={e => {
-                                          const el = e.currentTarget as HTMLImageElement;
-                                          el.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
-                                          el.alt = "Sticker indisponível";
-                                        }}
-                                      />
-                                    ) : msg.fileType?.startsWith("image/") ? (
-                                      <div className="relative group">
-                                        <img
-                                          src={getImageSrc(msg.fileUrl, msg.id)}
-                                          alt={msg.fileName || "Imagem"}
-                                          className="max-w-full rounded-lg max-h-64 object-cover cursor-pointer"
-                                          onClick={() =>
-                                            handleImageClick(
-                                              msg.fileUrl,
-                                              msg.id
-                                            )
-                                          }
-                                          onError={e => {
-                                            const el =
-                                              e.currentTarget as HTMLImageElement;
-                                            // Fallback simples: substitui pela menor placeholder
-                                            el.src =
-                                              "data:image/gif;base64,R0lGODlhAQABAIAAAAUEBA==";
-                                            el.alt = "Imagem indisponível";
-                                          }}
-                                        />
-                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg" />
-                                      </div>
-                                    ) : msg.fileType?.startsWith("video/") ? (
-                                      <div className="relative">
-                                        <video
-                                          src={getImageSrc(msg.fileUrl, msg.id)}
-                                          controls
-                                          className="max-w-full rounded-lg max-h-64"
-                                        />
-                                      </div>
-                                                                        ) : (msg.fileType === "application/pdf" || msg.fileType?.includes("officedocument") || msg.fileType === "application/msword" || msg.fileType === "application/vnd.ms-excel" || msg.fileType === "application/vnd.ms-powerpoint") ? (
-                                      <PDFPreview
-                                      fileUrl={getImageSrc(msg.fileUrl, msg.id)}
-                                      fileName={msg.fileName}
+                                    <MessageMedia
+                                      fileUrl={msg.fileUrl}
                                       fileType={msg.fileType}
+                                      fileName={msg.fileName}
+                                      fileSize={msg.fileSize}
+                                      messageId={msg.id}
+                                      onImageClick={() => handleImageClick(msg.fileUrl!, msg.id)}
+                                      onDocumentClick={(url) => {
+                                        window.open(url, "_blank", "noopener,noreferrer");
+                                      }}
+                                      isAgent={msg.senderType === "agent"}
                                     />
-                                    ) : (                                      <a
-                                        href={getImageSrc(msg.fileUrl, msg.id)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 text-xs underline"
-                                      >
-                                        <svg
-                                          className="w-4 h-4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          viewBox="0 0 24 24"
-                                        >
-                                          <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                          />
-                                        </svg>
-                                        {msg.fileName || "Arquivo"}
-                                      </a>
-                                    )}
                                   </div>
                                 )}
                                 <span
@@ -1046,10 +976,7 @@ export default function Messages() {
                                     size="sm"
                                     variant="ghost"
                                     className="h-5 px-1 text-xs text-red-500 hover:text-red-700"
-                                    onClick={() => reactToMessage.mutate({
-                                      messageId: msg.externalId || "",
-                                      emoji: "❤️",
-                                    })}
+                                    onClick={() => handleReact(msg.id, "❤️")}
                                   >
                                     <Heart className="w-3 h-3" />
                                   </Button>
@@ -1141,14 +1068,12 @@ export default function Messages() {
                   {/* Message Input */}
                   <div className="p-4 border-t border-gray-200 flex-shrink-0">
                     {activeTab === "messages" ? (
-                      isAdmin ? (
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
-                          <p className="text-sm text-gray-500">
-                            Modo observador — Use "Sussurrar p/ Agente" para orientar o atendente
+                      <>
+                        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-2">
+                          <p className="text-sm text-indigo-800">
+                            💡 <strong>Sugestões internas</strong> — mensagens digitadas aqui são sugestões para o agente e <strong>nunca</strong> são enviadas ao cliente.
                           </p>
                         </div>
-                      ) : (
-                      <>
                         {/* File Preview */}
                         {selectedFile && (
                           <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
@@ -1237,7 +1162,7 @@ export default function Messages() {
                             </Button>
                           )}
                           <Textarea
-                            placeholder="Digite sua mensagem..."
+                            placeholder="💡 Digite uma sugestão para o agente (não será enviada ao cliente)..."
                             value={messageInput}
                             onChange={e => setMessageInput(e.target.value)}
                             className="resize-none flex-1"
@@ -1281,12 +1206,14 @@ export default function Messages() {
                             {sendMessageMutation.isPending ? (
                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <Send className="w-4 h-4" />
+                              <>
+                                <Send className="w-4 h-4 mr-1" />
+                                💡 Sugestão
+                              </>
                             )}
                           </Button>
                         </div>
                       </>
-                      )
                     ) : activeTab === "notes" ? (
                       <div className="flex gap-2">
                         <Textarea
