@@ -571,6 +571,33 @@ export const conversationsRouter = router({
     }),
 
   /**
+   * Marca a conversa como não lida (reverte/soma ao contador de não-lida).
+   */
+  markAsUnread: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }): Promise<{ success: boolean; unreadCount: number }> => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const numericId = parseInt(input.id, 10);
+      if (isNaN(numericId)) {
+        throw new Error("ID inválido");
+      }
+
+      await db
+        .update(conversations)
+        .set({ unreadCount: sql<number>`GREATEST(${conversations.unreadCount} + 1, 1)` })
+        .where(eq(conversations.id, numericId));
+
+      const [updated] = await db
+        .select({ unreadCount: conversations.unreadCount })
+        .from(conversations)
+        .where(eq(conversations.id, numericId));
+
+      return { success: true, unreadCount: updated?.unreadCount ?? 0 };
+    }),
+
+  /**
    * Atribui uma conversa a um agente (normalmente o próprio agente logado).
    */
   assign: protectedProcedure

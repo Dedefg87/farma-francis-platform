@@ -57,6 +57,7 @@ import {
   ArrowDownUp,
   Plus,
   Inbox,
+  Mail,
   BellOff,
   Bell,
   Search,
@@ -170,6 +171,7 @@ export default function AgentMessages() {
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
@@ -570,6 +572,29 @@ export default function AgentMessages() {
         fileName: msg.fileName,
       }));
   }, [messages]);
+
+  const markAsUnreadMutation = trpc.conversations.markAsUnread.useMutation({
+    onSuccess: () => {
+      utils.conversations.list.invalidate();
+    },
+  });
+
+  const handleMarkAsUnread = (id: string) => {
+    setCtxMenu(null);
+    markAsUnreadMutation.mutate({ id });
+  };
+
+  // Fechar menu de contexto ao clicar fora
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const closeMenu = () => setCtxMenu(null);
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("keydown", closeMenu);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      document.removeEventListener("keydown", closeMenu);
+    };
+  }, [ctxMenu]);
 
   // Mutation para enviar mensagem
   const sendMessageMutation = trpc.messages.send.useMutation({
@@ -1373,6 +1398,10 @@ export default function AgentMessages() {
                 <button
                   key={conv.id}
                   onClick={() => handleSelectConversation(Number(conv.id))}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCtxMenu({ id: conv.id, x: e.clientX + 12, y: e.clientY + 12 });
+                  }}
                   className={`w-full p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors text-left ${
                     selectedConversationId === Number(conv.id)
                       ? "bg-blue-50 border-l-4 border-l-blue-500"
@@ -1442,6 +1471,23 @@ export default function AgentMessages() {
               <div className="p-8 text-center">
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">Nenhuma conversa ativa</p>
+              </div>
+            )}
+
+            {/* Menu de contexto (botão direito) — Marcar como não lida */}
+            {ctxMenu && (
+              <div
+                className="fixed z-50 min-w-[190px] bg-white rounded-lg shadow-lg border border-gray-200 py-1"
+                style={{ left: Math.min(ctxMenu.x, window.innerWidth - 210), top: Math.min(ctxMenu.y, window.innerHeight - 120) }}
+                onClick={(e) => { e.stopPropagation(); }}
+              >
+                <button
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  onClick={() => handleMarkAsUnread(ctxMenu.id)}
+                >
+                  <Mail className="w-4 h-4" />
+                  Marcar como não lida
+                </button>
               </div>
             )}
           </div>
