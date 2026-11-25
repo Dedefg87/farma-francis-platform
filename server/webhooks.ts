@@ -1967,6 +1967,16 @@ async function processEvolutionWebhook(body: unknown) {
         const messageTimestamp = data?.messageTimestamp || messageData?.timestamp || messageContent?.timestamp || Math.floor(Date.now() / 1000);
         const rawMessageType = data?.messageType || null; // PRIORITY: Evolution API message type
 
+        // [fix-old-msgs] Ignorar mensagens com mais de 24h para evitar enxurrada
+        // de histórico antigo que a Evolution pode reenviar (reconexão, re-sync, etc.)
+        const nowSec = Math.floor(Date.now() / 1000);
+        const MAX_AGE_SECONDS = 24 * 60 * 60; // 24 horas
+        const msgAgeSec = nowSec - Number(messageTimestamp || nowSec);
+        if (msgAgeSec > MAX_AGE_SECONDS) {
+          console.log(`[Evolution Webhook] ⏭️ Mensagem antiga ignorada (${Math.round(msgAgeSec/60)} min): ${messageId}`);
+          return;
+        }
+
         // Se não tem remoteJid, não dá pra processar
         if (!remoteJid) {
           console.log("[Evolution Webhook] Missing remoteJid, skipping");
