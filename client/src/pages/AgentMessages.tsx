@@ -415,7 +415,7 @@ export default function AgentMessages() {
     {},
     {
       enabled: hasSession(),
-      refetchInterval: 10000, // Atualizar lista de conversas a cada 10s
+      refetchInterval: false, // SSE cuida das atualizações em tempo real
     }
   );
 
@@ -525,7 +525,7 @@ export default function AgentMessages() {
     { conversation_id: selectedConversationId! },
     {
       enabled: !!selectedConversationId,
-      refetchInterval: selectedConversationId ? 4000 : false, // Atualizar mensagens a cada 3s (fallback quando SSE cai no Railway)
+      refetchInterval: false, // SSE cuida das atualizações em tempo real
       onSuccess: (data) => {
         if (data && data.length > 0) {
         }
