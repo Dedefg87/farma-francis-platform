@@ -1960,6 +1960,43 @@ async function processEvolutionWebhook(body: unknown) {
         const key = data?.key || messageData?.key || {};
         const messageContent = messageData?.message || messageData;
 
+        // [FIX] Detectar mensagem apagada (protocolMessage REVOKE) - nao criar mensagem vazia
+        const protocolMsg = messageContent?.protocolMessage;
+        const isRevoke = protocolMsg && (protocolMsg.type === 0 || protocolMsg.type === "REVOKE" || String(protocolMsg.type).toLowerCase() === "revoke");
+        if (isRevoke) {
+          const revokeKeyId = protocolMsg?.key?.id;
+          console.log("[Evolution Webhook] Mensagem apagada detectada:", revokeKeyId);
+          if (revokeKeyId) {
+            try {
+              const db = await getDb();
+              if (db) {
+                const { conversationMessages } = await import("../drizzle/schema");
+                const { eq } = await import("drizzle-orm");
+                const [target] = await db.select().from(conversationMessages).where(eq(conversationMessages.externalId, revokeKeyId)).limit(1);
+                if (target) {
+                  await db.delete(conversationMessages).where(eq(conversationMessages.id, target.id));
+                  console.log("[Evolution Webhook] Mensagem apagada removida do DB:", target.id);
+                  try {
+                    const { sseManager } = await import("./_core/sse");
+                    sseManager.emitToAll({ type: "message:deleted", data: { messageId: target.id }, timestamp: Date.now() });
+                  } catch (e) { /* ignore */ }
+                }
+              }
+            } catch (err) {
+              console.error("[Evolution Webhook] Erro ao remover mensagem apagada:", err);
+            }
+          }
+          return;
+        }
+
+        // [FIX] Ignorar mensagens com conteudo vazio (sem texto e sem midia)
+        const hasText = !!(messageContent?.conversation || messageContent?.extendedTextMessage?.text);
+        const hasMedia = !!(messageContent?.imageMessage || messageContent?.videoMessage || messageContent?.audioMessage || messageContent?.documentMessage || messageContent?.stickerMessage);
+        if (!hasText && !hasMedia && !messageContent?.reactionMessage && !messageContent?.protocolMessage) {
+          console.log("[Evolution Webhook] Mensagem vazia ignorada:", messageId);
+          return;
+        }
+
         // 🎯 Garantir messageId NUNCA nulo/undefined - fallback robusto
         let messageId = key?.id || data?.id || messageData?.id;
         if (!messageId) {

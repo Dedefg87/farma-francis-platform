@@ -258,6 +258,7 @@ export default function AgentMessages() {
               data.type === "conversation:new" ||
               data.type === "conversation:read" ||
               data.type === "message:reaction" ||
+              data.type === "message:deleted" ||
               (data.type === "messages.update" && data.data?.fromMe === false)
             ) {
               // Play notification sound if not muted (only for new messages)
@@ -309,6 +310,16 @@ export default function AgentMessages() {
                   }
                   return next;
                 });
+              }
+
+              // Handle deleted messages from SSE (realtime)
+              if (data.type === "message:deleted" && data.data?.messageId) {
+                const deletedId = Number(data.data.messageId);
+                if (!isNaN(deletedId)) {
+                  // Force refetch to remove the deleted message from the list
+                  refetchMessages();
+                  refetchConversations();
+                }
               }
             }
           } catch (e) {
