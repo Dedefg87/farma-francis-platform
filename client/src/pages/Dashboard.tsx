@@ -66,18 +66,22 @@ export default function Dashboard() {
 
   // --- INPUT PARA QUERIES (MEMOIZADO) ---
   const queryInput = useMemo(() => {
-    if (selectedPeriod === "custom") {
-      return {
-        period: selectedPeriod,
-        startDate: customStartDate,
-        endDate: customEndDate,
-      };
+    const base = selectedPeriod === "custom"
+      ? {
+          period: selectedPeriod,
+          startDate: customStartDate,
+          endDate: customEndDate,
+        }
+      : { period: selectedPeriod };
+    if (selectedAgentId !== "all") {
+      return { ...base, agentId: Number(selectedAgentId) };
     }
-    return { period: selectedPeriod };
-  }, [selectedPeriod, customStartDate, customEndDate]);
+    return base;
+  }, [selectedPeriod, customStartDate, customEndDate, selectedAgentId]);
 
   // --- PERÍODO ANTERIOR (para comparação de tendência) ---
   const previousPeriodInput = useMemo(() => {
+    const agentFilter = selectedAgentId !== "all" ? { agentId: Number(selectedAgentId) } : {};
     const periodMap: Record<string, string> = {
       hoje: "ontem",
       semana: "mes_anterior", // aproximado
@@ -94,6 +98,7 @@ export default function Dashboard() {
         period: "custom",
         startDate: prevStart.toISOString().split("T")[0],
         endDate: prevEnd.toISOString().split("T")[0],
+        ...agentFilter,
       };
     }
     if (selectedPeriod === "30d") {
@@ -106,6 +111,7 @@ export default function Dashboard() {
         period: "custom",
         startDate: sixtyDaysAgo.toISOString().split("T")[0],
         endDate: thirtyDaysAgo.toISOString().split("T")[0],
+        ...agentFilter,
       };
     }
     if (selectedPeriod === "365d") {
@@ -118,14 +124,15 @@ export default function Dashboard() {
         period: "custom",
         startDate: twoYearsAgo.toISOString().split("T")[0],
         endDate: yearAgo.toISOString().split("T")[0],
+        ...agentFilter,
       };
     }
     const prevPeriod = periodMap[selectedPeriod];
     if (prevPeriod) {
-      return { period: prevPeriod };
+      return { period: prevPeriod, ...agentFilter };
     }
     return null;
-  }, [selectedPeriod, customStartDate, customEndDate]);
+  }, [selectedPeriod, customStartDate, customEndDate, selectedAgentId]);
 
   // --- CONFIGURAÇÃO DAS QUERIES ---
   const queryConfig = {
@@ -136,9 +143,10 @@ export default function Dashboard() {
 
   // --- QUERIES TRPC ---
   const statsQuery = trpc.dashboardStats.getStats.useQuery(queryInput, queryConfig);
-  const prevStatsQuery = previousPeriodInput
-    ? trpc.dashboardStats.getStats.useQuery(previousPeriodInput, queryConfig)
-    : null;
+  const prevStatsQuery = trpc.dashboardStats.getStats.useQuery(
+    previousPeriodInput ?? { period: "mes" },
+    { ...queryConfig, enabled: !!previousPeriodInput }
+  );
   const channelQuery = trpc.dashboardStats.getConversationsByChannel.useQuery(queryInput, queryConfig);
   const statusQuery = trpc.dashboardStats.getConversationsByStatus.useQuery(queryInput, queryConfig);
   

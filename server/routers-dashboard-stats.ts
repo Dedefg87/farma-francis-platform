@@ -10,7 +10,7 @@ import {
   queues,
   queueAgents,
 } from "../drizzle/schema";
-import { eq, and, sql, gte, lte, isNotNull } from "drizzle-orm";
+import { eq, and, sql, gte, lte, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type {
   AgentStats,
@@ -43,6 +43,7 @@ export const dashboardStatsRouter = router({
           period: z.string().optional().default("mes"),
           startDate: z.string().optional(),
           endDate: z.string().optional(),
+          agentId: z.number().optional(),
         })
         .optional()
     )
@@ -59,9 +60,11 @@ export const dashboardStatsRouter = router({
 
       console.log(`[getStats] Período: ${period}, Filtrando entre ${start.toISOString()} e ${end.toISOString()} (TMA/SLA por conversas encerradas)`);
 
+      const agentId = input?.agentId;
       const dateFilter = and(
         gte(conversations.openedAt, start),
-        lte(conversations.openedAt, end)
+        lte(conversations.openedAt, end),
+        ...(agentId ? [eq(conversations.assignedTo, agentId)] : [])
       );
 
       const totalConversationsResult = await db
@@ -85,7 +88,8 @@ export const dashboardStatsRouter = router({
           and(
             eq(conversationMessages.senderType, "agent"),
             gte(conversationMessages.createdAt, start),
-            lte(conversationMessages.createdAt, end)
+            lte(conversationMessages.createdAt, end),
+            ...(agentId ? [eq(conversationMessages.senderId, agentId)] : [])
           )
         );
       const messagesSent = messagesSentResult[0]?.count || 0;
@@ -93,11 +97,13 @@ export const dashboardStatsRouter = router({
       const messagesReceivedResult = await db
         .select({ count: sql<number>`count(*)` })
         .from(conversationMessages)
+        .innerJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
         .where(
           and(
             eq(conversationMessages.senderType, "customer"),
             gte(conversationMessages.createdAt, start),
-            lte(conversationMessages.createdAt, end)
+            lte(conversationMessages.createdAt, end),
+            ...(agentId ? [eq(conversations.assignedTo, agentId)] : [])
           )
         );
       const messagesReceived = messagesReceivedResult[0]?.count || 0;
@@ -118,7 +124,8 @@ export const dashboardStatsRouter = router({
           and(
             isNotNull(conversations.closedAt),
             gte(conversations.closedAt, start),
-            lte(conversations.closedAt, end)
+            lte(conversations.closedAt, end),
+            ...(agentId ? [eq(conversations.assignedTo, agentId)] : [])
           )
         );
 
@@ -133,7 +140,8 @@ export const dashboardStatsRouter = router({
           eq(conversations.status, "closed"),
           eq(conversations.closeReason, "venda"),
           gte(conversations.closedAt, start),
-          lte(conversations.closedAt, end)
+          lte(conversations.closedAt, end),
+          ...(agentId ? [eq(conversations.assignedTo, agentId)] : [])
         ));
       const slaTargetResult = await db
         .select({ n: sql<number>`count(*)` })
@@ -143,7 +151,8 @@ export const dashboardStatsRouter = router({
           eq(conversations.closeReason, "venda"),
           gte(conversations.closedAt, start),
           lte(conversations.closedAt, end),
-          sql`TIMESTAMPDIFF(MINUTE, ${conversations.openedAt}, ${conversations.closedAt}) <= ${SLA_TARGET_MINUTES}`
+          sql`TIMESTAMPDIFF(MINUTE, ${conversations.openedAt}, ${conversations.closedAt}) <= ${SLA_TARGET_MINUTES}`,
+          ...(agentId ? [eq(conversations.assignedTo, agentId)] : [])
         ));
       const slaTotal = Number(slaTotalResult[0]?.n) || 0;
       const slaMet = Number(slaTargetResult[0]?.n) || 0;
