@@ -1506,7 +1506,8 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
     actualMessage.imageMessage?.fileSize ||
     actualMessage.videoMessage?.fileSize ||
     actualMessage.documentMessage?.fileSize ||
-    actualMessage.audioMessage?.fileSize || null;
+    actualMessage.audioMessage?.fileSize ||
+    actualMessage.stickerMessage?.fileSize || null;
 
   // 🎯 Store quotedMessage for later access (needed for mediaKey/directPath)
   const quotedMessage = message.extendedTextMessage?.contextInfo?.quotedMessage || (contextInfoFromData as any)?.quotedMessage;
@@ -1648,19 +1649,23 @@ if (!rawUrl && contextInfoFromData?.quotedMessage?.imageMessage?.url) {
                    (typeToSave === 'video' && actualMessage.videoMessage?.mediaKey) ||
                    (typeToSave === 'audio' && actualMessage.audioMessage?.mediaKey) ||
                    (typeToSave === 'document' && actualMessage.documentMessage?.mediaKey) ||
+                   (typeToSave === 'sticker' && actualMessage.stickerMessage?.mediaKey) ||
                    (typeToSave === 'image' && quotedMessage?.imageMessage?.mediaKey) ||
                    (typeToSave === 'video' && quotedMessage?.videoMessage?.mediaKey) ||
                    (typeToSave === 'audio' && quotedMessage?.audioMessage?.mediaKey) ||
                    (typeToSave === 'document' && quotedMessage?.documentMessage?.mediaKey) ||
+                   (typeToSave === 'sticker' && quotedMessage?.stickerMessage?.mediaKey) ||
                    null;
   const directPath = (typeToSave === 'image' && actualMessage.imageMessage?.directPath) ||
                      (typeToSave === 'video' && actualMessage.videoMessage?.directPath) ||
                      (typeToSave === 'audio' && actualMessage.audioMessage?.directPath) ||
                      (typeToSave === 'document' && actualMessage.documentMessage?.directPath) ||
+                     (typeToSave === 'sticker' && actualMessage.stickerMessage?.directPath) ||
                      (typeToSave === 'image' && quotedMessage?.imageMessage?.directPath) ||
                      (typeToSave === 'video' && quotedMessage?.videoMessage?.directPath) ||
                      (typeToSave === 'audio' && quotedMessage?.audioMessage?.directPath) ||
                      (typeToSave === 'document' && quotedMessage?.documentMessage?.directPath) ||
+                     (typeToSave === 'sticker' && quotedMessage?.stickerMessage?.directPath) ||
                      null;
   const quotedRawUrl = (typeToSave === 'image' && quotedMessage?.imageMessage?.url) ||
                        (typeToSave === 'video' && quotedMessage?.videoMessage?.url) ||
