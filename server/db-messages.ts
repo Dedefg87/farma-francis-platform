@@ -260,6 +260,45 @@ export async function findOrCreateCustomerByPhone(
       status: "active",
       photoUrl: photoUrl || null,
     } as any];
+
+    // [AUTO-BROADCAST] Adicionar novo cliente a lista de broadcast padrao automaticamente
+    try {
+      const { broadcastLists, broadcastListMembers } = await import("../drizzle/schema");
+      const { eq, and } = await import("drizzle-orm");
+      
+      let [defaultList] = await db.select().from(broadcastLists).where(eq(broadcastLists.name, "Todos os Contatos")).limit(1);
+      if (!defaultList) {
+        const insertResult = await db.insert(broadcastLists).values({
+          name: "Todos os Contatos",
+          description: "Lista automatica com todos os contatos que entraram em contato",
+          createdAt: new Date(),
+        });
+        const listId = Array.isArray(insertResult) ? insertResult[0]?.insertId : insertResult?.insertId;
+        if (listId) {
+          defaultList = { id: Number(listId), name: "Todos os Contatos" } as any;
+        }
+      }
+      
+      if (defaultList?.id) {
+        const [existingMember] = await db.select().from(broadcastListMembers).where(
+          and(
+            eq(broadcastListMembers.listId, defaultList.id),
+            eq(broadcastListMembers.customerId, newId)
+          )
+        ).limit(1);
+        
+        if (!existingMember) {
+          await db.insert(broadcastListMembers).values({
+            listId: defaultList.id,
+            customerId: newId,
+            addedAt: new Date(),
+          });
+          console.log("[Auto-Broadcast] Cliente " + newId + " adicionado a lista Todos os Contatos");
+        }
+      }
+    } catch (broadcastErr) {
+      console.warn("[Auto-Broadcast] Erro ao adicionar cliente a lista:", broadcastErr);
+    }
   }
 
   const customer = existing[0];
