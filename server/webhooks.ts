@@ -2065,6 +2065,9 @@ async function processEvolutionWebhook(body: unknown) {
                 } catch (_reErr70) { console.error('[fix70] Erro ao processar reação:', _reErr70); }
                 if (_react70) return;
 
+                // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
+                const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
+
                 // [OPT-OUT] Detectar resposta "SAIR" para remover de listas de broadcast
                 if (!isSentByMe) {
                   const optOutKeywords = ["sair", "stop", "cancelar", "remover", "descadastrar", "unsubscribe"];
@@ -2101,9 +2104,6 @@ async function processEvolutionWebhook(body: unknown) {
                     return; // Não processar como mensagem normal
                   }
                 }
-
-                // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
-                const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
                 if (!isSentByMe) {
                   console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
