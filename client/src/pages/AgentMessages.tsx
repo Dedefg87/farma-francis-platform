@@ -172,6 +172,7 @@ export default function AgentMessages() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const manuallyMarkedUnreadRef = useRef<Set<string>>(new Set());
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
@@ -584,6 +585,7 @@ export default function AgentMessages() {
 
   const handleMarkAsUnread = (id: string) => {
     setCtxMenu(null);
+    manuallyMarkedUnreadRef.current.add(id);
     markAsUnreadMutation.mutate({ id });
   };
 
@@ -708,6 +710,8 @@ export default function AgentMessages() {
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
     setSelectedConversationId(conversationId);
+    // Ao selecionar a conversa, reativa o auto-marcar como lida
+    manuallyMarkedUnreadRef.current.delete(String(conversationId));
     // Bug 2 fix: Persist to sessionStorage
     sessionStorage.setItem('selectedConversationId', String(conversationId));
 
@@ -843,7 +847,9 @@ export default function AgentMessages() {
     const activeConversation = conversations.find(c => Number(c.id) === selectedConversationId);
     
     // Se a conversa ativa tem mensagens não lidas, marcar como lida
-    if (activeConversation && activeConversation.unreadCount > 0) {
+    // Exceto quando o agente pediu explicitamente "marcar como não lida" (evita o auto-marca imediatamente limpar o badge)
+    const isManuallyUnread = manuallyMarkedUnreadRef.current.has(String(selectedConversationId));
+    if (activeConversation && activeConversation.unreadCount > 0 && !isManuallyUnread) {
       
       // Chamar endpoint REST e sincronizar o cache após marcar como lida
       fetch(`/api/conversations/${selectedConversationId}/mark-read`, {
