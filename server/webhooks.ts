@@ -667,22 +667,10 @@ async function processEvolutionWebhookAsync(req: Request) {
   try {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
-    // LOG SIMPLES - sem objetos complexos para evitar crash
-    console.log("📥 [Webhook] event:", body?.event, "| hasData:", !!body?.data, "| dataKeys:", body?.data ? Object.keys(body.data).join(',') : 'none');
-    console.log("📥 [Webhook] hasContextInfo:", !!body?.data?.contextInfo, "| hasMessage:", !!body?.data?.message);
-    if (body?.data?.contextInfo) {
-      const ctx = body.data.contextInfo;
-      console.log("📥 [Webhook] ctx.remoteJid:", ctx.remoteJid, "| ctx.participant:", ctx.participant, "| stanzaId:", ctx.stanzaId);
-      console.log("📥 [Webhook] has quotedMessage:", !!ctx.quotedMessage, "| has imageMessage:", !!ctx.quotedMessage?.imageMessage);
-      if (ctx.quotedMessage?.imageMessage) {
-        const img = ctx.quotedMessage.imageMessage;
-        console.log("📥 [Webhook] img keys:", Object.keys(img).join(','));
-        console.log("📥 [Webhook] img has url:", !!img.url, "| mediaKey:", !!img.mediaKey, "| jpegThumbnail:", !!img.jpegThumbnail, "| directPath:", !!img.directPath);
-      }
-    }
+    // [fix-flood] Log minimo — o volume alto de logs derrubava o rate limit do Railway.
+    console.log("📥 [Webhook] event:", body?.event);
 
     if (!body || Object.keys(body).length === 0) {
-      console.log("[Evolution Webhook] Empty body, skipping");
       return;
     }
 
@@ -706,12 +694,6 @@ async function processEvolutionWebhookAsync(req: Request) {
       console.log("[Evolution Webhook] Event name not detected, ignoring");
       return;
     }
-
-    console.log("[Evolution Webhook] 📥 Received event:", {
-      event: eventName,
-      hasData: !!body?.data,
-      bodyKeys: Object.keys(body),
-    });
 
     console.log("2. [Evolution Webhook] ✅ Evento detectado:", eventName);
 
@@ -746,7 +728,6 @@ async function processEvolutionWebhookAsync(req: Request) {
     }
 
     console.log("[Evolution Webhook] ✅ Event approved for processing");
-    console.log("3. [Evolution Webhook] ✅ Passou no filtro de eventos permitidos");
 
     // A partir daqui, processamos APENAS mensagens.upsert
     const db = await getDb();
@@ -1810,8 +1791,26 @@ async function processEvolutionWebhook(body: unknown) {
 
     const normalizedEvent = eventName.toLowerCase().replace(/[-.]/g, "_");
 
-    // Evento de contatos
+    // Evento de contatos — PROCESSAMENTO LEVE
+    // [fix-flood] O sync de contatos do celular dispara MUITOS contacts.update (cada um
+    // com ~9 contatos). O handler antigo resolvia LID via API (ate 10s cada), criava
+    // clientes com numeros invalidos e baixava fotos em lote — saturando o pool de
+    // conexoes e o event loop. Resultado: mensagens reais (messages_upsert) ficavam
+    // presas atras da enxurrada e apareciam com grande atraso.
+    // A foto de perfil ja e populada no fluxo messages_upsert (fromProfilePic/COALESCE),
+    // entao aqui NAO resolvemos LID, NAO criamos clientes e NAO baixamos fotos.
     if (normalizedEvent.includes("contact") || normalizedEvent === "contacts_update") {
+      const g = globalThis as any;
+      const now = Date.now();
+      // Throttle global: processar no maximo 1 sync a cada 15s (evita flood)
+      if (g.__ffContactSyncAt && now - g.__ffContactSyncAt < 15000) {
+        return;
+      }
+      g.__ffContactSyncAt = now;
+      return;
+    }
+
+    if (false) {
       const contactsList = Array.isArray(body?.data) ? body.data : [body?.data || body];
       for (const contact of contactsList) {
         const remoteJid = contact?.remoteJid || body?.remoteJid || extractEvolutionRemoteJid(body);
@@ -2017,8 +2016,6 @@ async function processEvolutionWebhook(body: unknown) {
                 // Detectar mensagens enviadas pelo celular (fromMe === true) - DEVE VIR ANTES DO STORY REPLY
                 const isSentByMe = fromMe === true || fromMe === "true" || fromMe === 1;
 
-                console.log("5. [Evolution] fromMe check:", { isSentByMe, fromMe, fromNumber, messageType });
-
                 if (!isSentByMe) {
                   console.log("[Evolution Webhook] Received inbound message from:", fromNumber, "type:", messageType);
                 }
@@ -2029,17 +2026,6 @@ async function processEvolutionWebhook(body: unknown) {
                                                         const isStoryReply = contextInfo.remoteJid === 'status@broadcast' && 
                                                           (contextInfo.quotedMessage?.imageMessage || contextInfo.quotedMessage?.videoMessage);
       
-                                                        // 🔬 INSTRUMENTAÇÃO STORY_RAW - capturar payload real (caminho upsert)
-                                                        console.log("[STORY_RAW][UPSERT] event:", eventName,
-                                                          "| messageType:", messageType,
-                                                          "| ctxRemoteJid:", contextInfo?.remoteJid,
-                                                          "| hasQuoted:", !!contextInfo?.quotedMessage,
-                                                          "| hasQuotedImg:", !!contextInfo?.quotedMessage?.imageMessage,
-                                                          "| hasQuotedVid:", !!contextInfo?.quotedMessage?.videoMessage,
-                                                          "| stanzaId:", contextInfo?.stanzaId,
-                                                          "| isStoryReply:", isStoryReply);
-                                                        console.log("[STORY_RAW][UPSERT] bodyPreview:", JSON.stringify(body).slice(0, 800));
-
                                                         if (isStoryReply) {
                                                           console.log("[Evolution Webhook] 📖 Story reply detected:", { messageId, stanzaId: contextInfo.stanzaId });
                                                           
@@ -2591,14 +2577,6 @@ async function processEvolutionWebhook(body: unknown) {
       const msgUpdateCtx = body?.data?.contextInfo || body?.contextInfo || {};
       const isStoryReplyUpdate = msgUpdateCtx.remoteJid === "status@broadcast" &&
         (msgUpdateCtx.quotedMessage?.imageMessage || msgUpdateCtx.quotedMessage?.videoMessage);
-      // 🔬 INSTRUMENTAÇÃO STORY_RAW - capturar payload real para diagnostico definitivo
-      console.log("[STORY_RAW][UPDATE] event:", eventName,
-        "| dataKeys:", body?.data ? Object.keys(body.data).join(",") : "none",
-        "| ctxKeys:", msgUpdateCtx ? Object.keys(msgUpdateCtx).join(",") : "none",
-        "| ctxRemoteJid:", msgUpdateCtx?.remoteJid,
-        "| hasQuoted:", !!msgUpdateCtx?.quotedMessage,
-        "| isStoryReplyUpdate:", isStoryReplyUpdate);
-      console.log("[STORY_RAW][UPDATE] bodyPreview:", JSON.stringify(body).slice(0, 800));
       if (isStoryReplyUpdate) {
         console.log("[Evolution Webhook] 📖 Story reply detected in messages.update");
         // Continuar processamento normal (não ignorar)

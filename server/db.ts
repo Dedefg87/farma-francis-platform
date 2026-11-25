@@ -23,29 +23,12 @@ let _dbHealthCheck: number = 0;
 export { _db as db }; // Exportar a referência interna como named export 'db'
 
 export async function getDb() {
-  // Se temos um DB cacheado, verificar se ainda está saudável (health check a cada 30s)
-  if (_db && Date.now() - _dbHealthCheck < 30000) {
-    try {
-      // Teste rápido
-      if (_pool) {
-        const connection = await _pool.getConnection();
-        await connection.ping();
-        connection.release();
-        return _db;
-      }
-    } catch (e) {
-      console.log("[Database] Health check failed, recreating pool...", e);
-      _db = null;
-      _pool = null;
-    }
-  }
-
-  // Se não temos DB cacheado ou health check falhou, criar novo
+  // Se não temos DB cacheado, criar novo pool
   if (!_db && process.env.DATABASE_URL) {
     try {
       // Parse DATABASE_URL: mysql://user:password@host:port/database
       const url = new URL(process.env.DATABASE_URL);
-      
+
       _pool = mysql.createPool({
         host: url.hostname,
         user: url.username,
@@ -57,6 +40,10 @@ export async function getDb() {
         queueLimit: 0,
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
+        // [fix-pool] Recicla conexoes ociosas para nao ficar preso quando o MySQL/proxy
+        // fecha conexoes idle (causa raiz de "para de chegar mensagem apos ~50 min").
+        idleTimeout: 30000,
+        maxIdle: 10,
         charset: 'utf8mb4',
         timezone: 'Z',
       });
@@ -77,6 +64,30 @@ export async function getDb() {
       console.error("[Database] Failed to connect:", error);
       _db = null;
       _pool = null;
+    }
+    return _db;
+  }
+
+  if (!_db || !_pool) return _db;
+
+  // [fix-pool] Health check PERIODICO (a cada 30s). Antes estava invertido:
+  // so rodava nos primeiros 30s e nunca mais, entao um pool corrompido/exaurido
+  // nunca se recuperava (as queries ficavam enfileiradas para sempre).
+  if (Date.now() - _dbHealthCheck > 30000) {
+    _dbHealthCheck = Date.now();
+    try {
+      const connection = await _pool.getConnection();
+      try {
+        await connection.ping();
+      } finally {
+        connection.release();
+      }
+    } catch (e) {
+      console.log("[Database] Health check failed, recreating pool...", (e as Error)?.message || e);
+      try { await _pool.end(); } catch {}
+      _db = null;
+      _pool = null;
+      return getDb(); // recria o pool imediatamente
     }
   }
 
