@@ -48,6 +48,7 @@ function getMimeType(
   return fileType || "";
 }
 import {
+  ChevronLeft,
   MessageSquare,
   Clock,
   User,
@@ -173,6 +174,18 @@ export default function AgentMessages() {
   const [selectedMsgId, setSelectedMsgId] = useState<number | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const manuallyMarkedUnreadRef = useRef<Set<string>>(new Set());
+  const suppressAutoSelectRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobile(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const [showConferenceDialog, setShowConferenceDialog] = useState(false);
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
@@ -490,7 +503,7 @@ export default function AgentMessages() {
 
   // Auto-selecionar primeira conversa se nenhuma estiver selecionada
   useEffect(() => {
-    if (!selectedConversationId && filteredConversations.length > 0) {
+    if (!selectedConversationId && filteredConversations.length > 0 && !suppressAutoSelectRef.current) {
       const firstConv = filteredConversations[0];
       const convId = Number(firstConv.id);
       setSelectedConversationId(convId);
@@ -710,6 +723,7 @@ export default function AgentMessages() {
   const handleSelectConversation = useCallback(async (conversationId: number) => {
     // Selecionar conversa visualmente
     setSelectedConversationId(conversationId);
+    suppressAutoSelectRef.current = false;
     // Ao selecionar a conversa, reativa o auto-marcar como lida
     manuallyMarkedUnreadRef.current.delete(String(conversationId));
     // Bug 2 fix: Persist to sessionStorage
@@ -860,6 +874,11 @@ export default function AgentMessages() {
         .catch(err => console.error("[AgentMessages] Erro auto-mark:", err));
     }
   }, [conversations, selectedConversationId, utils]);
+
+  const handleBackToList = useCallback(() => {
+    suppressAutoSelectRef.current = true;
+    setSelectedConversationId(null);
+  }, []);
 
   // Função para abrir lightbox de imagens
   const handleImageClick = useCallback(
@@ -1290,7 +1309,7 @@ export default function AgentMessages() {
       <AgentTopBar />
       <div className="h-[calc(100vh-64px)] bg-gray-50 flex flex-col md:flex-row">
         {/* Lista de Conversas */}
-        <div className="w-full md:w-96 bg-white border-r border-gray-200 flex flex-col">
+        <div className={isMobile && selectedConversationId ? "hidden" : "w-full md:w-96 bg-white border-r border-gray-200 flex flex-col"}>
           <div className="p-4 border-b border-gray-200 space-y-3">
             <div>
               <div>
@@ -1503,12 +1522,17 @@ export default function AgentMessages() {
         </div>
 
         {/* Área de Chat */}
-        <div className="flex-1 flex flex-col">
+        <div className={isMobile && !selectedConversationId ? "hidden" : "flex-1 flex flex-col"}>
           {selectedConversation ? (
             <>
               {/* Header do Chat */}
               <div className="bg-white border-b border-gray-200 p-4">
                 <div className="flex items-center justify-between gap-4">
+                  {isMobile && (
+                    <Button variant="ghost" size="icon" className="mr-1 shrink-0" onClick={handleBackToList} title="Voltar para a lista">
+                      <ChevronLeft className="w-5 h-5" />
+                    </Button>
+                  )}
                   <div className="flex items-center gap-3">
                     <Avatar className="w-10 h-10">
                       {selectedConversation?.customerAvatar ? (
