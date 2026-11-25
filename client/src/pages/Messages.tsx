@@ -120,7 +120,7 @@ export default function Messages() {
 
   // Buscar detalhes do cliente quando uma conversa é selecionada
   const selectedConversationData = conversations?.find(
-    c => c.id === selectedConversation
+    c => c.id === String(selectedConversation)
   );
 
   const { data: customerDetails } = trpc.customers.getById.useQuery(
@@ -302,9 +302,19 @@ export default function Messages() {
         ? suggestionContent + "\n📎 " + fileLabel + ": " + fileData.fileUrl
         : "📎 " + fileLabel + ": " + fileData.fileUrl;
     }
+    const assignedAgentId =
+      selectedConversationData?.assignedTo ??
+      selectedConversationData?.assignedAgentId ??
+      0;
+
+    if (!assignedAgentId) {
+      toast.error("Esta conversa não tem um agente atribuído");
+      return;
+    }
+
     sendMessageMutation.mutate({
       conversation_id: Number(selectedConversation),
-      recipient_id: Number(selectedConversationData?.assignedTo ?? 0),
+      recipient_id: Number(assignedAgentId),
       content: replyingTo
         ? "↩️ Respondendo a: " + String(replyingTo.content || "").split("\n")[0] + "\n" + suggestionContent
         : suggestionContent,
@@ -320,14 +330,14 @@ export default function Messages() {
       return;
     }
     if (!internalMessageInput.trim()) return;
-    if (!selectedConversationData?.assignedTo) {
+    if (!selectedConversationData?.assignedTo && !selectedConversationData?.assignedAgentId) {
       toast.error("Esta conversa não tem um agente atribuído");
       return;
     }
 
     sendInternalMessageMutation.mutate({
       conversation_id: Number(selectedConversation),
-      recipient_id: Number(selectedConversationData?.assignedTo ?? 0),
+      recipient_id: Number(selectedConversationData?.assignedTo ?? selectedConversationData?.assignedAgentId ?? 0),
       content: internalMessageInput,
     });
   };
@@ -500,9 +510,9 @@ export default function Messages() {
                     filteredConversations.map(conv => (
                       <button
                         key={conv.id}
-                        onClick={() => setSelectedConversation(conv.id)}
+                        onClick={() => setSelectedConversation(Number(conv.id))}
                         className={`w-full text-left p-3 rounded-lg transition-colors ${
-                          selectedConversation === conv.id
+                          String(selectedConversation) === conv.id
                             ? "bg-indigo-50 border border-indigo-200"
                             : "hover:bg-gray-50 border border-transparent"
                         }`}
