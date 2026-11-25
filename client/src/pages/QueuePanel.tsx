@@ -118,21 +118,21 @@ export default function QueuePanel() {
   return (
     <>
       <AgentTopBar />
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3 md:p-6">
         <div className="max-w-7xl mx-auto">
         {/* Header com boas-vindas e relógio */}
-        <div className="flex justify-between items-start mb-8">
+        <div className="flex flex-col gap-3 mb-8 md:flex-row md:justify-between md:items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-xl md:text-3xl font-bold text-gray-900 mb-2">
               Bem-vindo, {user?.name || 'Agente'}!
             </h1>
-            <p className="text-gray-600">
+            <p className="text-sm text-gray-600">
               Painel de Filas - Gerencie seus atendimentos
             </p>
           </div>
 
           {/* Relógio e Mensagem Motivacional */}
-          <Card className="p-6 bg-white shadow-lg min-w-[320px]">
+          <Card className="p-4 md:p-6 bg-white shadow-lg min-w-0">
             <div className="flex items-center gap-3 mb-4">
               <Clock className="h-6 w-6 text-[#D32F2F]" />
               <div>
@@ -211,13 +211,13 @@ export default function QueuePanel() {
           </h2>
           
           {queuesLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#D32F2F]"></div>
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#D32F2F]"></div>
             </div>
           ) : queues && queues.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {queues.map((queue) => (
-                <Card key={queue.id} className="p-6 bg-white hover:shadow-lg transition-shadow cursor-pointer">
+                <Card key={queue.id} className="p-4 md:p-6 bg-white hover:shadow-lg transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">
                       {queue.name}
@@ -243,8 +243,8 @@ export default function QueuePanel() {
                       <span className="font-semibold">{queue.stats.agentsOnline}</span>
                     </div>
                   </div>
-                  <Button 
-                    className="w-full mt-4 bg-[#D32F2F] hover:bg-[#B71C1C]"
+                  <Button
+                    className="w-full mt-4 min-h-[44px] bg-[#D32F2F] hover:bg-[#B71C1C]"
                     onClick={() => {
                       joinQueue.mutate({ queueId: queue.id }, {
                         onSuccess: () => {
