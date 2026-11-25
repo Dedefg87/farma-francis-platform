@@ -431,7 +431,7 @@ router.get("/whatsapp", async (req: Request, res: Response) => {
  * WhatsApp Webhook Message Handler (POST)
  * Receives incoming messages from WhatsApp Business API
  */
-router.get("/whatsapp", async (req: Request, res: Response) => {
+router.post("/whatsapp", async (req: Request, res: Response) => {
   try {
     const body = req.body;
 
@@ -528,7 +528,7 @@ router.get("/instagram", async (req: Request, res: Response) => {
  * Instagram Webhook Message Handler (POST)
  * Receives incoming messages from Instagram Graph API
  */
-router.get("/instagram", async (req: Request, res: Response) => {
+router.post("/instagram", async (req: Request, res: Response) => {
   try {
 
     logWebhookSummary("Instagram", body);

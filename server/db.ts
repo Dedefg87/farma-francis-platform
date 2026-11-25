@@ -40,7 +40,6 @@ export async function getDb() {
         // [fix-pool] FILA FINITA: se as 30 conexões se esgotarem, novas queries falham
         // rapidamente em vez de travar para sempre (queueLimit: 0 = fila infinita).
         queueLimit: 50,
-        acquireTimeout: 10000, // desiste depois de 10s esperando conexão
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
         // [fix-pool] Recicla conexoes ociosas para nao ficar preso quando o MySQL/proxy
