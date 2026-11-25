@@ -668,9 +668,10 @@ async function processEvolutionWebhookAsync(req: Request) {
     const fullUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
     // [fix-flood] Log minimo — o volume alto de logs derrubava o rate limit do Railway.
-    console.log("📥 [Webhook] event:", body?.event);
+    console.log("📥 [Webhook] event:", body?.event, "| hasBody:", !!body, "| bodyKeys:", body ? Object.keys(body).join(',') : 'none');
 
     if (!body || Object.keys(body).length === 0) {
+      console.log("[Evolution Webhook] Empty body, returning");
       return;
     }
 
@@ -735,6 +736,7 @@ async function processEvolutionWebhookAsync(req: Request) {
       console.error("[Evolution Webhook] ❌ Database not available");
       return;
     }
+    console.log("[Evolution Webhook] ✅ DB connected");
 
     // Extrair apikey da URL (suportar webhook_by_events: apikey/event-name)
     const [configRow] = await db
@@ -768,7 +770,10 @@ async function processEvolutionWebhookAsync(req: Request) {
 
     console.log("[Evolution Webhook] 🚀 Starting message processing...");
     // Processar evento de mensagem
-  if (guardHistorico({ ...body, event: eventName })) return;
+    const guardResult = guardHistorico({ ...body, event: eventName });
+    console.log("[Evolution Webhook] 🛡️ guardHistorico returned:", guardResult);
+    if (guardResult) return;
+    console.log("[Evolution Webhook] 🔄 Calling processEvolutionWebhook...");
     await processEvolutionWebhook({ ...body, event: eventName });
     console.log("[Evolution Webhook] ✅ Message processing completed");
   } catch (error) {
