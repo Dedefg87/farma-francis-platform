@@ -107,6 +107,18 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   const { data: apiSchedules } = trpc.businessHours.getAll.useQuery();
   const { data: apiHolidays } = trpc.businessHours.getHolidays.useQuery();
 
+  // Carregar Regras salvas no localStorage (legado de "farma-automation-settings")
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("farma-automation-settings");
+      if (saved) {
+        setSettings(prev => ({ ...prev, ...(JSON.parse(saved) as Partial<AutomationSettings>) }));
+      }
+    } catch {
+      // ignora dados corrompidos
+    }
+  }, []);
+
   // Load schedules from API
   useEffect(() => {
     if (apiSchedules) {
@@ -202,7 +214,15 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   };
 
   const toggleHoliday = (date: string) => setHolidays(prev => prev.map(h => h.date === date ? { ...h, enabled: !h.enabled } : h));
-  const deleteHoliday = (date: string) => setHolidays(prev => prev.filter(h => h.date !== date));
+  const deleteHoliday = async (date: string) => {
+    try {
+      await utils.businessHours.deleteHoliday.mutate({ date });
+      await utils.businessHours.getHolidays.invalidate();
+      setHolidays(prev => prev.filter(h => h.date !== date));
+    } catch {
+      toast.error("Erro ao excluir feriado");
+    }
+  };
   const addCustomHoliday = async () => {
     if (!customHoliday.date || !customHoliday.name) return toast.error("Preencha data e nome");
     try {

@@ -575,6 +575,36 @@ export type VisualFlow = typeof visualFlows.$inferSelect;
 export type InsertVisualFlow = typeof visualFlows.$inferInsert;
 
 /**
+ * Horários de funcionamento por dia da semana (persistidos no banco)
+ */
+export const businessHourSchedules = mysqlTable("business_hour_schedules", {
+  id: int("id").autoincrement().primaryKey(),
+  day: varchar("day", { length: 16 }).notNull().unique(),
+  enabled: int("enabled").notNull(),
+  openTime: varchar("open_time", { length: 8 }).notNull(),
+  closeTime: varchar("close_time", { length: 8 }).notNull(),
+  holidayOpenTime: varchar("holiday_open_time", { length: 8 }),
+  holidayCloseTime: varchar("holiday_close_time", { length: 8 }),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type BusinessHourSchedule = typeof businessHourSchedules.$inferSelect;
+
+/**
+ * Feriados definidos para o atendimento (persistidos no banco)
+ */
+export const businessHourHolidays = mysqlTable("business_hour_holidays", {
+  id: int("id").autoincrement().primaryKey(),
+  date: varchar("date", { length: 10 }).notNull().unique(),
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 32 }).notNull(), // national | municipal | state
+  enabled: int("enabled").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type BusinessHourHoliday = typeof businessHourHolidays.$inferSelect;
+
+/**
  * URA (Interactive Voice Response) menu configuration
  */
 export const uraMenus = mysqlTable("ura_menus", {
