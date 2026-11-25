@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "./_core/trpc";
 import { getDb } from "./db";
-import { businessHourSchedules, businessHourHolidays } from "../drizzle/schema";
+import { businessHourSchedules, businessHourHolidays, type BusinessHourSchedule, type BusinessHourHoliday } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 /**
@@ -71,8 +71,13 @@ async function getSchedulesFromDb(): Promise<DayScheduleView[]> {
   if (!db) {
     return DEFAULT_SCHEDULES.map(s => ({ ...s, enabled: s.enabled }));
   }
-  const rows = await db.select().from(businessHourSchedules);
-  if (rows.length === 0) {
+  let rows: BusinessHourSchedule[] | null;
+  try {
+    rows = await db.select().from(businessHourSchedules);
+  } catch {
+    rows = null;
+  }
+  if (!rows || rows.length === 0) {
     for (const s of DEFAULT_SCHEDULES) {
       try {
         await db.insert(businessHourSchedules).values({
@@ -104,10 +109,15 @@ async function getSchedulesFromDb(): Promise<DayScheduleView[]> {
  */
 async function getHolidaysFromDb(): Promise<Array<{ date: string; name: string; type: string; enabled: boolean }>> {
   const db = await getDb();
-  const rows = db ? await db.select().from(businessHourHolidays) : [];
+  let rows: BusinessHourHoliday[] | null = null;
+  try {
+    rows = db ? await db.select().from(businessHourHolidays) : null;
+  } catch {
+    rows = null;
+  }
   const merged = [
     ...defaultHolidaysForYear(new Date().getFullYear()),
-    ...rows.map(r => ({ date: r.date, name: r.name, type: r.type, enabled: !!r.enabled })),
+    ...(rows || []).map((r) => ({ date: r.date, name: r.name, type: r.type, enabled: !!r.enabled })),
   ];
   const seen = new Set<string>();
   return merged.filter(h => {
