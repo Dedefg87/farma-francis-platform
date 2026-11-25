@@ -1287,6 +1287,133 @@ export default function AgentMessages() {
     }
   };
 
+  // Botões de ação do composer — reusei na versão mobile (embaixo da barra de texto, estilo WhatsApp/Telegram) ou na desktop
+  const composerActions = (
+    <>
+      <input
+        type="file"
+        id="file-upload-agent"
+        className="hidden"
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.webp"
+        onChange={handleFileSelect}
+      />
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() =>
+          document.getElementById("file-upload-agent")?.click()
+        }
+        title="Anexar arquivo (imagens, vídeos, documentos)"
+      >
+        <Paperclip className="w-4 h-4" />
+      </Button>
+
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setShowStickerPicker(!showStickerPicker)}
+        title="Figurinhas"
+        className={showStickerPicker ? "bg-blue-50" : ""}
+      >
+        <Smile className="w-4 h-4" />
+      </Button>
+      {showStickerPicker && (
+        <div className="absolute bottom-12 left-0 z-50 w-64 p-2 bg-white border border-gray-200 rounded-lg shadow-xl">
+          <div className="text-xs text-gray-500 mb-2">Figurinhas</div>
+          <div className="grid grid-cols-4 gap-1">
+            {stickers.map(sticker => (
+              <button
+                key={sticker.id}
+                onClick={() => handleStickerSelect(sticker)}
+                className="p-1 hover:bg-gray-100 rounded"
+                title={sticker.name}
+              >
+                <img src={sticker.url} alt={sticker.name} className="w-6 h-6" onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZ2JnIi8+PC9zdmc+'; }} />
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowStickerPicker(false)}
+            className="w-full text-xs text-gray-500 mt-1 hover:text-gray-700"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => {
+          if (audioRecording) {
+            stopAudioRecording();
+          } else {
+            startAudioRecording();
+          }
+        }}
+        title={audioRecording ? "Parar gravação de áudio" : "Gravar mensagem de áudio"}
+        className={audioRecording ? "bg-red-50 text-red-600" : ""}
+      >
+        {audioRecording ? (
+          <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse" />
+        ) : (
+          <Mic className="w-4 h-4" />
+        )}
+      </Button>
+      {audioRecording && (
+        <div className="flex items-center gap-2 px-2 py-1 bg-red-50 rounded text-xs text-red-600">
+          <div className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+          <span>Gravando...</span>
+        </div>
+      )}
+      {showAudioRecorder && audioUrl && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+          <audio
+            src={audioUrl}
+            className="w-24"
+            controls
+            style={{ display: "block" }}
+          />
+          <Button variant="outline" size="sm" onClick={sendAudioMessage}>
+            Enviar áudio
+          </Button>
+          <Button variant="ghost" size="sm" onClick={cancelAudioRecording}>
+            Cancelar
+          </Button>
+        </div>
+      )}
+
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => setShowQuickReplies(true)}
+        title="Respostas Rápidas"
+      >
+        <MessageSquare className="w-4 h-4" />
+      </Button>
+
+      <div className="relative" ref={emojiPickerRef}>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          title="Emojis"
+        >
+          <Smile className="w-4 h-4" />
+        </Button>
+        {showEmojiPicker && (
+          <div className="absolute bottom-12 right-0 z-50">
+            <EmojiPicker
+              onEmojiClick={handleEmojiClick}
+              width={350}
+              height={400}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <>
       {/* PDF Preview Modal - deve estar no topo para z-index correto */}
@@ -1907,159 +2034,73 @@ export default function AgentMessages() {
                   </div>
                 )}
 
-                <div className="flex flex-nowrap items-center gap-1.5 md:gap-2">
-                  <input
-                    type="file"
-                    id="file-upload-agent"
-                    className="hidden"
-                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.webp"
-                    onChange={handleFileSelect}
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() =>
-                      document.getElementById("file-upload-agent")?.click()
-                    }
-                    title="Anexar arquivo (imagens, vídeos, documentos)"
-                  >
-                    <Paperclip className="w-4 h-4" />
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowStickerPicker(!showStickerPicker)}
-                    title="Figurinhas"
-                    className={showStickerPicker ? "bg-blue-50" : ""}
-                  >
-                    <Smile className="w-4 h-4" />
-                  </Button>
-                  {showStickerPicker && (
-                    <div className="absolute bottom-12 left-0 z-50 w-64 p-2 bg-white border border-gray-200 rounded-lg shadow-xl">
-                      <div className="text-xs text-gray-500 mb-2">Figurinhas</div>
-                      <div className="grid grid-cols-4 gap-1">
-                        {stickers.map(sticker => (
-                          <button
-                            key={sticker.id}
-                            onClick={() => handleStickerSelect(sticker)}
-                            className="p-1 hover:bg-gray-100 rounded"
-                            title={sticker.name}
-                          >
-                            <img src={sticker.url} alt={sticker.name} className="w-6 h-6" onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZ2JnIi8+PC9zdmc+'; }} />
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        onClick={() => setShowStickerPicker(false)}
-                        className="w-full text-xs text-gray-500 mt-1 hover:text-gray-700"
-                      >
-                        Fechar
-                      </button>
-                    </div>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      if (audioRecording) {
-                        stopAudioRecording();
-                      } else {
-                        startAudioRecording();
-                      }
-                    }}
-                    title={audioRecording ? "Parar gravação de áudio" : "Gravar mensagem de áudio"}
-                    className={audioRecording ? "bg-red-50 text-red-600" : ""}
-                  >
-                    {audioRecording ? (
-                      <div className="w-4 h-4 rounded-full bg-red-500 animate-pulse" />
-                    ) : (
-                      <Mic className="w-4 h-4" />
-                    )}
-                  </Button>
-                  {audioRecording && (
-                    <div className="flex items-center gap-2 px-2 py-1 bg-red-50 rounded text-xs text-red-600">
-                      <div className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
-                      <span>Gravando...</span>
-                    </div>
-                  )}
-                  {showAudioRecorder && audioUrl && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                      <audio
-                        src={audioUrl}
-                        className="w-24"
-                        controls
-                        style={{ display: "block" }}
+                {isMobile ? (
+                  <>
+                    {/* Barra de texto — digitação e Enviar juntos (estilo WhatsApp/Telegram) */}
+                    <div className="flex items-center gap-1.5">
+                      <Textarea
+                        value={message}
+                        onChange={e => {
+                          const value = e.target.value;
+                          setMessage(value);
+                          if (selectedConversationId != null) {
+                            messageDraftsRef.current[String(selectedConversationId)] = value;
+                          }
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        placeholder="Digite sua mensagem... (Enter para enviar)"
+                        className="flex-1 min-w-[120px] min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
+                        rows={1}
                       />
-                      <Button variant="outline" size="sm" onClick={sendAudioMessage}>
-                        Enviar áudio
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={cancelAudioRecording}>
-                        Cancelar
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!message.trim() && !selectedFile}
+                        className="min-h-[48px] px-4 md:px-6"
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Enviar
                       </Button>
                     </div>
-                  )}
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowQuickReplies(true)}
-                    title="Respostas Rápidas"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </Button>
-
-                  <div className="relative" ref={emojiPickerRef}>
+                    {/* Botões de ação ficam embaixo da barra de texto na mobile */}
+                    {composerActions}
+                  </>
+                ) : (
+                  <div className="flex flex-nowrap items-center gap-1.5 md:gap-2">
+                    {composerActions}
+                    <Textarea
+                      value={message}
+                      onChange={e => {
+                        const value = e.target.value;
+                        setMessage(value);
+                        if (selectedConversationId != null) {
+                          messageDraftsRef.current[String(selectedConversationId)] = value;
+                        }
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
+                      className="flex-1 min-w-[120px] min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
+                      rows={1}
+                    />
                     <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      title="Emojis"
+                      onClick={handleSendMessage}
+                      disabled={!message.trim() && !selectedFile}
+                      className="min-h-[44px] px-4 md:px-6"
                     >
-                      <Smile className="w-4 h-4" />
+                      <Send className="w-4 h-4 mr-2" />
+                      Enviar
                     </Button>
-                    {showEmojiPicker && (
-                      <div className="absolute bottom-12 right-0 z-50">
-                        <EmojiPicker
-                          onEmojiClick={handleEmojiClick}
-                          width={350}
-                          height={400}
-                        />
-                      </div>
-                    )}
                   </div>
-
-                  <Textarea
-                    value={message}
-                    onChange={e => {
-                      const value = e.target.value;
-                      setMessage(value);
-                      if (selectedConversationId != null) {
-                        messageDraftsRef.current[String(selectedConversationId)] = value;
-                      }
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                      // Shift+Enter permite nova linha (comportamento padrão do textarea)
-                    }}
-                    placeholder="Digite sua mensagem... (Enter para enviar, Shift+Enter para nova linha)"
-                    className="flex-1 min-w-[120px] min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500"
-                    rows={1}
-                  />
-
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!message.trim() && !selectedFile}
-                    className="min-h-[44px] px-4 md:px-6"
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Enviar
-                  </Button>
-                </div>
+                )}
               </div>
             </>
           ) : (
