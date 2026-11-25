@@ -36,16 +36,12 @@ export async function getDb() {
         database: url.pathname.slice(1),
         port: url.port ? parseInt(url.port) : 3306,
         waitForConnections: true,
-        connectionLimit: 30,
-        // [fix-pool] FILA FINITA: se as 30 conexões se esgotarem, novas queries falham
+        connectionLimit: 50,
+        // [fix-pool] FILA FINITA: se as 50 conexões se esgotarem, novas queries falham
         // rapidamente em vez de travar para sempre (queueLimit: 0 = fila infinita).
-        queueLimit: 50,
+        queueLimit: 100,
         enableKeepAlive: true,
         keepAliveInitialDelay: 0,
-        // [fix-pool] Recicla conexoes ociosas para nao ficar preso quando o MySQL/proxy
-        // fecha conexoes idle (causa raiz de "para de chegar mensagem apos ~50 min").
-        idleTimeout: 30000,
-        maxIdle: 10,
         charset: 'utf8mb4',
         timezone: 'Z',
       });
@@ -70,8 +66,19 @@ export async function getDb() {
           if (!_pool) return;
           try {
             const connection = await _pool.getConnection();
-            try { await connection.ping(); } finally { connection.release(); }
-            _dbHealthCheck = Date.now();
+            try {
+              await connection.ping();
+              _dbHealthCheck = Date.now();
+              // Log do status do pool para diagnostico
+              console.log(
+                "[Database] Pool status:",
+                "active=", _pool._allConnections.length,
+                "idle=", _pool._freeConnections.length,
+                "waiting=", _pool._connectionQueue.length
+              );
+            } finally {
+              connection.release();
+            }
           } catch (e) {
             console.log("[Database] Dedicated health check failed, recreating pool...", (e as Error)?.message || e);
             try { await _pool.end(); } catch {}
