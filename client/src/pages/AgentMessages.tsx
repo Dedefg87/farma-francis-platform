@@ -1663,20 +1663,6 @@ export default function AgentMessages() {
                             <Pencil className="w-3 h-3" />
                           </button>
                         )}
-                        {/* Delete options (for everyone / for me) */}
-                        {msg.senderType === "agent" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              handleShowDeleteOptions(msg.id, rect.bottom + 6, rect.left);
-                            }}
-                            className={`absolute -top-2 ${msg.senderType === "agent" ? "-left-42" : "-right-42"} w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center ${selectedMsgId === msg.id ? "opacity-100" : "opacity-0 pointer-events-none hidden"} transition-opacity hover:bg-red-600 z-10`}
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
                         {/* Nome do remetente */}
                         <p className="text-xs font-bold mb-1 text-black">
                           {msg.senderName || (msg.senderType === "agent" ? "Atendente" : "Cliente")}
