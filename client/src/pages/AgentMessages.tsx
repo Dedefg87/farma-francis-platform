@@ -1653,15 +1653,15 @@ export default function AgentMessages() {
           {selectedConversation ? (
             <>
               {/* Header do Chat */}
-              <div className="bg-white border-b border-gray-200 p-4">
-                <div className="flex items-center justify-between gap-4">
+              <div className="bg-white border-b border-gray-200 p-3 md:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   {isMobile && (
                     <Button variant="ghost" size="icon" className="mr-1 shrink-0" onClick={handleBackToList} title="Voltar para a lista">
                       <ChevronLeft className="w-5 h-5" />
                     </Button>
                   )}
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-10 h-10">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Avatar className="w-9 md:w-10 h-9 md:h-10 shrink-0">
                       {selectedConversation?.customerAvatar ? (
                         <AvatarImage
                           src={getImageSrc(selectedConversation.customerAvatar)}
@@ -1672,17 +1672,17 @@ export default function AgentMessages() {
                         <User className="w-5 h-5" />
                       </AvatarFallback>
                     </Avatar>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold text-gray-900 text-sm md:text-base">
                         {selectedConversation.customerName}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="truncate text-xs md:text-sm text-gray-500">
                         {selectedConversation.customerPhone}
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 md:gap-2">
+                  <div className="flex flex-wrap items-center gap-1 md:gap-2 [&>button]:min-h-[44px] [&>button]:min-w-[44px] [&>button]:shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
