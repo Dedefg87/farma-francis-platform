@@ -201,20 +201,15 @@ async function processMobileSyncJob(job: MobileSyncJob) {
       .where(eq(conversations.id, conversationId));
   }
 
-  // DUPLICATE CHECK: Verificar se já existe mensagem com mesmo externalId para esta conversa
+  // DUPLICATE CHECK: Verificar se já existe mensagem com mesmo externalId (o índice único é por provider+externalId)
   const existing = await db
     .select()
     .from(conversationMessages)
-    .where(
-      and(
-        eq(conversationMessages.conversationId, conversationId),
-        eq(conversationMessages.externalId, job.messageId)
-      )
-    )
+    .where(eq(conversationMessages.externalId, job.messageId))
     .limit(1);
 
   if (existing.length > 0) {
-    console.log("[MobileSync] Duplicate message ignored:", job.messageId);
+    console.log("[MobileSync] Duplicate message ignored (by externalId):", job.messageId);
     return;
   }
 
@@ -243,20 +238,32 @@ async function processMobileSyncJob(job: MobileSyncJob) {
     return;
   }
   // Inserir mensagem na tabela conversation_messages
-  const insertResult = await db.insert(conversationMessages).values({
-    conversationId,
-    senderId: null, // Mensagem do agente, mas não há user_id no contexto do mobile-sync (será atualizado depois se necessário)
-    senderType: "agent",
-    content,
-    fileUrl: job.mediaUrl || null,
-    fileName: job.fileName || null,
-    fileType: job.mimeType || null,
-    fileSize: null,
-    externalId: job.messageId,
-    remoteJid: job.remoteJid,
-    createdAt: new Date(job.messageTimestamp * 1000),
-  });
-  const messageDbId = insertResult.insertId as number;
+  let messageDbId: number;
+  try {
+    const insertResult = await db.insert(conversationMessages).values({
+      conversationId,
+      senderId: null, // Mensagem do agente, mas não há user_id no contexto do mobile-sync (será atualizado depois se necessário)
+      senderType: "agent",
+      content,
+      fileUrl: job.mediaUrl || null,
+      fileName: job.fileName || null,
+      fileType: job.mimeType || null,
+      fileSize: null,
+      externalId: job.messageId,
+      remoteJid: job.remoteJid,
+      createdAt: new Date(job.messageTimestamp * 1000),
+    });
+    messageDbId = insertResult.insertId as number;
+  } catch (err: unknown) {
+    const anyErr = err as any;
+    const causeMsg = String(anyErr?.cause?.message || anyErr?.message || "");
+    if (causeMsg.includes("Duplicate entry")) {
+      // Race com o webhook/ingest ou outro job — mensagem já existe, ignorar
+      console.log("[MobileSync] Duplicate entry on insert, ignoring:", job.messageId);
+      return;
+    }
+    throw err;
+  }
 
   // Se houver mídia com URL temporária do WhatsApp, baixar via Evolution API e subir para R2
   const shouldDownloadMedia =
