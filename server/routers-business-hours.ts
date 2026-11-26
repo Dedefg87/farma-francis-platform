@@ -74,7 +74,8 @@ async function getSchedulesFromDb(): Promise<DayScheduleView[]> {
   let rows: BusinessHourSchedule[] | null;
   try {
     rows = await db.select().from(businessHourSchedules);
-  } catch {
+  } catch (e) {
+    console.error("[businessHours] select failed:", (e as any)?.message, "| cause:", (e as any)?.cause?.message || (e as any)?.code || "");
     rows = null;
   }
   if (!rows || rows.length === 0) {
@@ -112,7 +113,8 @@ async function getHolidaysFromDb(): Promise<Array<{ date: string; name: string; 
   let rows: BusinessHourHoliday[] | null = null;
   try {
     rows = db ? await db.select().from(businessHourHolidays) : null;
-  } catch {
+  } catch (e) {
+    console.error("[businessHours] select holidays failed:", (e as any)?.message, "| cause:", (e as any)?.cause?.message || (e as any)?.code || "");
     rows = null;
   }
   const merged = [
@@ -154,7 +156,8 @@ export const businessHoursRouter = router({
           .values({ day: input.day, ...value })
           .onDuplicateKeyUpdate({ set: value });
       } catch (err) {
-        console.error("[businessHours.update] Error:", (err as Error).message);
+        const anyErr = err as any;
+        console.error("[businessHours.update] Error:", anyErr?.message, "| cause:", anyErr?.cause?.message || anyErr?.code || "", "| stack:", anyErr?.stack || "");
         throw new Error("Falha ao salvar horário");
       }
       return { success: true };
