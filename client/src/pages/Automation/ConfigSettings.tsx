@@ -107,6 +107,17 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   const { data: apiSchedules } = trpc.businessHours.getAll.useQuery();
   const { data: apiHolidays } = trpc.businessHours.getHolidays.useQuery();
 
+  // Mutações (correto: usar useMutation — utils.<proc>.mutate não existe no tRPC v11)
+  const updateScheduleMutation = trpc.businessHours.update.useMutation({
+    onError: (err) => toast.error(`Erro ao salvar horário: ${err.message}`),
+  });
+  const upsertHolidayMutation = trpc.businessHours.upsertHoliday.useMutation({
+    onError: () => toast.error("Erro ao adicionar feriado"),
+  });
+  const deleteHolidayMutation = trpc.businessHours.deleteHoliday.useMutation({
+    onError: () => toast.error("Erro ao excluir feriado"),
+  });
+
   // Carregar Regras salvas no localStorage (legado de "farma-automation-settings")
   useEffect(() => {
     try {
@@ -167,7 +178,7 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
       for (const day of DAYS) {
         const schedule = schedules[day.key];
         if (schedule) {
-          await utils.businessHours.update.mutate({
+          await updateScheduleMutation.mutateAsync({
             day: day.key as any,
             enabled: schedule.enabled,
             openTime: schedule.openTime,
@@ -177,18 +188,22 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
           });
         }
       }
-    } catch (err) {
-      console.error(err);
+      await utils.businessHours.getAll.invalidate();
     } finally {
       setSavingSchedule(false);
     }
   };
 
   const handleSave = async () => {
-    await handleSaveSchedules();
-    localStorage.setItem("farma-automation-settings", JSON.stringify({ ...settings, autoActive }));
-    setHasChanges(false);
-    toast.success("Configurações salvas com sucesso");
+    try {
+      await handleSaveSchedules();
+      localStorage.setItem("farma-automation-settings", JSON.stringify({ ...settings, autoActive }));
+      setHasChanges(false);
+      toast.success("Configurações salvas com sucesso");
+    } catch (err) {
+      console.error(err);
+      toast.error(`Erro ao salvar configurações: ${(err as Error)?.message || "tentei salvar mas houve erro"}`);
+    }
   };
 
   const fetchHolidaysForMunicipality = async () => {
@@ -216,7 +231,7 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   const toggleHoliday = (date: string) => setHolidays(prev => prev.map(h => h.date === date ? { ...h, enabled: !h.enabled } : h));
   const deleteHoliday = async (date: string) => {
     try {
-      await utils.businessHours.deleteHoliday.mutate({ date });
+      await deleteHolidayMutation.mutateAsync({ date });
       await utils.businessHours.getHolidays.invalidate();
       setHolidays(prev => prev.filter(h => h.date !== date));
     } catch {
@@ -226,7 +241,7 @@ export function ConfigSettings({ darkMode }: ConfigSettingsProps) {
   const addCustomHoliday = async () => {
     if (!customHoliday.date || !customHoliday.name) return toast.error("Preencha data e nome");
     try {
-      await utils.businessHours.upsertHoliday.mutate({
+      await upsertHolidayMutation.mutateAsync({
         date: customHoliday.date,
         name: customHoliday.name,
         type: "municipal",
