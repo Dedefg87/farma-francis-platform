@@ -53,7 +53,7 @@ async function sendWhatsAppMessageWithRetry(
     size: number;
   },
   instanceNameOverride?: string | null
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; messageId?: string | null }> {
   const variants = generatePhoneVariants(phone);
 
   // Buscar configuração da instância correta (query direta ao DB para suportar multi-instância)
@@ -187,6 +187,7 @@ export async function processBroadcastMessage(messageId: number) {
         fileName: broadcastMessages.fileName,
         fileType: broadcastMessages.fileType,
         fileSize: broadcastMessages.fileSize,
+        senderId: broadcastMessages.senderId,
       })
       .from(broadcastMessages)
       .where(eq(broadcastMessages.id, messageId))
@@ -275,7 +276,12 @@ export async function processBroadcastMessage(messageId: number) {
       const cutoff96h = new Date(Date.now() - 96 * 60 * 60 * 1000);
       if (!lastContact || lastContact < cutoff96h) {
         console.log(`[Broadcast] Contato ${targetPhone} não conversou nas últimas 96h, pulando`);
-        await db.update(broadcastMembersSent).set({ status: "skipped", errorMessage: "Sem contato nas últimas 96h" }).where(eq(broadcastMembersSent.id, sent.id));
+        // [FIX-STATUS] Falha no update de status não pode abortar o broadcast
+        try {
+          await db.update(broadcastMembersSent).set({ status: "skipped", errorMessage: "Sem contato nas últimas 96h" }).where(eq(broadcastMembersSent.id, sent.id));
+        } catch (memberErr) {
+          console.warn(`[Broadcast] ⚠️ Falha ao marcar membro ${sent.id} como skipped:`, (memberErr as Error)?.message || memberErr);
+        }
         continue;
       }
       
@@ -355,9 +361,9 @@ export async function processBroadcastMessage(messageId: number) {
 
         // 🔥 Salvar mensagem na conversa do cliente (para o agente ver)
         try {
-          await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId, result.messageId);
+          await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId ?? null, result.messageId);
         } catch (saveErr: unknown) {
-          console.warn(`[Broadcast] ⚠️ Erro ao salvar na conversa do cliente ${sent.customerId}:`, saveErr.message);
+          console.warn(`[Broadcast] ⚠️ Erro ao salvar na conversa do cliente ${sent.customerId}:`, (saveErr as Error)?.message || saveErr);
         }
 
         successCount++;
@@ -382,14 +388,19 @@ export async function processBroadcastMessage(messageId: number) {
     }
 
     // 4. Atualizar contadores da mensagem
-    await db
-      .update(broadcastMessages)
-      .set({
-        successfulSends: successCount,
-        failedSends: failCount,
-        status: successCount > 0 && failCount === 0 ? "completed" : "partial",
-      })
-      .where(eq(broadcastMessages.id, messageId));
+    // [FIX-STATUS] Sempre tentar tirar de 'sending' — senão o recovery reprocessa em loop
+    try {
+      await db
+        .update(broadcastMessages)
+        .set({
+          successfulSends: successCount,
+          failedSends: failCount,
+          status: successCount > 0 && failCount === 0 ? "completed" : "partial",
+        })
+        .where(eq(broadcastMessages.id, messageId));
+    } catch (msgErr) {
+      console.warn(`[Broadcast] ⚠️ Falha ao atualizar status final da mensagem ${messageId}:`, (msgErr as Error)?.message || msgErr);
+    }
 
     console.log(
       `[Broadcast] Mensagem ${messageId} processada: ${successCount} sucessos, ${failCount} falhas`
