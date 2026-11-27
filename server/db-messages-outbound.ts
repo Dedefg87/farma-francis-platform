@@ -224,11 +224,10 @@ export async function ingestOutboundConversationMessage(message: {
     content: content.substring(0, 50),
   });
 
-  // 5. Update conversation lastMessageAt
-  await db
-    .update(conversations)
-    .set({ lastMessageAt: message.createdAt || new Date() })
-    .where(eq(conversations.id, conversationId));
+  // [FIX-ORDER] Mensagens outbound (resposta do atendente) NAO devem mover a conversa no
+  // ranking/order. A ordenacao da listagem usa conversations.lastMessageAt; manter o update
+  // aqui faz a conversa "subir"/reordenar apos cada reply. A ordem das conversas deve respeitar
+  // a sequencia real de mensagens — inbound segue atualizando o campo normalmente.
 
   return { conversationId, customerId: customer.id, messageDbId };
 }
