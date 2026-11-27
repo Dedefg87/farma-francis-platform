@@ -544,6 +544,7 @@ export async function sendWhatsAppMessage(params: {
         messageType: "audio",
         messageText: params.caption || "",
         externalId: result?.key?.id || null,
+        instanceName: resolvedInstance, // ✅ Roteamento: conversa da instância que enviou
       });
       return { success: true, messageId: result?.key?.id || null, to: params.to };
     }
@@ -576,6 +577,7 @@ export async function sendWhatsAppMessage(params: {
         fileName: params.fileName,
         fileType: params.mediaType,
         fileSize: undefined,
+        instanceName: resolvedInstance, // ✅ Roteamento: conversa da instância que enviou
       });
     } catch (saveErr) {
       console.error("[sendWhatsAppMessage] Falha ao salvar mensagem de mídia:", saveErr);
@@ -614,7 +616,8 @@ export async function sendWhatsAppMessage(params: {
         messageText: params.message,
         externalId: result?.key?.id || null,
         replyToExternalId: params.replyToMessageId || null, // ✅ Salvar referência do reply
-      replyToContent: params.replyToContent || null, // ✅ Salvar conteúdo da mensagem citada
+        replyToContent: params.replyToContent || null, // ✅ Salvar conteúdo da mensagem citada
+        instanceName: resolvedInstance, // ✅ Roteamento: conversa da instância que enviou
       });
     return { success: true, messageId: result?.key?.id || null, to: params.to };
   }

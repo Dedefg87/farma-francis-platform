@@ -63,6 +63,7 @@ export async function ingestOutboundConversationMessage(message: {
   replyToMessageId?: string | null; // Mensagem respondida
   replyToExternalId?: string | null; // externalId da mensagem respondida
   replyToContent?: string | null; // Conteudo da mensagem respondida
+  instanceName?: string | null; // Instancia Evolution que enviou (roteamento da conversa)
   createdAt?: Date;
 }) {
   console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
@@ -101,7 +102,8 @@ export async function ingestOutboundConversationMessage(message: {
   }
 
   // 2. Find existing conversation or create new one
-  const found = await findConversationByPhone(db, customer.phone, conversations, customers);
+  // [FIX-ROUTE] Passa a instancia que enviou para reaproveitar a conversa certa
+  const found = await findConversationByPhone(db, customer.phone, conversations, customers, message.instanceName);
 
   let conversationId: number;
   if (found?.conversationId) {
@@ -115,6 +117,7 @@ export async function ingestOutboundConversationMessage(message: {
       channel: message.provider,
       status: "open",
       assignedTo: message.fromUserId,
+      ...(message.instanceName ? { instanceName: message.instanceName } : {}),
       openedAt: message.createdAt || new Date(),
       lastMessageAt: message.createdAt || new Date(),
       unreadCount: 0,

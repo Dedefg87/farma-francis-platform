@@ -933,6 +933,7 @@ export async function ingestOutboundConversationMessage(message: {
   fileSize?: number | null;
   externalId?: string | null; // Evolution API message ID
   replyToExternalId?: string | null; // ✅ ID da mensagem respondida (reply)
+  instanceName?: string | null; // Instância Evolution que enviou (para rotear a conversa correta)
   createdAt?: Date;
 }) {
   console.log("[ingestOutbound] Starting for message to", message.toNumber, "type:", message.messageType);
@@ -971,14 +972,15 @@ export async function ingestOutboundConversationMessage(message: {
   }
 
   // 2. Find existing conversation or create new one
-  let found = await findConversationByPhone(db, customer.phone, conversations, customers);
+  // [FIX-ROUTE] Passa a instancia que enviou para reaproveitar a conversa certa
+  let found = await findConversationByPhone(db, customer.phone, conversations, customers, message.instanceName);
   
   // Try phone variants if not found (Brazilian number normalization)
   if (!found) {
     const variants = generatePhoneVariants(customer.phone);
     for (const variant of variants) {
 
-      found = await findConversationByPhone(db, variant, conversations, customers);
+      found = await findConversationByPhone(db, variant, conversations, customers, message.instanceName);
       if (found) {
         console.log("[ingestOutbound] ✅ Found conversation with variant:", variant);
         break;
