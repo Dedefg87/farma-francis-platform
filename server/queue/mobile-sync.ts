@@ -21,6 +21,7 @@ interface MobileSyncJob {
   mimeType?: string | null;
   messageTimestamp: number;
   fileName?: string | null;
+  fromMe?: boolean; // true = mensagem enviada pelo próprio WhatsApp/atendente (não é inbound)
 }
 
 // Fila simples em memória (Railway roda instância única)
@@ -160,7 +161,17 @@ async function processMobileSyncJob(job: MobileSyncJob) {
 
   let conversationId: number;
 
-  if (!conv) {
+  if (job.fromMe) {
+    // [FIX-ORDER] Mensagem outbound (fromMe = enviada pelo atendente): NÃO deve criar
+    // conversa nova nem reordenar/incrementar unread. A mensagem outbound já foi registrada
+    // pelo caminho direto (sendWhatsAppMessage); aqui só processamos o insert (com dedup).
+    // A ordem das conversas deve ser preservada (lastMessageAt só é atualizado em inbound).
+    conversationId = conv?.id ?? 0;
+    if (!conversationId) {
+      console.log("[MobileSync] fromMe sem conversa encontrada, ignorando job:", job.id);
+      return;
+    }
+  } else if (!conv) {
     // Criar nova conversa (open, sem agente designado, sem queue)
     const insertResult = await db.insert(conversations).values({
       customerId: customerRecord.id,

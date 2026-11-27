@@ -2398,6 +2398,7 @@ async function processEvolutionWebhook(body: unknown) {
               mimeType: mimeType,
               messageTimestamp: messageTimestamp,
               fileName: parsed.fileName || null,
+              fromMe: true,
             });
           } catch (e) {
             // Erro ao enfileirar (raro), ignora silenciosamente
