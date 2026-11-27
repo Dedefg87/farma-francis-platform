@@ -114,8 +114,10 @@ async function sendWhatsAppMessageWithRetry(
         );
 
         if (response.ok) {
-          console.log(`[Broadcast] ✅ Enviado com sucesso para ${variant} (mídia)`);
-          return { success: true };
+          const sendResult: any = await response.json().catch(() => ({}));
+          const sentMessageId = sendResult?.key?.id || sendResult?.messageId || null;
+          console.log(`[Broadcast] ✅ Enviado com sucesso para ${variant} (mídia)`, { messageId: sentMessageId });
+          return { success: true, messageId: sentMessageId };
         } else {
           const errorText = await response.text();
           console.warn(
@@ -139,8 +141,10 @@ async function sendWhatsAppMessageWithRetry(
         );
 
         if (response.ok) {
-          console.log(`[Broadcast] ✅ Enviado com sucesso para ${variant} (texto)`);
-          return { success: true };
+          const sendResult: any = await response.json().catch(() => ({}));
+          const sentMessageId = sendResult?.key?.id || sendResult?.messageId || null;
+          console.log(`[Broadcast] ✅ Enviado com sucesso para ${variant} (texto)`, { messageId: sentMessageId });
+          return { success: true, messageId: sentMessageId };
         } else {
           const errorText = await response.text();
           console.warn(
@@ -159,6 +163,7 @@ async function sendWhatsAppMessageWithRetry(
   return {
     success: false,
     error: "Todas as 4 variações falharam",
+    messageId: null,
   };
 }
 
@@ -335,32 +340,40 @@ export async function processBroadcastMessage(messageId: number) {
       );
 
       if (result.success) {
-        await db
-          .update(broadcastMembersSent)
-          .set({
-            status: "sent",
-            sentAt: new Date(),
-            errorMessage: null,
-          })
-          .where(eq(broadcastMembersSent.id, sent.id));
+        try {
+          await db
+            .update(broadcastMembersSent)
+            .set({
+              status: "sent",
+              sentAt: new Date(),
+              errorMessage: null,
+            })
+            .where(eq(broadcastMembersSent.id, sent.id));
+        } catch (memberErr) {
+          console.warn(`[Broadcast] ⚠️ Falha ao marcar membro ${sent.id} como sent:`, (memberErr as Error)?.message || memberErr);
+        }
 
         // 🔥 Salvar mensagem na conversa do cliente (para o agente ver)
         try {
-          await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId);
+          await saveBroadcastToConversation(db, sent.customerId, message.messageText, resolvedFileUrl, message.fileName, message.fileType, message.senderId, result.messageId);
         } catch (saveErr: unknown) {
           console.warn(`[Broadcast] ⚠️ Erro ao salvar na conversa do cliente ${sent.customerId}:`, saveErr.message);
         }
 
         successCount++;
       } else {
-        await db
-          .update(broadcastMembersSent)
-          .set({
-            status: "failed",
-            errorMessage: result.error || "Erro desconhecido",
-            sentAt: null,
-          })
-          .where(eq(broadcastMembersSent.id, sent.id));
+        try {
+          await db
+            .update(broadcastMembersSent)
+            .set({
+              status: "failed",
+              errorMessage: result.error || "Erro desconhecido",
+              sentAt: null,
+            })
+            .where(eq(broadcastMembersSent.id, sent.id));
+        } catch (memberErr) {
+          console.warn(`[Broadcast] ⚠️ Falha ao marcar membro ${sent.id} como failed:`, (memberErr as Error)?.message || memberErr);
+        }
         failCount++;
       }
 
@@ -403,7 +416,8 @@ async function saveBroadcastToConversation(
   fileUrl: string | null,
   fileName: string | null,
   fileType: string | null,
-  senderId: number | null
+  senderId: number | null,
+  sentMessageId?: string | null
 ) {
   if (!customerId) return;
 
@@ -479,6 +493,8 @@ async function saveBroadcastToConversation(
     fileName: fileName || null,
     fileType: fileType || null,
     createdAt: now,
+    // [FIX-DUP] externalId da Evolution -> permite dedup via mobile-sync (fromMe)
+    externalId: sentMessageId || null,
   });
 
   console.log(`[Broadcast] 💬 Mensagem salva na conversa ${conversationId} do cliente ${customerId}`);
